@@ -90,6 +90,87 @@ make lint-fix
 make clean
 ```
 
+### Run All Services
+
+```bash
+# Start all services (db, api, dashboard)
+docker compose up -d
+
+# View logs
+docker compose logs -f
+
+# Stop all services
+docker compose down
+```
+
+| Service | URL | Description |
+|---------|-----|-------------|
+| Dashboard | http://localhost:8501 | Streamlit UI for risk inspection |
+| API | http://localhost:8000 | FastAPI signal evaluation |
+| API Docs | http://localhost:8000/docs | Swagger UI |
+| Database | localhost:5432 | PostgreSQL |
+
+## API Reference
+
+### Signal Evaluation
+
+Evaluate fraud risk for a transaction.
+
+**Endpoint:** `POST /evaluate/signal`
+
+**Request:**
+```json
+{
+  "user_id": "user_abc123",
+  "amount": 150.00,
+  "currency": "USD",
+  "client_transaction_id": "txn_xyz789"
+}
+```
+
+**Response:**
+```json
+{
+  "request_id": "req_123xyz",
+  "score": 85,
+  "risk_components": [
+    {"key": "velocity", "label": "high_transaction_velocity"},
+    {"key": "history", "label": "insufficient_history"}
+  ],
+  "model_version": "v1.0.0"
+}
+```
+
+**Score Interpretation:**
+- 1-20: Low risk (most transactions)
+- 21-50: Moderate risk
+- 51-80: Elevated risk
+- 81-99: High risk (rare)
+
+**Risk Components:**
+
+| Key | Label | Trigger |
+|-----|-------|---------|
+| `velocity` | high_transaction_velocity | velocity_24h > 5 |
+| `amount_ratio` | unusual_transaction_amount | amount ratio > 3.0 |
+| `balance` | low_balance_volatility | z-score < -2.0 |
+| `connections` | connection_burst_detected | connections_24h > 4 |
+| `merchant` | high_risk_merchant | merchant_risk > 70 |
+| `history` | insufficient_history | no transaction history |
+
+### Health Check
+
+**Endpoint:** `GET /health`
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "model_loaded": true,
+  "version": "v1.0.0"
+}
+```
+
 ## Table and Feature Schemas
 
 ### Generated Records Table (`generated_records`)
@@ -300,6 +381,18 @@ Metadata for model evaluation (not used in training).
 synthetic-data-gen/
 ├── src/
 │   ├── main.py                          # CLI entry point
+│   ├── api/                             # FastAPI application
+│   │   ├── __init__.py
+│   │   ├── main.py                      # API routes and app
+│   │   ├── schemas.py                   # Pydantic request/response models
+│   │   └── services.py                  # Signal evaluation logic
+│   ├── model/                           # ML model utilities
+│   │   ├── __init__.py
+│   │   ├── loader.py                    # DataLoader for train/test splits
+│   │   └── evaluate.py                  # Score calibration and evaluation
+│   ├── ui/                              # Streamlit dashboard
+│   │   ├── Dockerfile                   # Dashboard container
+│   │   └── app.py                       # Dashboard application
 │   ├── generator/
 │   │   ├── __init__.py                  # Stateful generator exports
 │   │   └── core.py                      # UserSimulator, fraud profiles
@@ -326,6 +419,9 @@ synthetic-data-gen/
 │           └── transaction.py           # TransactionEvaluation model
 ├── tests/
 │   ├── __init__.py
+│   ├── test_api.py                      # API endpoint tests
+│   ├── test_evaluate.py                 # Model evaluation tests
+│   ├── test_loader.py                   # DataLoader tests
 │   ├── test_core_generator.py           # Stateful generator tests
 │   ├── test_feature_store.py            # Feature store tests
 │   ├── test_generator.py                # DataGenerator tests
@@ -341,8 +437,8 @@ synthetic-data-gen/
 ├── .env.example                         # Environment template
 ├── .gitignore
 ├── .pre-commit-config.yaml              # Pre-commit hooks
-├── docker-compose.yml                   # Docker services
-├── Dockerfile                           # Generator container
+├── docker-compose.yml                   # Docker services (db, api, dashboard)
+├── Dockerfile                           # Generator/API container
 ├── Makefile                             # Build commands
 ├── pyproject.toml                       # Project config and dependencies
 └── README.md                            # This file
@@ -353,6 +449,11 @@ synthetic-data-gen/
 | File | Purpose |
 |------|---------|
 | `src/main.py` | CLI with `seed`, `init-db`, `stats` commands |
+| `src/api/main.py` | FastAPI application with `/evaluate/signal` endpoint |
+| `src/api/services.py` | Signal evaluation logic and feature processing |
+| `src/model/loader.py` | DataLoader with temporal splitting and label maturity |
+| `src/model/evaluate.py` | Score calibration and impact analysis |
+| `src/ui/app.py` | Streamlit dashboard for risk inspection |
 | `src/generator/core.py` | Stateful UserSimulator, BustOutProfile, SleeperProfile |
 | `src/pipeline/materialize_features.py` | Feature materialization with SQL window functions |
 | `src/synthetic_pipeline/generator.py` | Transaction data generation with fraud patterns |
@@ -361,7 +462,7 @@ synthetic-data-gen/
 | `src/synthetic_pipeline/db/session.py` | Database connection pooling and batch inserts |
 | `src/synthetic_pipeline/db/migrations/*.sql` | SQL migration scripts |
 | `src/synthetic_pipeline/models/*.py` | Pydantic validation models |
-| `docker-compose.yml` | PostgreSQL and generator services |
+| `docker-compose.yml` | Docker services (db, api, dashboard) |
 | `pyproject.toml` | Dependencies and project metadata |
 
 ## Environment Variables
@@ -374,3 +475,4 @@ synthetic-data-gen/
 | `POSTGRES_HOST` | localhost | Database host |
 | `POSTGRES_PORT` | 5432 | Database port |
 | `DATABASE_URL` | (built from above) | Full connection URL |
+| `API_BASE_URL` | http://localhost:8000 | API base URL (for dashboard) |

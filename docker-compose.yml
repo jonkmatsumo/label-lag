@@ -31,5 +31,41 @@ services:
     stdin_open: true
     tty: true
 
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: synthetic-data-api
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    command: ["uv", "run", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: src/ui/Dockerfile
+    container_name: synthetic-data-dashboard
+    ports:
+      - "8501:8501"
+    environment:
+      - API_BASE_URL=http://api:8000
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-synthetic}:${POSTGRES_PASSWORD:-synthetic_dev_password}@db:5432/${POSTGRES_DB:-synthetic_data}
+    depends_on:
+      api:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+
 volumes:
   postgres_data:
