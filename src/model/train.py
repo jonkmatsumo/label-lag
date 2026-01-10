@@ -66,10 +66,12 @@ def train_model(
     n_positive = (split.y_train == 1).sum()
 
     if n_positive == 0:
+        cutoff = training_cutoff_date.date()
         raise ValueError(
-            f"No fraud samples in training set (cutoff: {training_cutoff_date.date()}). "
-            f"Either try a smaller training_window_days (current: {training_window_days}), "
-            f"or regenerate data with: docker compose run --rm generator uv run python src/main.py seed --drop-tables"
+            f"No fraud samples in training set (cutoff: {cutoff}). "
+            f"Try a smaller training_window_days (current: {training_window_days}), "
+            "or regenerate data with: docker compose run --rm generator "
+            "uv run python src/main.py seed --drop-tables"
         )
 
     # Calculate scale_pos_weight if not provided

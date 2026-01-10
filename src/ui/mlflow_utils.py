@@ -183,7 +183,10 @@ def promote_to_production(
 
         return {
             "success": True,
-            "message": f"Model version {target_version} promoted to Production. {reload_message}",
+            "message": (
+                f"Model version {target_version} promoted to Production. "
+                f"{reload_message}"
+            ),
             "version": target_version,
         }
 

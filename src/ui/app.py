@@ -170,9 +170,6 @@ def _render_model_selector() -> None:
     if api_health and api_health.get("model_loaded"):
         live_model = api_health.get("version", "unknown")
 
-    # Get production model from MLflow
-    prod_version = get_production_model_version()
-
     # Get all model versions
     all_versions = get_model_versions()
 
@@ -217,7 +214,7 @@ def _render_model_selector() -> None:
             "View Model Version",
             options=range(len(options)),
             format_func=lambda i: options[i]["label"],
-            help="Select a model version to view its details. The LIVE model is currently serving predictions.",
+            help="Select a model version to view details. LIVE = serving.",
         )
 
         if selected_idx is not None:
@@ -554,10 +551,12 @@ def render_model_lab() -> None:
                 result = response.json()
 
                 if result.get("success"):
+                    total = result.get("total_records")
+                    fraud = result.get("fraud_records")
+                    features = result.get("features_materialized")
                     st.success(
-                        f"Generated {result.get('total_records')} records "
-                        f"({result.get('fraud_records')} fraud). "
-                        f"Materialized {result.get('features_materialized')} feature snapshots."
+                        f"Generated {total} records ({fraud} fraud). "
+                        f"Materialized {features} feature snapshots."
                     )
                 else:
                     st.error(f"Generation failed: {result.get('error')}")

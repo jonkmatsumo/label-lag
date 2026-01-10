@@ -1,13 +1,11 @@
 """Business logic for signal evaluation."""
 
 import logging
-import os
 import uuid
 from dataclasses import dataclass, field
 from decimal import Decimal
 
 import numpy as np
-import pandas as pd
 from sqlalchemy import text
 
 from api.schemas import RiskComponent, SignalRequest, SignalResponse
@@ -156,7 +154,9 @@ class SignalEvaluator:
                     return FeatureVector(
                         velocity_24h=int(row.velocity_24h),
                         amount_to_avg_ratio_30d=float(row.amount_to_avg_ratio_30d),
-                        balance_volatility_z_score=float(row.balance_volatility_z_score),
+                        balance_volatility_z_score=float(
+                            row.balance_volatility_z_score
+                        ),
                         bank_connections_24h=0,  # Not in feature_snapshots yet
                         merchant_risk_score=0,  # Not in feature_snapshots yet
                         has_history=True,

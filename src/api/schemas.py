@@ -158,7 +158,9 @@ class GenerateDataResponse(BaseModel):
     success: bool = Field(..., description="Whether generation completed successfully")
     total_records: int = Field(0, description="Total records generated")
     fraud_records: int = Field(0, description="Number of fraud records")
-    features_materialized: int = Field(0, description="Number of feature snapshots created")
+    features_materialized: int = Field(
+        0, description="Number of feature snapshots created"
+    )
     error: str | None = Field(None, description="Error message if generation failed")
 
 
