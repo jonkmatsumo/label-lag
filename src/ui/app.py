@@ -9,7 +9,16 @@ NOTE: This service is isolated and does NOT import from src.model or src.generat
 
 import os
 
+import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
+from data_service import (
+    fetch_daily_stats,
+    fetch_fraud_summary,
+    fetch_recent_alerts,
+    fetch_transaction_details,
+)
+from plotly.subplots import make_subplots
 
 # Configuration from environment
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
@@ -63,30 +72,186 @@ def render_analytics() -> None:
     st.header("Historical Analytics")
     st.markdown("Analyze historical transaction patterns and fraud metrics.")
 
-    # Placeholder content
-    st.info("🚧 Analytics dashboard coming soon...")
+    # Fetch data
+    summary = fetch_fraud_summary()
+    daily_stats = fetch_daily_stats(days=30)
+    transactions = fetch_transaction_details(days=7)
+    alerts = fetch_recent_alerts(limit=50)
 
-    # Placeholder metrics
-    col1, col2, col3, col4 = st.columns(4)
+    # --- Global Metrics ---
+    st.subheader("Global Metrics")
+
+    col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.metric(label="Total Transactions", value="--", delta=None)
+        st.metric(
+            label="Total Transactions Analyzed",
+            value=f"{summary['total_transactions']:,}",
+        )
 
     with col2:
-        st.metric(label="Fraud Rate", value="--", delta=None)
+        fraud_delta = (
+            f"{summary['fraud_rate']:.2f}%" if summary["fraud_rate"] > 0 else None
+        )
+        st.metric(
+            label="Detected Fraud (High Risk)",
+            value=f"{summary['total_fraud']:,}",
+            delta=fraud_delta,
+            delta_color="inverse",
+        )
 
     with col3:
-        st.metric(label="Avg Risk Score", value="--", delta=None)
+        # Estimate false positive rate based on alerts vs actual fraud
+        # This is a rough estimate: alerts that aren't fraud / total alerts
+        if len(alerts) > 0 and "is_fraudulent" in alerts.columns:
+            true_positives = alerts["is_fraudulent"].sum()
+            false_positives = len(alerts) - true_positives
+            fpr = (false_positives / len(alerts) * 100) if len(alerts) > 0 else 0
+            st.metric(
+                label="False Positive Rate (Est)",
+                value=f"{fpr:.1f}%",
+                help="Percentage of high-risk alerts that are not actual fraud",
+            )
+        else:
+            st.metric(
+                label="False Positive Rate (Est)",
+                value="--",
+                help="No alert data available",
+            )
 
-    with col4:
-        st.metric(label="Blocked Amount", value="--", delta=None)
+    st.markdown("---")
 
-    # Placeholder for charts
-    st.subheader("Score Distribution")
-    st.markdown("*Connect to database to load charts*")
+    # --- Time Series Visualization ---
+    st.subheader("Transaction Volume & Fraud Trends")
 
-    st.subheader("Fraud Trends")
-    st.markdown("*Connect to database to load charts*")
+    if len(daily_stats) > 0:
+        # Create dual-axis chart: bars for volume, line for fraud
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+        # Bar chart for transaction volume
+        fig.add_trace(
+            go.Bar(
+                x=daily_stats["date"],
+                y=daily_stats["total_transactions"],
+                name="Transaction Volume",
+                marker_color="#3498db",
+                opacity=0.7,
+            ),
+            secondary_y=False,
+        )
+
+        # Line chart for fraud count
+        fig.add_trace(
+            go.Scatter(
+                x=daily_stats["date"],
+                y=daily_stats["fraud_count"],
+                name="Fraud Count",
+                mode="lines+markers",
+                line={"color": "#e74c3c", "width": 3},
+                marker={"size": 8},
+            ),
+            secondary_y=True,
+        )
+
+        fig.update_layout(
+            title="Daily Transaction Volume with Fraud Overlay",
+            xaxis_title="Date",
+            legend={"orientation": "h", "yanchor": "bottom", "y": 1.02},
+            height=400,
+            hovermode="x unified",
+        )
+        fig.update_yaxes(title_text="Transaction Count", secondary_y=False)
+        fig.update_yaxes(title_text="Fraud Count", secondary_y=True)
+
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No daily statistics available. Generate data to see trends.")
+
+    st.markdown("---")
+
+    # --- Amount Distribution ---
+    st.subheader("Transaction Amount Distribution")
+
+    if len(transactions) > 0 and "amount" in transactions.columns:
+        # Create a copy and add fraud label for visualization
+        viz_data = transactions.copy()
+        if "is_fraudulent" in viz_data.columns:
+            viz_data["Fraud Status"] = viz_data["is_fraudulent"].map(
+                {True: "Fraudulent", False: "Legitimate"}
+            )
+        else:
+            viz_data["Fraud Status"] = "Unknown"
+
+        fig = px.histogram(
+            viz_data,
+            x="amount",
+            color="Fraud Status",
+            nbins=50,
+            title="Transaction Amount Distribution by Fraud Status",
+            labels={"amount": "Transaction Amount ($)", "count": "Frequency"},
+            color_discrete_map={
+                "Fraudulent": "#e74c3c",
+                "Legitimate": "#2ecc71",
+                "Unknown": "#95a5a6",
+            },
+            opacity=0.7,
+            barmode="overlay",
+        )
+        fig.update_layout(height=400)
+
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No transaction data available. Generate data to see distribution.")
+
+    st.markdown("---")
+
+    # --- Recent Alerts Table ---
+    st.subheader("Recent High-Risk Alerts")
+
+    if len(alerts) > 0:
+        # Format the display columns
+        display_cols = [
+            "record_id",
+            "user_id",
+            "created_at",
+            "amount",
+            "computed_risk_score",
+            "is_fraudulent",
+            "fraud_type",
+        ]
+        available_cols = [c for c in display_cols if c in alerts.columns]
+
+        if available_cols:
+            display_df = alerts[available_cols].copy()
+
+            # Rename columns for display
+            column_names = {
+                "record_id": "Record ID",
+                "user_id": "User ID",
+                "created_at": "Timestamp",
+                "amount": "Amount ($)",
+                "computed_risk_score": "Risk Score",
+                "is_fraudulent": "Confirmed Fraud",
+                "fraud_type": "Fraud Type",
+            }
+            display_df = display_df.rename(
+                columns={k: v for k, v in column_names.items() if k in display_df}
+            )
+
+            st.dataframe(
+                display_df,
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            st.caption(f"Showing {len(alerts)} high-risk transactions (score >= 80)")
+        else:
+            st.warning("Alert data structure unexpected.")
+    else:
+        st.info(
+            "No high-risk alerts found. This could mean no risky transactions "
+            "or no data has been generated yet."
+        )
 
 
 def main() -> None:

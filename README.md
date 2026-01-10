@@ -110,6 +110,36 @@ docker compose down
 | API Docs | http://localhost:8000/docs | Swagger UI |
 | Database | localhost:5432 | PostgreSQL |
 
+## Dashboard
+
+The Streamlit dashboard provides two modes for fraud risk analysis:
+
+### Live Scoring (API)
+
+Submit transactions for real-time fraud risk evaluation via the signal API. Enter user ID, amount, currency, and transaction ID to get instant risk scores.
+
+### Historical Analytics (DB)
+
+Analyze historical transaction patterns and fraud metrics from the database:
+
+**Global Metrics:**
+- Total Transactions Analyzed
+- Detected Fraud (High Risk) with fraud rate delta
+- Estimated False Positive Rate (alerts that aren't actual fraud)
+
+**Time Series Visualization:**
+- Dual-axis chart showing daily transaction volume (bars) and fraud count (line)
+- 30-day rolling view of trends
+
+**Amount Distribution:**
+- Histogram of transaction amounts colored by fraud status
+- Visual separation of fraudulent vs legitimate transactions
+
+**Recent Alerts Table:**
+- High-risk transactions (computed risk score >= 80)
+- Shows Record ID, User ID, Timestamp, Amount, Risk Score, Confirmed Fraud, Fraud Type
+- Risk score computed from: velocity, amount ratio, balance volatility, merchant risk, off-hours transactions
+
 ## API Reference
 
 ### Signal Evaluation
