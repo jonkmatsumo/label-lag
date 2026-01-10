@@ -103,15 +103,17 @@ docker compose logs -f
 docker compose down
 ```
 
-| Service | URL | Description |
-|---------|-----|-------------|
-| Dashboard | http://localhost:8501 | Streamlit UI for risk inspection |
-| API | http://localhost:8000 | FastAPI signal evaluation |
-| API Docs | http://localhost:8000/docs | Swagger UI |
-| MLflow | http://localhost:5000 | Experiment tracking and model registry |
-| MinIO Console | http://localhost:9001 | Object storage for model artifacts |
-| MinIO API | http://localhost:9000 | S3-compatible API |
-| Database | localhost:5432 | PostgreSQL |
+| Service | Default URL | Port Env Var | Description |
+|---------|-------------|--------------|-------------|
+| Dashboard | http://localhost:8501 | `DASHBOARD_PORT` | Streamlit UI for risk inspection |
+| API | http://localhost:8000 | `API_PORT` | FastAPI signal evaluation |
+| API Docs | http://localhost:8000/docs | `API_PORT` | Swagger UI |
+| MLflow | http://localhost:5005 | `MLFLOW_PORT` | Experiment tracking and model registry |
+| MinIO Console | http://localhost:9001 | `MINIO_CONSOLE_PORT` | Object storage for model artifacts |
+| MinIO API | http://localhost:9000 | `MINIO_API_PORT` | S3-compatible API |
+| Database | localhost:5432 | `DB_PORT` | PostgreSQL |
+
+**Note:** All ports are configurable via `.env` file to avoid conflicts with other projects.
 
 ## Dashboard
 
@@ -557,8 +559,14 @@ synthetic-data-gen/
 | `POSTGRES_HOST` | localhost | Database host |
 | `POSTGRES_PORT` | 5432 | Database port |
 | `DATABASE_URL` | (built from above) | Full connection URL |
+| `DB_PORT` | 5432 | Host port for PostgreSQL |
+| `API_PORT` | 8000 | Host port for API server |
+| `DASHBOARD_PORT` | 8501 | Host port for Streamlit dashboard |
+| `MLFLOW_PORT` | 5005 | Host port for MLflow server |
+| `MINIO_API_PORT` | 9000 | Host port for MinIO API |
+| `MINIO_CONSOLE_PORT` | 9001 | Host port for MinIO console |
 | `API_BASE_URL` | http://localhost:8000 | API base URL (for dashboard) |
-| `MLFLOW_TRACKING_URI` | http://localhost:5000 | MLflow tracking server URL |
+| `MLFLOW_TRACKING_URI` | http://localhost:5005 | MLflow tracking server URL |
 | `MLFLOW_S3_ENDPOINT_URL` | http://minio:9000 | MinIO S3 endpoint (Docker) |
 | `AWS_ACCESS_KEY_ID` | minioadmin | MinIO access key |
 | `AWS_SECRET_ACCESS_KEY` | minioadmin | MinIO secret key |
