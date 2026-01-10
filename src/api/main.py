@@ -12,6 +12,9 @@ from fastapi.responses import JSONResponse
 
 from api.model_manager import get_model_manager
 from api.schemas import (
+    ClearDataResponse,
+    GenerateDataRequest,
+    GenerateDataResponse,
     HealthResponse,
     SignalRequest,
     SignalResponse,
@@ -139,6 +142,125 @@ async def evaluate_signal(request: SignalRequest) -> SignalResponse:
             status_code=500,
             detail=f"Evaluation failed: {e!s}",
         ) from e
+
+
+@app.post(
+    "/data/generate",
+    response_model=GenerateDataResponse,
+    tags=["Data Management"],
+    summary="Generate synthetic data",
+    description="Generate synthetic transaction data with configurable fraud rate.",
+)
+async def generate_data(request: GenerateDataRequest) -> GenerateDataResponse:
+    """Generate synthetic transaction data.
+
+    Args:
+        request: Generation request with num_users, fraud_rate, and drop_existing.
+
+    Returns:
+        GenerateDataResponse with counts of generated records.
+    """
+    try:
+        from pipeline.materialize_features import FeatureMaterializer
+        from synthetic_pipeline.db.models import (
+            EvaluationMetadataDB,
+            GeneratedRecordDB,
+        )
+        from synthetic_pipeline.db.session import DatabaseSession
+        from synthetic_pipeline.generator import DataGenerator
+
+        # Generate data
+        generator = DataGenerator()
+        result = generator.generate_dataset_with_sequences(
+            num_users=request.num_users,
+            fraud_rate=request.fraud_rate,
+        )
+
+        # Count fraud records
+        fraud_count = sum(1 for r in result.records if r.is_fraudulent)
+
+        # Connect to database
+        db_session = DatabaseSession()
+
+        with db_session.get_session() as session:
+            if request.drop_existing:
+                # Drop and recreate tables
+                from synthetic_pipeline.db.models import Base
+
+                Base.metadata.drop_all(db_session.engine)
+                Base.metadata.create_all(db_session.engine)
+            else:
+                # Just ensure tables exist
+                from synthetic_pipeline.db.models import Base
+
+                Base.metadata.create_all(db_session.engine)
+
+            # Convert and insert records
+            db_records = [
+                GeneratedRecordDB.from_pydantic(record) for record in result.records
+            ]
+            session.bulk_save_objects(db_records)
+
+            # Insert metadata
+            meta_records = [
+                EvaluationMetadataDB.from_pydantic(meta) for meta in result.metadata
+            ]
+            session.bulk_save_objects(meta_records)
+
+            session.commit()
+
+        # Materialize features
+        materializer = FeatureMaterializer()
+        features_count = materializer.materialize_all()
+
+        return GenerateDataResponse(
+            success=True,
+            total_records=len(result.records),
+            fraud_records=fraud_count,
+            features_materialized=features_count,
+        )
+
+    except Exception as e:
+        logger.exception("Data generation failed")
+        return GenerateDataResponse(success=False, error=str(e))
+
+
+@app.delete(
+    "/data/clear",
+    response_model=ClearDataResponse,
+    tags=["Data Management"],
+    summary="Clear all data",
+    description="Delete all records from the database tables.",
+)
+async def clear_data() -> ClearDataResponse:
+    """Clear all data from the database.
+
+    Returns:
+        ClearDataResponse with list of cleared tables.
+    """
+    try:
+        from synthetic_pipeline.db.models import Base
+        from synthetic_pipeline.db.session import DatabaseSession
+
+        db_session = DatabaseSession()
+
+        # Get table names before dropping
+        table_names = [table.name for table in Base.metadata.sorted_tables]
+
+        # Drop all tables
+        Base.metadata.drop_all(db_session.engine)
+
+        # Recreate empty tables
+        Base.metadata.create_all(db_session.engine)
+
+        return ClearDataResponse(
+            success=True,
+            tables_cleared=table_names,
+        )
+
+    except Exception as e:
+        logger.exception("Data clearing failed")
+        return ClearDataResponse(success=False, error=str(e))
 
 
 @app.post(
