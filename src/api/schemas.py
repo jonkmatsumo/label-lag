@@ -104,3 +104,72 @@ class HealthResponse(BaseModel):
     status: str = Field(default="healthy")
     model_loaded: bool = Field(default=False)
     version: str = Field(default="0.1.0")
+
+
+class TrainRequest(BaseModel):
+    """Request schema for model training endpoint."""
+
+    max_depth: int = Field(
+        default=6,
+        ge=2,
+        le=12,
+        description="Maximum depth of XGBoost trees",
+    )
+    training_window_days: int = Field(
+        default=30,
+        ge=7,
+        le=90,
+        description="Number of days for training window",
+    )
+
+
+class TrainResponse(BaseModel):
+    """Response schema for model training endpoint."""
+
+    success: bool = Field(..., description="Whether training completed successfully")
+    run_id: str | None = Field(None, description="MLflow run ID if successful")
+    error: str | None = Field(None, description="Error message if training failed")
+
+
+class GenerateDataRequest(BaseModel):
+    """Request schema for data generation endpoint."""
+
+    num_users: int = Field(
+        default=500,
+        ge=10,
+        le=10000,
+        description="Number of unique users to generate",
+    )
+    fraud_rate: float = Field(
+        default=0.05,
+        ge=0.0,
+        le=0.5,
+        description="Fraction of users with fraud events (0.0-0.5)",
+    )
+    drop_existing: bool = Field(
+        default=False,
+        description="Drop existing tables before generating new data",
+    )
+
+
+class GenerateDataResponse(BaseModel):
+    """Response schema for data generation endpoint."""
+
+    success: bool = Field(..., description="Whether generation completed successfully")
+    total_records: int = Field(0, description="Total records generated")
+    fraud_records: int = Field(0, description="Number of fraud records")
+    features_materialized: int = Field(
+        0, description="Number of feature snapshots created"
+    )
+    error: str | None = Field(None, description="Error message if generation failed")
+
+
+class ClearDataResponse(BaseModel):
+    """Response schema for data clearing endpoint."""
+
+    success: bool = Field(..., description="Whether clearing completed successfully")
+    tables_cleared: list[str] = Field(
+        default_factory=list,
+        description="List of tables that were cleared",
+    )
+    error: str | None = Field(None, description="Error message if clearing failed")

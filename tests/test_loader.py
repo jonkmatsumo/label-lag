@@ -172,7 +172,7 @@ class TestDataLoaderTemporalSplit:
         query_text = str(call_args[0][0])
 
         # Check for correct filtering conditions
-        assert "created_at < :cutoff" in query_text
+        assert "transaction_timestamp < :cutoff" in query_text
         assert "is_train_eligible = TRUE" in query_text
 
     def test_test_query_filters_by_cutoff(self, loader, mock_session):
@@ -202,7 +202,7 @@ class TestDataLoaderTemporalSplit:
         call_args = mock_session.execute.call_args
         query_text = str(call_args[0][0])
 
-        assert "created_at >= :cutoff" in query_text
+        assert "transaction_timestamp >= :cutoff" in query_text
 
 
 class TestDataLoaderLabelMaturity:

@@ -1,22 +1,34 @@
 """ACH Risk Inspector Dashboard.
 
-A Streamlit dashboard for fraud risk analysis with two modes:
+A Streamlit dashboard for fraud risk analysis with three modes:
 - Live Scoring: Real-time transaction evaluation via API
 - Historical Analytics: Analysis of historical data from database
+- Model Lab: Train models and manage the model registry
 
 NOTE: This service is isolated and does NOT import from src.model or src.generator.
 """
 
+import json
 import os
+import time
 
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 from data_service import (
+    check_api_health,
     fetch_daily_stats,
     fetch_fraud_summary,
     fetch_recent_alerts,
     fetch_transaction_details,
+    predict_risk,
+)
+from mlflow_utils import (
+    check_mlflow_connection,
+    get_experiment_runs,
+    get_model_versions,
+    get_production_model_version,
+    promote_to_production,
 )
 from plotly.subplots import make_subplots
 
@@ -45,22 +57,170 @@ def render_live_scoring() -> None:
     st.header("Live Scoring")
     st.markdown("Submit transactions for real-time fraud risk evaluation.")
 
-    # Placeholder content
-    st.info("🚧 Live scoring interface coming soon...")
+    # Show current model status
+    api_health = check_api_health()
+    if api_health:
+        model_loaded = api_health.get("model_loaded", False)
+        model_version = api_health.get("version", "unknown")
+
+        if model_loaded:
+            st.success(f"Live Model: **{model_version}** (ML model active)")
+        else:
+            st.warning(f"Live Model: **{model_version}** (rule-based fallback)")
+    else:
+        st.error("API unavailable - cannot determine model status")
+
+    st.markdown("---")
 
     col1, col2 = st.columns(2)
 
     with col1:
         st.subheader("Transaction Input")
-        st.text_input("User ID", placeholder="user_abc123")
-        st.number_input("Amount", min_value=0.01, value=100.00, step=0.01)
-        st.selectbox("Currency", ["USD", "EUR", "GBP", "CAD", "AUD"])
-        st.text_input("Transaction ID", placeholder="txn_xyz789")
-        st.button("Evaluate Risk", type="primary")
+
+        user_id = st.text_input("User ID", value="user_001")
+        amount = st.number_input(
+            "Amount", min_value=0.01, value=100.00, step=0.01, format="%.2f"
+        )
+        currency = st.text_input("Currency", value="USD", disabled=True)
+
+        analyze_clicked = st.button("Analyze Risk", type="primary")
 
     with col2:
         st.subheader("Risk Assessment")
-        st.markdown("*Submit a transaction to see results*")
+
+        if analyze_clicked:
+            # Measure API latency
+            start_time = time.time()
+            result = predict_risk(user_id, amount, currency)
+            elapsed_ms = (time.time() - start_time) * 1000
+
+            if result is None:
+                st.error("API request failed. Is the API server running?")
+                st.caption(f"Latency: {elapsed_ms:.0f}ms")
+            else:
+                score = result.get("score", 0)
+
+                # Score gauge with color-coded risk level
+                if score < 10:
+                    st.markdown(
+                        "<h1 style='color: #2ecc71; text-align: center;'>LOW RISK</h1>",
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(
+                        f"<h2 style='color: #2ecc71; text-align: center;'>"
+                        f"Score: {score}</h2>",
+                        unsafe_allow_html=True,
+                    )
+                elif score < 80:
+                    st.markdown(
+                        "<h1 style='color: #f39c12; text-align: center;'>"
+                        "MEDIUM RISK</h1>",
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(
+                        f"<h2 style='color: #f39c12; text-align: center;'>"
+                        f"Score: {score}</h2>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.markdown(
+                        "<h1 style='color: #e74c3c; text-align: center;'>"
+                        "HIGH RISK</h1>",
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(
+                        f"<h2 style='color: #e74c3c; text-align: center;'>"
+                        f"Score: {score}</h2>",
+                        unsafe_allow_html=True,
+                    )
+
+                st.markdown("---")
+
+                # Risk components
+                risk_components = result.get("risk_components", [])
+                if risk_components:
+                    st.markdown("**Risk Factors:**")
+                    for component in risk_components:
+                        label = component.get("label", "unknown")
+                        st.caption(f"- {label}")
+                else:
+                    st.caption("No specific risk factors identified.")
+
+                # Latency display
+                st.markdown("---")
+                st.caption(f"Latency: {elapsed_ms:.0f}ms")
+
+                # Raw JSON expander
+                with st.expander("View Raw API Response"):
+                    st.json(json.dumps(result, indent=2, default=str))
+        else:
+            st.markdown("*Submit a transaction to see results*")
+
+
+def _render_model_selector() -> None:
+    """Render model version selector with current production indicator.
+
+    Shows a dropdown of all available model versions with the production
+    model clearly marked. Currently for display purposes - future versions
+    could use this to compare model performance.
+    """
+    # Get API health for live model info
+    api_health = check_api_health()
+    live_model = None
+    if api_health and api_health.get("model_loaded"):
+        live_model = api_health.get("version", "unknown")
+
+    # Get all model versions
+    all_versions = get_model_versions()
+
+    if not all_versions:
+        st.info("No models registered yet. Train a model in Model Lab to get started.")
+        return
+
+    # Build options list with indicators
+    options = []
+    for v in sorted(all_versions, key=lambda x: int(x["version"]), reverse=True):
+        version = v["version"]
+        stage = v["stage"]
+
+        # Build label with indicators
+        label = f"v{version}"
+        indicators = []
+
+        if stage == "Production":
+            indicators.append("PRODUCTION")
+        if live_model and live_model == f"v{version}":
+            indicators.append("LIVE")
+
+        if indicators:
+            label += f" ({', '.join(indicators)})"
+        elif stage != "None":
+            label += f" ({stage})"
+
+        options.append({"label": label, "version": version, "stage": stage})
+
+    # Display current live model status
+    col1, col2 = st.columns([2, 3])
+
+    with col1:
+        if live_model:
+            st.success(f"Live Model: **{live_model}**")
+        else:
+            st.warning("No ML model loaded (using rules)")
+
+    with col2:
+        # Model version dropdown
+        selected_idx = st.selectbox(
+            "View Model Version",
+            options=range(len(options)),
+            format_func=lambda i: options[i]["label"],
+            help="Select a model version to view details. LIVE = serving.",
+        )
+
+        if selected_idx is not None:
+            selected = options[selected_idx]
+            # Store in session state for potential future use
+            st.session_state["selected_model_version"] = selected["version"]
 
 
 def render_analytics() -> None:
@@ -71,6 +231,11 @@ def render_analytics() -> None:
     """
     st.header("Historical Analytics")
     st.markdown("Analyze historical transaction patterns and fraud metrics.")
+
+    # --- Model Selection ---
+    _render_model_selector()
+
+    st.markdown("---")
 
     # Fetch data
     summary = fetch_fraud_summary()
@@ -254,6 +419,220 @@ def render_analytics() -> None:
         )
 
 
+def render_model_lab() -> None:
+    """Render the Model Lab page.
+
+    This page provides model training and registry management:
+    - Train new models with configurable hyperparameters
+    - View experiment runs and metrics
+    - Promote models to production
+    """
+    st.header("Model Lab")
+    st.markdown("Train models and manage the model registry.")
+
+    # Check MLflow connection
+    mlflow_connected = check_mlflow_connection()
+    if not mlflow_connected:
+        st.error(
+            "Cannot connect to MLflow tracking server. "
+            "Make sure the MLflow service is running."
+        )
+        return
+
+    st.success("Connected to MLflow tracking server")
+
+    # --- Section A: Train New Model ---
+    st.subheader("Train New Model")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        max_depth = st.slider(
+            "Max Depth",
+            min_value=2,
+            max_value=12,
+            value=6,
+            step=1,
+            help="Maximum depth of XGBoost trees",
+        )
+
+    with col2:
+        training_window = st.slider(
+            "Training Window (days)",
+            min_value=7,
+            max_value=90,
+            value=30,
+            step=7,
+            help="Number of days before today for training cutoff",
+        )
+
+    train_clicked = st.button("Start Training", type="primary")
+
+    if train_clicked:
+        with st.spinner("Training model... This may take a moment."):
+            try:
+                import requests
+
+                response = requests.post(
+                    f"{API_BASE_URL}/train",
+                    json={
+                        "max_depth": max_depth,
+                        "training_window_days": training_window,
+                    },
+                    timeout=300,  # Training can take a while
+                )
+                result = response.json()
+
+                if result.get("success"):
+                    st.success(f"Training complete! Run ID: `{result.get('run_id')}`")
+                    st.balloons()
+                else:
+                    st.error(f"Training failed: {result.get('error')}")
+            except requests.exceptions.RequestException as e:
+                st.error(f"API request failed: {e}")
+
+    st.markdown("---")
+
+    # --- Section B: Data Management ---
+    st.subheader("Data Management")
+    st.markdown("Generate synthetic training data or clear existing data.")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        num_users = st.slider(
+            "Number of Users",
+            min_value=100,
+            max_value=5000,
+            value=500,
+            step=100,
+            help="Number of unique users to generate",
+        )
+
+    with col2:
+        fraud_rate = st.slider(
+            "Fraud Rate",
+            min_value=0.01,
+            max_value=0.20,
+            value=0.05,
+            step=0.01,
+            format="%.2f",
+            help="Fraction of users with fraud events",
+        )
+
+    drop_existing = st.checkbox(
+        "Drop existing data before generating",
+        value=True,
+        help="If checked, existing data will be deleted before generating new data",
+    )
+
+    col_gen, col_clear = st.columns(2)
+
+    with col_gen:
+        generate_clicked = st.button("Generate Data", type="primary")
+
+    with col_clear:
+        clear_clicked = st.button("Clear All Data", type="secondary")
+
+    if generate_clicked:
+        with st.spinner(f"Generating data for {num_users} users..."):
+            try:
+                import requests
+
+                response = requests.post(
+                    f"{API_BASE_URL}/data/generate",
+                    json={
+                        "num_users": num_users,
+                        "fraud_rate": fraud_rate,
+                        "drop_existing": drop_existing,
+                    },
+                    timeout=300,
+                )
+                result = response.json()
+
+                if result.get("success"):
+                    total = result.get("total_records")
+                    fraud = result.get("fraud_records")
+                    features = result.get("features_materialized")
+                    st.success(
+                        f"Generated {total} records ({fraud} fraud). "
+                        f"Materialized {features} feature snapshots."
+                    )
+                else:
+                    st.error(f"Generation failed: {result.get('error')}")
+            except requests.exceptions.RequestException as e:
+                st.error(f"API request failed: {e}")
+
+    if clear_clicked:
+        with st.spinner("Clearing all data..."):
+            try:
+                import requests
+
+                response = requests.delete(
+                    f"{API_BASE_URL}/data/clear",
+                    timeout=60,
+                )
+                result = response.json()
+
+                if result.get("success"):
+                    tables = ", ".join(result.get("tables_cleared", []))
+                    st.success(f"Cleared tables: {tables}")
+                else:
+                    st.error(f"Clear failed: {result.get('error')}")
+            except requests.exceptions.RequestException as e:
+                st.error(f"API request failed: {e}")
+
+    st.markdown("---")
+
+    # --- Section C: Model Registry ---
+    st.subheader("Model Registry")
+
+    # Show current production model
+    prod_version = get_production_model_version()
+    if prod_version:
+        st.info(f"Current Production Model: Version {prod_version}")
+    else:
+        st.warning("No production model deployed yet.")
+
+    # Fetch and display experiment runs
+    runs_df = get_experiment_runs()
+
+    if len(runs_df) > 0:
+        st.markdown("**Experiment Runs** (sorted by PR-AUC)")
+
+        st.dataframe(
+            runs_df,
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        st.markdown("---")
+
+        # Promote to production
+        st.markdown("**Promote to Production**")
+
+        run_ids = runs_df["Run ID"].tolist()
+        selected_run = st.selectbox(
+            "Select Run ID to promote",
+            options=run_ids,
+            index=0,
+            help="Choose a model run to promote to production",
+        )
+
+        promote_clicked = st.button("Promote to Production", type="secondary")
+
+        if promote_clicked and selected_run:
+            with st.spinner("Promoting model..."):
+                result = promote_to_production(selected_run)
+
+            if result["success"]:
+                st.success(result["message"])
+            else:
+                st.error(result["message"])
+    else:
+        st.info("No experiment runs found. Train a model to see results here.")
+
+
 def main() -> None:
     """Main application entry point."""
     # Sidebar navigation
@@ -262,7 +641,7 @@ def main() -> None:
 
     page = st.sidebar.radio(
         "Navigation",
-        options=["Live Scoring (API)", "Historical Analytics (DB)"],
+        options=["Live Scoring (API)", "Historical Analytics (DB)", "Model Lab"],
         index=0,
     )
 
@@ -275,8 +654,10 @@ def main() -> None:
     # Render selected page
     if page == "Live Scoring (API)":
         render_live_scoring()
-    else:
+    elif page == "Historical Analytics (DB)":
         render_analytics()
+    else:
+        render_model_lab()
 
 
 if __name__ == "__main__":

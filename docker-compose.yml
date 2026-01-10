@@ -5,9 +5,10 @@ services:
     env_file:
       - .env
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-mlflow-db.sql:/docker-entrypoint-initdb.d/init-mlflow-db.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -38,11 +39,20 @@ services:
     container_name: synthetic-data-api
     env_file:
       - .env
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
     ports:
-      - "8000:8000"
+      - "${API_PORT:-8000}:8000"
     command: ["uv", "run", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     depends_on:
       db:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -57,15 +67,85 @@ services:
       dockerfile: src/ui/Dockerfile
     container_name: synthetic-data-dashboard
     ports:
-      - "8501:8501"
+      - "${DASHBOARD_PORT:-8501}:8501"
     environment:
       - API_BASE_URL=http://api:8000
       - DATABASE_URL=postgresql://${POSTGRES_USER:-synthetic}:${POSTGRES_PASSWORD:-synthetic_dev_password}@db:5432/${POSTGRES_DB:-synthetic_data}
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
     depends_on:
       api:
         condition: service_healthy
       db:
         condition: service_healthy
+      mlflow:
+        condition: service_healthy
+
+  minio:
+    image: minio/minio:latest
+    container_name: synthetic-data-minio
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  create-buckets:
+    image: minio/mc
+    container_name: synthetic-data-create-buckets
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      /usr/bin/mc mb --ignore-existing myminio/mlflow-artifacts;
+      /usr/bin/mc anonymous set public myminio/mlflow-artifacts;
+      exit 0;
+      "
+
+  mlflow:
+    build:
+      context: .
+      dockerfile: mlflow.Dockerfile
+    container_name: synthetic-data-mlflow
+    ports:
+      - "${MLFLOW_PORT:-5005}:5000"
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+    command: >
+      mlflow server
+      --backend-store-uri postgresql://${POSTGRES_USER:-synthetic}:${POSTGRES_PASSWORD:-synthetic_dev_password}@db:5432/mlflow_db
+      --default-artifact-root s3://mlflow-artifacts/
+      --host 0.0.0.0
+      --allowed-hosts "*"
+    depends_on:
+      db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
 volumes:
   postgres_data:
+  minio_data:
