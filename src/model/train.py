@@ -7,9 +7,15 @@ import subprocess
 import sys
 import tempfile
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import mlflow
 import mlflow.sklearn
+import xgboost as xgb_pkg
 from mlflow.models import infer_signature
 from sklearn.metrics import (
     average_precision_score,
@@ -21,7 +27,6 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
-import xgboost as xgb_pkg
 from xgboost import XGBClassifier
 
 from model.loader import DataLoader
@@ -51,6 +56,88 @@ def _get_git_sha() -> str | None:
         return out.strip() or None
     except (subprocess.CalledProcessError, FileNotFoundError):
         return None
+
+
+def _save_confusion_matrix_plot(y_test, y_pred, path: str | Path) -> None:
+    """Save confusion matrix as PNG heatmap."""
+    cm = confusion_matrix(y_test, y_pred, labels=[0, 1])
+    fig, ax = plt.subplots(figsize=(6, 5))
+    im = ax.imshow(cm, cmap="Blues")
+    ax.set_xticks([0, 1])
+    ax.set_yticks([0, 1])
+    ax.set_xticklabels(["Legit (0)", "Fraud (1)"])
+    ax.set_yticklabels(["Legit (0)", "Fraud (1)"])
+    ax.set_xlabel("Predicted")
+    ax.set_ylabel("Actual")
+    for i in range(2):
+        for j in range(2):
+            ax.text(j, i, str(cm[i, j]), ha="center", va="center")
+    plt.colorbar(im, ax=ax, label="Count")
+    plt.title("Confusion Matrix")
+    plt.tight_layout()
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
+def _save_feature_importance(
+    clf, feature_names: list[str], path_base: str | Path
+) -> tuple[str, str]:
+    """Save feature importance as JSON and bar chart PNG. Returns paths."""
+    path_base = Path(path_base)
+    importances = clf.feature_importances_
+    data = dict(zip(feature_names, [float(x) for x in importances]))
+    json_path = path_base.with_suffix(".json")
+    with open(json_path, "w") as f:
+        json.dump(data, f, indent=2)
+    fig, ax = plt.subplots(figsize=(8, max(4, len(feature_names) * 0.4)))
+    names = list(data.keys())
+    vals = list(data.values())
+    ax.barh(names, vals)
+    ax.set_xlabel("Importance")
+    ax.set_title("Feature Importance")
+    plt.tight_layout()
+    png_path = path_base.with_name(path_base.stem + "_plot.png")
+    fig.savefig(png_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return str(json_path), str(png_path)
+
+
+def _generate_model_card(params: dict, metrics: dict, path: str | Path) -> None:
+    """Write model card markdown with training summary, metrics, and config."""
+    tr = params.get("train_fraud_rate")
+    te = params.get("test_fraud_rate")
+    tr_s = f"{tr:.4f}" if isinstance(tr, (int, float)) else "N/A"
+    te_s = f"{te:.4f}" if isinstance(te, (int, float)) else "N/A"
+    lines = [
+        "# Model Card",
+        "",
+        "## Training Summary",
+        f"- **Train size:** {params.get('train_size', 'N/A')}",
+        f"- **Test size:** {params.get('test_size', 'N/A')}",
+        f"- **Train fraud rate:** {tr_s}",
+        f"- **Test fraud rate:** {te_s}",
+        "",
+        "## Metrics",
+        "| Metric | Value |",
+        "|--------|-------|",
+    ]
+    for k, v in metrics.items():
+        if isinstance(v, float):
+            lines.append(f"| {k} | {v:.4f} |")
+        else:
+            lines.append(f"| {k} | {v} |")
+    lines.extend(
+        [
+            "",
+            "## Config",
+            f"- **max_depth:** {params.get('max_depth', 'N/A')}",
+            f"- **n_estimators:** {params.get('n_estimators', 'N/A')}",
+            f"- **learning_rate:** {params.get('learning_rate', 'N/A')}",
+            f"- **training_window_days:** {params.get('training_window_days', 'N/A')}",
+        ]
+    )
+    with open(path, "w") as f:
+        f.write("\n".join(lines))
 
 
 def train_model(
@@ -218,6 +305,31 @@ def train_model(
             input_example=split.X_train.iloc[:1],
         )
 
+        # Build params/metrics dicts for model card
+        params_dict = {
+            "train_size": split.train_size,
+            "test_size": split.test_size,
+            "train_fraud_rate": split.train_fraud_rate,
+            "test_fraud_rate": split.test_fraud_rate,
+            "max_depth": max_depth,
+            "n_estimators": n_estimators,
+            "learning_rate": learning_rate,
+            "training_window_days": training_window_days,
+        }
+        metrics_dict = {
+            "precision": precision,
+            "recall": recall,
+            "pr_auc": pr_auc,
+            "f1": f1,
+            "roc_auc": roc_auc_val,
+            "log_loss": log_loss_val,
+            "brier_score": brier,
+            "tp": int(tp),
+            "fp": int(fp),
+            "tn": int(tn),
+            "fn": int(fn),
+        }
+
         # Save and log reference data (X_test) for drift detection
         with tempfile.TemporaryDirectory() as tmpdir:
             reference_path = os.path.join(tmpdir, "reference_data.parquet")
@@ -229,6 +341,24 @@ def train_model(
             with open(feature_columns_path, "w") as f:
                 json.dump(actual_feature_columns, f, indent=2)
             mlflow.log_artifact(feature_columns_path)
+
+            # Confusion matrix plot
+            cm_path = os.path.join(tmpdir, "confusion_matrix.png")
+            _save_confusion_matrix_plot(split.y_test, y_pred, cm_path)
+            mlflow.log_artifact(cm_path)
+
+            # Feature importance JSON + plot
+            fi_base = os.path.join(tmpdir, "feature_importance")
+            fi_json, fi_png = _save_feature_importance(
+                clf, actual_feature_columns, fi_base
+            )
+            mlflow.log_artifact(fi_json)
+            mlflow.log_artifact(fi_png)
+
+            # Model card
+            card_path = os.path.join(tmpdir, "model_card.md")
+            _generate_model_card(params_dict, metrics_dict, card_path)
+            mlflow.log_artifact(card_path)
 
         # Register the model
         model_uri = f"runs:/{run.info.run_id}/model"
