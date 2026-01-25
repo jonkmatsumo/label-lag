@@ -121,6 +121,16 @@ class TrainRequest(BaseModel):
         le=90,
         description="Number of days for training window",
     )
+    selected_feature_columns: list[str] | None = Field(
+        default=None,
+        description="Feature columns to use for training. If None, uses default columns.",
+    )
+
+    def model_post_init(self, __context) -> None:
+        """Validate selected_feature_columns if provided."""
+        if self.selected_feature_columns is not None:
+            if len(self.selected_feature_columns) == 0:
+                raise ValueError("selected_feature_columns cannot be empty if provided")
 
 
 class TrainResponse(BaseModel):
