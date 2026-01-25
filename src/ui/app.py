@@ -1867,12 +1867,62 @@ def render_model_lab() -> None:
                         if not a["is_dir"]:
                             st.caption(a["path"])
 
+        run_ids = runs_df["Run ID"].tolist()
+
+        st.markdown("**Compare runs**")
+        compare_ids = st.multiselect(
+            "Select runs to compare",
+            options=run_ids,
+            default=run_ids[:2] if len(run_ids) >= 2 else run_ids,
+            help="Choose 2+ runs for side-by-side comparison",
+        )
+        if len(compare_ids) >= 2:
+            compare_clicked = st.button("Compare selected")
+            if compare_clicked:
+                details_list = [get_run_details(rid) for rid in compare_ids]
+                metric_keys = ["precision", "recall", "pr_auc", "f1", "roc_auc"]
+                rows = []
+                for k in metric_keys:
+                    row = {"metric": k}
+                    for i, rid in enumerate(compare_ids):
+                        v = details_list[i].get("metrics", {}).get(k)
+                        row[rid[:8]] = v if v is not None else ""
+                    rows.append(row)
+                comp_df = pd.DataFrame(rows).set_index("metric")
+                st.dataframe(comp_df, use_container_width=True, hide_index=False)
+                fig = go.Figure()
+                for i, rid in enumerate(compare_ids):
+                    vals = [
+                        details_list[i].get("metrics", {}).get(k) for k in metric_keys
+                    ]
+                    fig.add_trace(go.Bar(name=rid[:12], x=metric_keys, y=vals))
+                fig.update_layout(
+                    barmode="group",
+                    title="Metrics comparison",
+                    xaxis_title="Metric",
+                    yaxis_title="Value",
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                all_params = set()
+                for d in details_list:
+                    all_params.update(d.get("params", {}).keys())
+                diffs = []
+                for p in sorted(all_params):
+                    vals = [str(d.get("params", {}).get(p, "")) for d in details_list]
+                    if len(set(vals)) > 1:
+                        diffs.append((p, vals))
+                if diffs:
+                    st.markdown("**Config diffs**")
+                    for p, vals in diffs:
+                        parts = " | ".join(
+                            f"{rid[:8]}: {v}" for rid, v in zip(compare_ids, vals)
+                        )
+                        st.caption(f"**{p}**: {parts}")
+
         st.markdown("---")
 
         # Promote to production
         st.markdown("**Promote to Production**")
-
-        run_ids = runs_df["Run ID"].tolist()
         selected_run = st.selectbox(
             "Select Run ID to promote",
             options=run_ids,
