@@ -2598,31 +2598,137 @@ def _render_suggestions_tab() -> None:
             st.markdown(f"**{total} suggestion(s) generated**")
 
             if suggestions:
-                # Suggestions table
-                table_data = []
-                for s in suggestions:
-                    table_data.append(
-                        {
-                            "Field": s.get("field", ""),
-                            "Operator": s.get("operator", ""),
-                            "Threshold": f"{s.get('threshold', 0):.2f}",
-                            "Action": s.get("action", ""),
-                            "Score": s.get("suggested_score", 0),
-                            "Confidence": f"{s.get('confidence', 0) * 100:.0f}%",
-                            "Reason": s.get("reason", ""),
-                        }
-                    )
+                # Store suggestions in session state for acceptance
+                st.session_state.suggestions_list = suggestions
 
-                suggestions_df = pd.DataFrame(table_data)
-                st.dataframe(suggestions_df, use_container_width=True, hide_index=True)
+                # Suggestions table with accept buttons
+                st.markdown("### Suggestions")
+                for i, s in enumerate(suggestions):
+                    with st.container():
+                        col_info, col_action = st.columns([4, 1])
 
-                # Evidence details
+                        with col_info:
+                            st.markdown(
+                                f"**{s.get('field')}** {s.get('operator')} "
+                                f"**{s.get('threshold', 0):.2f}** → "
+                                f"{s.get('action')} (score: {s.get('suggested_score', 0)})"
+                            )
+                            st.caption(
+                                f"Confidence: {s.get('confidence', 0) * 100:.0f}% | "
+                                f"{s.get('reason', '')}"
+                            )
+
+                        with col_action:
+                            if st.button(
+                                "Accept as Draft",
+                                key=f"accept_{i}",
+                                type="secondary",
+                            ):
+                                st.session_state.accept_suggestion_index = i
+                                st.session_state.show_accept_modal = True
+
+                        st.divider()
+
+                # Accept suggestion modal
+                if st.session_state.get("show_accept_modal", False):
+                    accept_idx = st.session_state.get("accept_suggestion_index")
+                    if accept_idx is not None and accept_idx < len(suggestions):
+                        suggestion = suggestions[accept_idx]
+
+                        st.markdown("---")
+                        st.markdown("### Accept Suggestion as Draft Rule")
+
+                        st.info(
+                            f"**Suggestion Details:**\n"
+                            f"- Field: {suggestion.get('field')}\n"
+                            f"- Operator: {suggestion.get('operator')}\n"
+                            f"- Threshold: {suggestion.get('threshold', 0):.2f}\n"
+                            f"- Action: {suggestion.get('action')}\n"
+                            f"- Suggested Score: {suggestion.get('suggested_score', 0)}\n"
+                            f"- Confidence: {suggestion.get('confidence', 0) * 100:.0f}%"
+                        )
+
+                        evidence = suggestion.get("evidence", {})
+                        st.markdown("**Evidence:**")
+                        st.json(evidence)
+
+                        with st.form("accept_suggestion_form"):
+                            custom_id = st.text_input(
+                                "Rule ID (optional)",
+                                value="",
+                                help="Leave empty to auto-generate",
+                            )
+
+                            st.markdown("**Optional Edits:**")
+                            edit_field = st.text_input("Field override (optional)")
+                            edit_score = st.number_input(
+                                "Score override (optional)",
+                                min_value=1,
+                                max_value=99,
+                                value=suggestion.get("suggested_score", 70),
+                            )
+                            edit_reason = st.text_area("Reason override (optional)")
+
+                            col_acc1, col_acc2 = st.columns(2)
+
+                            with col_acc1:
+                                accept_submitted = st.form_submit_button(
+                                    "Accept as Draft", type="primary"
+                                )
+
+                            with col_acc2:
+                                cancel_accept = st.form_submit_button("Cancel")
+
+                            if cancel_accept:
+                                st.session_state.show_accept_modal = False
+                                st.session_state.accept_suggestion_index = None
+                                st.rerun()
+
+                            if accept_submitted:
+                                # Build edits dict
+                                edits = {}
+                                if edit_field:
+                                    edits["field"] = edit_field
+                                if edit_score != suggestion.get("suggested_score", 70):
+                                    edits["suggested_score"] = edit_score
+                                if edit_reason:
+                                    edits["reason"] = edit_reason
+
+                                with st.spinner("Creating draft rule from suggestion..."):
+                                    result = accept_suggestion(
+                                        suggestion=suggestion,
+                                        actor="ui_user",
+                                        custom_id=custom_id if custom_id else None,
+                                        edits=edits if edits else None,
+                                    )
+
+                                if result:
+                                    rule_id = result.get("rule_id", "unknown")
+                                    st.success(
+                                        f"✅ Suggestion accepted! Draft rule '{rule_id}' created."
+                                    )
+                                    st.info(
+                                        "**Next steps:** Navigate to the Draft Rules tab to "
+                                        "review, edit, or submit the rule for review."
+                                    )
+                                    st.session_state.show_accept_modal = False
+                                    st.session_state.accept_suggestion_index = None
+                                    # Clear suggestions to force refresh
+                                    st.session_state.suggestions_list = None
+                                    st.rerun()
+                                else:
+                                    st.error(
+                                        "Failed to accept suggestion. "
+                                        "Check the API server or rule ID conflicts."
+                                    )
+
+                # Evidence details (collapsed by default)
                 st.markdown("### Evidence Details")
                 for i, s in enumerate(suggestions):
                     evidence = s.get("evidence", {})
                     with st.expander(
                         f"{s.get('field')} {s.get('operator')} "
-                        f"{s.get('threshold', 0):.2f}"
+                        f"{s.get('threshold', 0):.2f} - Evidence"
                     ):
                         col_a, col_b, col_c, col_d = st.columns(4)
                         with col_a:
@@ -2639,10 +2745,10 @@ def _render_suggestions_tab() -> None:
                         st.caption(f"Statistic: {evidence.get('statistic', 'N/A')}")
 
                 st.markdown("---")
-            st.info(
-                "To implement a suggestion, create a rule manually with the "
-                "suggested parameters via the API or ruleset configuration."
-            )
+                st.info(
+                    "**Accept as Draft** - Click the button next to any suggestion "
+                    "to create a draft rule. You can edit it before submission."
+                )
 
 
 def _render_draft_rules_tab() -> None:
