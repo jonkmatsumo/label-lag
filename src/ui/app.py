@@ -1,8 +1,9 @@
 """ACH Risk Inspector Dashboard.
 
-A Streamlit dashboard for fraud risk analysis with three modes:
+A Streamlit dashboard for fraud risk analysis with four modes:
 - Live Scoring: Real-time transaction evaluation via API
 - Historical Analytics: Analysis of historical data from database
+- Synthetic Dataset: Generate and manage synthetic training data
 - Model Lab: Train models and manage the model registry
 
 NOTE: This service is isolated and does NOT import from src.model or src.generator.
@@ -419,6 +420,110 @@ def render_analytics() -> None:
         )
 
 
+def render_synthetic_dataset() -> None:
+    """Render the Synthetic Dataset page.
+
+    This page provides controls for generating and managing
+    synthetic training data.
+    """
+    st.header("Synthetic Dataset")
+    st.markdown("Generate and manage synthetic training data for model development.")
+
+    # --- Generate Dataset section ---
+    st.subheader("Generate Dataset")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        num_users = st.slider(
+            "Number of Users",
+            min_value=100,
+            max_value=5000,
+            value=500,
+            step=100,
+            help="Number of unique users to generate",
+        )
+
+    with col2:
+        fraud_rate = st.slider(
+            "Fraud Rate",
+            min_value=0.01,
+            max_value=0.20,
+            value=0.05,
+            step=0.01,
+            format="%.2f",
+            help="Fraction of users with fraud events",
+        )
+
+    drop_existing = st.checkbox(
+        "Drop existing data before generating",
+        value=True,
+        help="If checked, existing data will be deleted before generating new data",
+    )
+
+    generate_clicked = st.button("Generate Data", type="primary")
+
+    if generate_clicked:
+        with st.spinner(f"Generating data for {num_users} users..."):
+            try:
+                import requests
+
+                response = requests.post(
+                    f"{API_BASE_URL}/data/generate",
+                    json={
+                        "num_users": num_users,
+                        "fraud_rate": fraud_rate,
+                        "drop_existing": drop_existing,
+                    },
+                    timeout=300,
+                )
+                result = response.json()
+
+                if result.get("success"):
+                    total = result.get("total_records")
+                    fraud = result.get("fraud_records")
+                    features = result.get("features_materialized")
+                    st.success(
+                        f"Generated {total} records ({fraud} fraud). "
+                        f"Materialized {features} feature snapshots."
+                    )
+                    # Clear caches and refresh UI
+                    st.cache_data.clear()
+                    st.rerun()
+                else:
+                    st.error(f"Generation failed: {result.get('error')}")
+            except requests.exceptions.RequestException as e:
+                st.error(f"API request failed: {e}")
+
+    st.markdown("---")
+
+    # --- Danger Zone section ---
+    with st.expander("Danger Zone"):
+        clear_clicked = st.button("Clear All Data", type="secondary")
+
+        if clear_clicked:
+            with st.spinner("Clearing all data..."):
+                try:
+                    import requests
+
+                    response = requests.delete(
+                        f"{API_BASE_URL}/data/clear",
+                        timeout=60,
+                    )
+                    result = response.json()
+
+                    if result.get("success"):
+                        tables = ", ".join(result.get("tables_cleared", []))
+                        st.success(f"Cleared tables: {tables}")
+                        # Clear caches and refresh UI
+                        st.cache_data.clear()
+                        st.rerun()
+                    else:
+                        st.error(f"Clear failed: {result.get('error')}")
+                except requests.exceptions.RequestException as e:
+                    st.error(f"API request failed: {e}")
+
+
 def render_model_lab() -> None:
     """Render the Model Lab page.
 
@@ -641,7 +746,12 @@ def main() -> None:
 
     page = st.sidebar.radio(
         "Navigation",
-        options=["Live Scoring (API)", "Historical Analytics (DB)", "Model Lab"],
+        options=[
+            "Live Scoring (API)",
+            "Historical Analytics (DB)",
+            "Synthetic Dataset",
+            "Model Lab",
+        ],
         index=0,
     )
 
@@ -656,6 +766,8 @@ def main() -> None:
         render_live_scoring()
     elif page == "Historical Analytics (DB)":
         render_analytics()
+    elif page == "Synthetic Dataset":
+        render_synthetic_dataset()
     else:
         render_model_lab()
 
