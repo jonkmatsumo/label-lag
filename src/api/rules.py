@@ -6,11 +6,22 @@ in a versioned and explainable way.
 
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+class RuleStatus(str, Enum):
+    """Lifecycle status of a rule."""
+
+    DRAFT = "draft"
+    PENDING_REVIEW = "pending_review"
+    ACTIVE = "active"
+    DISABLED = "disabled"
+    ARCHIVED = "archived"
 
 
 @dataclass
@@ -25,9 +36,17 @@ class Rule:
     score: int | None = None
     severity: str = "medium"  # low, medium, high
     reason: str = ""
+    status: str = field(default="active")  # draft, pending_review, active, disabled, archived
 
     def __post_init__(self):
         """Validate rule configuration."""
+        # Validate status
+        valid_statuses = [s.value for s in RuleStatus]
+        if self.status not in valid_statuses:
+            raise ValueError(
+                f"Invalid status: {self.status}. Must be one of {valid_statuses}"
+            )
+
         valid_ops = [">", ">=", "<", "<=", "==", "in", "not_in"]
         if self.op not in valid_ops:
             raise ValueError(f"Invalid operator: {self.op}. Must be one of {valid_ops}")
@@ -93,6 +112,10 @@ class RuleSet:
         rules = []
         for i, rule_dict in enumerate(data["rules"]):
             try:
+                # Backward compatibility: if status is missing, default to "active"
+                if "status" not in rule_dict:
+                    rule_dict = rule_dict.copy()
+                    rule_dict["status"] = "active"
                 rule = Rule(**rule_dict)
                 rules.append(rule)
             except (TypeError, ValueError) as e:
@@ -180,6 +203,10 @@ def evaluate_rules(
     override_applied = False
 
     for rule in ruleset.rules:
+        # Skip non-active rules
+        if rule.status != RuleStatus.ACTIVE.value:
+            continue
+
         # Check if feature exists
         if rule.field not in features:
             continue  # Skip rule if feature missing
