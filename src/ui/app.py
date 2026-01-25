@@ -3314,11 +3314,6 @@ def _render_draft_rules_tab() -> None:
                                 st.error("Failed to update rule. Check the API server.")
         else:
             st.error(f"Could not load rule {rule_id}")
-            else:
-                st.info(
-                    "No suggestions generated. This could mean insufficient data "
-                    "or no patterns meet the confidence threshold."
-                )
 
 
 def main() -> None:
