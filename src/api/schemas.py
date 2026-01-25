@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 from enum import Enum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -310,3 +310,442 @@ class ClearDataResponse(BaseModel):
         description="List of tables that were cleared",
     )
     error: str | None = Field(None, description="Error message if clearing failed")
+
+
+# =============================================================================
+# Rule Inspector Schemas (Phase 1)
+# =============================================================================
+
+
+class SandboxFeatures(BaseModel):
+    """Feature input for sandbox evaluation."""
+
+    velocity_24h: int = Field(
+        default=0,
+        ge=0,
+        le=50,
+        description="Transaction count in last 24 hours",
+    )
+    amount_to_avg_ratio_30d: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=20.0,
+        description="Transaction amount vs 30-day average ratio",
+    )
+    balance_volatility_z_score: float = Field(
+        default=0.0,
+        ge=-5.0,
+        le=5.0,
+        description="Balance volatility z-score",
+    )
+    bank_connections_24h: int = Field(
+        default=0,
+        ge=0,
+        le=30,
+        description="Bank connections in last 24 hours",
+    )
+    merchant_risk_score: int = Field(
+        default=0,
+        ge=0,
+        le=100,
+        description="Merchant risk score (0-100)",
+    )
+    has_history: bool = Field(
+        default=True,
+        description="Whether user has transaction history",
+    )
+    transaction_amount: float = Field(
+        default=100.0,
+        ge=0.0,
+        le=10000.0,
+        description="Transaction amount",
+    )
+
+
+class RuleDefinition(BaseModel):
+    """A single rule definition for sandbox testing."""
+
+    id: str = Field(..., description="Rule identifier")
+    field: str = Field(..., description="Feature field to check")
+    op: str = Field(
+        ...,
+        description="Comparison operator (>, >=, <, <=, ==, in, not_in)",
+    )
+    value: int | float | list = Field(..., description="Value to compare against")
+    action: str = Field(
+        ...,
+        description="Action to take (override_score, clamp_min, clamp_max, reject)",
+    )
+    score: int | None = Field(None, description="Score for score-modifying actions")
+    severity: str = Field(
+        default="medium", description="Rule severity (low/medium/high)"
+    )
+    reason: str = Field(default="", description="Human-readable reason")
+    status: str = Field(default="active", description="Rule status")
+
+
+class RuleSetDefinition(BaseModel):
+    """RuleSet definition for sandbox testing."""
+
+    version: str = Field(..., description="RuleSet version string")
+    rules: list[RuleDefinition] = Field(
+        default_factory=list, description="List of rules"
+    )
+
+
+class SandboxEvaluateRequest(BaseModel):
+    """Request schema for sandbox rule evaluation."""
+
+    features: SandboxFeatures = Field(
+        default_factory=SandboxFeatures,
+        description="Feature values for evaluation",
+    )
+    base_score: int = Field(
+        default=50,
+        ge=1,
+        le=99,
+        description="Base score before rule application",
+    )
+    ruleset: RuleSetDefinition | None = Field(
+        default=None,
+        description="Custom ruleset to evaluate. If None, uses production ruleset.",
+    )
+
+
+class SandboxMatchedRule(BaseModel):
+    """Matched rule in sandbox evaluation result."""
+
+    rule_id: str = Field(..., description="Rule identifier")
+    severity: str = Field(..., description="Rule severity")
+    reason: str = Field(..., description="Human-readable reason")
+    action: str = Field(default="", description="Action taken")
+    score: int | None = Field(None, description="Score value if applicable")
+
+
+class SandboxEvaluateResponse(BaseModel):
+    """Response schema for sandbox rule evaluation."""
+
+    final_score: int = Field(..., description="Final score after rule application")
+    matched_rules: list[SandboxMatchedRule] = Field(
+        default_factory=list,
+        description="Production rules that matched",
+    )
+    explanations: list[dict] = Field(
+        default_factory=list,
+        description="Explanations for matched rules",
+    )
+    shadow_matched_rules: list[SandboxMatchedRule] = Field(
+        default_factory=list,
+        description="Shadow rules that matched (not applied to score)",
+    )
+    rejected: bool = Field(
+        default=False, description="Whether transaction was rejected"
+    )
+    ruleset_version: str = Field(..., description="Version of ruleset used")
+
+
+class RuleMetricsItem(BaseModel):
+    """Metrics for a single rule over a time period."""
+
+    rule_id: str = Field(..., description="Rule identifier")
+    period_start: str = Field(..., description="Period start date (ISO format)")
+    period_end: str = Field(..., description="Period end date (ISO format)")
+    production_matches: int = Field(default=0, description="Production match count")
+    shadow_matches: int = Field(default=0, description="Shadow match count")
+    overlap_count: int = Field(default=0, description="Overlap count")
+    production_only_count: int = Field(default=0, description="Production-only matches")
+    shadow_only_count: int = Field(default=0, description="Shadow-only matches")
+
+
+class ShadowComparisonResponse(BaseModel):
+    """Response schema for shadow mode comparison."""
+
+    period_start: str = Field(..., description="Period start date (ISO format)")
+    period_end: str = Field(..., description="Period end date (ISO format)")
+    rule_metrics: list[RuleMetricsItem] = Field(
+        default_factory=list,
+        description="Per-rule metrics",
+    )
+    total_requests: int = Field(default=0, description="Total requests in period")
+
+
+class BacktestMetricsResponse(BaseModel):
+    """Backtest metrics in response."""
+
+    total_records: int = Field(default=0, description="Total records processed")
+    matched_count: int = Field(default=0, description="Records with matched rules")
+    match_rate: float = Field(default=0.0, description="Match rate (0.0-1.0)")
+    score_distribution: dict[str, int] = Field(
+        default_factory=dict,
+        description="Score distribution by range",
+    )
+    score_mean: float = Field(default=0.0, description="Mean score")
+    score_std: float = Field(default=0.0, description="Score standard deviation")
+    score_min: int = Field(default=0, description="Minimum score")
+    score_max: int = Field(default=0, description="Maximum score")
+    rejected_count: int = Field(default=0, description="Number of rejections")
+    rejected_rate: float = Field(default=0.0, description="Rejection rate (0.0-1.0)")
+
+
+class BacktestResultResponse(BaseModel):
+    """Response schema for a single backtest result."""
+
+    job_id: str = Field(..., description="Backtest job identifier")
+    rule_id: str | None = Field(None, description="Rule ID if testing single rule")
+    ruleset_version: str = Field(..., description="RuleSet version tested")
+    start_date: str = Field(..., description="Backtest start date (ISO format)")
+    end_date: str = Field(..., description="Backtest end date (ISO format)")
+    metrics: BacktestMetricsResponse = Field(..., description="Computed metrics")
+    completed_at: str = Field(..., description="Completion timestamp (ISO format)")
+    error: str | None = Field(None, description="Error message if backtest failed")
+
+
+class BacktestResultsListResponse(BaseModel):
+    """Response schema for backtest results list."""
+
+    results: list[BacktestResultResponse] = Field(
+        default_factory=list,
+        description="List of backtest results",
+    )
+    total: int = Field(default=0, description="Total number of results")
+
+
+class SuggestionEvidence(BaseModel):
+    """Evidence supporting a rule suggestion."""
+
+    statistic: str = Field(..., description="Statistical measure used")
+    value: float = Field(..., description="Threshold value")
+    mean: float = Field(..., description="Mean of the distribution")
+    std: float = Field(..., description="Standard deviation")
+    sample_count: int = Field(default=0, description="Number of samples analyzed")
+
+
+class RuleSuggestionResponse(BaseModel):
+    """Response schema for a single rule suggestion."""
+
+    field: str = Field(..., description="Feature field for the suggested rule")
+    operator: str = Field(..., description="Comparison operator")
+    threshold: float = Field(..., description="Threshold value")
+    action: str = Field(..., description="Suggested action")
+    suggested_score: int = Field(..., description="Suggested score")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence (0.0-1.0)")
+    evidence: SuggestionEvidence = Field(..., description="Supporting evidence")
+    reason: str = Field(default="", description="Human-readable reason")
+
+
+class SuggestionsListResponse(BaseModel):
+    """Response schema for suggestions list."""
+
+    suggestions: list[RuleSuggestionResponse] = Field(
+        default_factory=list,
+        description="List of rule suggestions",
+    )
+    total: int = Field(default=0, description="Total number of suggestions")
+
+
+# =============================================================================
+# Draft Rule Schemas
+# =============================================================================
+
+
+class DraftRuleCreateRequest(BaseModel):
+    """Request schema for creating a draft rule."""
+
+    id: str = Field(..., description="Rule identifier")
+    field: str = Field(..., description="Feature field to check")
+    op: str = Field(
+        ...,
+        description="Comparison operator (>, >=, <, <=, ==, in, not_in)",
+    )
+    value: int | float | list = Field(..., description="Value to compare against")
+    action: str = Field(
+        ...,
+        description="Action to take (override_score, clamp_min, clamp_max, reject)",
+    )
+    score: int | None = Field(
+        None,
+        description="Score for score-modifying actions",
+    )
+    severity: str = Field(
+        default="medium",
+        description="Rule severity (low/medium/high)",
+    )
+    reason: str = Field(default="", description="Human-readable reason")
+    actor: str = Field(..., description="Who is creating this rule")
+
+
+class DraftRuleUpdateRequest(BaseModel):
+    """Request schema for updating a draft rule."""
+
+    field: str | None = Field(None, description="Feature field to check")
+    op: str | None = Field(
+        None,
+        description="Comparison operator (>, >=, <, <=, ==, in, not_in)",
+    )
+    value: int | float | list | None = Field(
+        None, description="Value to compare against"
+    )
+    action: str | None = Field(
+        None,
+        description="Action to take (override_score, clamp_min, clamp_max, reject)",
+    )
+    score: int | None = Field(
+        None,
+        description="Score for score-modifying actions",
+    )
+    severity: str | None = Field(None, description="Rule severity (low/medium/high)")
+    reason: str | None = Field(None, description="Human-readable reason")
+    actor: str = Field(..., description="Who is updating this rule")
+
+
+class ConflictResponse(BaseModel):
+    """Response schema for a rule conflict."""
+
+    rule1_id: str = Field(..., description="First rule ID")
+    rule2_id: str = Field(..., description="Second rule ID")
+    conflict_type: str = Field(..., description="Type of conflict")
+    description: str = Field(..., description="Human-readable description")
+
+
+class RedundancyResponse(BaseModel):
+    """Response schema for a rule redundancy."""
+
+    rule_id: str = Field(..., description="Redundant rule ID")
+    redundant_with: str = Field(..., description="Rule it's redundant with")
+    redundancy_type: str = Field(..., description="Type of redundancy")
+    description: str = Field(..., description="Human-readable description")
+
+
+class ValidationResult(BaseModel):
+    """Validation result for a draft rule."""
+
+    conflicts: list[ConflictResponse] = Field(
+        default_factory=list,
+        description="List of conflicts",
+    )
+    redundancies: list[RedundancyResponse] = Field(
+        default_factory=list,
+        description="List of redundancies",
+    )
+    is_valid: bool = Field(..., description="Whether rule is valid (no conflicts)")
+
+
+class DraftRuleResponse(BaseModel):
+    """Response schema for a draft rule."""
+
+    rule_id: str = Field(..., description="Rule identifier")
+    field: str = Field(..., description="Feature field")
+    op: str = Field(..., description="Comparison operator")
+    value: int | float | list = Field(..., description="Comparison value")
+    action: str = Field(..., description="Action to take")
+    score: int | None = Field(None, description="Score value")
+    severity: str = Field(..., description="Rule severity")
+    reason: str = Field(..., description="Human-readable reason")
+    status: str = Field(..., description="Rule status")
+    created_at: str | None = Field(None, description="Creation timestamp (ISO format)")
+
+
+class DraftRuleCreateResponse(BaseModel):
+    """Response schema for creating a draft rule."""
+
+    rule_id: str = Field(..., description="Rule identifier")
+    rule: DraftRuleResponse = Field(..., description="Created rule")
+    validation: ValidationResult = Field(..., description="Validation results")
+    created_at: str = Field(..., description="Creation timestamp (ISO format)")
+
+
+class DraftRuleListResponse(BaseModel):
+    """Response schema for listing draft rules."""
+
+    rules: list[DraftRuleResponse] = Field(
+        default_factory=list,
+        description="List of draft rules",
+    )
+    total: int = Field(default=0, description="Total number of rules")
+
+
+class DraftRuleUpdateResponse(BaseModel):
+    """Response schema for updating a draft rule."""
+
+    rule: DraftRuleResponse = Field(..., description="Updated rule")
+    version_id: str = Field(..., description="Version ID of the update")
+    validation: ValidationResult = Field(..., description="Validation results")
+
+
+class DraftRuleValidateRequest(BaseModel):
+    """Request schema for validating a draft rule."""
+
+    include_existing_rules: bool = Field(
+        default=True,
+        description="Validate against production ruleset",
+    )
+
+
+class DraftRuleValidateResponse(BaseModel):
+    """Response schema for draft rule validation."""
+
+    schema_errors: list[str] = Field(
+        default_factory=list,
+        description="Schema validation errors",
+    )
+    conflicts: list[ConflictResponse] = Field(
+        default_factory=list,
+        description="List of conflicts",
+    )
+    redundancies: list[RedundancyResponse] = Field(
+        default_factory=list,
+        description="List of redundancies",
+    )
+    is_valid: bool = Field(
+        ..., description="Whether rule is valid (no errors or conflicts)"
+    )
+
+
+class DraftRuleSubmitRequest(BaseModel):
+    """Request schema for submitting a draft rule for review."""
+
+    actor: str = Field(..., description="Who is submitting this rule")
+    justification: str = Field(
+        ...,
+        min_length=10,
+        description="Justification for submission (min 10 characters)",
+    )
+
+
+class DraftRuleSubmitResponse(BaseModel):
+    """Response schema for submitting a draft rule."""
+
+    rule: DraftRuleResponse = Field(..., description="Rule with pending_review status")
+    submitted_at: str = Field(..., description="Submission timestamp (ISO format)")
+    audit_id: str | None = Field(None, description="Audit record ID if available")
+
+
+class AcceptSuggestionRequest(BaseModel):
+    """Request schema for accepting a suggestion as a draft rule."""
+
+    actor: str = Field(..., description="Who is accepting this suggestion")
+    suggestion: RuleSuggestionResponse = Field(
+        ...,
+        description="The suggestion to accept (from suggestions list)",
+    )
+    custom_id: str | None = Field(
+        None,
+        description="Custom rule ID (overrides auto-generated)",
+    )
+    edits: dict[str, Any] | None = Field(
+        None,
+        description="Optional field overrides (field, op, value, action, score, etc.)",
+    )
+
+
+class AcceptSuggestionResponse(BaseModel):
+    """Response schema for accepting a suggestion."""
+
+    rule: DraftRuleResponse = Field(..., description="Created draft rule")
+    rule_id: str = Field(..., description="Rule identifier")
+    source_suggestion: dict[str, Any] = Field(
+        ...,
+        description=(
+            "Source suggestion metadata (confidence, evidence, field, threshold)"
+        ),
+    )

@@ -998,3 +998,404 @@ def check_api_health() -> dict[str, Any] | None:
         return response.json()
     except requests.RequestException:
         return None
+
+
+# =============================================================================
+# Rule Inspector API Clients (Phase 1)
+# =============================================================================
+
+
+def fetch_rules() -> dict[str, Any] | None:
+    """Fetch the current production ruleset.
+
+    Returns:
+        Dict with version and rules, or None if unavailable.
+    """
+    url = f"{API_BASE_URL}/rules"
+
+    try:
+        response = requests.get(url, timeout=API_TIMEOUT)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error fetching rules: {e}")
+        return None
+
+
+def sandbox_evaluate(
+    features: dict[str, Any],
+    base_score: int = 50,
+    ruleset: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Evaluate rules in sandbox mode.
+
+    Args:
+        features: Dict of feature values.
+        base_score: Base score before rule application.
+        ruleset: Optional custom ruleset dict.
+
+    Returns:
+        Evaluation result dict or None if request failed.
+    """
+    url = f"{API_BASE_URL}/rules/sandbox/evaluate"
+
+    payload = {
+        "features": features,
+        "base_score": base_score,
+    }
+    if ruleset is not None:
+        payload["ruleset"] = ruleset
+
+    try:
+        response = requests.post(url, json=payload, timeout=API_TIMEOUT * 2)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error in sandbox evaluation: {e}")
+        return None
+
+
+def fetch_shadow_comparison(
+    start_date: str,
+    end_date: str,
+    rule_ids: list[str] | None = None,
+) -> dict[str, Any] | None:
+    """Fetch shadow mode comparison metrics.
+
+    Args:
+        start_date: Start date (ISO format).
+        end_date: End date (ISO format).
+        rule_ids: Optional list of rule IDs to filter.
+
+    Returns:
+        Comparison report dict or None if unavailable.
+    """
+    url = f"{API_BASE_URL}/metrics/shadow/comparison"
+
+    params = {
+        "start_date": start_date,
+        "end_date": end_date,
+    }
+    if rule_ids:
+        params["rule_ids"] = ",".join(rule_ids)
+
+    try:
+        response = requests.get(url, params=params, timeout=API_TIMEOUT * 2)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error fetching shadow comparison: {e}")
+        return None
+
+
+def fetch_backtest_results(
+    rule_id: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    limit: int = 50,
+) -> dict[str, Any] | None:
+    """Fetch backtest results list.
+
+    Args:
+        rule_id: Optional rule ID filter.
+        start_date: Optional start date filter (ISO format).
+        end_date: Optional end date filter (ISO format).
+        limit: Maximum results to return.
+
+    Returns:
+        Dict with results list or None if unavailable.
+    """
+    url = f"{API_BASE_URL}/backtest/results"
+
+    params = {"limit": limit}
+    if rule_id:
+        params["rule_id"] = rule_id
+    if start_date:
+        params["start_date"] = start_date
+    if end_date:
+        params["end_date"] = end_date
+
+    try:
+        response = requests.get(url, params=params, timeout=API_TIMEOUT * 2)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error fetching backtest results: {e}")
+        return None
+
+
+def fetch_backtest_result(job_id: str) -> dict[str, Any] | None:
+    """Fetch a specific backtest result.
+
+    Args:
+        job_id: Backtest job identifier.
+
+    Returns:
+        Backtest result dict or None if not found.
+    """
+    url = f"{API_BASE_URL}/backtest/results/{job_id}"
+
+    try:
+        response = requests.get(url, timeout=API_TIMEOUT)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error fetching backtest result {job_id}: {e}")
+        return None
+
+
+def fetch_heuristic_suggestions(
+    field: str | None = None,
+    min_confidence: float = 0.7,
+    min_samples: int = 100,
+) -> dict[str, Any] | None:
+    """Fetch heuristic rule suggestions.
+
+    Args:
+        field: Optional feature field to filter.
+        min_confidence: Minimum confidence threshold.
+        min_samples: Minimum samples required for analysis.
+
+    Returns:
+        Dict with suggestions list or None if unavailable.
+    """
+    url = f"{API_BASE_URL}/suggestions/heuristic"
+
+    params = {
+        "min_confidence": min_confidence,
+        "min_samples": min_samples,
+    }
+    if field:
+        params["field"] = field
+
+    try:
+        response = requests.get(url, params=params, timeout=API_TIMEOUT * 3)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error fetching suggestions: {e}")
+        return None
+
+
+# =============================================================================
+# Draft Rule API Clients
+# =============================================================================
+
+
+def create_draft_rule(
+    rule_data: dict[str, Any],
+    actor: str = "ui_user",
+) -> dict[str, Any] | None:
+    """Create a new draft rule.
+
+    Args:
+        rule_data: Dict with rule fields (id, field, op, value, action, etc.).
+        actor: Who is creating the rule.
+
+    Returns:
+        Created rule response or None if request failed.
+    """
+    url = f"{API_BASE_URL}/rules/draft"
+
+    payload = {**rule_data, "actor": actor}
+
+    try:
+        response = requests.post(url, json=payload, timeout=API_TIMEOUT * 2)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error creating draft rule: {e}")
+        return None
+
+
+def list_draft_rules(
+    status: str | None = None,
+    include_archived: bool = False,
+) -> dict[str, Any] | None:
+    """List all draft rules.
+
+    Args:
+        status: Optional status filter.
+        include_archived: Whether to include archived rules.
+
+    Returns:
+        Dict with rules list or None if unavailable.
+    """
+    url = f"{API_BASE_URL}/rules/draft"
+
+    params = {"include_archived": include_archived}
+    if status:
+        params["status"] = status
+
+    try:
+        response = requests.get(url, params=params, timeout=API_TIMEOUT)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error listing draft rules: {e}")
+        return None
+
+
+def get_draft_rule(rule_id: str) -> dict[str, Any] | None:
+    """Get a specific draft rule.
+
+    Args:
+        rule_id: Rule identifier.
+
+    Returns:
+        Rule dict or None if not found.
+    """
+    url = f"{API_BASE_URL}/rules/draft/{rule_id}"
+
+    try:
+        response = requests.get(url, timeout=API_TIMEOUT)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error fetching draft rule {rule_id}: {e}")
+        return None
+
+
+def update_draft_rule(
+    rule_id: str,
+    updates: dict[str, Any],
+    actor: str = "ui_user",
+) -> dict[str, Any] | None:
+    """Update a draft rule.
+
+    Args:
+        rule_id: Rule identifier.
+        updates: Dict with fields to update (all optional).
+        actor: Who is updating the rule.
+
+    Returns:
+        Updated rule response or None if request failed.
+    """
+    url = f"{API_BASE_URL}/rules/draft/{rule_id}"
+
+    payload = {**updates, "actor": actor}
+
+    try:
+        response = requests.put(url, json=payload, timeout=API_TIMEOUT * 2)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error updating draft rule: {e}")
+        return None
+
+
+def delete_draft_rule(rule_id: str, actor: str = "ui_user") -> dict[str, Any] | None:
+    """Archive a draft rule.
+
+    Args:
+        rule_id: Rule identifier.
+        actor: Who is archiving the rule.
+
+    Returns:
+        Success response or None if request failed.
+    """
+    url = f"{API_BASE_URL}/rules/draft/{rule_id}"
+
+    params = {"actor": actor}
+
+    try:
+        response = requests.delete(url, params=params, timeout=API_TIMEOUT)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error deleting draft rule: {e}")
+        return None
+
+
+def validate_draft_rule(
+    rule_id: str,
+    include_existing_rules: bool = True,
+) -> dict[str, Any] | None:
+    """Validate a draft rule.
+
+    Args:
+        rule_id: Rule identifier.
+        include_existing_rules: Whether to validate against production ruleset.
+
+    Returns:
+        Validation results or None if request failed.
+    """
+    url = f"{API_BASE_URL}/rules/draft/{rule_id}/validate"
+
+    payload = {"include_existing_rules": include_existing_rules}
+
+    try:
+        response = requests.post(url, json=payload, timeout=API_TIMEOUT * 2)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error validating draft rule: {e}")
+        return None
+
+
+def submit_draft_rule(
+    rule_id: str,
+    justification: str,
+    actor: str = "ui_user",
+) -> dict[str, Any] | None:
+    """Submit a draft rule for review.
+
+    Args:
+        rule_id: Rule identifier.
+        justification: Justification text (min 10 characters).
+        actor: Who is submitting the rule.
+
+    Returns:
+        Submission response or None if request failed.
+    """
+    url = f"{API_BASE_URL}/rules/draft/{rule_id}/submit"
+
+    payload = {
+        "actor": actor,
+        "justification": justification,
+    }
+
+    try:
+        response = requests.post(url, json=payload, timeout=API_TIMEOUT * 2)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error submitting draft rule: {e}")
+        return None
+
+
+def accept_suggestion(
+    suggestion: dict[str, Any],
+    actor: str = "ui_user",
+    custom_id: str | None = None,
+    edits: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Accept a suggestion as a draft rule.
+
+    Args:
+        suggestion: Suggestion data from suggestions list.
+        actor: Who is accepting the suggestion.
+        custom_id: Optional custom rule ID.
+        edits: Optional field overrides.
+
+    Returns:
+        Created rule response or None if request failed.
+    """
+    url = f"{API_BASE_URL}/suggestions/accept"
+
+    payload = {
+        "actor": actor,
+        "suggestion": suggestion,
+    }
+    if custom_id:
+        payload["custom_id"] = custom_id
+    if edits:
+        payload["edits"] = edits
+
+    try:
+        response = requests.post(url, json=payload, timeout=API_TIMEOUT * 2)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error accepting suggestion: {e}")
+        return None

@@ -1,6 +1,6 @@
 # Label Lag
 
-End-to-end ML system for fraud detection with realistic label delay simulation. Generates synthetic transaction data, trains XGBoost models with MLflow tracking, serves predictions via API, and provides a dashboard for analysis and model management.
+End-to-end ML system for fraud detection with realistic label delay simulation. Combines XGBoost models and rule-based decision engine for hybrid fraud scoring. Generates synthetic transaction data, trains models with MLflow tracking, serves predictions via API, and provides a dashboard for analysis, model management, and rule authoring.
 
 ## Quick Start
 
@@ -39,7 +39,7 @@ docker compose -f docker-compose.infra.yml -f docker-compose.app.yml up -d api
 
 | Service | URL | Description |
 |---------|-----|-------------|
-| Dashboard | http://localhost:8501 | Streamlit UI for scoring, analytics, and model training |
+| Dashboard | http://localhost:8501 | Streamlit UI for scoring, analytics, model training, and rule authoring |
 | API | http://localhost:8000 | FastAPI fraud scoring and training endpoints |
 | API Docs | http://localhost:8000/docs | Swagger UI |
 | MLflow | http://localhost:5005 | Experiment tracking and model registry |
@@ -50,7 +50,7 @@ All ports are configurable via `.env` file.
 
 ## Dashboard
 
-The Streamlit dashboard provides three main views:
+The Streamlit dashboard provides five main views:
 
 ### Live Scoring
 - Submit transactions for real-time fraud risk evaluation
@@ -65,21 +65,34 @@ The Streamlit dashboard provides three main views:
 - Transaction amount distribution by fraud status
 - Recent high-risk alerts table
 
+### Synthetic Dataset
+- **Data Generation**: Generate synthetic transaction data with configurable user count and fraud rate
+- **Dataset Overview**: Total records, fraud statistics, timestamp ranges, schema summary
+- **Feature Analysis**: Histograms, box plots, correlation matrices (Pearson, Spearman, Cramér's V)
+- **Data Sampling**: Stratified sampling with fraud status preservation
+
 ### Model Lab
-- **Train Models**: Configure max depth and training window, train XGBoost models
-- **Data Management**: Generate synthetic data or clear existing data
+- **Train Models**: Configure feature columns, hyperparameters, and training window
 - **Model Registry**: View experiment runs sorted by PR-AUC, promote models to production
+- **Training Progress**: Real-time training metrics and completion status
 
-## API Endpoints
+### Rule Inspector
+- **Sandbox**: Deterministic rule testing with custom features and rulesets (no side effects, no DB writes)
+- **Shadow Metrics**: Compare production rules vs shadow rules with match counts and overlap statistics
+- **Backtest Results**: View historical rule performance metrics and score distributions
+- **Suggestions**: Browse heuristic rule recommendations based on feature distributions
+- **Draft Rules**: Author, validate, and submit rules through the lifecycle workflow
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/signal` | POST | Evaluate transaction fraud risk |
-| `/train` | POST | Train a new model with MLflow tracking |
-| `/reload-model` | POST | Reload production model from registry |
-| `/data/generate` | POST | Generate synthetic transaction data |
-| `/data/clear` | DELETE | Clear all transaction data |
-| `/health` | GET | Health check with model status |
+## API
+
+The API provides endpoints for:
+
+- **Evaluation**: Real-time fraud scoring with hybrid ML + rules (`POST /evaluate/signal`)
+- **Training**: Model training with MLflow tracking (`POST /train`)
+- **Data**: Synthetic data generation and management (`POST /data/generate`, `DELETE /data/clear`)
+- **Rules**: Sandbox testing, draft rule management, heuristic suggestions, shadow metrics, and backtest results
+
+Full API documentation with request/response schemas available at http://localhost:8000/docs (Swagger UI).
 
 ## CLI Commands
 
@@ -141,38 +154,89 @@ make lint-fix     # Auto-fix issues
 
 ```
 src/
-├── api/              # FastAPI application
-│   ├── main.py       # API endpoints
-│   ├── services.py   # SignalEvaluator with ML model integration
-│   ├── model_manager.py  # MLflow model loading
-│   └── schemas.py    # Pydantic request/response models
-├── model/            # ML training pipeline
-│   ├── train.py      # XGBoost training with MLflow
-│   └── loader.py     # Point-in-time correct data loading
-├── monitor/          # Production monitoring
-│   └── detect_drift.py   # PSI-based drift detection
-├── pipeline/         # Feature engineering
-│   └── materialize_features.py  # SQL window functions
-├── generator/        # Stateful user simulation
-│   └── core.py       # BustOut, Sleeper, and other fraud profiles
-├── synthetic_pipeline/   # Core data generation
-│   ├── generator.py  # DataGenerator with sequences
-│   ├── graph.py      # Graph network generation
-│   ├── db/           # Database models and session
-│   └── models/       # Pydantic domain models
+├── api/              # FastAPI app, rule engine, evaluation services
+├── model/            # XGBoost training, evaluation, tuning
+├── monitor/          # Drift detection (PSI)
+├── pipeline/         # Feature materialization (SQL window functions)
+├── generator/        # Stateful fraud profile simulation
+├── synthetic_pipeline/  # Core data generation, DB models
 └── ui/               # Streamlit dashboard
-    ├── app.py        # Dashboard application
-    ├── data_service.py   # API and DB queries
-    └── mlflow_utils.py   # MLflow client utilities
 ```
+
+### Package Responsibilities
+
+- **`api/`**: FastAPI application with hybrid ML + rule evaluation, rule lifecycle management (draft → active → shadow), validation, audit logging, versioning, backtesting, and heuristic suggestions
+- **`model/`**: XGBoost training pipeline with MLflow integration, hyperparameter tuning (Optuna), temporal train/test splitting, and score calibration
+- **`monitor/`**: Population Stability Index (PSI) drift detection comparing production model reference data with live feature distributions
+- **`pipeline/`**: Point-in-time correct feature engineering using SQL window functions to prevent data leakage
+- **`generator/`**: Stateful user simulation with fraud profiles (BustOut, Sleeper ATO) and label delay modeling
+- **`synthetic_pipeline/`**: Core synthetic data generation with graph network relationships, database persistence, and Pydantic domain models
+- **`ui/`**: Streamlit dashboard with five pages: Live Scoring, Historical Analytics, Synthetic Dataset, Model Lab, and Rule Inspector
 
 ### Key Components
 
-- **SignalEvaluator**: Queries real features from `feature_snapshots` table, uses ML model when available, falls back to rule-based scoring for unknown users
-- **ModelManager**: Loads production models from MLflow registry, supports hot-reloading on promotion
-- **FeatureMaterializer**: SQL window functions compute point-in-time correct features without data leakage
+- **SignalEvaluator**: Hybrid scoring combining ML model predictions with rule-based adjustments, queries features from `feature_snapshots` table
+- **ModelManager**: Loads production models from MLflow registry with hot-reload support on promotion
+- **RuleEvaluator**: Matches transaction features against rule conditions, applies actions (override_score, clamp, reject) with precedence
+- **DraftRuleStore**: Manages draft rule authoring workflow with validation, conflict detection, and state transitions
+- **FeatureMaterializer**: SQL window functions compute point-in-time correct features without future data leakage
 - **DataLoader**: Temporal train/test split respecting label maturity (fraud confirmation dates)
 - **DriftDetector**: PSI calculation comparing reference data (from model artifacts) with live feature distributions
+
+## Rule Engine
+
+The system includes a comprehensive rule-based decision engine that works alongside ML models for hybrid fraud scoring.
+
+### Rule Structure
+
+Rules consist of:
+- **Field**: Feature to evaluate (e.g., `velocity_24h`, `amount_to_avg_ratio_30d`)
+- **Operator**: Comparison operator (`>`, `>=`, `<`, `<=`, `==`, `in`, `not_in`)
+- **Value**: Threshold or comparison value
+- **Action**: What to do when matched (`override_score`, `clamp_min`, `clamp_max`, `reject`)
+- **Severity**: Risk level (`low`, `medium`, `high`)
+- **Status**: Lifecycle state (see below)
+
+### Rule Lifecycle
+
+Rules progress through states with controlled transitions:
+
+```mermaid
+stateDiagram-v2
+    [*] --> draft
+    draft --> pending_review
+    pending_review --> active: approved
+    pending_review --> draft: rejected
+    active --> shadow: test mode
+    active --> disabled: deactivate
+    shadow --> active: promote
+    shadow --> disabled: deactivate
+    disabled --> active: reactivate
+    disabled --> archived: permanent removal
+    archived --> [*]
+```
+
+- **draft**: Initial creation, can be edited and validated
+- **pending_review**: Submitted for approval, cannot be edited
+- **active**: Production-active, affects scoring
+- **shadow**: Evaluated but not applied (for A/B testing)
+- **disabled**: Temporarily inactive
+- **archived**: Terminal state, historical record only
+
+### Shadow Mode
+
+Shadow rules are evaluated alongside production rules but don't affect the final score. This enables:
+- Safe testing of new rules without production impact
+- Comparison metrics between production and shadow rule performance
+- Gradual rollout of rule changes
+
+### Sandbox Testing
+
+The sandbox provides deterministic rule evaluation with no side effects:
+- Test rules against arbitrary feature inputs
+- Use custom rulesets (ephemeral, not saved)
+- Inspect matched rules and explanations
+- No database writes or production impact
 
 ## Fraud Patterns
 

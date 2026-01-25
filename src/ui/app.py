@@ -21,15 +21,28 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 from ui.data_service import (
+    accept_suggestion,
     check_api_health,
+    create_draft_rule,
+    delete_draft_rule,
+    fetch_backtest_results,
     fetch_daily_stats,
     fetch_feature_sample,
     fetch_fraud_summary,
+    fetch_heuristic_suggestions,
     fetch_overview_metrics,
     fetch_recent_alerts,
+    fetch_rules,
     fetch_schema_summary,
+    fetch_shadow_comparison,
     fetch_transaction_details,
+    get_draft_rule,
+    list_draft_rules,
     predict_risk,
+    sandbox_evaluate,
+    submit_draft_rule,
+    update_draft_rule,
+    validate_draft_rule,
 )
 from ui.mlflow_utils import (
     check_mlflow_connection,
@@ -2016,6 +2029,1330 @@ def render_model_lab() -> None:
         st.info("No experiment runs found. Train a model to see results here.")
 
 
+def render_rule_inspector() -> None:
+    """Render the Rule Inspector page.
+
+    This page provides rule inspection, testing, and draft rule authoring:
+    - Sandbox: Deterministic rule testing
+    - Shadow Metrics: Production vs shadow comparison
+    - Backtest Results: Historical backtest viewer
+    - Suggestions: Heuristic rule suggestions
+    - Draft Rules: Create, edit, and manage draft rules
+
+    Draft rules can be created and edited, but cannot affect production
+    until submitted for review and approved.
+    """
+    st.header("Rule Inspector")
+
+    # Safety banner
+    st.info(
+        "**Draft Rule Authoring Mode** - Draft rules can be created and edited. "
+        "No production impact until submitted for review and approved."
+    )
+
+    # Create tabs
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+        [
+            "Sandbox (Testing)",
+            "Shadow Metrics (Read-Only)",
+            "Backtest Results (Read-Only)",
+            "Suggestions (Read-Only)",
+            "Draft Rules",
+        ]
+    )
+
+    # --- Tab 1: Sandbox ---
+    with tab1:
+        _render_sandbox_tab()
+
+    # --- Tab 2: Shadow Metrics ---
+    with tab2:
+        _render_shadow_metrics_tab()
+
+    # --- Tab 3: Backtest Results ---
+    with tab3:
+        _render_backtest_tab()
+
+    # --- Tab 4: Suggestions ---
+    with tab4:
+        _render_suggestions_tab()
+
+    # --- Tab 5: Draft Rules ---
+    with tab5:
+        _render_draft_rules_tab()
+
+
+def _render_sandbox_tab() -> None:
+    """Render the Sandbox testing tab."""
+    st.subheader("Rule Sandbox")
+    st.markdown(
+        "Test rule evaluation against arbitrary feature inputs. "
+        "**No database writes, no model inference, no production changes.**"
+    )
+
+    st.info(
+        "**SANDBOX MODE** - This is a pure function evaluation. "
+        "Custom rulesets are ephemeral and not saved."
+    )
+
+    col1, col2 = st.columns([1, 1])
+
+    with col1:
+        st.markdown("#### Feature Inputs")
+
+        # Feature sliders/inputs
+        velocity_24h = st.slider(
+            "velocity_24h",
+            min_value=0,
+            max_value=50,
+            value=3,
+            help="Transaction count in last 24 hours",
+        )
+
+        amount_to_avg_ratio = st.slider(
+            "amount_to_avg_ratio_30d",
+            min_value=0.0,
+            max_value=20.0,
+            value=1.5,
+            step=0.1,
+            help="Transaction amount vs 30-day average ratio",
+        )
+
+        balance_volatility = st.slider(
+            "balance_volatility_z_score",
+            min_value=-5.0,
+            max_value=5.0,
+            value=0.0,
+            step=0.1,
+            help="Balance volatility z-score",
+        )
+
+        bank_connections = st.slider(
+            "bank_connections_24h",
+            min_value=0,
+            max_value=30,
+            value=1,
+            help="Bank connections in last 24 hours",
+        )
+
+        merchant_risk = st.slider(
+            "merchant_risk_score",
+            min_value=0,
+            max_value=100,
+            value=30,
+            help="Merchant risk score",
+        )
+
+        has_history = st.checkbox("has_history", value=True, help="User has history")
+
+        transaction_amount = st.number_input(
+            "transaction_amount",
+            min_value=0.0,
+            max_value=10000.0,
+            value=100.0,
+            step=10.0,
+            help="Transaction amount",
+        )
+
+        st.markdown("---")
+
+        base_score = st.slider(
+            "Base Score",
+            min_value=1,
+            max_value=99,
+            value=50,
+            help="Base score before rule application",
+        )
+
+    with col2:
+        st.markdown("#### Ruleset Selection")
+
+        ruleset_source = st.radio(
+            "Ruleset Source",
+            options=["Production Ruleset", "Custom JSON"],
+            index=0,
+            help="Choose ruleset to evaluate",
+        )
+
+        custom_ruleset = None
+        if ruleset_source == "Custom JSON":
+            default_json = """{
+  "version": "test_v1",
+  "rules": [
+    {
+      "id": "high_velocity",
+      "field": "velocity_24h",
+      "op": ">",
+      "value": 5,
+      "action": "clamp_min",
+      "score": 70,
+      "severity": "medium",
+      "reason": "High transaction velocity",
+      "status": "active"
+    }
+  ]
+}"""
+            json_input = st.text_area(
+                "Custom Ruleset JSON",
+                value=default_json,
+                height=300,
+                help="Paste custom ruleset JSON (ephemeral - not saved)",
+            )
+
+            try:
+                custom_ruleset = json.loads(json_input)
+                st.success("Valid JSON")
+            except json.JSONDecodeError as e:
+                st.error(f"Invalid JSON: {e}")
+                custom_ruleset = None
+        else:
+            # Show current production ruleset
+            with st.expander("View Production Ruleset"):
+                prod_rules = fetch_rules()
+                if prod_rules:
+                    st.json(prod_rules)
+                else:
+                    st.info("No production ruleset loaded.")
+
+        st.markdown("---")
+
+        evaluate_clicked = st.button("Evaluate Rules", type="primary")
+
+    # Evaluation results
+    if evaluate_clicked:
+        features = {
+            "velocity_24h": velocity_24h,
+            "amount_to_avg_ratio_30d": amount_to_avg_ratio,
+            "balance_volatility_z_score": balance_volatility,
+            "bank_connections_24h": bank_connections,
+            "merchant_risk_score": merchant_risk,
+            "has_history": has_history,
+            "transaction_amount": transaction_amount,
+        }
+
+        with st.spinner("Evaluating rules..."):
+            result = sandbox_evaluate(features, base_score, custom_ruleset)
+
+        if result is None:
+            st.error("Evaluation failed. Is the API server running?")
+        else:
+            st.markdown("---")
+            st.markdown("### Evaluation Results")
+
+            # Score display
+            final_score = result.get("final_score", 0)
+            rejected = result.get("rejected", False)
+
+            col_a, col_b, col_c = st.columns(3)
+
+            with col_a:
+                if rejected:
+                    st.error(f"**Final Score: {final_score}** (REJECTED)")
+                elif final_score >= 80:
+                    st.error(f"**Final Score: {final_score}** (High Risk)")
+                elif final_score >= 50:
+                    st.warning(f"**Final Score: {final_score}** (Medium Risk)")
+                else:
+                    st.success(f"**Final Score: {final_score}** (Low Risk)")
+
+            with col_b:
+                st.metric("Base Score", base_score)
+
+            with col_c:
+                st.metric("Score Change", final_score - base_score)
+
+            # Matched rules table
+            matched_rules = result.get("matched_rules", [])
+            if matched_rules:
+                st.markdown("#### Matched Rules (Applied to Score)")
+                rules_df = pd.DataFrame(matched_rules)
+                st.dataframe(rules_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("No rules matched.")
+
+            # Shadow matched rules table
+            shadow_matched = result.get("shadow_matched_rules", [])
+            if shadow_matched:
+                st.markdown("#### Shadow Rules Matched (Not Applied)")
+                shadow_df = pd.DataFrame(shadow_matched)
+                st.dataframe(shadow_df, use_container_width=True, hide_index=True)
+
+            # Raw response
+            with st.expander("View Raw Response"):
+                st.json(result)
+
+
+def _render_shadow_metrics_tab() -> None:
+    """Render the Shadow Metrics tab."""
+    st.subheader("Shadow Mode Metrics")
+    st.markdown(
+        "Compare production vs shadow rule performance. "
+        "**Read-only view - no modifications possible.**"
+    )
+
+    # Date range selector
+    from datetime import datetime as dt
+    from datetime import timedelta
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        default_start = dt.now() - timedelta(days=30)
+        start_date = st.date_input(
+            "Start Date",
+            value=default_start,
+            help="Start of comparison period",
+        )
+
+    with col2:
+        end_date = st.date_input(
+            "End Date",
+            value=dt.now(),
+            help="End of comparison period",
+        )
+
+    fetch_clicked = st.button("Fetch Metrics", type="primary")
+
+    if fetch_clicked:
+        with st.spinner("Fetching shadow metrics..."):
+            result = fetch_shadow_comparison(
+                start_date=start_date.isoformat(),
+                end_date=end_date.isoformat(),
+            )
+
+        if result is None:
+            st.error("Failed to fetch metrics. Is the API server running?")
+        else:
+            rule_metrics = result.get("rule_metrics", [])
+            total_requests = result.get("total_requests", 0)
+
+            # Summary cards
+            st.markdown("---")
+            st.markdown("### Summary")
+
+            col_a, col_b, col_c, col_d = st.columns(4)
+
+            total_prod = sum(m.get("production_matches", 0) for m in rule_metrics)
+            total_shadow = sum(m.get("shadow_matches", 0) for m in rule_metrics)
+            total_overlap = sum(m.get("overlap_count", 0) for m in rule_metrics)
+
+            with col_a:
+                st.metric("Total Requests", total_requests)
+
+            with col_b:
+                st.metric("Production Matches", total_prod)
+
+            with col_c:
+                st.metric("Shadow Matches", total_shadow)
+
+            with col_d:
+                overlap_pct = (
+                    (total_overlap / max(total_prod, 1)) * 100 if total_prod > 0 else 0
+                )
+                st.metric("Overlap %", f"{overlap_pct:.1f}%")
+
+            # Per-rule metrics table
+            if rule_metrics:
+                st.markdown("### Per-Rule Metrics")
+                metrics_df = pd.DataFrame(rule_metrics)
+
+                # Select display columns
+                display_cols = [
+                    "rule_id",
+                    "production_matches",
+                    "shadow_matches",
+                    "overlap_count",
+                    "production_only_count",
+                    "shadow_only_count",
+                ]
+                available_cols = [c for c in display_cols if c in metrics_df.columns]
+                if available_cols:
+                    st.dataframe(
+                        metrics_df[available_cols],
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+                # Bar chart comparison
+                if len(metrics_df) > 0:
+                    st.markdown("### Production vs Shadow Matches")
+                    chart_data = metrics_df[
+                        ["rule_id", "production_matches", "shadow_matches"]
+                    ].melt(
+                        id_vars=["rule_id"],
+                        var_name="Match Type",
+                        value_name="Count",
+                    )
+                    fig = px.bar(
+                        chart_data,
+                        x="rule_id",
+                        y="Count",
+                        color="Match Type",
+                        barmode="group",
+                        title="Rule Match Comparison",
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info(
+                    "No shadow metrics collected yet. "
+                    "Shadow rules record matches when requests are processed."
+                )
+
+
+def _render_backtest_tab() -> None:
+    """Render the Backtest Results tab."""
+    st.subheader("Backtest Results")
+    st.markdown(
+        "Browse completed backtest results. "
+        "**Read-only view - no backtests can be triggered from here.**"
+    )
+
+    # Filters
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        rule_id_filter = st.text_input(
+            "Rule ID Filter",
+            value="",
+            help="Filter by specific rule ID (optional)",
+        )
+
+    with col2:
+        limit = st.slider(
+            "Max Results",
+            min_value=10,
+            max_value=100,
+            value=50,
+            help="Maximum results to display",
+        )
+
+    with col3:
+        fetch_clicked = st.button("Fetch Results", type="primary")
+
+    if fetch_clicked or "backtest_results" not in st.session_state:
+        with st.spinner("Fetching backtest results..."):
+            result = fetch_backtest_results(
+                rule_id=rule_id_filter if rule_id_filter else None,
+                limit=limit,
+            )
+
+        if result is None:
+            st.error("Failed to fetch results. Is the API server running?")
+            st.session_state.backtest_results = None
+        else:
+            st.session_state.backtest_results = result
+
+    results = st.session_state.get("backtest_results")
+    if results:
+        results_list = results.get("results", [])
+        total = results.get("total", 0)
+
+        st.markdown(f"**{total} result(s) found**")
+
+        if results_list:
+            # Results table
+            table_data = []
+            for r in results_list:
+                metrics = r.get("metrics", {})
+                table_data.append(
+                    {
+                        "Job ID": r.get("job_id", ""),
+                        "Rule ID": r.get("rule_id") or "All",
+                        "Ruleset Version": r.get("ruleset_version", ""),
+                        "Match Rate": f"{metrics.get('match_rate', 0) * 100:.1f}%",
+                        "Total Records": metrics.get("total_records", 0),
+                        "Completed At": r.get("completed_at", "")[:19],
+                    }
+                )
+
+            results_df = pd.DataFrame(table_data)
+            st.dataframe(results_df, use_container_width=True, hide_index=True)
+
+            # Detail view
+            st.markdown("### Result Details")
+            selected_job = st.selectbox(
+                "Select Job ID for Details",
+                options=[r.get("job_id", "") for r in results_list],
+                help="View detailed metrics for a specific backtest",
+            )
+
+            if selected_job:
+                selected_result = next(
+                    (r for r in results_list if r.get("job_id") == selected_job), None
+                )
+                if selected_result:
+                    metrics = selected_result.get("metrics", {})
+
+                    col_a, col_b, col_c, col_d = st.columns(4)
+                    with col_a:
+                        st.metric("Total Records", metrics.get("total_records", 0))
+                    with col_b:
+                        st.metric("Matched Count", metrics.get("matched_count", 0))
+                    with col_c:
+                        st.metric(
+                            "Match Rate",
+                            f"{metrics.get('match_rate', 0) * 100:.1f}%",
+                        )
+                    with col_d:
+                        st.metric("Rejected Count", metrics.get("rejected_count", 0))
+
+                    # Score distribution
+                    score_dist = metrics.get("score_distribution", {})
+                    if score_dist:
+                        st.markdown("#### Score Distribution")
+                        dist_df = pd.DataFrame(
+                            [{"Range": k, "Count": v} for k, v in score_dist.items()]
+                        )
+                        fig = px.bar(
+                            dist_df,
+                            x="Range",
+                            y="Count",
+                            title="Score Distribution",
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+
+                    # Error display
+                    error = selected_result.get("error")
+                    if error:
+                        st.error(f"Backtest Error: {error}")
+
+                    # Full details
+                    with st.expander("View Full Details"):
+                        st.json(selected_result)
+        else:
+            st.info(
+                "No backtest results available. "
+                "Backtests must be triggered via CLI or API."
+            )
+
+
+def _render_suggestions_tab() -> None:
+    """Render the Suggestions tab."""
+    st.subheader("Rule Suggestions")
+    st.markdown(
+        "Heuristic rule suggestions based on feature distribution analysis. "
+        "**Preview only - no rules are created.**"
+    )
+
+    st.warning(
+        "**PREVIEW ONLY** - These are suggestions based on statistical analysis. "
+        "No rules are created or modified. Review carefully before implementing."
+    )
+
+    # Filters
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        field_options = [
+            "",
+            "velocity_24h",
+            "amount_to_avg_ratio_30d",
+            "balance_volatility_z_score",
+        ]
+        field_filter = st.selectbox(
+            "Field Filter",
+            options=field_options,
+            help="Filter suggestions by field (optional)",
+        )
+
+    with col2:
+        min_confidence = st.slider(
+            "Min Confidence",
+            min_value=0.5,
+            max_value=1.0,
+            value=0.7,
+            step=0.05,
+            help="Minimum confidence threshold",
+        )
+
+    with col3:
+        min_samples = st.number_input(
+            "Min Samples",
+            min_value=10,
+            max_value=10000,
+            value=100,
+            step=50,
+            help="Minimum samples required",
+        )
+
+    with col4:
+        generate_clicked = st.button("Generate Suggestions", type="primary")
+
+    if generate_clicked:
+        with st.spinner("Analyzing feature distributions..."):
+            result = fetch_heuristic_suggestions(
+                field=field_filter if field_filter else None,
+                min_confidence=min_confidence,
+                min_samples=min_samples,
+            )
+
+        if result is None:
+            st.error("Failed to generate suggestions. Is the API server running?")
+        else:
+            suggestions = result.get("suggestions", [])
+            total = result.get("total", 0)
+
+            st.markdown(f"**{total} suggestion(s) generated**")
+
+            if suggestions:
+                # Store suggestions in session state for acceptance
+                st.session_state.suggestions_list = suggestions
+
+                # Suggestions table with accept buttons
+                st.markdown("### Suggestions")
+                for i, s in enumerate(suggestions):
+                    with st.container():
+                        col_info, col_action = st.columns([4, 1])
+
+                        with col_info:
+                            st.markdown(
+                                f"**{s.get('field')}** {s.get('operator')} "
+                                f"**{s.get('threshold', 0):.2f}** → "
+                                f"{s.get('action')} "
+                                f"(score: {s.get('suggested_score', 0)})"
+                            )
+                            st.caption(
+                                f"Confidence: {s.get('confidence', 0) * 100:.0f}% | "
+                                f"{s.get('reason', '')}"
+                            )
+
+                        with col_action:
+                            if st.button(
+                                "Accept as Draft",
+                                key=f"accept_{i}",
+                                type="secondary",
+                            ):
+                                st.session_state.accept_suggestion_index = i
+                                st.session_state.show_accept_modal = True
+
+                        st.divider()
+
+                # Accept suggestion modal
+                if st.session_state.get("show_accept_modal", False):
+                    accept_idx = st.session_state.get("accept_suggestion_index")
+                    if accept_idx is not None and accept_idx < len(suggestions):
+                        suggestion = suggestions[accept_idx]
+
+                        st.markdown("---")
+                        st.markdown("### Accept Suggestion as Draft Rule")
+
+                        st.info(
+                            f"**Suggestion Details:**\n"
+                            f"- Field: {suggestion.get('field')}\n"
+                            f"- Operator: {suggestion.get('operator')}\n"
+                            f"- Threshold: {suggestion.get('threshold', 0):.2f}\n"
+                            f"- Action: {suggestion.get('action')}\n"
+                            f"- Suggested Score: "
+                            f"{suggestion.get('suggested_score', 0)}\n"
+                            f"- Confidence: "
+                            f"{suggestion.get('confidence', 0) * 100:.0f}%"
+                        )
+
+                        evidence = suggestion.get("evidence", {})
+                        st.markdown("**Evidence:**")
+                        st.json(evidence)
+
+                        with st.form("accept_suggestion_form"):
+                            custom_id = st.text_input(
+                                "Rule ID (optional)",
+                                value="",
+                                help="Leave empty to auto-generate",
+                            )
+
+                            st.markdown("**Optional Edits:**")
+                            edit_field = st.text_input("Field override (optional)")
+                            edit_score = st.number_input(
+                                "Score override (optional)",
+                                min_value=1,
+                                max_value=99,
+                                value=suggestion.get("suggested_score", 70),
+                            )
+                            edit_reason = st.text_area("Reason override (optional)")
+
+                            col_acc1, col_acc2 = st.columns(2)
+
+                            with col_acc1:
+                                accept_submitted = st.form_submit_button(
+                                    "Accept as Draft", type="primary"
+                                )
+
+                            with col_acc2:
+                                cancel_accept = st.form_submit_button("Cancel")
+
+                            if cancel_accept:
+                                st.session_state.show_accept_modal = False
+                                st.session_state.accept_suggestion_index = None
+                                st.rerun()
+
+                            if accept_submitted:
+                                # Build edits dict
+                                edits = {}
+                                if edit_field:
+                                    edits["field"] = edit_field
+                                if edit_score != suggestion.get("suggested_score", 70):
+                                    edits["suggested_score"] = edit_score
+                                if edit_reason:
+                                    edits["reason"] = edit_reason
+
+                                with st.spinner(
+                                    "Creating draft rule from suggestion..."
+                                ):
+                                    result = accept_suggestion(
+                                        suggestion=suggestion,
+                                        actor="ui_user",
+                                        custom_id=custom_id if custom_id else None,
+                                        edits=edits if edits else None,
+                                    )
+
+                                if result:
+                                    rule_id = result.get("rule_id", "unknown")
+                                    st.success(
+                                        f"✅ Suggestion accepted! "
+                                        f"Draft rule '{rule_id}' created."
+                                    )
+                                    st.info(
+                                        "**Next steps:** Navigate to the Draft Rules "
+                                        "tab to review, edit, or submit the rule "
+                                        "for review."
+                                    )
+                                    st.session_state.show_accept_modal = False
+                                    st.session_state.accept_suggestion_index = None
+                                    # Clear suggestions to force refresh
+                                    st.session_state.suggestions_list = None
+                                    st.rerun()
+                                else:
+                                    st.error(
+                                        "Failed to accept suggestion. "
+                                        "Check the API server or rule ID conflicts."
+                                    )
+
+                # Evidence details (collapsed by default)
+                st.markdown("### Evidence Details")
+                for i, s in enumerate(suggestions):
+                    evidence = s.get("evidence", {})
+                    with st.expander(
+                        f"{s.get('field')} {s.get('operator')} "
+                        f"{s.get('threshold', 0):.2f} - Evidence"
+                    ):
+                        col_a, col_b, col_c, col_d = st.columns(4)
+                        with col_a:
+                            st.metric("Mean", f"{evidence.get('mean', 0):.2f}")
+                        with col_b:
+                            st.metric("Std Dev", f"{evidence.get('std', 0):.2f}")
+                        with col_c:
+                            st.metric(
+                                "Threshold Value", f"{evidence.get('value', 0):.2f}"
+                            )
+                        with col_d:
+                            st.metric("Sample Count", evidence.get("sample_count", 0))
+
+                        st.caption(f"Statistic: {evidence.get('statistic', 'N/A')}")
+
+                st.markdown("---")
+                st.info(
+                    "**Accept as Draft** - Click the button next to any suggestion "
+                    "to create a draft rule. You can edit it before submission."
+                )
+
+
+def _render_draft_rules_tab() -> None:
+    """Render the Draft Rules tab."""
+    st.subheader("Draft Rules")
+    st.markdown(
+        "Create, edit, and manage draft rules. **Draft rules do not affect "
+        "production until submitted for review and approved.**"
+    )
+
+    st.info(
+        "**DRAFT STATUS** - Rules created here are in draft status. "
+        "They can be edited and tested before submission."
+    )
+
+    # Initialize session state
+    if "draft_rules_list" not in st.session_state:
+        st.session_state.draft_rules_list = None
+    if "selected_draft_rule" not in st.session_state:
+        st.session_state.selected_draft_rule = None
+    if "show_create_form" not in st.session_state:
+        st.session_state.show_create_form = False
+    if "show_edit_form" not in st.session_state:
+        st.session_state.show_edit_form = False
+
+    # Action buttons
+    col1, col2 = st.columns([1, 4])
+
+    with col1:
+        if st.button("Create New Rule", type="primary"):
+            st.session_state.show_create_form = True
+            st.session_state.show_edit_form = False
+            st.session_state.selected_draft_rule = None
+
+    with col2:
+        refresh_clicked = st.button("Refresh List")
+
+    # Fetch draft rules list
+    if refresh_clicked or st.session_state.draft_rules_list is None:
+        with st.spinner("Loading draft rules..."):
+            result = list_draft_rules(include_archived=False)
+            if result:
+                st.session_state.draft_rules_list = result
+            else:
+                st.session_state.draft_rules_list = {"rules": [], "total": 0}
+
+    # Display draft rules list
+    rules_list = st.session_state.draft_rules_list
+    if rules_list and rules_list.get("rules"):
+        st.markdown("### Draft Rules List")
+
+        # Create DataFrame for display
+        rules_data = []
+        for rule in rules_list["rules"]:
+            rules_data.append(
+                {
+                    "Rule ID": rule.get("rule_id", ""),
+                    "Field": rule.get("field", ""),
+                    "Operator": rule.get("op", ""),
+                    "Value": str(rule.get("value", "")),
+                    "Action": rule.get("action", ""),
+                    "Score": rule.get("score", ""),
+                    "Status": rule.get("status", "").upper(),
+                }
+            )
+
+        rules_df = pd.DataFrame(rules_data)
+
+        # Add status badges
+        def format_status(status):
+            if status == "DRAFT":
+                return "🟡 DRAFT"
+            elif status == "PENDING_REVIEW":
+                return "🟠 PENDING REVIEW"
+            elif status == "ARCHIVED":
+                return "⚫ ARCHIVED"
+            return status
+
+        if "Status" in rules_df.columns:
+            rules_df["Status"] = rules_df["Status"].apply(format_status)
+
+        st.dataframe(rules_df, use_container_width=True, hide_index=True)
+
+        # Rule selection for edit/delete
+        rule_ids = [r.get("rule_id", "") for r in rules_list["rules"]]
+        selected_id = st.selectbox(
+            "Select Rule to View/Edit",
+            options=[""] + rule_ids,
+            help="Select a draft rule to view details or edit",
+        )
+
+        if selected_id:
+            st.session_state.selected_draft_rule = selected_id
+
+    else:
+        st.info("No draft rules found. Create a new rule to get started.")
+
+    # Create form
+    if st.session_state.show_create_form:
+        st.markdown("---")
+        st.markdown("### Create New Draft Rule")
+
+        with st.form("create_draft_rule_form"):
+            col1, col2 = st.columns(2)
+
+            with col1:
+                rule_id = st.text_input(
+                    "Rule ID *", help="Unique identifier for the rule"
+                )
+                field = st.selectbox(
+                    "Field *",
+                    options=[
+                        "velocity_24h",
+                        "amount_to_avg_ratio_30d",
+                        "balance_volatility_z_score",
+                        "bank_connections_24h",
+                        "merchant_risk_score",
+                        "has_history",
+                        "transaction_amount",
+                    ],
+                )
+                op = st.selectbox(
+                    "Operator *",
+                    options=[">", ">=", "<", "<=", "==", "in", "not_in"],
+                )
+                value_input = st.text_input(
+                    "Value *",
+                    help="Numeric value or comma-separated list for 'in'/'not_in'",
+                )
+
+            with col2:
+                action = st.selectbox(
+                    "Action *",
+                    options=["override_score", "clamp_min", "clamp_max", "reject"],
+                )
+                score = st.number_input(
+                    "Score",
+                    min_value=1,
+                    max_value=99,
+                    value=70,
+                    help="Required for override_score, clamp_min, clamp_max",
+                )
+                severity = st.selectbox(
+                    "Severity",
+                    options=["low", "medium", "high"],
+                    index=1,
+                )
+                reason = st.text_area("Reason", help="Human-readable explanation")
+
+            submitted = st.form_submit_button("Create Rule", type="primary")
+
+            if submitted:
+                # Validate inputs
+                errors = []
+                if not rule_id:
+                    errors.append("Rule ID is required")
+                if not value_input:
+                    errors.append("Value is required")
+
+                # Parse value
+                value = None
+                if value_input:
+                    if op in ["in", "not_in"]:
+                        try:
+                            value = [int(x.strip()) for x in value_input.split(",")]
+                        except ValueError:
+                            try:
+                                value = [
+                                    float(x.strip()) for x in value_input.split(",")
+                                ]
+                            except ValueError:
+                                errors.append(
+                                    "Value must be comma-separated numbers "
+                                    "for 'in'/'not_in'"
+                                )
+                    else:
+                        try:
+                            value = int(value_input)
+                        except ValueError:
+                            try:
+                                value = float(value_input)
+                            except ValueError:
+                                errors.append("Value must be a number")
+
+                # Check score requirement
+                if action in ["override_score", "clamp_min", "clamp_max"] and not score:
+                    errors.append(f"Action {action} requires a score")
+
+                if errors:
+                    for error in errors:
+                        st.error(error)
+                else:
+                    # Create rule
+                    rule_data = {
+                        "id": rule_id,
+                        "field": field,
+                        "op": op,
+                        "value": value,
+                        "action": action,
+                        "score": score if action != "reject" else None,
+                        "severity": severity,
+                        "reason": reason,
+                    }
+
+                    with st.spinner("Creating draft rule..."):
+                        result = create_draft_rule(rule_data, actor="ui_user")
+
+                    if result:
+                        st.success(f"Draft rule '{rule_id}' created successfully!")
+                        st.session_state.show_create_form = False
+                        st.session_state.draft_rules_list = None
+                        st.rerun()
+                    else:
+                        st.error("Failed to create draft rule. Check the API server.")
+
+    # Edit/View form
+    if st.session_state.selected_draft_rule and not st.session_state.show_create_form:
+        st.markdown("---")
+        st.markdown("### Rule Details")
+
+        rule_id = st.session_state.selected_draft_rule
+        rule_data = get_draft_rule(rule_id)
+
+        if rule_data:
+            status = rule_data.get("status", "").upper()
+
+            # Status badge
+            if status == "DRAFT":
+                st.success(f"**Status: {status}** - This rule can be edited")
+            elif status == "PENDING_REVIEW":
+                st.warning(f"**Status: {status}** - This rule is awaiting review")
+            else:
+                st.info(f"**Status: {status}** - This rule cannot be edited")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown(f"**Rule ID:** {rule_data.get('rule_id', '')}")
+                st.markdown(f"**Field:** {rule_data.get('field', '')}")
+                st.markdown(f"**Operator:** {rule_data.get('op', '')}")
+                st.markdown(f"**Value:** {rule_data.get('value', '')}")
+
+            with col2:
+                st.markdown(f"**Action:** {rule_data.get('action', '')}")
+                st.markdown(f"**Score:** {rule_data.get('score', 'N/A')}")
+                st.markdown(f"**Severity:** {rule_data.get('severity', '')}")
+                st.markdown(f"**Reason:** {rule_data.get('reason', '')}")
+
+            # Actions (only for draft rules)
+            if status == "DRAFT":
+                st.markdown("---")
+                action_col1, action_col2, action_col3, action_col4 = st.columns(4)
+
+                with action_col1:
+                    if st.button("Edit Rule", key="edit_btn"):
+                        st.session_state.show_edit_form = True
+
+                with action_col2:
+                    validate_clicked = st.button("Validate Rule", key="validate_btn")
+                    if validate_clicked:
+                        st.session_state.show_validation = True
+
+                with action_col3:
+                    # Check if rule is valid before enabling submit
+                    validation = st.session_state.get("validation_result")
+                    is_valid = validation.get("is_valid", False) if validation else None
+                    submit_disabled = (
+                        is_valid is False if is_valid is not None else False
+                    )
+
+                    if st.button(
+                        "Submit for Review",
+                        type="primary",
+                        key="submit_btn",
+                        disabled=submit_disabled,
+                    ):
+                        st.session_state.show_submit_modal = True
+
+                with action_col4:
+                    if st.button("Delete Rule", type="secondary", key="delete_btn"):
+                        st.session_state.show_delete_confirm = True
+
+            # Validation results panel
+            if st.session_state.get("show_validation", False):
+                st.markdown("---")
+                st.markdown("#### Validation Results")
+
+                col_val1, col_val2 = st.columns([3, 1])
+                with col_val1:
+                    include_prod = st.checkbox(
+                        "Include production ruleset in validation",
+                        value=True,
+                        key="include_prod_check",
+                    )
+                with col_val2:
+                    if st.button("Re-validate", key="revalidate_btn"):
+                        st.session_state.validation_result = None
+
+                if (
+                    "validation_result" not in st.session_state
+                    or st.session_state.validation_result is None
+                ):
+                    with st.spinner("Validating rule..."):
+                        validation = validate_draft_rule(
+                            rule_id, include_existing_rules=include_prod
+                        )
+                        st.session_state.validation_result = validation
+
+                validation = st.session_state.get("validation_result")
+                if validation:
+                    # Validation status badge
+                    if validation.get("is_valid"):
+                        st.success("✅ **Valid** - No conflicts detected")
+                    else:
+                        st.error("❌ **Invalid** - Conflicts must be resolved")
+
+                    # Conflicts section
+                    conflicts = validation.get("conflicts", [])
+                    if conflicts:
+                        st.markdown("**⚠️ Conflicts (must be resolved):**")
+                        for conflict in conflicts:
+                            with st.expander(
+                                f"Conflict: {conflict.get('rule1_id', '')} vs "
+                                f"{conflict.get('rule2_id', '')}"
+                            ):
+                                st.error(conflict.get("description", ""))
+                                st.caption(
+                                    f"Conflict type: "
+                                    f"{conflict.get('conflict_type', 'unknown')}"
+                                )
+
+                    # Redundancies section (warnings)
+                    redundancies = validation.get("redundancies", [])
+                    if redundancies:
+                        st.markdown("**ℹ️ Redundancies (warnings - can proceed):**")
+                        for redundancy in redundancies:
+                            with st.expander(
+                                f"Redundancy: {redundancy.get('rule_id', '')} "
+                                f"redundant with {redundancy.get('redundant_with', '')}"
+                            ):
+                                st.warning(redundancy.get("description", ""))
+                                st.caption(
+                                    f"Redundancy type: "
+                                    f"{redundancy.get('redundancy_type', 'unknown')}"
+                                )
+
+                    # Schema errors
+                    schema_errors = validation.get("schema_errors", [])
+                    if schema_errors:
+                        st.markdown("**❌ Schema Errors:**")
+                        for error in schema_errors:
+                            st.error(f"- {error}")
+
+                    # Summary
+                    if validation.get("is_valid") and not schema_errors:
+                        st.success("Rule is ready for submission!")
+                    elif conflicts:
+                        st.error(
+                            f"**{len(conflicts)} conflict(s) must be resolved "
+                            "before submission.**"
+                        )
+                    elif redundancies:
+                        st.warning(
+                            f"**{len(redundancies)} redundancy warning(s). "
+                            "You can proceed, but consider reviewing.**"
+                        )
+
+            # Submit for review modal
+            if st.session_state.get("show_submit_modal", False):
+                st.markdown("---")
+                st.markdown("### Submit Rule for Review")
+
+                st.warning(
+                    "**⚠️ Warning:** Once submitted, this rule cannot be edited "
+                    "until reviewed. It will enter the review queue."
+                )
+
+                with st.form("submit_rule_form"):
+                    justification = st.text_area(
+                        "Justification *",
+                        help=(
+                            "Explain why this rule should be reviewed "
+                            "(min 10 characters)"
+                        ),
+                        min_chars=10,
+                    )
+
+                    confirm_checkbox = st.checkbox(
+                        "I understand this rule will enter the review queue and "
+                        "cannot be edited until reviewed",
+                        key="submit_confirm",
+                    )
+
+                    col_sub1, col_sub2 = st.columns(2)
+
+                    with col_sub1:
+                        submit_clicked = st.form_submit_button(
+                            "Submit for Review",
+                            type="primary",
+                            disabled=not confirm_checkbox,
+                        )
+
+                    with col_sub2:
+                        cancel_clicked = st.form_submit_button("Cancel")
+
+                    if cancel_clicked:
+                        st.session_state.show_submit_modal = False
+                        st.rerun()
+
+                    if submit_clicked and confirm_checkbox:
+                        if len(justification) < 10:
+                            st.error("Justification must be at least 10 characters")
+                        else:
+                            with st.spinner("Submitting rule for review..."):
+                                result = submit_draft_rule(
+                                    rule_id, justification, actor="ui_user"
+                                )
+
+                            if result:
+                                st.success(
+                                    f"✅ Rule '{rule_id}' submitted for review "
+                                    "successfully! Status changed to PENDING_REVIEW."
+                                )
+                                st.info(
+                                    "**No production impact** - This rule will not "
+                                    "affect production scoring until approved by a "
+                                    "reviewer."
+                                )
+                                st.session_state.show_submit_modal = False
+                                st.session_state.draft_rules_list = None
+                                st.session_state.selected_draft_rule = None
+                                st.session_state.validation_result = None
+                                st.rerun()
+                            else:
+                                st.error(
+                                    "Failed to submit rule. Check validation status "
+                                    "or API server connection."
+                                )
+
+                with action_col3:
+                    if st.button("Delete Rule", type="secondary", key="delete_btn"):
+                        st.session_state.show_delete_confirm = True
+
+                # Delete confirmation
+                if st.session_state.get("show_delete_confirm", False):
+                    st.warning("⚠️ This will archive the draft rule. Continue?")
+                    col_a, col_b = st.columns(2)
+                    with col_a:
+                        if st.button("Confirm Delete", type="primary"):
+                            result = delete_draft_rule(rule_id, actor="ui_user")
+                            if result and result.get("success"):
+                                st.success("Rule archived successfully")
+                                st.session_state.draft_rules_list = None
+                                st.session_state.selected_draft_rule = None
+                                st.session_state.show_delete_confirm = False
+                                st.rerun()
+                            else:
+                                st.error("Failed to archive rule")
+                    with col_b:
+                        if st.button("Cancel"):
+                            st.session_state.show_delete_confirm = False
+                            st.rerun()
+
+                # Edit form
+                if st.session_state.show_edit_form:
+                    st.markdown("---")
+                    st.markdown("### Edit Draft Rule")
+
+                    with st.form("edit_draft_rule_form"):
+                        col1, col2 = st.columns(2)
+
+                        with col1:
+                            field_options = [
+                                "velocity_24h",
+                                "amount_to_avg_ratio_30d",
+                                "balance_volatility_z_score",
+                                "bank_connections_24h",
+                                "merchant_risk_score",
+                                "has_history",
+                                "transaction_amount",
+                            ]
+                            current_field = rule_data.get("field", "velocity_24h")
+                            field_index = (
+                                field_options.index(current_field)
+                                if current_field in field_options
+                                else 0
+                            )
+                            new_field = st.selectbox(
+                                "Field", options=field_options, index=field_index
+                            )
+
+                            op_options = [">", ">=", "<", "<=", "==", "in", "not_in"]
+                            current_op = rule_data.get("op", ">")
+                            op_index = (
+                                op_options.index(current_op)
+                                if current_op in op_options
+                                else 0
+                            )
+                            new_op = st.selectbox(
+                                "Operator", options=op_options, index=op_index
+                            )
+                            current_value = rule_data.get("value", "")
+                            if isinstance(current_value, list):
+                                value_str = ",".join(str(v) for v in current_value)
+                            else:
+                                value_str = str(current_value)
+                            new_value_input = st.text_input("Value", value=value_str)
+
+                        with col2:
+                            action_options = [
+                                "override_score",
+                                "clamp_min",
+                                "clamp_max",
+                                "reject",
+                            ]
+                            current_action = rule_data.get("action", "clamp_min")
+                            action_index = (
+                                action_options.index(current_action)
+                                if current_action in action_options
+                                else 1
+                            )
+                            new_action = st.selectbox(
+                                "Action", options=action_options, index=action_index
+                            )
+
+                            current_score = rule_data.get("score")
+                            new_score = st.number_input(
+                                "Score",
+                                min_value=1,
+                                max_value=99,
+                                value=current_score if current_score else 70,
+                            )
+
+                            severity_options = ["low", "medium", "high"]
+                            current_severity = rule_data.get("severity", "medium")
+                            severity_index = (
+                                severity_options.index(current_severity)
+                                if current_severity in severity_options
+                                else 1
+                            )
+                            new_severity = st.selectbox(
+                                "Severity",
+                                options=severity_options,
+                                index=severity_index,
+                            )
+                            new_reason = st.text_area(
+                                "Reason", value=rule_data.get("reason", "")
+                            )
+
+                        submitted = st.form_submit_button(
+                            "Save Changes", type="primary"
+                        )
+
+                        if submitted:
+                            # Parse value
+                            value = None
+                            if new_value_input:
+                                if new_op in ["in", "not_in"]:
+                                    try:
+                                        value = [
+                                            int(x.strip())
+                                            for x in new_value_input.split(",")
+                                        ]
+                                    except ValueError:
+                                        value = [
+                                            float(x.strip())
+                                            for x in new_value_input.split(",")
+                                        ]
+                                else:
+                                    try:
+                                        value = int(new_value_input)
+                                    except ValueError:
+                                        value = float(new_value_input)
+
+                            updates = {
+                                "field": new_field,
+                                "op": new_op,
+                                "value": value,
+                                "action": new_action,
+                                "score": new_score if new_action != "reject" else None,
+                                "severity": new_severity,
+                                "reason": new_reason,
+                            }
+
+                            with st.spinner("Updating draft rule..."):
+                                result = update_draft_rule(
+                                    rule_id, updates, actor="ui_user"
+                                )
+
+                            if result:
+                                st.success("Rule updated successfully!")
+                                st.session_state.show_edit_form = False
+                                st.session_state.draft_rules_list = None
+                                st.rerun()
+                            else:
+                                st.error("Failed to update rule. Check the API server.")
+        else:
+            st.error(f"Could not load rule {rule_id}")
+
+
 def main() -> None:
     """Main application entry point."""
     # Sidebar navigation
@@ -2029,6 +3366,7 @@ def main() -> None:
             "Historical Analytics (DB)",
             "Synthetic Dataset",
             "Model Lab",
+            "Rule Inspector",
         ],
         index=0,
     )
@@ -2046,8 +3384,10 @@ def main() -> None:
         render_analytics()
     elif page == "Synthetic Dataset":
         render_synthetic_dataset()
-    else:
+    elif page == "Model Lab":
         render_model_lab()
+    else:
+        render_rule_inspector()
 
 
 if __name__ == "__main__":
