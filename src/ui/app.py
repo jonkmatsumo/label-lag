@@ -33,9 +33,13 @@ from ui.data_service import (
 )
 from ui.mlflow_utils import (
     check_mlflow_connection,
+    fetch_artifact_path,
     get_experiment_runs,
     get_model_versions,
     get_production_model_version,
+    get_run_artifacts,
+    get_run_details,
+    get_version_details,
     promote_to_production,
 )
 
@@ -189,22 +193,28 @@ def _render_model_selector() -> None:
     for v in sorted(all_versions, key=lambda x: int(x["version"]), reverse=True):
         version = v["version"]
         stage = v["stage"]
+        run_id = v.get("run_id", "")
 
         # Build label with indicators
         label = f"v{version}"
         indicators = []
-
         if stage == "Production":
             indicators.append("PRODUCTION")
         if live_model and live_model == f"v{version}":
             indicators.append("LIVE")
-
         if indicators:
             label += f" ({', '.join(indicators)})"
-        elif stage != "None":
+        elif stage and stage != "None":
             label += f" ({stage})"
 
-        options.append({"label": label, "version": version, "stage": stage})
+        options.append(
+            {
+                "label": label,
+                "version": version,
+                "stage": stage,
+                "run_id": run_id,
+            }
+        )
 
     # Display current live model status
     col1, col2 = st.columns([2, 3])
@@ -226,8 +236,22 @@ def _render_model_selector() -> None:
 
         if selected_idx is not None:
             selected = options[selected_idx]
-            # Store in session state for potential future use
             st.session_state["selected_model_version"] = selected["version"]
+
+            with st.expander("Version details"):
+                det = get_version_details(version=selected["version"])
+                if det:
+                    st.markdown(f"**Run ID:** `{det.get('run_id', '—')}`")
+                    m = det.get("metrics", {})
+                    parts = []
+                    if m.get("pr_auc") is not None:
+                        parts.append(f"PR-AUC: {m['pr_auc']:.4f}")
+                    if m.get("f1") is not None:
+                        parts.append(f"F1: {m['f1']:.4f}")
+                    if parts:
+                        st.caption(" · ".join(parts))
+                    if selected["stage"] == "Production":
+                        st.success("Production model")
 
 
 def render_analytics() -> None:
@@ -1641,33 +1665,180 @@ def render_model_lab() -> None:
             help="Number of days before today for training cutoff",
         )
 
+    with st.expander("Advanced Hyperparameters"):
+        ah1, ah2 = st.columns(2)
+        with ah1:
+            n_estimators = st.slider(
+                "n_estimators",
+                min_value=50,
+                max_value=500,
+                value=100,
+                step=25,
+                help="Number of boosting rounds",
+            )
+            learning_rate = st.slider(
+                "Learning Rate",
+                min_value=0.01,
+                max_value=0.3,
+                value=0.1,
+                step=0.01,
+                format="%.2f",
+                help="Step size shrinkage",
+            )
+            min_child_weight = st.slider(
+                "min_child_weight",
+                min_value=1,
+                max_value=10,
+                value=1,
+                step=1,
+            )
+            subsample = st.slider(
+                "subsample",
+                min_value=0.5,
+                max_value=1.0,
+                value=1.0,
+                step=0.1,
+                format="%.1f",
+            )
+            colsample_bytree = st.slider(
+                "colsample_bytree",
+                min_value=0.5,
+                max_value=1.0,
+                value=1.0,
+                step=0.1,
+                format="%.1f",
+            )
+        with ah2:
+            gamma = st.slider(
+                "gamma",
+                min_value=0.0,
+                max_value=5.0,
+                value=0.0,
+                step=0.1,
+                format="%.1f",
+            )
+            reg_alpha = st.slider(
+                "reg_alpha",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.0,
+                step=0.1,
+                format="%.1f",
+            )
+            reg_lambda = st.slider(
+                "reg_lambda",
+                min_value=0.0,
+                max_value=10.0,
+                value=1.0,
+                step=0.5,
+                format="%.1f",
+            )
+            early_stopping_rounds = st.number_input(
+                "Early Stopping Rounds",
+                min_value=0,
+                max_value=50,
+                value=0,
+                step=5,
+                help="0 = disabled. Stop if no improvement for N rounds.",
+            )
+            if early_stopping_rounds == 0:
+                early_stopping_rounds = None
+
+    with st.expander("Hyperparameter Tuning"):
+        tuning_enabled = st.checkbox(
+            "Enable tuning",
+            value=False,
+            help="Run Optuna to search for best hyperparameters before training.",
+        )
+        tune_col1, tune_col2 = st.columns(2)
+        with tune_col1:
+            tuning_n_trials = st.slider(
+                "Trials",
+                min_value=5,
+                max_value=50,
+                value=20,
+                step=5,
+                disabled=not tuning_enabled,
+            )
+            tuning_timeout = st.slider(
+                "Timeout (min)",
+                min_value=5,
+                max_value=120,
+                value=30,
+                step=5,
+                disabled=not tuning_enabled,
+            )
+        with tune_col2:
+            tuning_metric = st.selectbox(
+                "Optimize",
+                options=["pr_auc", "roc_auc", "f1"],
+                index=0,
+                disabled=not tuning_enabled,
+            )
+        if tuning_enabled:
+            st.caption("Training may take longer. Best params logged to MLflow.")
+
     train_clicked = st.button(
         "Start Training", type="primary", disabled=not selected_columns
     )
 
     if train_clicked:
-        with st.spinner("Training model... This may take a moment."):
-            try:
-                import requests
+        import requests
 
+        spinner_msg = (
+            "1. Loading data · 2. Training model · 3. Computing metrics · "
+            "4. Logging artifacts"
+        )
+        if tuning_enabled:
+            spinner_msg = "Running tuning, then " + spinner_msg
+        timeout_sec = (tuning_timeout + 60) if tuning_enabled else 300
+        payload = {
+            "max_depth": max_depth,
+            "training_window_days": training_window,
+            "selected_feature_columns": selected_columns,
+            "n_estimators": n_estimators,
+            "learning_rate": learning_rate,
+            "min_child_weight": min_child_weight,
+            "subsample": subsample,
+            "colsample_bytree": colsample_bytree,
+            "gamma": gamma,
+            "reg_alpha": reg_alpha,
+            "reg_lambda": reg_lambda,
+            "tuning_config": {
+                "enabled": tuning_enabled,
+                "n_trials": tuning_n_trials,
+                "timeout_minutes": tuning_timeout,
+                "metric": tuning_metric,
+            },
+        }
+        if early_stopping_rounds is not None:
+            payload["early_stopping_rounds"] = early_stopping_rounds
+
+        with st.spinner(spinner_msg):
+            start = time.time()
+            try:
                 response = requests.post(
                     f"{API_BASE_URL}/train",
-                    json={
-                        "max_depth": max_depth,
-                        "training_window_days": training_window,
-                        "selected_feature_columns": selected_columns,
-                    },
-                    timeout=300,  # Training can take a while
+                    json=payload,
+                    timeout=timeout_sec,
                 )
+                elapsed = time.time() - start
                 result = response.json()
 
                 if result.get("success"):
-                    st.success(f"Training complete! Run ID: `{result.get('run_id')}`")
+                    st.success(
+                        f"Training complete! Run ID: `{result.get('run_id')}` "
+                        f"(elapsed {elapsed:.0f}s)"
+                    )
                     st.balloons()
                 else:
-                    st.error(f"Training failed: {result.get('error')}")
+                    st.error(
+                        f"Training failed: {result.get('error')} "
+                        f"(elapsed {elapsed:.0f}s)"
+                    )
             except requests.exceptions.RequestException as e:
-                st.error(f"API request failed: {e}")
+                elapsed = time.time() - start
+                st.error(f"API request failed: {e} (elapsed {elapsed:.0f}s)")
 
     st.markdown("---")
 
@@ -1693,12 +1864,137 @@ def render_model_lab() -> None:
             hide_index=True,
         )
 
+        st.markdown("**Run details**")
+        for _, row in runs_df.iterrows():
+            run_id = row["Run ID"]
+            pr_auc = row.get("PR-AUC", "")
+            label = f"Run `{run_id}` — PR-AUC {pr_auc}"
+            with st.expander(label):
+                details = get_run_details(run_id)
+                c1, c2 = st.columns(2)
+                with c1:
+                    if details["params"]:
+                        st.markdown("**Parameters**")
+                        st.json(details["params"])
+                with c2:
+                    if details["metrics"]:
+                        st.markdown("**Metrics**")
+                        st.json(details["metrics"])
+                arts = get_run_artifacts(run_id)
+                for a in arts:
+                    if a["is_dir"]:
+                        continue
+                    path = a["path"]
+                    if path.endswith("confusion_matrix.png"):
+                        local = fetch_artifact_path(run_id, path)
+                        if local:
+                            st.image(local, caption="Confusion matrix")
+                    elif path.endswith("feature_importance_plot.png"):
+                        local = fetch_artifact_path(run_id, path)
+                        if local:
+                            st.image(local, caption="Feature importance")
+                    elif path.endswith("model_card.md"):
+                        local = fetch_artifact_path(run_id, path)
+                        if local:
+                            try:
+                                with open(local, encoding="utf-8") as f:
+                                    raw = f.read()
+                                st.markdown("**Model card**")
+                                st.markdown(raw)
+                            except OSError:
+                                st.caption(path)
+                if arts:
+                    st.markdown("**Artifacts**")
+                    for a in arts:
+                        if not a["is_dir"]:
+                            st.caption(a["path"])
+
+        run_ids = runs_df["Run ID"].tolist()
+
+        st.markdown("**Compare runs**")
+        compare_ids = st.multiselect(
+            "Select runs to compare",
+            options=run_ids,
+            default=run_ids[:2] if len(run_ids) >= 2 else run_ids,
+            help="Choose 2+ runs for side-by-side comparison",
+        )
+        if len(compare_ids) >= 2:
+            compare_clicked = st.button("Compare selected")
+            if compare_clicked:
+                details_list = [get_run_details(rid) for rid in compare_ids]
+                metric_keys = ["precision", "recall", "pr_auc", "f1", "roc_auc"]
+                rows = []
+                for k in metric_keys:
+                    row = {"metric": k}
+                    for i, rid in enumerate(compare_ids):
+                        v = details_list[i].get("metrics", {}).get(k)
+                        row[rid[:8]] = v if v is not None else ""
+                    rows.append(row)
+                comp_df = pd.DataFrame(rows).set_index("metric")
+                st.dataframe(comp_df, use_container_width=True, hide_index=False)
+                fig = go.Figure()
+                for i, rid in enumerate(compare_ids):
+                    vals = [
+                        details_list[i].get("metrics", {}).get(k) for k in metric_keys
+                    ]
+                    fig.add_trace(go.Bar(name=rid[:12], x=metric_keys, y=vals))
+                fig.update_layout(
+                    barmode="group",
+                    title="Metrics comparison",
+                    xaxis_title="Metric",
+                    yaxis_title="Value",
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                pr_aucs = [
+                    details_list[i].get("metrics", {}).get("pr_auc")
+                    for i in range(len(compare_ids))
+                ]
+                f1s = [
+                    details_list[i].get("metrics", {}).get("f1")
+                    for i in range(len(compare_ids))
+                ]
+                valid = [
+                    (p, f, rid)
+                    for p, f, rid in zip(pr_aucs, f1s, compare_ids)
+                    if p is not None and f is not None
+                ]
+                if len(valid) >= 2:
+                    px_, fx_, tx_ = zip(*valid)
+                    fig2 = go.Figure(
+                        go.Scatter(
+                            x=px_,
+                            y=fx_,
+                            text=[t[:12] for t in tx_],
+                            mode="markers+text",
+                            textposition="top center",
+                        )
+                    )
+                    fig2.update_layout(
+                        title="Tradeoff: PR-AUC vs F1",
+                        xaxis_title="PR-AUC",
+                        yaxis_title="F1",
+                    )
+                    st.plotly_chart(fig2, use_container_width=True)
+                all_params = set()
+                for d in details_list:
+                    all_params.update(d.get("params", {}).keys())
+                diffs = []
+                for p in sorted(all_params):
+                    vals = [str(d.get("params", {}).get(p, "")) for d in details_list]
+                    if len(set(vals)) > 1:
+                        diffs.append((p, vals))
+                if diffs:
+                    st.markdown("**Config diffs**")
+                    for p, vals in diffs:
+                        parts = " | ".join(
+                            f"{rid[:8]}: {v}" for rid, v in zip(compare_ids, vals)
+                        )
+                        st.caption(f"**{p}**: {parts}")
+
         st.markdown("---")
 
         # Promote to production
         st.markdown("**Promote to Production**")
-
-        run_ids = runs_df["Run ID"].tolist()
         selected_run = st.selectbox(
             "Select Run ID to promote",
             options=run_ids,

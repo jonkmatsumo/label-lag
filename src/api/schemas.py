@@ -2,6 +2,7 @@
 
 from decimal import Decimal
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -144,6 +145,76 @@ class HealthResponse(BaseModel):
     version: str = Field(default="0.1.0")
 
 
+class SplitStrategy(str, Enum):
+    """Supported train/test split strategies."""
+
+    TEMPORAL = "temporal"
+    TEMPORAL_STRATIFIED = "temporal_stratified"
+    GROUP_TEMPORAL = "group_temporal"
+    KFOLD_TEMPORAL = "kfold_temporal"
+    EXPANDING_WINDOW = "expanding_window"
+
+
+class SplitConfig(BaseModel):
+    """Configuration for train/test split and optional CV."""
+
+    strategy: SplitStrategy = Field(
+        default=SplitStrategy.TEMPORAL,
+        description="Split strategy",
+    )
+    n_folds: int = Field(
+        default=5,
+        ge=2,
+        le=10,
+        description="Number of folds for CV strategies",
+    )
+    stratify_column: str | None = Field(
+        default=None,
+        description="Column to stratify on (e.g. is_fraudulent)",
+    )
+    group_column: str | None = Field(
+        default="user_id",
+        description="Column for group-based splits",
+    )
+    validation_fraction: float = Field(
+        default=0.2,
+        ge=0.1,
+        le=0.5,
+        description="Validation fraction when using validation split",
+    )
+    seed: int = Field(default=42, description="Random seed for reproducibility")
+
+
+class TuningStrategy(str, Enum):
+    """Hyperparameter tuning strategy."""
+
+    GRID = "grid"
+    RANDOM = "random"
+    BAYESIAN = "bayesian"
+
+
+class TuningConfig(BaseModel):
+    """Configuration for hyperparameter tuning."""
+
+    enabled: bool = Field(default=False, description="Enable tuning")
+    strategy: TuningStrategy = Field(
+        default=TuningStrategy.BAYESIAN,
+        description="Tuning strategy",
+    )
+    n_trials: int = Field(default=20, ge=5, le=100, description="Number of trials")
+    timeout_minutes: int = Field(
+        default=30,
+        ge=5,
+        le=120,
+        description="Max tuning time in minutes",
+    )
+    metric: str = Field(default="pr_auc", description="Metric to optimize")
+    direction: Literal["maximize", "minimize"] = Field(
+        default="maximize",
+        description="Optimization direction",
+    )
+
+
 class TrainRequest(BaseModel):
     """Request schema for model training endpoint."""
 
@@ -163,6 +234,24 @@ class TrainRequest(BaseModel):
         default=None,
         description="Feature columns for training. If None, uses defaults.",
     )
+    split_config: SplitConfig = Field(
+        default_factory=SplitConfig,
+        description="Split and optional CV configuration",
+    )
+    tuning_config: TuningConfig = Field(
+        default_factory=TuningConfig,
+        description="Hyperparameter tuning configuration",
+    )
+    n_estimators: int = Field(default=100, ge=50, le=500)
+    learning_rate: float = Field(default=0.1, ge=0.01, le=0.3)
+    min_child_weight: int = Field(default=1, ge=1, le=10)
+    subsample: float = Field(default=1.0, ge=0.5, le=1.0)
+    colsample_bytree: float = Field(default=1.0, ge=0.5, le=1.0)
+    gamma: float = Field(default=0.0, ge=0.0, le=5.0)
+    reg_alpha: float = Field(default=0.0, ge=0.0, le=1.0)
+    reg_lambda: float = Field(default=1.0, ge=0.0, le=10.0)
+    random_state: int = Field(default=42)
+    early_stopping_rounds: int | None = Field(default=None, ge=5, le=50)
 
     def model_post_init(self, __context) -> None:
         """Validate selected_feature_columns if provided."""

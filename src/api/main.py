@@ -357,6 +357,18 @@ async def train_model_endpoint(request: TrainRequest) -> TrainResponse:
             max_depth=request.max_depth,
             training_window_days=request.training_window_days,
             feature_columns=request.selected_feature_columns,
+            split_config=request.split_config,
+            n_estimators=request.n_estimators,
+            learning_rate=request.learning_rate,
+            min_child_weight=request.min_child_weight,
+            subsample=request.subsample,
+            colsample_bytree=request.colsample_bytree,
+            gamma=request.gamma,
+            reg_alpha=request.reg_alpha,
+            reg_lambda=request.reg_lambda,
+            random_state=request.random_state,
+            early_stopping_rounds=request.early_stopping_rounds,
+            tuning_config=request.tuning_config,
         )
         return TrainResponse(success=True, run_id=run_id)
     except ValueError as e:

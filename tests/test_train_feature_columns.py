@@ -59,12 +59,13 @@ class TestTrainModelWithFeatureColumns:
         assert "feature_columns" in params_call
         assert json.loads(params_call["feature_columns"]) == custom_features
 
+    @patch("model.train._get_git_sha", return_value="test_sha")
     @patch("model.train.mlflow")
     @patch("model.train.DataLoader")
     @patch("model.train.os.path.join")
     @patch("model.train.open", create=True)
     def test_train_model_logs_feature_columns_artifact(
-        self, mock_open, mock_join, mock_loader_cls, mock_mlflow
+        self, mock_open, mock_join, mock_loader_cls, mock_mlflow, _mock_git_sha
     ):
         """Verify that feature_columns.json artifact is logged."""
         # Setup mocks
