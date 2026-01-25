@@ -37,7 +37,10 @@ class TestRenderSyntheticDataset:
         from ui.app import render_synthetic_dataset
 
         # Setup mocks
-        mock_columns.return_value = [MagicMock(), MagicMock()]
+        def columns_side_effect(*args, **kwargs):
+            num = args[0] if args else kwargs.get('spec', 3)
+            return [MagicMock() for _ in range(num)]
+        mock_columns.side_effect = columns_side_effect
         mock_slider.return_value = 500
         mock_checkbox.return_value = True
         mock_button.return_value = False
@@ -100,7 +103,11 @@ class TestRenderSyntheticDataset:
             patch("ui.app.st.slider") as mock_slider,
             patch("ui.app.st.checkbox") as mock_checkbox,
         ):
-            mock_columns.return_value = [MagicMock(), MagicMock()]
+            # st.columns can be called with different numbers, return 3 by default
+            def columns_side_effect(*args, **kwargs):
+                num = args[0] if args else kwargs.get('spec', 3)
+                return [MagicMock() for _ in range(num)]
+            mock_columns.side_effect = columns_side_effect
             mock_slider.return_value = 500
             mock_checkbox.return_value = True
 
@@ -115,7 +122,7 @@ class TestRenderSyntheticDataset:
     @patch("ui.app.st.rerun")
     @patch("ui.app.st.success")
     @patch("ui.app.st.spinner")
-    @patch("ui.app.requests.post")
+    @patch("requests.post")
     @patch("ui.app.st.button")
     @patch("ui.app.st.checkbox")
     @patch("ui.app.st.slider")
@@ -136,7 +143,10 @@ class TestRenderSyntheticDataset:
         from ui.app import render_synthetic_dataset
 
         # Setup mocks
-        mock_columns.return_value = [MagicMock(), MagicMock()]
+        def columns_side_effect(*args, **kwargs):
+            num = args[0] if args else kwargs.get('spec', 3)
+            return [MagicMock() for _ in range(num)]
+        mock_columns.side_effect = columns_side_effect
         mock_slider.return_value = 500
         mock_checkbox.return_value = True
         mock_button.return_value = True  # Generate button clicked
@@ -163,7 +173,7 @@ class TestRenderSyntheticDataset:
     @patch("ui.app.st.rerun")
     @patch("ui.app.st.success")
     @patch("ui.app.st.spinner")
-    @patch("ui.app.requests.delete")
+    @patch("requests.delete")
     @patch("ui.app.st.expander")
     @patch("ui.app.st.button")
     @patch("ui.app.st.checkbox")
@@ -186,7 +196,10 @@ class TestRenderSyntheticDataset:
         from ui.app import render_synthetic_dataset
 
         # Setup mocks
-        mock_columns.return_value = [MagicMock(), MagicMock()]
+        def columns_side_effect(*args, **kwargs):
+            num = args[0] if args else kwargs.get('spec', 3)
+            return [MagicMock() for _ in range(num)]
+        mock_columns.side_effect = columns_side_effect
         mock_slider.return_value = 500
         mock_checkbox.return_value = True
 
@@ -220,7 +233,7 @@ class TestRenderSyntheticDataset:
     @patch("ui.app.st.rerun")
     @patch("ui.app.st.error")
     @patch("ui.app.st.spinner")
-    @patch("ui.app.requests.post")
+    @patch("requests.post")
     @patch("ui.app.st.button")
     @patch("ui.app.st.checkbox")
     @patch("ui.app.st.slider")
@@ -241,7 +254,10 @@ class TestRenderSyntheticDataset:
         from ui.app import render_synthetic_dataset
 
         # Setup mocks
-        mock_columns.return_value = [MagicMock(), MagicMock()]
+        def columns_side_effect(*args, **kwargs):
+            num = args[0] if args else kwargs.get('spec', 3)
+            return [MagicMock() for _ in range(num)]
+        mock_columns.side_effect = columns_side_effect
         mock_slider.return_value = 500
         mock_checkbox.return_value = True
         mock_button.return_value = True  # Generate button clicked
@@ -266,7 +282,7 @@ class TestRenderSyntheticDataset:
 
     @patch("ui.app.st.error")
     @patch("ui.app.st.spinner")
-    @patch("ui.app.requests.post")
+    @patch("requests.post")
     @patch("ui.app.st.button")
     @patch("ui.app.st.checkbox")
     @patch("ui.app.st.slider")
@@ -285,7 +301,10 @@ class TestRenderSyntheticDataset:
         from ui.app import render_synthetic_dataset
 
         # Setup mocks
-        mock_columns.return_value = [MagicMock(), MagicMock()]
+        def columns_side_effect(*args, **kwargs):
+            num = args[0] if args else kwargs.get('spec', 3)
+            return [MagicMock() for _ in range(num)]
+        mock_columns.side_effect = columns_side_effect
         mock_slider.return_value = 500
         mock_checkbox.return_value = True
         mock_button.return_value = True  # Generate button clicked
@@ -489,7 +508,7 @@ class TestRenderModelLab:
     @patch("ui.app.check_mlflow_connection")
     @patch("ui.app.st.success")
     @patch("ui.app.st.spinner")
-    @patch("ui.app.requests.post")
+    @patch("requests.post")
     @patch("ui.app.st.button")
     @patch("ui.app.st.slider")
     @patch("ui.app.st.columns")
@@ -580,7 +599,7 @@ class TestCacheInvalidation:
     @patch("ui.app.st.rerun")
     @patch("ui.app.st.success")
     @patch("ui.app.st.spinner")
-    @patch("ui.app.requests.post")
+    @patch("requests.post")
     @patch("ui.app.st.button")
     @patch("ui.app.st.checkbox")
     @patch("ui.app.st.slider")
@@ -601,7 +620,10 @@ class TestCacheInvalidation:
         from ui.app import render_synthetic_dataset
 
         # Setup mocks
-        mock_columns.return_value = [MagicMock(), MagicMock()]
+        def columns_side_effect(*args, **kwargs):
+            num = args[0] if args else kwargs.get('spec', 3)
+            return [MagicMock() for _ in range(num)]
+        mock_columns.side_effect = columns_side_effect
         mock_slider.return_value = 500
         mock_checkbox.return_value = True
         mock_button.return_value = True  # Generate button clicked
@@ -627,7 +649,7 @@ class TestCacheInvalidation:
     @patch("ui.app.st.rerun")
     @patch("ui.app.st.success")
     @patch("ui.app.st.spinner")
-    @patch("ui.app.requests.delete")
+    @patch("requests.delete")
     @patch("ui.app.st.expander")
     @patch("ui.app.st.button")
     @patch("ui.app.st.checkbox")
@@ -650,7 +672,10 @@ class TestCacheInvalidation:
         from ui.app import render_synthetic_dataset
 
         # Setup mocks
-        mock_columns.return_value = [MagicMock(), MagicMock()]
+        def columns_side_effect(*args, **kwargs):
+            num = args[0] if args else kwargs.get('spec', 3)
+            return [MagicMock() for _ in range(num)]
+        mock_columns.side_effect = columns_side_effect
         mock_slider.return_value = 500
         mock_checkbox.return_value = True
 
@@ -682,7 +707,7 @@ class TestCacheInvalidation:
     @patch("ui.app.st.rerun")
     @patch("ui.app.st.success")
     @patch("ui.app.st.spinner")
-    @patch("ui.app.requests.post")
+    @patch("requests.post")
     @patch("ui.app.st.button")
     @patch("ui.app.st.checkbox")
     @patch("ui.app.st.slider")
@@ -702,7 +727,10 @@ class TestCacheInvalidation:
         from ui.app import render_synthetic_dataset
 
         # Setup mocks
-        mock_columns.return_value = [MagicMock(), MagicMock()]
+        def columns_side_effect(*args, **kwargs):
+            num = args[0] if args else kwargs.get('spec', 3)
+            return [MagicMock() for _ in range(num)]
+        mock_columns.side_effect = columns_side_effect
         mock_slider.return_value = 500
         mock_checkbox.return_value = True
         mock_button.return_value = True  # Generate button clicked
@@ -728,7 +756,7 @@ class TestCacheInvalidation:
     @patch("ui.app.st.rerun")
     @patch("ui.app.st.success")
     @patch("ui.app.st.spinner")
-    @patch("ui.app.requests.delete")
+    @patch("requests.delete")
     @patch("ui.app.st.expander")
     @patch("ui.app.st.button")
     @patch("ui.app.st.checkbox")
@@ -750,7 +778,10 @@ class TestCacheInvalidation:
         from ui.app import render_synthetic_dataset
 
         # Setup mocks
-        mock_columns.return_value = [MagicMock(), MagicMock()]
+        def columns_side_effect(*args, **kwargs):
+            num = args[0] if args else kwargs.get('spec', 3)
+            return [MagicMock() for _ in range(num)]
+        mock_columns.side_effect = columns_side_effect
         mock_slider.return_value = 500
         mock_checkbox.return_value = True
 
@@ -784,7 +815,7 @@ class TestCacheInvalidation:
     @patch("ui.app.st.rerun")
     @patch("ui.app.st.error")
     @patch("ui.app.st.spinner")
-    @patch("ui.app.requests.post")
+    @patch("requests.post")
     @patch("ui.app.st.button")
     @patch("ui.app.st.checkbox")
     @patch("ui.app.st.slider")
@@ -805,7 +836,10 @@ class TestCacheInvalidation:
         from ui.app import render_synthetic_dataset
 
         # Setup mocks
-        mock_columns.return_value = [MagicMock(), MagicMock()]
+        def columns_side_effect(*args, **kwargs):
+            num = args[0] if args else kwargs.get('spec', 3)
+            return [MagicMock() for _ in range(num)]
+        mock_columns.side_effect = columns_side_effect
         mock_slider.return_value = 500
         mock_checkbox.return_value = True
         mock_button.return_value = True  # Generate button clicked
@@ -831,7 +865,7 @@ class TestCacheInvalidation:
     @patch("ui.app.st.rerun")
     @patch("ui.app.st.error")
     @patch("ui.app.st.spinner")
-    @patch("ui.app.requests.post")
+    @patch("requests.post")
     @patch("ui.app.st.button")
     @patch("ui.app.st.checkbox")
     @patch("ui.app.st.slider")
@@ -852,7 +886,10 @@ class TestCacheInvalidation:
         from ui.app import render_synthetic_dataset
 
         # Setup mocks
-        mock_columns.return_value = [MagicMock(), MagicMock()]
+        def columns_side_effect(*args, **kwargs):
+            num = args[0] if args else kwargs.get('spec', 3)
+            return [MagicMock() for _ in range(num)]
+        mock_columns.side_effect = columns_side_effect
         mock_slider.return_value = 500
         mock_checkbox.return_value = True
         mock_button.return_value = True  # Generate button clicked
@@ -876,7 +913,7 @@ class TestCacheInvalidation:
     @patch("ui.app.st.rerun")
     @patch("ui.app.st.error")
     @patch("ui.app.st.spinner")
-    @patch("ui.app.requests.post")
+    @patch("requests.post")
     @patch("ui.app.st.button")
     @patch("ui.app.st.checkbox")
     @patch("ui.app.st.slider")
@@ -897,7 +934,10 @@ class TestCacheInvalidation:
         from ui.app import render_synthetic_dataset
 
         # Setup mocks
-        mock_columns.return_value = [MagicMock(), MagicMock()]
+        def columns_side_effect(*args, **kwargs):
+            num = args[0] if args else kwargs.get('spec', 3)
+            return [MagicMock() for _ in range(num)]
+        mock_columns.side_effect = columns_side_effect
         mock_slider.return_value = 500
         mock_checkbox.return_value = True
         mock_button.return_value = True  # Generate button clicked
@@ -918,7 +958,7 @@ class TestCacheInvalidation:
     @patch("ui.app.st.rerun")
     @patch("ui.app.st.success")
     @patch("ui.app.st.spinner")
-    @patch("ui.app.requests.post")
+    @patch("requests.post")
     @patch("ui.app.st.button")
     @patch("ui.app.st.checkbox")
     @patch("ui.app.st.slider")
@@ -939,7 +979,10 @@ class TestCacheInvalidation:
         from ui.app import render_synthetic_dataset
 
         # Setup mocks
-        mock_columns.return_value = [MagicMock(), MagicMock()]
+        def columns_side_effect(*args, **kwargs):
+            num = args[0] if args else kwargs.get('spec', 3)
+            return [MagicMock() for _ in range(num)]
+        mock_columns.side_effect = columns_side_effect
         mock_slider.return_value = 500
         mock_checkbox.return_value = True
         mock_button.return_value = True  # Generate button clicked

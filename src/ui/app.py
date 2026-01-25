@@ -18,7 +18,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
-from data_service import (
+from ui.data_service import (
     check_api_health,
     fetch_daily_stats,
     fetch_feature_sample,
@@ -29,7 +29,7 @@ from data_service import (
     fetch_transaction_details,
     predict_risk,
 )
-from mlflow_utils import (
+from ui.mlflow_utils import (
     check_mlflow_connection,
     get_experiment_runs,
     get_model_versions,
