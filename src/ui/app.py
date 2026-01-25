@@ -2501,10 +2501,7 @@ def _render_backtest_tab() -> None:
                     if score_dist:
                         st.markdown("#### Score Distribution")
                         dist_df = pd.DataFrame(
-                            [
-                                {"Range": k, "Count": v}
-                                for k, v in score_dist.items()
-                            ]
+                            [{"Range": k, "Count": v} for k, v in score_dist.items()]
                         )
                         fig = px.bar(
                             dist_df,
@@ -3021,9 +3018,7 @@ def _render_draft_rules_tab() -> None:
                 with action_col3:
                     # Check if rule is valid before enabling submit
                     validation = st.session_state.get("validation_result")
-                    is_valid = (
-                        validation.get("is_valid", False) if validation else None
-                    )
+                    is_valid = validation.get("is_valid", False) if validation else None
                     submit_disabled = (
                         is_valid is False if is_valid is not None else False
                     )

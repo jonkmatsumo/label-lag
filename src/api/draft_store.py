@@ -53,9 +53,7 @@ class DraftRuleStore:
                     except (TypeError, ValueError) as e:
                         logger.warning(f"Failed to load rule {rule_id}: {e}")
         except (json.JSONDecodeError, KeyError, ValueError) as e:
-            logger.warning(
-                f"Failed to load draft rules from {self.storage_path}: {e}"
-            )
+            logger.warning(f"Failed to load draft rules from {self.storage_path}: {e}")
             self._rules = {}
 
     def _save_rules(self) -> None:

@@ -1144,9 +1144,7 @@ async def create_draft_rule(request: DraftRuleCreateRequest) -> DraftRuleCreateR
     all_rules = draft_rules.copy()
     if production_ruleset:
         # Only include active rules from production
-        all_rules.extend(
-            [r for r in production_ruleset.rules if r.status == "active"]
-        )
+        all_rules.extend([r for r in production_ruleset.rules if r.status == "active"])
 
     test_ruleset = RuleSet(version="validation", rules=all_rules)
     conflicts, redundancies = validate_ruleset(test_ruleset, strict=False)
@@ -1362,9 +1360,7 @@ async def update_draft_rule(
         ),
         "score": request.score if request.score is not None else existing_rule.score,
         "severity": (
-            request.severity
-            if request.severity is not None
-            else existing_rule.severity
+            request.severity if request.severity is not None else existing_rule.severity
         ),
         "reason": (
             request.reason if request.reason is not None else existing_rule.reason
@@ -1655,9 +1651,7 @@ async def validate_draft_rule(
     rule_conflicts = [
         c for c in conflicts if c.rule1_id == rule_id or c.rule2_id == rule_id
     ]
-    rule_redundancies = [
-        r for r in redundancies if r.rule_id == rule_id
-    ]
+    rule_redundancies = [r for r in redundancies if r.rule_id == rule_id]
 
     # Convert to response
     return DraftRuleValidateResponse(
