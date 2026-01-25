@@ -13,19 +13,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Copy dependency files
+# Copy dependency files first (changes rarely)
 COPY pyproject.toml uv.lock README.md ./
-COPY src ./src
 
-# Install dependencies
+# Install dependencies (cached unless deps change)
 RUN uv sync --frozen --no-dev
 
-# Copy the rest of the application
-COPY . .
+# Copy source code last (changes frequently)
+COPY src ./src
+COPY config ./config
+COPY scripts ./scripts
 
-# Copy and set up wait-for-it script
-COPY scripts/wait-for-it.sh /usr/local/bin/wait-for-it.sh
-RUN chmod +x /usr/local/bin/wait-for-it.sh
+# Set up wait-for-it script
+RUN cp /app/scripts/wait-for-it.sh /usr/local/bin/wait-for-it.sh && \
+    chmod +x /usr/local/bin/wait-for-it.sh
 
 # Default command
 CMD ["uv", "run", "python", "-c", "print('Generator ready')"]
