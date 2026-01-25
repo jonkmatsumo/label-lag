@@ -25,10 +25,10 @@ from api.schemas import (
     DraftRuleCreateResponse,
     DraftRuleListResponse,
     DraftRuleResponse,
-    DraftRuleUpdateRequest,
-    DraftRuleUpdateResponse,
     DraftRuleSubmitRequest,
     DraftRuleSubmitResponse,
+    DraftRuleUpdateRequest,
+    DraftRuleUpdateResponse,
     DraftRuleValidateRequest,
     DraftRuleValidateResponse,
     GenerateDataRequest,
@@ -911,7 +911,6 @@ async def accept_suggestion(
     """
     from api.audit import get_audit_logger
     from api.draft_store import get_draft_store
-    from api.rules import RuleStatus
     from api.suggestions import RuleSuggestion
     from api.versioning import get_version_store
 
@@ -1716,7 +1715,6 @@ async def submit_draft_rule(
         HTTPException: If rule not found, not in draft status, validation fails,
             or transition fails.
     """
-    from api.audit import get_audit_logger
     from api.draft_store import get_draft_store
     from api.rules import RuleSet, RuleStatus
     from api.validation import validate_ruleset
@@ -1725,7 +1723,6 @@ async def submit_draft_rule(
 
     store = get_draft_store()
     version_store = get_version_store()
-    audit_logger = get_audit_logger()
     state_machine = RuleStateMachine(require_approval=False)
 
     # Get existing rule

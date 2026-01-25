@@ -2714,8 +2714,9 @@ def _render_suggestions_tab() -> None:
                                         f"Draft rule '{rule_id}' created."
                                     )
                                     st.info(
-                                        "**Next steps:** Navigate to the Draft Rules tab to "
-                                        "review, edit, or submit the rule for review."
+                                        "**Next steps:** Navigate to the Draft Rules "
+                                        "tab to review, edit, or submit the rule "
+                                        "for review."
                                     )
                                     st.session_state.show_accept_modal = False
                                     st.session_state.accept_suggestion_index = None
@@ -3154,7 +3155,9 @@ def _render_draft_rules_tab() -> None:
 
                     with col_sub1:
                         submit_clicked = st.form_submit_button(
-                            "Submit for Review", type="primary", disabled=not confirm_checkbox
+                            "Submit for Review",
+                            type="primary",
+                            disabled=not confirm_checkbox,
                         )
 
                     with col_sub2:
@@ -3179,8 +3182,9 @@ def _render_draft_rules_tab() -> None:
                                     "successfully! Status changed to PENDING_REVIEW."
                                 )
                                 st.info(
-                                    "**No production impact** - This rule will not affect "
-                                    "production scoring until approved by a reviewer."
+                                    "**No production impact** - This rule will not "
+                                    "affect production scoring until approved by a "
+                                    "reviewer."
                                 )
                                 st.session_state.show_submit_modal = False
                                 st.session_state.draft_rules_list = None
@@ -3314,7 +3318,8 @@ def _render_draft_rules_tab() -> None:
                                 if new_op in ["in", "not_in"]:
                                     try:
                                         value = [
-                                            int(x.strip()) for x in new_value_input.split(",")
+                                            int(x.strip())
+                                            for x in new_value_input.split(",")
                                         ]
                                     except ValueError:
                                         value = [

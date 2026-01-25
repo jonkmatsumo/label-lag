@@ -90,3 +90,67 @@ from fastapi import FastAPI
 - Always run `uv run ruff check src tests` before committing
 - Fix all F401 (unused imports), F841 (unused variables), E501 (line too long), and I001 (import sorting) errors
 - Use `uv run ruff check --fix src tests` to auto-fix issues where possible
+
+## Commit Message Format
+
+Commit messages must follow this format:
+
+```
+<type>: <verb> (lower-case)
+
+- <sub-item 1>
+- <sub-item 2>
+- <sub-item 3>
+```
+
+### Commit Types
+- `fix:` - Bug fixes and linting corrections
+- `feat:` - New features
+- `refactor:` - Code refactoring without changing functionality
+
+### Guidelines
+- Use lower-case verb in the subject line (e.g., "fix:", "add:", "remove:", "update:")
+- Use present tense, imperative mood (e.g., "fix" not "fixed" or "fixes")
+- Keep subject line concise (under 72 characters)
+- Use unordered list items (denoted with `-`) for multiple changes
+- Each sub-item should be a complete sentence or clear description
+
+### Examples
+
+**Good:**
+```
+fix: resolve ruff linting errors
+
+- Remove unused RuleStatus import
+- Fix line length violations in ui/app.py
+- Remove unused audit_logger variable
+```
+
+```
+feat: add rule sandbox testing
+
+- Implement deterministic rule evaluation endpoint
+- Add custom ruleset support for testing
+- Include matched rules and explanations in response
+```
+
+```
+refactor: reorganize api endpoints
+
+- Group rule-related endpoints under /rules prefix
+- Separate draft rule management from production rules
+- Update endpoint documentation
+```
+
+**Bad:**
+```
+Fixed linting errors  # Missing type prefix, wrong tense
+```
+
+```
+fix: Resolved all issues  # Wrong tense, not imperative
+```
+
+```
+fix: fix linting  # Redundant "fix"
+```
