@@ -12,6 +12,7 @@ from typing import Any
 
 import pandas as pd
 import requests
+import streamlit as st
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
@@ -292,6 +293,631 @@ def fetch_fraud_summary() -> dict[str, Any]:
         "total_amount": 0.0,
         "fraud_amount": 0.0,
     }
+
+
+# --- Pure Helper Utilities ---
+
+
+def compute_sample_fraction(total_rows: int, sample_size: int) -> float:
+    """Compute the fraction of rows to sample.
+
+    Args:
+        total_rows: Total number of rows in the dataset.
+        sample_size: Desired sample size.
+
+    Returns:
+        Fraction between 0.0 and 1.0. Returns 0.0 if total_rows is 0.
+        Returns 1.0 if sample_size >= total_rows.
+    """
+    if total_rows == 0:
+        return 0.0
+    return min(1.0, sample_size / total_rows)
+
+
+def split_stratified_counts(
+    total: int,
+    fraud_rate: float,
+    sample_size: int,
+    min_per_class: int,
+) -> tuple[int, int]:
+    """Split sample size into fraud and non-fraud counts maintaining ratio.
+
+    Args:
+        total: Total number of records.
+        fraud_rate: Fraction of records that are fraudulent (0.0 to 1.0).
+        sample_size: Total desired sample size.
+        min_per_class: Minimum samples required per class.
+
+    Returns:
+        Tuple of (fraud_sample_size, non_fraud_sample_size).
+        Both values will be at least min_per_class if possible.
+    """
+    if total == 0:
+        return (0, 0)
+
+    fraud_count = int(total * fraud_rate)
+    non_fraud_count = total - fraud_count
+
+    # If dataset is too small for minimums, return what we can
+    if total < min_per_class * 2:
+        fraud_sample = min(fraud_count, sample_size // 2)
+        non_fraud_sample = min(non_fraud_count, sample_size - fraud_sample)
+        return (fraud_sample, non_fraud_sample)
+
+    # Calculate proportional sample sizes
+    if fraud_count > 0 and non_fraud_count > 0:
+        fraud_fraction = fraud_count / total
+        fraud_sample = int(sample_size * fraud_fraction)
+        non_fraud_sample = sample_size - fraud_sample
+    elif fraud_count > 0:
+        # All fraud
+        fraud_sample = min(fraud_count, sample_size)
+        non_fraud_sample = 0
+    else:
+        # All non-fraud
+        fraud_sample = 0
+        non_fraud_sample = min(non_fraud_count, sample_size)
+
+    # Enforce minimums
+    if fraud_sample < min_per_class and fraud_count >= min_per_class:
+        fraud_sample = min_per_class
+        non_fraud_sample = min(non_fraud_count, sample_size - fraud_sample)
+
+    if non_fraud_sample < min_per_class and non_fraud_count >= min_per_class:
+        non_fraud_sample = min_per_class
+        fraud_sample = min(fraud_count, sample_size - non_fraud_sample)
+
+    # Ensure we don't exceed available counts
+    fraud_sample = min(fraud_sample, fraud_count)
+    non_fraud_sample = min(non_fraud_sample, non_fraud_count)
+
+    return (fraud_sample, non_fraud_sample)
+
+
+def normalize_schema_df(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize schema DataFrame column names and ordering.
+
+    Args:
+        df: DataFrame with schema information (from information_schema).
+
+    Returns:
+        DataFrame with normalized column names (lowercase) and consistent
+        column ordering: table_name, column_name, data_type, is_nullable,
+        ordinal_position.
+    """
+    if df.empty:
+        return df
+
+    # Normalize column names to lowercase
+    df = df.copy()
+    df.columns = [col.lower() for col in df.columns]
+
+    # Define expected column order
+    expected_cols = [
+        "table_name",
+        "column_name",
+        "data_type",
+        "is_nullable",
+        "ordinal_position",
+    ]
+
+    # Reorder columns if they exist
+    available_cols = [col for col in expected_cols if col in df.columns]
+    other_cols = [col for col in df.columns if col not in expected_cols]
+    df = df[available_cols + other_cols]
+
+    return df
+
+
+# --- Dataset Primitives ---
+
+
+@st.cache_data
+def get_dataset_fingerprint() -> dict[str, Any]:
+    """Get a lightweight fingerprint of the dataset for cache invalidation.
+
+    Returns aggregate statistics from generated_records and feature_snapshots
+    that change whenever the dataset changes. Used to key other cached functions.
+
+    Returns:
+        Dictionary with stable keys:
+        - generated_records: dict with count, max_created_at, max_transaction_timestamp, max_id
+        - feature_snapshots: dict with count, max_computed_at, max_snapshot_id
+        All timestamp and ID fields are None if the table is empty.
+    """
+    fingerprint = {
+        "generated_records": {
+            "count": 0,
+            "max_created_at": None,
+            "max_transaction_timestamp": None,
+            "max_id": None,
+        },
+        "feature_snapshots": {
+            "count": 0,
+            "max_computed_at": None,
+            "max_snapshot_id": None,
+        },
+    }
+
+    # Query generated_records aggregates
+    query_gr = text("""
+        SELECT
+            COUNT(*) as count,
+            MAX(created_at) as max_created_at,
+            MAX(transaction_timestamp) as max_transaction_timestamp,
+            MAX(id) as max_id
+        FROM generated_records
+    """)
+
+    try:
+        with get_db_connection() as conn:
+            result = conn.execute(query_gr)
+            row = result.fetchone()
+            if row:
+                fingerprint["generated_records"] = {
+                    "count": row.count or 0,
+                    "max_created_at": row.max_created_at,
+                    "max_transaction_timestamp": row.max_transaction_timestamp,
+                    "max_id": row.max_id,
+                }
+    except SQLAlchemyError as e:
+        print(f"Database error in get_dataset_fingerprint (generated_records): {e}")
+
+    # Query feature_snapshots aggregates
+    query_fs = text("""
+        SELECT
+            COUNT(*) as count,
+            MAX(computed_at) as max_computed_at,
+            MAX(snapshot_id) as max_snapshot_id
+        FROM feature_snapshots
+    """)
+
+    try:
+        with get_db_connection() as conn:
+            result = conn.execute(query_fs)
+            row = result.fetchone()
+            if row:
+                fingerprint["feature_snapshots"] = {
+                    "count": row.count or 0,
+                    "max_computed_at": row.max_computed_at,
+                    "max_snapshot_id": row.max_snapshot_id,
+                }
+    except SQLAlchemyError as e:
+        print(f"Database error in get_dataset_fingerprint (feature_snapshots): {e}")
+
+    return fingerprint
+
+
+@st.cache_data
+def _cached_overview_metrics(fingerprint: dict[str, Any]) -> dict[str, Any]:
+    """Internal cached function for overview metrics.
+
+    Args:
+        fingerprint: Dataset fingerprint dict from get_dataset_fingerprint().
+
+    Returns:
+        Dictionary with overview metrics.
+    """
+    query = text("""
+        SELECT
+            COUNT(*) as total_records,
+            SUM(CASE WHEN is_fraudulent THEN 1 ELSE 0 END) as fraud_records,
+            COUNT(DISTINCT user_id) as unique_users,
+            MIN(transaction_timestamp) as min_transaction_timestamp,
+            MAX(transaction_timestamp) as max_transaction_timestamp,
+            MIN(created_at) as min_created_at,
+            MAX(created_at) as max_created_at
+        FROM generated_records
+    """)
+
+    try:
+        with get_db_connection() as conn:
+            result = conn.execute(query)
+            row = result.fetchone()
+            if row:
+                total_records = row.total_records or 0
+                fraud_records = row.fraud_records or 0
+                fraud_rate = (
+                    (fraud_records / total_records * 100.0) if total_records > 0 else 0.0
+                )
+
+                return {
+                    "total_records": total_records,
+                    "fraud_records": fraud_records,
+                    "fraud_rate": fraud_rate,
+                    "unique_users": row.unique_users or 0,
+                    "min_transaction_timestamp": row.min_transaction_timestamp,
+                    "max_transaction_timestamp": row.max_transaction_timestamp,
+                    "min_created_at": row.min_created_at,
+                    "max_created_at": row.max_created_at,
+                }
+    except SQLAlchemyError as e:
+        print(f"Database error in fetch_overview_metrics: {e}")
+
+    return {
+        "total_records": 0,
+        "fraud_records": 0,
+        "fraud_rate": 0.0,
+        "unique_users": 0,
+        "min_transaction_timestamp": None,
+        "max_transaction_timestamp": None,
+        "min_created_at": None,
+        "max_created_at": None,
+    }
+
+
+def fetch_overview_metrics() -> dict[str, Any]:
+    """Fetch dataset overview metrics.
+
+    Returns aggregate statistics about the dataset including record counts,
+    fraud rates, unique users, and timestamp ranges.
+
+    Returns:
+        Dictionary with keys:
+        - total_records: Total number of records
+        - fraud_records: Number of fraudulent records
+        - fraud_rate: Fraud rate as percentage (0.0 to 100.0)
+        - unique_users: Number of distinct users
+        - min_transaction_timestamp: Earliest transaction timestamp
+        - max_transaction_timestamp: Latest transaction timestamp
+        - min_created_at: Earliest record creation timestamp
+        - max_created_at: Latest record creation timestamp
+    """
+    fingerprint = get_dataset_fingerprint()
+    return _cached_overview_metrics(fingerprint)
+
+
+def fetch_schema_summary(
+    table_names: list[str] | None = None,
+) -> pd.DataFrame:
+    """Fetch schema summary from information_schema.
+
+    Args:
+        table_names: List of table names to query. Defaults to
+            ["generated_records", "feature_snapshots"] if None.
+
+    Returns:
+        DataFrame with columns: table_name, column_name, data_type,
+        is_nullable, ordinal_position. Column names are normalized to lowercase.
+    """
+    if table_names is None:
+        table_names = ["generated_records", "feature_snapshots"]
+
+    query = text("""
+        SELECT
+            table_name,
+            column_name,
+            data_type,
+            is_nullable,
+            ordinal_position
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = ANY(:table_names)
+        ORDER BY table_name, ordinal_position
+    """)
+
+    try:
+        with get_db_connection() as conn:
+            result = conn.execute(query, {"table_names": table_names})
+            rows = result.fetchall()
+            columns = result.keys()
+            df = pd.DataFrame(rows, columns=list(columns))
+            return normalize_schema_df(df)
+    except SQLAlchemyError as e:
+        print(f"Database error in fetch_schema_summary: {e}")
+        return pd.DataFrame()
+
+
+def _get_postgres_version(conn) -> int:
+    """Get PostgreSQL major version number.
+
+    Args:
+        conn: Database connection.
+
+    Returns:
+        Major version number (e.g., 16 for PostgreSQL 16.x).
+    """
+    try:
+        result = conn.execute(text("SELECT version()"))
+        version_str = result.scalar()
+        # Extract major version from string like "PostgreSQL 16.1 ..."
+        if version_str:
+            parts = version_str.split()
+            for i, part in enumerate(parts):
+                if part.startswith("PostgreSQL"):
+                    if i + 1 < len(parts):
+                        version_num = parts[i + 1].split(".")[0]
+                        return int(version_num)
+        return 0
+    except Exception:
+        return 0
+
+
+def _get_table_stats(conn) -> tuple[int, int, int]:
+    """Get table statistics for sampling strategy selection.
+
+    Args:
+        conn: Database connection.
+
+    Returns:
+        Tuple of (min_id, max_id, count).
+    """
+    query = text("""
+        SELECT
+            MIN(id) as min_id,
+            MAX(id) as max_id,
+            COUNT(*) as count
+        FROM generated_records
+    """)
+    result = conn.execute(query)
+    row = result.fetchone()
+    if row:
+        return (row.min_id or 0, row.max_id or 0, row.count or 0)
+    return (0, 0, 0)
+
+
+def _sample_generated_records(
+    conn,
+    sample_size: int,
+    stratify: bool,
+    fraud_rate: float,
+    min_per_class: int,
+) -> pd.DataFrame:
+    """Sample records from generated_records using appropriate strategy.
+
+    Args:
+        conn: Database connection.
+        sample_size: Desired sample size.
+        stratify: Whether to stratify by fraud class.
+        fraud_rate: Fraud rate for stratification.
+        min_per_class: Minimum samples per class.
+
+    Returns:
+        DataFrame with sampled records.
+    """
+    min_id, max_id, total_count = _get_table_stats(conn)
+
+    if total_count == 0:
+        return pd.DataFrame()
+
+    # Determine sampling strategy
+    use_tablesample = False
+    use_id_range = False
+    use_offset = False
+    use_random = False
+
+    pg_version = _get_postgres_version(conn)
+    if pg_version >= 16 and total_count > 100000:
+        use_tablesample = True
+    elif max_id > min_id and total_count > 10000:
+        use_id_range = True
+    elif total_count < 100000:
+        use_offset = True
+    else:
+        use_random = True
+
+    if stratify:
+        fraud_sample_size, non_fraud_sample_size = split_stratified_counts(
+            total_count, fraud_rate, sample_size, min_per_class
+        )
+
+        # Sample fraud records
+        fraud_df = pd.DataFrame()
+        try:
+            if use_tablesample:
+                fraction = compute_sample_fraction(total_count, fraud_sample_size)
+                query = text(
+                    f"SELECT * FROM generated_records TABLESAMPLE SYSTEM ({fraction * 100}) "
+                    f"WHERE is_fraudulent = true LIMIT {fraud_sample_size}"
+                )
+            elif use_id_range and max_id > min_id:
+                # Use ID range with fraud filter
+                query = text(
+                    f"SELECT * FROM generated_records "
+                    f"WHERE id BETWEEN {min_id} AND {max_id} "
+                    f"AND is_fraudulent = true "
+                    f"LIMIT {fraud_sample_size}"
+                )
+            elif use_offset:
+                query = text(
+                    f"SELECT * FROM generated_records "
+                    f"WHERE is_fraudulent = true "
+                    f"LIMIT {fraud_sample_size} OFFSET 0"
+                )
+            else:
+                query = text(
+                    f"SELECT * FROM generated_records "
+                    f"WHERE is_fraudulent = true "
+                    f"ORDER BY random() LIMIT {fraud_sample_size}"
+                )
+
+            fraud_result = conn.execute(query)
+            fraud_rows = fraud_result.fetchall()
+            if fraud_rows:
+                fraud_columns = fraud_result.keys()
+                fraud_df = pd.DataFrame(fraud_rows, columns=list(fraud_columns))
+                if len(fraud_df) > fraud_sample_size:
+                    fraud_df = fraud_df.head(fraud_sample_size)
+        except Exception as e:
+            print(f"Error sampling fraud records: {e}")
+
+        # Sample non-fraud records
+        non_fraud_df = pd.DataFrame()
+        try:
+            if use_tablesample:
+                fraction = compute_sample_fraction(total_count, non_fraud_sample_size)
+                query = text(
+                    f"SELECT * FROM generated_records TABLESAMPLE SYSTEM ({fraction * 100}) "
+                    f"WHERE is_fraudulent = false LIMIT {non_fraud_sample_size}"
+                )
+            elif use_id_range and max_id > min_id:
+                query = text(
+                    f"SELECT * FROM generated_records "
+                    f"WHERE id BETWEEN {min_id} AND {max_id} "
+                    f"AND is_fraudulent = false "
+                    f"LIMIT {non_fraud_sample_size}"
+                )
+            elif use_offset:
+                query = text(
+                    f"SELECT * FROM generated_records "
+                    f"WHERE is_fraudulent = false "
+                    f"LIMIT {non_fraud_sample_size} OFFSET 0"
+                )
+            else:
+                query = text(
+                    f"SELECT * FROM generated_records "
+                    f"WHERE is_fraudulent = false "
+                    f"ORDER BY random() LIMIT {non_fraud_sample_size}"
+                )
+
+            non_fraud_result = conn.execute(query)
+            non_fraud_rows = non_fraud_result.fetchall()
+            if non_fraud_rows:
+                non_fraud_columns = non_fraud_result.keys()
+                non_fraud_df = pd.DataFrame(
+                    non_fraud_rows, columns=list(non_fraud_columns)
+                )
+                if len(non_fraud_df) > non_fraud_sample_size:
+                    non_fraud_df = non_fraud_df.head(non_fraud_sample_size)
+        except Exception as e:
+            print(f"Error sampling non-fraud records: {e}")
+
+        # Combine results
+        if not fraud_df.empty and not non_fraud_df.empty:
+            return pd.concat([fraud_df, non_fraud_df], ignore_index=True)
+        elif not fraud_df.empty:
+            return fraud_df
+        elif not non_fraud_df.empty:
+            return non_fraud_df
+        else:
+            return pd.DataFrame()
+    else:
+        # Non-stratified sampling
+        try:
+            if use_tablesample:
+                fraction = compute_sample_fraction(total_count, sample_size)
+                query = text(
+                    f"SELECT * FROM generated_records "
+                    f"TABLESAMPLE SYSTEM ({fraction * 100}) "
+                    f"LIMIT {sample_size}"
+                )
+            elif use_id_range and max_id > min_id:
+                # Sample IDs uniformly
+                step = max(1, (max_id - min_id) // sample_size)
+                query = text(
+                    f"SELECT * FROM generated_records "
+                    f"WHERE id IN (SELECT generate_series({min_id}, {max_id}, {step}) LIMIT {sample_size})"
+                )
+            elif use_offset:
+                query = text(
+                    f"SELECT * FROM generated_records LIMIT {sample_size} OFFSET 0"
+                )
+            else:
+                query = text(
+                    f"SELECT * FROM generated_records ORDER BY random() LIMIT {sample_size}"
+                )
+
+            result = conn.execute(query)
+            rows = result.fetchall()
+            if rows:
+                columns = result.keys()
+                df = pd.DataFrame(rows, columns=list(columns))
+                if len(df) > sample_size:
+                    df = df.head(sample_size)
+                return df
+        except Exception as e:
+            print(f"Error sampling records: {e}")
+
+    return pd.DataFrame()
+
+
+@st.cache_data
+def _cached_feature_sample(
+    fingerprint: dict[str, Any],
+    sample_size: int,
+    stratify: bool,
+) -> pd.DataFrame:
+    """Internal cached function for feature sampling.
+
+    Args:
+        fingerprint: Dataset fingerprint dict.
+        sample_size: Desired sample size.
+        stratify: Whether to stratify by fraud class.
+
+    Returns:
+        DataFrame with sampled features.
+    """
+    try:
+        with get_db_connection() as conn:
+            # Get fraud rate for stratification
+            fraud_rate = 0.0
+            if stratify:
+                overview = fetch_overview_metrics()
+                total = overview.get("total_records", 0)
+                fraud = overview.get("fraud_records", 0)
+                if total > 0:
+                    fraud_rate = fraud / total
+
+            # Sample from generated_records
+            sampled_df = _sample_generated_records(
+                conn, sample_size, stratify, fraud_rate, min_per_class=10
+            )
+
+            if sampled_df.empty:
+                return pd.DataFrame()
+
+            # Join to feature_snapshots
+            record_ids = sampled_df["record_id"].tolist()
+            if not record_ids:
+                return pd.DataFrame()
+
+            query = text("""
+                SELECT
+                    gr.record_id,
+                    gr.is_fraudulent,
+                    fs.velocity_24h,
+                    fs.amount_to_avg_ratio_30d,
+                    fs.balance_volatility_z_score
+                FROM generated_records gr
+                INNER JOIN feature_snapshots fs ON gr.record_id = fs.record_id
+                WHERE gr.record_id = ANY(:record_ids)
+            """)
+
+            result = conn.execute(query, {"record_ids": record_ids})
+            rows = result.fetchall()
+            if rows:
+                columns = result.keys()
+                df = pd.DataFrame(rows, columns=list(columns))
+                # Ensure we don't exceed sample_size
+                if len(df) > sample_size:
+                    df = df.head(sample_size)
+                return df
+    except SQLAlchemyError as e:
+        print(f"Database error in fetch_feature_sample: {e}")
+
+    return pd.DataFrame()
+
+
+def fetch_feature_sample(
+    sample_size: int,
+    stratify: bool = True,
+) -> pd.DataFrame:
+    """Fetch a sampled feature frame for diagnostics and analysis.
+
+    Returns a bounded-size DataFrame with numeric features and labels,
+    optionally stratified by fraud class.
+
+    Args:
+        sample_size: Maximum number of rows to return.
+        stratify: Whether to stratify sampling by fraud class. Default True.
+
+    Returns:
+        DataFrame with columns: record_id, is_fraudulent, velocity_24h,
+        amount_to_avg_ratio_30d, balance_volatility_z_score.
+        DataFrame will have at most sample_size rows.
+    """
+    fingerprint = get_dataset_fingerprint()
+    return _cached_feature_sample(fingerprint, sample_size, stratify)
 
 
 # --- API Client ---

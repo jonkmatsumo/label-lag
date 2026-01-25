@@ -304,3 +304,173 @@ class TestCheckApiHealth:
             result = check_api_health()
 
             assert result is None
+
+
+class TestComputeSampleFraction:
+    """Tests for compute_sample_fraction function."""
+
+    def test_normal_case(self):
+        from ui.data_service import compute_sample_fraction
+
+        assert compute_sample_fraction(1000, 100) == 0.1
+        assert compute_sample_fraction(1000, 500) == 0.5
+
+    def test_sample_larger_than_total(self):
+        from ui.data_service import compute_sample_fraction
+
+        assert compute_sample_fraction(100, 200) == 1.0
+        assert compute_sample_fraction(50, 100) == 1.0
+
+    def test_zero_rows(self):
+        from ui.data_service import compute_sample_fraction
+
+        assert compute_sample_fraction(0, 100) == 0.0
+        assert compute_sample_fraction(0, 0) == 0.0
+
+    def test_zero_sample(self):
+        from ui.data_service import compute_sample_fraction
+
+        assert compute_sample_fraction(1000, 0) == 0.0
+        assert compute_sample_fraction(100, 0) == 0.0
+
+    def test_exact_match(self):
+        from ui.data_service import compute_sample_fraction
+
+        assert compute_sample_fraction(100, 100) == 1.0
+        assert compute_sample_fraction(1000, 1000) == 1.0
+
+
+class TestSplitStratifiedCounts:
+    """Tests for split_stratified_counts function."""
+
+    def test_normal_balanced_case(self):
+        from ui.data_service import split_stratified_counts
+
+        # 1000 total, 5% fraud rate, 100 sample, min 10 per class
+        fraud_sample, non_fraud_sample = split_stratified_counts(
+            1000, 0.05, 100, 10
+        )
+        # Should maintain ratio: ~5 fraud, ~95 non-fraud, but enforce minimums
+        assert fraud_sample >= 10
+        assert non_fraud_sample >= 10
+        assert fraud_sample + non_fraud_sample <= 100
+
+    def test_extreme_imbalance(self):
+        from ui.data_service import split_stratified_counts
+
+        # 10000 total, 1% fraud rate, 200 sample, min 10 per class
+        fraud_sample, non_fraud_sample = split_stratified_counts(
+            10000, 0.01, 200, 10
+        )
+        # Should enforce minimums
+        assert fraud_sample >= 10
+        assert non_fraud_sample >= 10
+        assert fraud_sample + non_fraud_sample <= 200
+
+    def test_small_dataset(self):
+        from ui.data_service import split_stratified_counts
+
+        # Dataset smaller than min_per_class * 2
+        fraud_sample, non_fraud_sample = split_stratified_counts(10, 0.5, 10, 10)
+        # Should return what we can
+        assert fraud_sample + non_fraud_sample <= 10
+        assert fraud_sample >= 0
+        assert non_fraud_sample >= 0
+
+    def test_zero_total(self):
+        from ui.data_service import split_stratified_counts
+
+        fraud_sample, non_fraud_sample = split_stratified_counts(0, 0.05, 100, 10)
+        assert fraud_sample == 0
+        assert non_fraud_sample == 0
+
+    def test_minimum_enforcement(self):
+        from ui.data_service import split_stratified_counts
+
+        # Large dataset with very low fraud rate
+        fraud_sample, non_fraud_sample = split_stratified_counts(
+            100000, 0.001, 100, 20
+        )
+        # Should enforce minimum for fraud class
+        assert fraud_sample >= 20
+        assert non_fraud_sample >= 20
+
+    def test_all_fraud(self):
+        from ui.data_service import split_stratified_counts
+
+        fraud_sample, non_fraud_sample = split_stratified_counts(1000, 1.0, 100, 10)
+        assert fraud_sample == 100
+        assert non_fraud_sample == 0
+
+    def test_all_non_fraud(self):
+        from ui.data_service import split_stratified_counts
+
+        fraud_sample, non_fraud_sample = split_stratified_counts(1000, 0.0, 100, 10)
+        assert fraud_sample == 0
+        assert non_fraud_sample == 100
+
+
+class TestNormalizeSchemaDf:
+    """Tests for normalize_schema_df function."""
+
+    def test_column_name_normalization(self):
+        from ui.data_service import normalize_schema_df
+
+        df = pd.DataFrame(
+            {
+                "TABLE_NAME": ["test"],
+                "COLUMN_NAME": ["id"],
+                "DATA_TYPE": ["integer"],
+            }
+        )
+        result = normalize_schema_df(df)
+        assert "table_name" in result.columns
+        assert "column_name" in result.columns
+        assert "data_type" in result.columns
+
+    def test_column_ordering(self):
+        from ui.data_service import normalize_schema_df
+
+        df = pd.DataFrame(
+            {
+                "ordinal_position": [1],
+                "table_name": ["test"],
+                "data_type": ["integer"],
+                "column_name": ["id"],
+                "is_nullable": ["YES"],
+            }
+        )
+        result = normalize_schema_df(df)
+        # Check that expected columns are in the right order (if present)
+        cols = result.columns.tolist()
+        if "table_name" in cols and "column_name" in cols:
+            assert cols.index("table_name") < cols.index("column_name")
+
+    def test_missing_columns_handled_gracefully(self):
+        from ui.data_service import normalize_schema_df
+
+        df = pd.DataFrame({"some_column": [1, 2, 3]})
+        result = normalize_schema_df(df)
+        assert len(result) == 3
+        assert "some_column" in result.columns
+
+    def test_empty_dataframe(self):
+        from ui.data_service import normalize_schema_df
+
+        df = pd.DataFrame()
+        result = normalize_schema_df(df)
+        assert result.empty
+        assert isinstance(result, pd.DataFrame)
+
+    def test_mixed_case_columns(self):
+        from ui.data_service import normalize_schema_df
+
+        df = pd.DataFrame(
+            {
+                "Table_Name": ["test"],
+                "column_name": ["id"],
+                "Data_Type": ["integer"],
+            }
+        )
+        result = normalize_schema_df(df)
+        assert all(col.islower() for col in result.columns)
