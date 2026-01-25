@@ -516,3 +516,394 @@ class TestRenderModelLab:
         # Verify registry functions were called
         mock_prod_version.assert_called()
         mock_runs.assert_called()
+
+
+class TestCacheInvalidation:
+    """Tests for cache invalidation behavior after generate/clear operations."""
+
+    @patch("ui.app.st.cache_data")
+    @patch("ui.app.st.rerun")
+    @patch("ui.app.st.success")
+    @patch("ui.app.st.spinner")
+    @patch("ui.app.requests.post")
+    @patch("ui.app.st.button")
+    @patch("ui.app.st.checkbox")
+    @patch("ui.app.st.slider")
+    @patch("ui.app.st.columns")
+    def test_cache_clear_called_exactly_once_after_successful_generate(
+        self,
+        mock_columns,
+        mock_slider,
+        mock_checkbox,
+        mock_button,
+        mock_post,
+        mock_spinner,
+        mock_success,
+        mock_rerun,
+        mock_cache_data,
+    ):
+        """Test that st.cache_data.clear() is called exactly once after successful generate."""
+        from ui.app import render_synthetic_dataset
+
+        # Setup mocks
+        mock_columns.return_value = [MagicMock(), MagicMock()]
+        mock_slider.return_value = 500
+        mock_checkbox.return_value = True
+        mock_button.return_value = True  # Generate button clicked
+        mock_spinner.return_value.__enter__ = MagicMock()
+        mock_spinner.return_value.__exit__ = MagicMock()
+
+        # Mock successful API response
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "success": True,
+            "total_records": 1000,
+            "fraud_records": 50,
+            "features_materialized": 1000,
+        }
+        mock_post.return_value = mock_response
+
+        render_synthetic_dataset()
+
+        # Verify cache clear is called exactly once
+        assert mock_cache_data.clear.call_count == 1
+
+    @patch("ui.app.st.cache_data")
+    @patch("ui.app.st.rerun")
+    @patch("ui.app.st.success")
+    @patch("ui.app.st.spinner")
+    @patch("ui.app.requests.delete")
+    @patch("ui.app.st.expander")
+    @patch("ui.app.st.button")
+    @patch("ui.app.st.checkbox")
+    @patch("ui.app.st.slider")
+    @patch("ui.app.st.columns")
+    def test_cache_clear_called_exactly_once_after_successful_clear(
+        self,
+        mock_columns,
+        mock_slider,
+        mock_checkbox,
+        mock_button,
+        mock_expander,
+        mock_delete,
+        mock_spinner,
+        mock_success,
+        mock_rerun,
+        mock_cache_data,
+    ):
+        """Test that st.cache_data.clear() is called exactly once after successful clear."""
+        from ui.app import render_synthetic_dataset
+
+        # Setup mocks
+        mock_columns.return_value = [MagicMock(), MagicMock()]
+        mock_slider.return_value = 500
+        mock_checkbox.return_value = True
+
+        # Mock expander context for Danger Zone
+        mock_expander_context = MagicMock()
+        mock_expander.return_value.__enter__ = MagicMock(return_value=mock_expander_context)
+        mock_expander.return_value.__exit__ = MagicMock(return_value=None)
+
+        # First button call is Generate (False), second is Clear (True)
+        mock_button.side_effect = [False, True]
+        mock_spinner.return_value.__enter__ = MagicMock()
+        mock_spinner.return_value.__exit__ = MagicMock()
+
+        # Mock successful API response
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "success": True,
+            "tables_cleared": ["generated_records", "feature_snapshots"],
+        }
+        mock_delete.return_value = mock_response
+
+        render_synthetic_dataset()
+
+        # Verify cache clear is called exactly once
+        assert mock_cache_data.clear.call_count == 1
+
+    @patch("ui.app.st.rerun")
+    @patch("ui.app.st.success")
+    @patch("ui.app.st.spinner")
+    @patch("ui.app.requests.post")
+    @patch("ui.app.st.button")
+    @patch("ui.app.st.checkbox")
+    @patch("ui.app.st.slider")
+    @patch("ui.app.st.columns")
+    def test_rerun_called_after_successful_generate(
+        self,
+        mock_columns,
+        mock_slider,
+        mock_checkbox,
+        mock_button,
+        mock_post,
+        mock_spinner,
+        mock_success,
+        mock_rerun,
+    ):
+        """Test that st.rerun() is called after successful generate."""
+        from ui.app import render_synthetic_dataset
+
+        # Setup mocks
+        mock_columns.return_value = [MagicMock(), MagicMock()]
+        mock_slider.return_value = 500
+        mock_checkbox.return_value = True
+        mock_button.return_value = True  # Generate button clicked
+        mock_spinner.return_value.__enter__ = MagicMock()
+        mock_spinner.return_value.__exit__ = MagicMock()
+
+        # Mock successful API response
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "success": True,
+            "total_records": 1000,
+            "fraud_records": 50,
+            "features_materialized": 1000,
+        }
+        mock_post.return_value = mock_response
+
+        with patch("ui.app.st.cache_data"):
+            render_synthetic_dataset()
+
+        # Verify rerun is called
+        mock_rerun.assert_called_once()
+
+    @patch("ui.app.st.rerun")
+    @patch("ui.app.st.success")
+    @patch("ui.app.st.spinner")
+    @patch("ui.app.requests.delete")
+    @patch("ui.app.st.expander")
+    @patch("ui.app.st.button")
+    @patch("ui.app.st.checkbox")
+    @patch("ui.app.st.slider")
+    @patch("ui.app.st.columns")
+    def test_rerun_called_after_successful_clear(
+        self,
+        mock_columns,
+        mock_slider,
+        mock_checkbox,
+        mock_button,
+        mock_expander,
+        mock_delete,
+        mock_spinner,
+        mock_success,
+        mock_rerun,
+    ):
+        """Test that st.rerun() is called after successful clear."""
+        from ui.app import render_synthetic_dataset
+
+        # Setup mocks
+        mock_columns.return_value = [MagicMock(), MagicMock()]
+        mock_slider.return_value = 500
+        mock_checkbox.return_value = True
+
+        # Mock expander context for Danger Zone
+        mock_expander_context = MagicMock()
+        mock_expander.return_value.__enter__ = MagicMock(return_value=mock_expander_context)
+        mock_expander.return_value.__exit__ = MagicMock(return_value=None)
+
+        # First button call is Generate (False), second is Clear (True)
+        mock_button.side_effect = [False, True]
+        mock_spinner.return_value.__enter__ = MagicMock()
+        mock_spinner.return_value.__exit__ = MagicMock()
+
+        # Mock successful API response
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "success": True,
+            "tables_cleared": ["generated_records", "feature_snapshots"],
+        }
+        mock_delete.return_value = mock_response
+
+        with patch("ui.app.st.cache_data"):
+            render_synthetic_dataset()
+
+        # Verify rerun is called
+        mock_rerun.assert_called_once()
+
+    @patch("ui.app.st.cache_data")
+    @patch("ui.app.st.rerun")
+    @patch("ui.app.st.error")
+    @patch("ui.app.st.spinner")
+    @patch("ui.app.requests.post")
+    @patch("ui.app.st.button")
+    @patch("ui.app.st.checkbox")
+    @patch("ui.app.st.slider")
+    @patch("ui.app.st.columns")
+    def test_cache_clear_not_called_on_api_errors(
+        self,
+        mock_columns,
+        mock_slider,
+        mock_checkbox,
+        mock_button,
+        mock_post,
+        mock_spinner,
+        mock_error,
+        mock_rerun,
+        mock_cache_data,
+    ):
+        """Test that cache clear is NOT called on API errors."""
+        from ui.app import render_synthetic_dataset
+
+        # Setup mocks
+        mock_columns.return_value = [MagicMock(), MagicMock()]
+        mock_slider.return_value = 500
+        mock_checkbox.return_value = True
+        mock_button.return_value = True  # Generate button clicked
+        mock_spinner.return_value.__enter__ = MagicMock()
+        mock_spinner.return_value.__exit__ = MagicMock()
+
+        # Mock API error response
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"success": False, "error": "Generation failed"}
+        mock_post.return_value = mock_response
+
+        render_synthetic_dataset()
+
+        # Verify cache clear is NOT called
+        mock_cache_data.clear.assert_not_called()
+        # Verify rerun is NOT called
+        mock_rerun.assert_not_called()
+
+    @patch("ui.app.st.cache_data")
+    @patch("ui.app.st.rerun")
+    @patch("ui.app.st.error")
+    @patch("ui.app.st.spinner")
+    @patch("ui.app.requests.post")
+    @patch("ui.app.st.button")
+    @patch("ui.app.st.checkbox")
+    @patch("ui.app.st.slider")
+    @patch("ui.app.st.columns")
+    def test_rerun_not_called_on_api_errors(
+        self,
+        mock_columns,
+        mock_slider,
+        mock_checkbox,
+        mock_button,
+        mock_post,
+        mock_spinner,
+        mock_error,
+        mock_rerun,
+        mock_cache_data,
+    ):
+        """Test that rerun is NOT called on API errors."""
+        from ui.app import render_synthetic_dataset
+
+        # Setup mocks
+        mock_columns.return_value = [MagicMock(), MagicMock()]
+        mock_slider.return_value = 500
+        mock_checkbox.return_value = True
+        mock_button.return_value = True  # Generate button clicked
+        mock_spinner.return_value.__enter__ = MagicMock()
+        mock_spinner.return_value.__exit__ = MagicMock()
+
+        # Mock API error response
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"success": False, "error": "Generation failed"}
+        mock_post.return_value = mock_response
+
+        render_synthetic_dataset()
+
+        # Verify rerun is NOT called
+        mock_rerun.assert_not_called()
+
+    @patch("ui.app.st.cache_data")
+    @patch("ui.app.st.rerun")
+    @patch("ui.app.st.error")
+    @patch("ui.app.st.spinner")
+    @patch("ui.app.requests.post")
+    @patch("ui.app.st.button")
+    @patch("ui.app.st.checkbox")
+    @patch("ui.app.st.slider")
+    @patch("ui.app.st.columns")
+    def test_cache_clear_not_called_on_network_timeouts(
+        self,
+        mock_columns,
+        mock_slider,
+        mock_checkbox,
+        mock_button,
+        mock_post,
+        mock_spinner,
+        mock_error,
+        mock_rerun,
+        mock_cache_data,
+    ):
+        """Test that cache clear is NOT called on network timeouts."""
+        from ui.app import render_synthetic_dataset
+
+        # Setup mocks
+        mock_columns.return_value = [MagicMock(), MagicMock()]
+        mock_slider.return_value = 500
+        mock_checkbox.return_value = True
+        mock_button.return_value = True  # Generate button clicked
+        mock_spinner.return_value.__enter__ = MagicMock()
+        mock_spinner.return_value.__exit__ = MagicMock()
+
+        # Mock timeout exception
+        mock_post.side_effect = requests.exceptions.Timeout("Request timeout")
+
+        render_synthetic_dataset()
+
+        # Verify cache clear is NOT called
+        mock_cache_data.clear.assert_not_called()
+        # Verify rerun is NOT called
+        mock_rerun.assert_not_called()
+
+    @patch("ui.app.st.cache_data")
+    @patch("ui.app.st.rerun")
+    @patch("ui.app.st.success")
+    @patch("ui.app.st.spinner")
+    @patch("ui.app.requests.post")
+    @patch("ui.app.st.button")
+    @patch("ui.app.st.checkbox")
+    @patch("ui.app.st.slider")
+    @patch("ui.app.st.columns")
+    def test_cache_clear_and_rerun_call_timing(
+        self,
+        mock_columns,
+        mock_slider,
+        mock_checkbox,
+        mock_button,
+        mock_post,
+        mock_spinner,
+        mock_success,
+        mock_rerun,
+        mock_cache_data,
+    ):
+        """Test that cache clear and rerun are called in correct order after success."""
+        from ui.app import render_synthetic_dataset
+
+        # Setup mocks
+        mock_columns.return_value = [MagicMock(), MagicMock()]
+        mock_slider.return_value = 500
+        mock_checkbox.return_value = True
+        mock_button.return_value = True  # Generate button clicked
+        mock_spinner.return_value.__enter__ = MagicMock()
+        mock_spinner.return_value.__exit__ = MagicMock()
+
+        # Mock successful API response
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "success": True,
+            "total_records": 1000,
+            "fraud_records": 50,
+            "features_materialized": 1000,
+        }
+        mock_post.return_value = mock_response
+
+        # Track call order
+        call_order = []
+
+        def track_cache_clear():
+            call_order.append("cache_clear")
+
+        def track_rerun():
+            call_order.append("rerun")
+
+        mock_cache_data.clear.side_effect = track_cache_clear
+        mock_rerun.side_effect = track_rerun
+
+        render_synthetic_dataset()
+
+        # Verify cache clear is called before rerun
+        assert call_order == ["cache_clear", "rerun"]
