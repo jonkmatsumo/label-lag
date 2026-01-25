@@ -1720,12 +1720,52 @@ def render_model_lab() -> None:
             if early_stopping_rounds == 0:
                 early_stopping_rounds = None
 
+    with st.expander("Hyperparameter Tuning"):
+        tuning_enabled = st.checkbox(
+            "Enable tuning",
+            value=False,
+            help="Run Optuna to search for best hyperparameters before training.",
+        )
+        tune_col1, tune_col2 = st.columns(2)
+        with tune_col1:
+            tuning_n_trials = st.slider(
+                "Trials",
+                min_value=5,
+                max_value=50,
+                value=20,
+                step=5,
+                disabled=not tuning_enabled,
+            )
+            tuning_timeout = st.slider(
+                "Timeout (min)",
+                min_value=5,
+                max_value=120,
+                value=30,
+                step=5,
+                disabled=not tuning_enabled,
+            )
+        with tune_col2:
+            tuning_metric = st.selectbox(
+                "Optimize",
+                options=["pr_auc", "roc_auc", "f1"],
+                index=0,
+                disabled=not tuning_enabled,
+            )
+        if tuning_enabled:
+            st.caption("Training may take longer. Best params logged to MLflow.")
+
     train_clicked = st.button(
         "Start Training", type="primary", disabled=not selected_columns
     )
 
     if train_clicked:
-        with st.spinner("Training model... This may take a moment."):
+        spinner_msg = (
+            "Running tuning, then training..."
+            if tuning_enabled
+            else "Training model... This may take a moment."
+        )
+        timeout_sec = (tuning_timeout + 60) if tuning_enabled else 300
+        with st.spinner(spinner_msg):
             try:
                 import requests
 
@@ -1741,13 +1781,19 @@ def render_model_lab() -> None:
                     "gamma": gamma,
                     "reg_alpha": reg_alpha,
                     "reg_lambda": reg_lambda,
+                    "tuning_config": {
+                        "enabled": tuning_enabled,
+                        "n_trials": tuning_n_trials,
+                        "timeout_minutes": tuning_timeout,
+                        "metric": tuning_metric,
+                    },
                 }
                 if early_stopping_rounds is not None:
                     payload["early_stopping_rounds"] = early_stopping_rounds
                 response = requests.post(
                     f"{API_BASE_URL}/train",
                     json=payload,
-                    timeout=300,  # Training can take a while
+                    timeout=timeout_sec,
                 )
                 result = response.json()
 
