@@ -106,6 +106,14 @@ class SignalEvaluator:
                 f"model_score={score}, final_score={final_score}"
             )
 
+        # Log shadow rule matches (separate from production)
+        if rule_result.shadow_matched_rules:
+            logger.info(
+                f"Shadow rules matched (not applied): version={manager.rules_version}, "
+                f"matched={rule_result.shadow_matched_rules}, "
+                f"model_score={score}, would_have_been={final_score}"
+            )
+
         # Identify risk components based on feature values
         risk_components = self._identify_risk_components(features)
 
@@ -134,6 +142,14 @@ class SignalEvaluator:
             ],
             model_score=score if rule_result.matched_rules else None,
             rules_version=manager.rules_version if manager.ruleset else None,
+            shadow_matched_rules=[
+                MatchedRule(
+                    rule_id=exp["rule_id"],
+                    severity=exp["severity"],
+                    reason=exp["reason"],
+                )
+                for exp in rule_result.shadow_explanations
+            ],
         )
 
     def _predict_with_model(self, manager, features: FeatureVector) -> float:

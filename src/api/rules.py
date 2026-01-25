@@ -20,6 +20,7 @@ class RuleStatus(str, Enum):
     DRAFT = "draft"
     PENDING_REVIEW = "pending_review"
     ACTIVE = "active"
+    SHADOW = "shadow"
     DISABLED = "disabled"
     ARCHIVED = "archived"
 
@@ -76,6 +77,15 @@ class RuleResult:
     matched_rules: list[str]  # rule IDs
     explanations: list[dict[str, Any]]  # {rule_id, severity, reason}
     rejected: bool = False
+    shadow_matched_rules: list[str] = None  # rule IDs for shadow rules
+    shadow_explanations: list[dict[str, Any]] = None  # shadow rule explanations
+
+    def __post_init__(self):
+        """Initialize shadow fields if None."""
+        if self.shadow_matched_rules is None:
+            self.shadow_matched_rules = []
+        if self.shadow_explanations is None:
+            self.shadow_explanations = []
 
 
 @dataclass
@@ -194,18 +204,24 @@ def evaluate_rules(
             final_score=current_score,
             matched_rules=[],
             explanations=[],
+            shadow_matched_rules=[],
+            shadow_explanations=[],
         )
 
     score = current_score
     matched_rules = []
     explanations = []
+    shadow_matched_rules = []
+    shadow_explanations = []
     rejected = False
     override_applied = False
 
-    for rule in ruleset.rules:
-        # Skip non-active rules
-        if rule.status != RuleStatus.ACTIVE.value:
-            continue
+    # Separate active and shadow rules
+    active_rules = [r for r in ruleset.rules if r.status == RuleStatus.ACTIVE.value]
+    shadow_rules = [r for r in ruleset.rules if r.status == RuleStatus.SHADOW.value]
+
+    # Evaluate active rules (affect score)
+    for rule in active_rules:
 
         # Check if feature exists
         if rule.field not in features:
@@ -261,6 +277,47 @@ def evaluate_rules(
         elif rule.action == "clamp_max" and not override_applied:
             score = min(score, rule.score)
 
+    # Evaluate shadow rules (do not affect score, just log)
+    for rule in shadow_rules:
+        # Check if feature exists
+        if rule.field not in features:
+            continue  # Skip rule if feature missing
+
+        feature_value = features[rule.field]
+
+        # Evaluate condition
+        matches = False
+        try:
+            if rule.op == ">":
+                matches = feature_value > rule.value
+            elif rule.op == ">=":
+                matches = feature_value >= rule.value
+            elif rule.op == "<":
+                matches = feature_value < rule.value
+            elif rule.op == "<=":
+                matches = feature_value <= rule.value
+            elif rule.op == "==":
+                matches = feature_value == rule.value
+            elif rule.op == "in":
+                matches = feature_value in rule.value
+            elif rule.op == "not_in":
+                matches = feature_value not in rule.value
+        except (TypeError, ValueError):
+            # Type mismatch - rule does not match
+            continue
+
+        if matches:
+            # Shadow rule matched - record it (but don't affect score)
+            shadow_matched_rules.append(rule.id)
+            shadow_explanations.append(
+                {
+                    "rule_id": rule.id,
+                    "severity": rule.severity,
+                    "reason": rule.reason or f"shadow_rule_matched:{rule.id}",
+                }
+            )
+            logger.debug(f"Shadow rule '{rule.id}' matched but not applied")
+
     # Ensure score is in valid range
     score = max(1, min(99, score))
 
@@ -269,4 +326,6 @@ def evaluate_rules(
         matched_rules=matched_rules,
         explanations=explanations,
         rejected=rejected,
+        shadow_matched_rules=shadow_matched_rules,
+        shadow_explanations=shadow_explanations,
     )

@@ -114,6 +114,10 @@ class SignalResponse(BaseModel):
         description="Version of decision rules applied",
         examples=["v1"],
     )
+    shadow_matched_rules: list[MatchedRule] = Field(
+        default_factory=list,
+        description="Shadow rules that matched (evaluated but not applied to score)",
+    )
 
     model_config = {
         "json_schema_extra": {
