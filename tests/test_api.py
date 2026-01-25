@@ -491,3 +491,86 @@ class TestClearDataEndpoint:
         data = response.json()
         assert data["success"] is False
         assert "Connection failed" in data["error"]
+
+
+class TestTrainEndpoint:
+    """Tests for model training endpoint."""
+
+    def test_train_endpoint_accepts_selected_feature_columns(self, client):
+        """Test that /train accepts selected_feature_columns parameter."""
+        with patch("api.main.train_model") as mock_train:
+            mock_train.return_value = "test_run_123"
+
+            response = client.post(
+                "/train",
+                json={
+                    "max_depth": 6,
+                    "training_window_days": 30,
+                    "selected_feature_columns": ["velocity_24h", "amount_to_avg_ratio_30d"],
+                },
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is True
+            assert data["run_id"] == "test_run_123"
+
+            # Verify train_model was called with feature_columns
+            mock_train.assert_called_once()
+            call_kwargs = mock_train.call_args[1]
+            assert call_kwargs["feature_columns"] == ["velocity_24h", "amount_to_avg_ratio_30d"]
+
+    def test_train_endpoint_works_without_feature_columns(self, client):
+        """Test that /train works without selected_feature_columns (backward compatible)."""
+        with patch("api.main.train_model") as mock_train:
+            mock_train.return_value = "test_run_456"
+
+            response = client.post(
+                "/train",
+                json={
+                    "max_depth": 6,
+                    "training_window_days": 30,
+                },
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is True
+
+            # Verify train_model was called with feature_columns=None
+            call_kwargs = mock_train.call_args[1]
+            assert call_kwargs.get("feature_columns") is None
+
+    def test_train_endpoint_rejects_empty_feature_columns(self, client):
+        """Test that /train rejects empty selected_feature_columns list."""
+        response = client.post(
+            "/train",
+            json={
+                "max_depth": 6,
+                "training_window_days": 30,
+                "selected_feature_columns": [],
+            },
+        )
+
+        assert response.status_code == 422  # Validation error
+
+    def test_train_endpoint_handles_invalid_columns_error(self, client):
+        """Test that /train returns error when invalid columns are provided."""
+        with patch("api.main.train_model") as mock_train:
+            mock_train.side_effect = ValueError(
+                "Requested feature columns not found in data: ['invalid_col']"
+            )
+
+            response = client.post(
+                "/train",
+                json={
+                    "max_depth": 6,
+                    "training_window_days": 30,
+                    "selected_feature_columns": ["invalid_col"],
+                },
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is False
+            assert "invalid_col" in data["error"]

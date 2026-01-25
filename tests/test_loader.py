@@ -80,6 +80,181 @@ class TestDataLoaderInit:
         assert "balance_volatility_z_score" in DataLoader.FEATURE_COLUMNS
 
 
+class TestFeatureColumnOverride:
+    """Tests for feature column override behavior."""
+
+    @pytest.fixture
+    def mock_session(self):
+        """Create a mock database session."""
+        session = MagicMock()
+        return session
+
+    @pytest.fixture
+    def loader(self):
+        """Create a DataLoader instance."""
+        return DataLoader(database_url="postgresql://test:test@localhost/test")
+
+    def test_load_uses_default_columns_when_none_provided(self, loader, mock_session):
+        """Verify default behavior when feature_columns is None."""
+        cutoff = datetime(2024, 4, 1)
+
+        mock_result = MagicMock()
+        # Return sample data with all default columns
+        mock_result.fetchall.return_value = [
+            (
+                "rec1",
+                "user1",
+                5,
+                1.5,
+                0.2,
+                None,
+                True,
+                None,
+                False,
+                datetime(2024, 3, 1),
+                0,
+            )
+        ]
+        mock_result.keys.return_value = [
+            "record_id",
+            "user_id",
+            "velocity_24h",
+            "amount_to_avg_ratio_30d",
+            "balance_volatility_z_score",
+            "experimental_signals",
+            "is_train_eligible",
+            "fraud_confirmed_at",
+            "is_fraudulent",
+            "transaction_timestamp",
+            "label",
+        ]
+        mock_session.execute.return_value = mock_result
+
+        split = loader.load_train_test_split(cutoff, session=mock_session)
+
+        # Should use default FEATURE_COLUMNS
+        assert list(split.X_train.columns) == DataLoader.FEATURE_COLUMNS
+        assert list(split.X_test.columns) == DataLoader.FEATURE_COLUMNS
+
+    def test_load_uses_override_list_when_provided(self, loader, mock_session):
+        """Verify custom feature list is used when provided."""
+        cutoff = datetime(2024, 4, 1)
+        custom_columns = ["velocity_24h", "amount_to_avg_ratio_30d"]
+
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = [
+            (
+                "rec1",
+                "user1",
+                5,
+                1.5,
+                0.2,
+                None,
+                True,
+                None,
+                False,
+                datetime(2024, 3, 1),
+                0,
+            )
+        ]
+        mock_result.keys.return_value = [
+            "record_id",
+            "user_id",
+            "velocity_24h",
+            "amount_to_avg_ratio_30d",
+            "balance_volatility_z_score",
+            "experimental_signals",
+            "is_train_eligible",
+            "fraud_confirmed_at",
+            "is_fraudulent",
+            "transaction_timestamp",
+            "label",
+        ]
+        mock_session.execute.return_value = mock_result
+
+        split = loader.load_train_test_split(
+            cutoff, session=mock_session, feature_columns=custom_columns
+        )
+
+        # Should use custom columns
+        assert list(split.X_train.columns) == custom_columns
+        assert list(split.X_test.columns) == custom_columns
+
+    def test_load_raises_on_missing_columns(self, loader, mock_session):
+        """Verify ValueError is raised when requested columns are missing."""
+        cutoff = datetime(2024, 4, 1)
+        missing_columns = ["velocity_24h", "nonexistent_column"]
+
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = [
+            (
+                "rec1",
+                "user1",
+                5,
+                1.5,
+                0.2,
+                None,
+                True,
+                None,
+                False,
+                datetime(2024, 3, 1),
+                0,
+            )
+        ]
+        mock_result.keys.return_value = [
+            "record_id",
+            "user_id",
+            "velocity_24h",
+            "amount_to_avg_ratio_30d",
+            "balance_volatility_z_score",
+            "experimental_signals",
+            "is_train_eligible",
+            "fraud_confirmed_at",
+            "is_fraudulent",
+            "transaction_timestamp",
+            "label",
+        ]
+        mock_session.execute.return_value = mock_result
+
+        with pytest.raises(ValueError) as exc_info:
+            loader.load_train_test_split(
+                cutoff, session=mock_session, feature_columns=missing_columns
+            )
+
+        assert "nonexistent_column" in str(exc_info.value)
+        assert "Requested feature columns not found" in str(exc_info.value)
+
+    def test_load_handles_empty_override_list(self, loader, mock_session):
+        """Verify error when empty feature list is provided."""
+        cutoff = datetime(2024, 4, 1)
+        empty_columns = []
+
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = []
+        mock_result.keys.return_value = [
+            "record_id",
+            "user_id",
+            "velocity_24h",
+            "amount_to_avg_ratio_30d",
+            "balance_volatility_z_score",
+            "experimental_signals",
+            "is_train_eligible",
+            "fraud_confirmed_at",
+            "is_fraudulent",
+            "transaction_timestamp",
+            "label",
+        ]
+        mock_session.execute.return_value = mock_result
+
+        # Empty list should work (creates empty DataFrame with specified columns)
+        split = loader.load_train_test_split(
+            cutoff, session=mock_session, feature_columns=empty_columns
+        )
+
+        assert list(split.X_train.columns) == empty_columns
+        assert list(split.X_test.columns) == empty_columns
+
+
 class TestDataLoaderTemporalSplit:
     """Tests for temporal splitting logic."""
 
