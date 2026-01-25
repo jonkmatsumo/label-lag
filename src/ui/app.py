@@ -2887,7 +2887,7 @@ def _render_draft_rules_tab() -> None:
             # Actions (only for draft rules)
             if status == "DRAFT":
                 st.markdown("---")
-                action_col1, action_col2, action_col3 = st.columns(3)
+                action_col1, action_col2, action_col3, action_col4 = st.columns(4)
 
                 with action_col1:
                     if st.button("Edit Rule", key="edit_btn"):
@@ -2897,6 +2897,28 @@ def _render_draft_rules_tab() -> None:
                     validate_clicked = st.button("Validate Rule", key="validate_btn")
                     if validate_clicked:
                         st.session_state.show_validation = True
+
+                with action_col3:
+                    # Check if rule is valid before enabling submit
+                    validation = st.session_state.get("validation_result")
+                    is_valid = (
+                        validation.get("is_valid", False) if validation else None
+                    )
+                    submit_disabled = (
+                        is_valid is False if is_valid is not None else False
+                    )
+
+                    if st.button(
+                        "Submit for Review",
+                        type="primary",
+                        key="submit_btn",
+                        disabled=submit_disabled,
+                    ):
+                        st.session_state.show_submit_modal = True
+
+                with action_col4:
+                    if st.button("Delete Rule", type="secondary", key="delete_btn"):
+                        st.session_state.show_delete_confirm = True
 
             # Validation results panel
             if st.session_state.get("show_validation", False):
@@ -2980,6 +3002,72 @@ def _render_draft_rules_tab() -> None:
                             f"**{len(redundancies)} redundancy warning(s). "
                             "You can proceed, but consider reviewing.**"
                         )
+
+            # Submit for review modal
+            if st.session_state.get("show_submit_modal", False):
+                st.markdown("---")
+                st.markdown("### Submit Rule for Review")
+
+                st.warning(
+                    "**⚠️ Warning:** Once submitted, this rule cannot be edited "
+                    "until reviewed. It will enter the review queue."
+                )
+
+                with st.form("submit_rule_form"):
+                    justification = st.text_area(
+                        "Justification *",
+                        help="Explain why this rule should be reviewed (min 10 characters)",
+                        min_chars=10,
+                    )
+
+                    confirm_checkbox = st.checkbox(
+                        "I understand this rule will enter the review queue and "
+                        "cannot be edited until reviewed",
+                        key="submit_confirm",
+                    )
+
+                    col_sub1, col_sub2 = st.columns(2)
+
+                    with col_sub1:
+                        submit_clicked = st.form_submit_button(
+                            "Submit for Review", type="primary", disabled=not confirm_checkbox
+                        )
+
+                    with col_sub2:
+                        cancel_clicked = st.form_submit_button("Cancel")
+
+                    if cancel_clicked:
+                        st.session_state.show_submit_modal = False
+                        st.rerun()
+
+                    if submit_clicked and confirm_checkbox:
+                        if len(justification) < 10:
+                            st.error("Justification must be at least 10 characters")
+                        else:
+                            with st.spinner("Submitting rule for review..."):
+                                result = submit_draft_rule(
+                                    rule_id, justification, actor="ui_user"
+                                )
+
+                            if result:
+                                st.success(
+                                    f"✅ Rule '{rule_id}' submitted for review successfully! "
+                                    "Status changed to PENDING_REVIEW."
+                                )
+                                st.info(
+                                    "**No production impact** - This rule will not affect "
+                                    "production scoring until approved by a reviewer."
+                                )
+                                st.session_state.show_submit_modal = False
+                                st.session_state.draft_rules_list = None
+                                st.session_state.selected_draft_rule = None
+                                st.session_state.validation_result = None
+                                st.rerun()
+                            else:
+                                st.error(
+                                    "Failed to submit rule. Check validation status "
+                                    "or API server connection."
+                                )
 
                 with action_col3:
                     if st.button("Delete Rule", type="secondary", key="delete_btn"):
