@@ -9,7 +9,7 @@ import numpy as np
 from sqlalchemy import text
 
 from api.rules import RuleResult, evaluate_rules
-from api.schemas import RiskComponent, SignalRequest, SignalResponse
+from api.schemas import MatchedRule, RiskComponent, SignalRequest, SignalResponse
 from model.evaluate import ScoreCalibrator
 from synthetic_pipeline.db.session import DatabaseSession
 
@@ -118,6 +118,16 @@ class SignalEvaluator:
             score=final_score,
             risk_components=risk_components,
             model_version=model_version,
+            matched_rules=[
+                MatchedRule(
+                    rule_id=exp["rule_id"],
+                    severity=exp["severity"],
+                    reason=exp["reason"],
+                )
+                for exp in rule_result.explanations
+            ],
+            model_score=score if rule_result.matched_rules else None,
+            rules_version=manager.rules_version if manager.ruleset else None,
         )
 
     def _predict_with_model(self, manager, features: FeatureVector) -> float:

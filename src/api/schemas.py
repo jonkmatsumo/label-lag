@@ -56,6 +56,26 @@ class RiskComponent(BaseModel):
     )
 
 
+class MatchedRule(BaseModel):
+    """Rule that matched during evaluation."""
+
+    rule_id: str = Field(
+        ...,
+        description="Rule identifier",
+        examples=["high_velocity", "reject_large_amount"],
+    )
+    severity: str = Field(
+        default="medium",
+        description="Rule severity level",
+        examples=["low", "medium", "high"],
+    )
+    reason: str = Field(
+        default="",
+        description="Human-readable explanation of why the rule matched",
+        examples=["high transaction velocity", "transaction amount exceeds threshold"],
+    )
+
+
 class SignalResponse(BaseModel):
     """Response schema for signal evaluation endpoint."""
 
@@ -79,6 +99,20 @@ class SignalResponse(BaseModel):
         ...,
         description="Version of the model used for evaluation",
         examples=["v1.0.0"],
+    )
+    matched_rules: list[MatchedRule] = Field(
+        default_factory=list,
+        description="Decision rules that matched this request",
+    )
+    model_score: int | None = Field(
+        default=None,
+        description="Raw model score before rule adjustments (if rules applied)",
+        examples=[75],
+    )
+    rules_version: str | None = Field(
+        default=None,
+        description="Version of decision rules applied",
+        examples=["v1"],
     )
 
     model_config = {
