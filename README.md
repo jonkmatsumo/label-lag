@@ -5,7 +5,10 @@ End-to-end ML system for fraud detection with realistic label delay simulation. 
 ## Quick Start
 
 ```bash
-# Start all services
+# Copy .env (see Environment Variables)
+cp .env.example .env
+
+# Start all services (convenience wrapper includes infra + app)
 docker compose up -d
 
 # Open the dashboard
@@ -14,6 +17,22 @@ open http://localhost:8501
 # Generate data via dashboard: Model Lab > Generate Data
 # Or via CLI:
 docker compose exec generator uv run python src/main.py seed --users 1000 --fraud-rate 0.05
+```
+
+### Split infra vs app (recommended for development)
+
+Start infrastructure once, then run app separately so you can rebuild app without touching infra:
+
+```bash
+# 1. Start infra (db, minio, mlflow). Keep running.
+docker compose -f docker-compose.infra.yml up -d
+
+# 2. Start app (api, dashboard, generator). Rebuild frequently.
+docker compose -f docker-compose.infra.yml -f docker-compose.app.yml up -d
+
+# Rebuild only API after source change:
+docker compose -f docker-compose.infra.yml -f docker-compose.app.yml build api
+docker compose -f docker-compose.infra.yml -f docker-compose.app.yml up -d api
 ```
 
 ## Services
@@ -91,6 +110,32 @@ make test
 make lint         # Check only
 make lint-fix     # Auto-fix issues
 ```
+
+### Docker workflow (split compose)
+
+| When | Command |
+|------|---------|
+| **Once per machine** | `cp .env.example .env` |
+| **Start infra** (long-lived) | `docker compose -f docker-compose.infra.yml up -d` |
+| **Start app** (daily) | `docker compose -f docker-compose.infra.yml -f docker-compose.app.yml up -d` |
+| **After source change** | `docker compose -f ... -f ... build api` then `up -d api` (or restart) |
+| **After dependency change** | `docker compose -f docker-compose.infra.yml -f docker-compose.app.yml build --no-cache` then `up -d` |
+| **App down only** | `docker compose -f docker-compose.app.yml down` |
+| **Infra down only** | `docker compose -f docker-compose.infra.yml down` |
+
+**Always start infra before app.** The app compose file references the shared network; use both `-f docker-compose.infra.yml -f docker-compose.app.yml` when running app.
+
+### Reset commands
+
+| Scope | Command |
+|-------|---------|
+| **Wipe app only** | `docker compose -f docker-compose.app.yml down` |
+| **Wipe infra only** | `docker compose -f docker-compose.infra.yml down` |
+| **Full reset (all data)** | `docker compose -f docker-compose.infra.yml down -v` then `docker compose -f docker-compose.app.yml down` |
+| **Reset DB only** | `docker compose -f docker-compose.infra.yml stop db` → `docker compose -f docker-compose.infra.yml rm -f db` → `docker volume rm labellag_postgres_data` → `docker compose -f docker-compose.infra.yml up -d db` |
+| **Reset MinIO only** | `docker compose -f docker-compose.infra.yml stop minio` → `docker compose -f docker-compose.infra.yml rm -f minio create-buckets` → `docker volume rm labellag_minio_data` → `docker compose -f docker-compose.infra.yml up -d minio create-buckets` |
+
+**Volume migration:** If you previously used the legacy setup, volumes `postgres_data` and `minio_data` are orphaned. Remove them after confirming the new setup works: `docker volume rm postgres_data minio_data`.
 
 ## Architecture
 
