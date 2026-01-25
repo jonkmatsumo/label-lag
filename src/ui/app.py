@@ -20,7 +20,9 @@ from data_service import (
     check_api_health,
     fetch_daily_stats,
     fetch_fraud_summary,
+    fetch_overview_metrics,
     fetch_recent_alerts,
+    fetch_schema_summary,
     fetch_transaction_details,
     predict_risk,
 )
@@ -428,6 +430,79 @@ def render_synthetic_dataset() -> None:
     """
     st.header("Synthetic Dataset")
     st.markdown("Generate and manage synthetic training data for model development.")
+
+    # --- Dataset Overview section ---
+    st.subheader("Dataset Overview")
+
+    try:
+        overview = fetch_overview_metrics()
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            total_records = overview.get("total_records", 0)
+            fraud_records = overview.get("fraud_records", 0)
+            st.metric(
+                label="Total Records",
+                value=f"{total_records:,}" if total_records > 0 else "—",
+            )
+            st.metric(
+                label="Fraud Records",
+                value=f"{fraud_records:,}" if fraud_records > 0 else "—",
+            )
+
+        with col2:
+            fraud_rate = overview.get("fraud_rate", 0.0)
+            unique_users = overview.get("unique_users", 0)
+            st.metric(
+                label="Fraud Rate",
+                value=f"{fraud_rate:.2f}%" if fraud_rate > 0 else "—",
+            )
+            st.metric(
+                label="Unique Users",
+                value=f"{unique_users:,}" if unique_users > 0 else "—",
+            )
+
+        with col3:
+            min_ts = overview.get("min_transaction_timestamp")
+            max_ts = overview.get("max_transaction_timestamp")
+            if min_ts and max_ts:
+                date_range = f"{min_ts.strftime('%Y-%m-%d')} → {max_ts.strftime('%Y-%m-%d')}"
+            else:
+                date_range = "—"
+            st.metric(
+                label="Transaction Date Range",
+                value=date_range,
+            )
+    except Exception as e:
+        st.error(f"Error loading dataset overview: {e}")
+
+    st.markdown("---")
+
+    # --- Schema Summary section ---
+    st.subheader("Schema Summary")
+
+    try:
+        schema_df = fetch_schema_summary()
+
+        if schema_df.empty:
+            st.info("No schema information available.")
+        else:
+            # Display only relevant columns
+            display_cols = ["table_name", "column_name", "data_type", "is_nullable"]
+            available_cols = [col for col in display_cols if col in schema_df.columns]
+            if available_cols:
+                st.dataframe(
+                    schema_df[available_cols],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            else:
+                st.dataframe(schema_df, use_container_width=True, hide_index=True)
+    except Exception as e:
+        st.error(f"Error loading schema summary: {e}")
+
+    st.markdown("---")
 
     # --- Generate Dataset section ---
     st.subheader("Generate Dataset")
