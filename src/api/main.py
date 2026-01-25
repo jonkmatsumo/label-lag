@@ -6,19 +6,31 @@ It does not modify transaction state - it only provides an evaluation.
 
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime
 from typing import TYPE_CHECKING
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from api.model_manager import get_model_manager
 from api.schemas import (
+    BacktestMetricsResponse,
+    BacktestResultResponse,
+    BacktestResultsListResponse,
     ClearDataResponse,
     GenerateDataRequest,
     GenerateDataResponse,
     HealthResponse,
+    RuleMetricsItem,
+    RuleSuggestionResponse,
+    SandboxEvaluateRequest,
+    SandboxEvaluateResponse,
+    SandboxMatchedRule,
+    ShadowComparisonResponse,
     SignalRequest,
     SignalResponse,
+    SuggestionEvidence,
+    SuggestionsListResponse,
     TrainRequest,
     TrainResponse,
 )
@@ -376,6 +388,480 @@ async def train_model_endpoint(request: TrainRequest) -> TrainResponse:
     except Exception as e:
         logger.exception("Training failed")
         return TrainResponse(success=False, error=str(e))
+
+
+# =============================================================================
+# Rule Inspector Endpoints (Phase 1 - Read-Only/Deterministic)
+# =============================================================================
+
+
+@app.get(
+    "/rules",
+    tags=["Rule Inspector"],
+    summary="List current production ruleset",
+    description="Returns the current production ruleset. Read-only endpoint.",
+)
+async def get_rules() -> dict:
+    """Get the current production ruleset.
+
+    Returns:
+        Dict containing the ruleset version and rules.
+    """
+    manager = get_model_manager()
+    ruleset = manager.ruleset
+
+    if ruleset is None:
+        return {"version": "none", "rules": []}
+
+    return {
+        "version": ruleset.version,
+        "rules": [
+            {
+                "id": rule.id,
+                "field": rule.field,
+                "op": rule.op,
+                "value": rule.value,
+                "action": rule.action,
+                "score": rule.score,
+                "severity": rule.severity,
+                "reason": rule.reason,
+                "status": rule.status,
+            }
+            for rule in ruleset.rules
+        ],
+    }
+
+
+@app.post(
+    "/rules/sandbox/evaluate",
+    response_model=SandboxEvaluateResponse,
+    tags=["Rule Inspector"],
+    summary="Evaluate rules in sandbox mode",
+    description="""
+Deterministic rule evaluation for testing purposes.
+
+This endpoint is **pure function** - no database writes, no model inference,
+no production ruleset modification. Safe for experimentation.
+
+Provide feature values and optionally a custom ruleset to test rule behavior
+without affecting production.
+""",
+)
+async def sandbox_evaluate(request: SandboxEvaluateRequest) -> SandboxEvaluateResponse:
+    """Evaluate rules against features in sandbox mode.
+
+    Args:
+        request: Sandbox evaluation request with features, base_score,
+            and optional ruleset.
+
+    Returns:
+        SandboxEvaluateResponse with evaluation results.
+    """
+    from api.rules import Rule, RuleSet, evaluate_rules
+
+    # Build feature dict from request
+    features = {
+        "velocity_24h": request.features.velocity_24h,
+        "amount_to_avg_ratio_30d": request.features.amount_to_avg_ratio_30d,
+        "balance_volatility_z_score": request.features.balance_volatility_z_score,
+        "bank_connections_24h": request.features.bank_connections_24h,
+        "merchant_risk_score": request.features.merchant_risk_score,
+        "has_history": request.features.has_history,
+        "transaction_amount": request.features.transaction_amount,
+    }
+
+    # Use custom ruleset if provided, otherwise use production
+    if request.ruleset is not None:
+        try:
+            rules = [
+                Rule(
+                    id=r.id,
+                    field=r.field,
+                    op=r.op,
+                    value=r.value,
+                    action=r.action,
+                    score=r.score,
+                    severity=r.severity,
+                    reason=r.reason,
+                    status=r.status,
+                )
+                for r in request.ruleset.rules
+            ]
+            ruleset = RuleSet(version=request.ruleset.version, rules=rules)
+        except (TypeError, ValueError) as e:
+            raise HTTPException(status_code=400, detail=f"Invalid ruleset: {e}") from e
+    else:
+        manager = get_model_manager()
+        ruleset = manager.ruleset
+        if ruleset is None:
+            ruleset = RuleSet.empty()
+
+    # Evaluate rules
+    result = evaluate_rules(features, request.base_score, ruleset)
+
+    # Build matched rules with full info
+    matched_rules = []
+    for exp in result.explanations:
+        rule_id = exp["rule_id"]
+        # Find the rule to get action and score
+        matching_rule = next((r for r in ruleset.rules if r.id == rule_id), None)
+        matched_rules.append(
+            SandboxMatchedRule(
+                rule_id=rule_id,
+                severity=exp["severity"],
+                reason=exp["reason"],
+                action=matching_rule.action if matching_rule else "",
+                score=matching_rule.score if matching_rule else None,
+            )
+        )
+
+    # Build shadow matched rules
+    shadow_matched_rules = []
+    for exp in result.shadow_explanations or []:
+        rule_id = exp["rule_id"]
+        matching_rule = next((r for r in ruleset.rules if r.id == rule_id), None)
+        shadow_matched_rules.append(
+            SandboxMatchedRule(
+                rule_id=rule_id,
+                severity=exp["severity"],
+                reason=exp["reason"],
+                action=matching_rule.action if matching_rule else "",
+                score=matching_rule.score if matching_rule else None,
+            )
+        )
+
+    return SandboxEvaluateResponse(
+        final_score=result.final_score,
+        matched_rules=matched_rules,
+        explanations=result.explanations,
+        shadow_matched_rules=shadow_matched_rules,
+        rejected=result.rejected,
+        ruleset_version=ruleset.version,
+    )
+
+
+@app.get(
+    "/metrics/shadow/comparison",
+    response_model=ShadowComparisonResponse,
+    tags=["Rule Inspector"],
+    summary="Get shadow mode comparison metrics",
+    description="""
+Read-only metrics comparing production vs shadow rule performance.
+
+Returns per-rule match counts and overlap statistics for the specified
+date range. No side effects.
+""",
+)
+async def get_shadow_comparison(
+    start_date: str = Query(
+        ...,
+        description="Start date (ISO format, e.g., 2024-01-01)",
+    ),
+    end_date: str = Query(
+        ...,
+        description="End date (ISO format, e.g., 2024-01-31)",
+    ),
+    rule_ids: str | None = Query(
+        None,
+        description="Comma-separated rule IDs to filter (optional)",
+    ),
+) -> ShadowComparisonResponse:
+    """Get shadow mode comparison metrics.
+
+    Args:
+        start_date: Start of date range (ISO format).
+        end_date: End of date range (ISO format).
+        rule_ids: Optional comma-separated rule IDs to filter.
+
+    Returns:
+        ShadowComparisonResponse with comparison metrics.
+    """
+    from api.metrics import get_metrics_collector
+
+    try:
+        start_dt = datetime.fromisoformat(start_date)
+        end_dt = datetime.fromisoformat(end_date)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid date format. Use ISO format (YYYY-MM-DD): {e}",
+        ) from e
+
+    # Parse rule_ids if provided
+    if rule_ids:
+        rule_id_list = [r.strip() for r in rule_ids.split(",") if r.strip()]
+    else:
+        # Get all rule IDs from the current ruleset
+        manager = get_model_manager()
+        ruleset = manager.ruleset
+        if ruleset:
+            rule_id_list = [r.id for r in ruleset.rules]
+        else:
+            rule_id_list = []
+
+    if not rule_id_list:
+        return ShadowComparisonResponse(
+            period_start=start_date,
+            period_end=end_date,
+            rule_metrics=[],
+            total_requests=0,
+        )
+
+    # Get metrics
+    collector = get_metrics_collector()
+    report = collector.generate_comparison_report(rule_id_list, start_dt, end_dt)
+
+    # Convert to response
+    rule_metrics = [
+        RuleMetricsItem(
+            rule_id=rm.rule_id,
+            period_start=rm.period_start.isoformat(),
+            period_end=rm.period_end.isoformat(),
+            production_matches=rm.production_matches,
+            shadow_matches=rm.shadow_matches,
+            overlap_count=rm.overlap_count,
+            production_only_count=rm.production_only_count,
+            shadow_only_count=rm.shadow_only_count,
+        )
+        for rm in report.rule_metrics
+    ]
+
+    return ShadowComparisonResponse(
+        period_start=report.period_start.isoformat(),
+        period_end=report.period_end.isoformat(),
+        rule_metrics=rule_metrics,
+        total_requests=report.total_requests,
+    )
+
+
+@app.get(
+    "/backtest/results",
+    response_model=BacktestResultsListResponse,
+    tags=["Rule Inspector"],
+    summary="List backtest results",
+    description="""
+Read-only list of completed backtest results.
+
+Returns backtest results with optional filters. No side effects.
+""",
+)
+async def list_backtest_results(
+    rule_id: str | None = Query(None, description="Filter by rule ID"),
+    start_date: str | None = Query(
+        None,
+        description="Filter results completed after this date (ISO format)",
+    ),
+    end_date: str | None = Query(
+        None,
+        description="Filter results completed before this date (ISO format)",
+    ),
+    limit: int = Query(50, ge=1, le=100, description="Maximum results to return"),
+) -> BacktestResultsListResponse:
+    """List backtest results with optional filters.
+
+    Args:
+        rule_id: Optional rule ID filter.
+        start_date: Optional start date filter.
+        end_date: Optional end date filter.
+        limit: Maximum results to return.
+
+    Returns:
+        BacktestResultsListResponse with list of results.
+    """
+    from api.backtest import BacktestStore
+
+    store = BacktestStore()
+
+    # Parse dates if provided
+    start_dt = None
+    end_dt = None
+    try:
+        if start_date:
+            start_dt = datetime.fromisoformat(start_date)
+        if end_date:
+            end_dt = datetime.fromisoformat(end_date)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid date format. Use ISO format (YYYY-MM-DD): {e}",
+        ) from e
+
+    # Get results
+    results = store.list_results(
+        rule_id=rule_id,
+        start_date=start_dt,
+        end_date=end_dt,
+    )
+
+    # Apply limit
+    results = results[:limit]
+
+    # Convert to response
+    response_results = [
+        BacktestResultResponse(
+            job_id=r.job_id,
+            rule_id=r.rule_id,
+            ruleset_version=r.ruleset_version,
+            start_date=r.start_date.isoformat(),
+            end_date=r.end_date.isoformat(),
+            metrics=BacktestMetricsResponse(
+                total_records=r.metrics.total_records,
+                matched_count=r.metrics.matched_count,
+                match_rate=r.metrics.match_rate,
+                score_distribution=r.metrics.score_distribution,
+                score_mean=r.metrics.score_mean,
+                score_std=r.metrics.score_std,
+                score_min=r.metrics.score_min,
+                score_max=r.metrics.score_max,
+                rejected_count=r.metrics.rejected_count,
+                rejected_rate=r.metrics.rejected_rate,
+            ),
+            completed_at=r.completed_at.isoformat(),
+            error=r.error,
+        )
+        for r in results
+    ]
+
+    return BacktestResultsListResponse(
+        results=response_results,
+        total=len(response_results),
+    )
+
+
+@app.get(
+    "/backtest/results/{job_id}",
+    response_model=BacktestResultResponse,
+    tags=["Rule Inspector"],
+    summary="Get backtest result by job ID",
+    description="""
+Read-only retrieval of a specific backtest result.
+
+Returns the full backtest result for the given job ID. No side effects.
+""",
+)
+async def get_backtest_result(job_id: str) -> BacktestResultResponse:
+    """Get a specific backtest result by job ID.
+
+    Args:
+        job_id: Backtest job identifier.
+
+    Returns:
+        BacktestResultResponse with full result details.
+
+    Raises:
+        HTTPException: If result not found.
+    """
+    from api.backtest import BacktestStore
+
+    store = BacktestStore()
+    result = store.get(job_id)
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Backtest result not found: {job_id}",
+        )
+
+    return BacktestResultResponse(
+        job_id=result.job_id,
+        rule_id=result.rule_id,
+        ruleset_version=result.ruleset_version,
+        start_date=result.start_date.isoformat(),
+        end_date=result.end_date.isoformat(),
+        metrics=BacktestMetricsResponse(
+            total_records=result.metrics.total_records,
+            matched_count=result.metrics.matched_count,
+            match_rate=result.metrics.match_rate,
+            score_distribution=result.metrics.score_distribution,
+            score_mean=result.metrics.score_mean,
+            score_std=result.metrics.score_std,
+            score_min=result.metrics.score_min,
+            score_max=result.metrics.score_max,
+            rejected_count=result.metrics.rejected_count,
+            rejected_rate=result.metrics.rejected_rate,
+        ),
+        completed_at=result.completed_at.isoformat(),
+        error=result.error,
+    )
+
+
+@app.get(
+    "/suggestions/heuristic",
+    response_model=SuggestionsListResponse,
+    tags=["Rule Inspector"],
+    summary="Get heuristic rule suggestions",
+    description="""
+Read-only rule suggestions based on feature distribution analysis.
+
+Analyzes feature distributions and suggests potential rules.
+These are suggestions only - no rules are created or modified.
+""",
+)
+async def get_heuristic_suggestions(
+    field: str | None = Query(
+        None,
+        description="Filter by feature field (e.g., velocity_24h)",
+    ),
+    min_confidence: float = Query(
+        0.7,
+        ge=0.0,
+        le=1.0,
+        description="Minimum confidence threshold",
+    ),
+    min_samples: int = Query(
+        100,
+        ge=10,
+        le=10000,
+        description="Minimum samples required for analysis",
+    ),
+) -> SuggestionsListResponse:
+    """Get heuristic rule suggestions.
+
+    Args:
+        field: Optional field to filter suggestions.
+        min_confidence: Minimum confidence threshold.
+        min_samples: Minimum samples required.
+
+    Returns:
+        SuggestionsListResponse with list of suggestions.
+    """
+    from api.suggestions import SuggestionEngine
+
+    try:
+        engine = SuggestionEngine(min_confidence=min_confidence)
+        suggestions = engine.generate_suggestions(field=field, min_samples=min_samples)
+
+        # Convert to response (limit to 50)
+        response_suggestions = []
+        for s in suggestions[:50]:
+            evidence = s.evidence
+            response_suggestions.append(
+                RuleSuggestionResponse(
+                    field=s.field,
+                    operator=s.operator,
+                    threshold=s.threshold,
+                    action=s.action,
+                    suggested_score=s.suggested_score,
+                    confidence=s.confidence,
+                    evidence=SuggestionEvidence(
+                        statistic=evidence.get("statistic", ""),
+                        value=evidence.get("value", 0.0),
+                        mean=evidence.get("mean", 0.0),
+                        std=evidence.get("std", 0.0),
+                        sample_count=evidence.get("sample_count", 0),
+                    ),
+                    reason=s.reason,
+                )
+            )
+
+        return SuggestionsListResponse(
+            suggestions=response_suggestions,
+            total=len(response_suggestions),
+        )
+
+    except Exception as e:
+        logger.warning(f"Suggestion generation failed: {e}")
+        return SuggestionsListResponse(suggestions=[], total=0)
 
 
 @app.exception_handler(Exception)

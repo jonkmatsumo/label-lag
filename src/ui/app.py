@@ -22,14 +22,19 @@ from plotly.subplots import make_subplots
 
 from ui.data_service import (
     check_api_health,
+    fetch_backtest_results,
     fetch_daily_stats,
     fetch_feature_sample,
     fetch_fraud_summary,
+    fetch_heuristic_suggestions,
     fetch_overview_metrics,
     fetch_recent_alerts,
+    fetch_rules,
     fetch_schema_summary,
+    fetch_shadow_comparison,
     fetch_transaction_details,
     predict_risk,
+    sandbox_evaluate,
 )
 from ui.mlflow_utils import (
     check_mlflow_connection,
@@ -2016,6 +2021,620 @@ def render_model_lab() -> None:
         st.info("No experiment runs found. Train a model to see results here.")
 
 
+def render_rule_inspector() -> None:
+    """Render the Rule Inspector page.
+
+    This page provides read-only inspection and testing of decision rules:
+    - Sandbox: Deterministic rule testing
+    - Shadow Metrics: Production vs shadow comparison
+    - Backtest Results: Historical backtest viewer
+    - Suggestions: Heuristic rule suggestions
+
+    All features are read-only - no production modifications possible.
+    """
+    st.header("Rule Inspector")
+
+    # Safety banner
+    st.warning(
+        "**Read-Only Inspection Mode** - No production changes possible. "
+        "All operations are safe for exploration."
+    )
+
+    # Create tabs
+    tab1, tab2, tab3, tab4 = st.tabs(
+        [
+            "Sandbox (Testing)",
+            "Shadow Metrics (Read-Only)",
+            "Backtest Results (Read-Only)",
+            "Suggestions (Read-Only)",
+        ]
+    )
+
+    # --- Tab 1: Sandbox ---
+    with tab1:
+        _render_sandbox_tab()
+
+    # --- Tab 2: Shadow Metrics ---
+    with tab2:
+        _render_shadow_metrics_tab()
+
+    # --- Tab 3: Backtest Results ---
+    with tab3:
+        _render_backtest_tab()
+
+    # --- Tab 4: Suggestions ---
+    with tab4:
+        _render_suggestions_tab()
+
+
+def _render_sandbox_tab() -> None:
+    """Render the Sandbox testing tab."""
+    st.subheader("Rule Sandbox")
+    st.markdown(
+        "Test rule evaluation against arbitrary feature inputs. "
+        "**No database writes, no model inference, no production changes.**"
+    )
+
+    st.info(
+        "**SANDBOX MODE** - This is a pure function evaluation. "
+        "Custom rulesets are ephemeral and not saved."
+    )
+
+    col1, col2 = st.columns([1, 1])
+
+    with col1:
+        st.markdown("#### Feature Inputs")
+
+        # Feature sliders/inputs
+        velocity_24h = st.slider(
+            "velocity_24h",
+            min_value=0,
+            max_value=50,
+            value=3,
+            help="Transaction count in last 24 hours",
+        )
+
+        amount_to_avg_ratio = st.slider(
+            "amount_to_avg_ratio_30d",
+            min_value=0.0,
+            max_value=20.0,
+            value=1.5,
+            step=0.1,
+            help="Transaction amount vs 30-day average ratio",
+        )
+
+        balance_volatility = st.slider(
+            "balance_volatility_z_score",
+            min_value=-5.0,
+            max_value=5.0,
+            value=0.0,
+            step=0.1,
+            help="Balance volatility z-score",
+        )
+
+        bank_connections = st.slider(
+            "bank_connections_24h",
+            min_value=0,
+            max_value=30,
+            value=1,
+            help="Bank connections in last 24 hours",
+        )
+
+        merchant_risk = st.slider(
+            "merchant_risk_score",
+            min_value=0,
+            max_value=100,
+            value=30,
+            help="Merchant risk score",
+        )
+
+        has_history = st.checkbox("has_history", value=True, help="User has history")
+
+        transaction_amount = st.number_input(
+            "transaction_amount",
+            min_value=0.0,
+            max_value=10000.0,
+            value=100.0,
+            step=10.0,
+            help="Transaction amount",
+        )
+
+        st.markdown("---")
+
+        base_score = st.slider(
+            "Base Score",
+            min_value=1,
+            max_value=99,
+            value=50,
+            help="Base score before rule application",
+        )
+
+    with col2:
+        st.markdown("#### Ruleset Selection")
+
+        ruleset_source = st.radio(
+            "Ruleset Source",
+            options=["Production Ruleset", "Custom JSON"],
+            index=0,
+            help="Choose ruleset to evaluate",
+        )
+
+        custom_ruleset = None
+        if ruleset_source == "Custom JSON":
+            default_json = """{
+  "version": "test_v1",
+  "rules": [
+    {
+      "id": "high_velocity",
+      "field": "velocity_24h",
+      "op": ">",
+      "value": 5,
+      "action": "clamp_min",
+      "score": 70,
+      "severity": "medium",
+      "reason": "High transaction velocity",
+      "status": "active"
+    }
+  ]
+}"""
+            json_input = st.text_area(
+                "Custom Ruleset JSON",
+                value=default_json,
+                height=300,
+                help="Paste custom ruleset JSON (ephemeral - not saved)",
+            )
+
+            try:
+                custom_ruleset = json.loads(json_input)
+                st.success("Valid JSON")
+            except json.JSONDecodeError as e:
+                st.error(f"Invalid JSON: {e}")
+                custom_ruleset = None
+        else:
+            # Show current production ruleset
+            with st.expander("View Production Ruleset"):
+                prod_rules = fetch_rules()
+                if prod_rules:
+                    st.json(prod_rules)
+                else:
+                    st.info("No production ruleset loaded.")
+
+        st.markdown("---")
+
+        evaluate_clicked = st.button("Evaluate Rules", type="primary")
+
+    # Evaluation results
+    if evaluate_clicked:
+        features = {
+            "velocity_24h": velocity_24h,
+            "amount_to_avg_ratio_30d": amount_to_avg_ratio,
+            "balance_volatility_z_score": balance_volatility,
+            "bank_connections_24h": bank_connections,
+            "merchant_risk_score": merchant_risk,
+            "has_history": has_history,
+            "transaction_amount": transaction_amount,
+        }
+
+        with st.spinner("Evaluating rules..."):
+            result = sandbox_evaluate(features, base_score, custom_ruleset)
+
+        if result is None:
+            st.error("Evaluation failed. Is the API server running?")
+        else:
+            st.markdown("---")
+            st.markdown("### Evaluation Results")
+
+            # Score display
+            final_score = result.get("final_score", 0)
+            rejected = result.get("rejected", False)
+
+            col_a, col_b, col_c = st.columns(3)
+
+            with col_a:
+                if rejected:
+                    st.error(f"**Final Score: {final_score}** (REJECTED)")
+                elif final_score >= 80:
+                    st.error(f"**Final Score: {final_score}** (High Risk)")
+                elif final_score >= 50:
+                    st.warning(f"**Final Score: {final_score}** (Medium Risk)")
+                else:
+                    st.success(f"**Final Score: {final_score}** (Low Risk)")
+
+            with col_b:
+                st.metric("Base Score", base_score)
+
+            with col_c:
+                st.metric("Score Change", final_score - base_score)
+
+            # Matched rules table
+            matched_rules = result.get("matched_rules", [])
+            if matched_rules:
+                st.markdown("#### Matched Rules (Applied to Score)")
+                rules_df = pd.DataFrame(matched_rules)
+                st.dataframe(rules_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("No rules matched.")
+
+            # Shadow matched rules table
+            shadow_matched = result.get("shadow_matched_rules", [])
+            if shadow_matched:
+                st.markdown("#### Shadow Rules Matched (Not Applied)")
+                shadow_df = pd.DataFrame(shadow_matched)
+                st.dataframe(shadow_df, use_container_width=True, hide_index=True)
+
+            # Raw response
+            with st.expander("View Raw Response"):
+                st.json(result)
+
+
+def _render_shadow_metrics_tab() -> None:
+    """Render the Shadow Metrics tab."""
+    st.subheader("Shadow Mode Metrics")
+    st.markdown(
+        "Compare production vs shadow rule performance. "
+        "**Read-only view - no modifications possible.**"
+    )
+
+    # Date range selector
+    from datetime import datetime as dt
+    from datetime import timedelta
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        default_start = dt.now() - timedelta(days=30)
+        start_date = st.date_input(
+            "Start Date",
+            value=default_start,
+            help="Start of comparison period",
+        )
+
+    with col2:
+        end_date = st.date_input(
+            "End Date",
+            value=dt.now(),
+            help="End of comparison period",
+        )
+
+    fetch_clicked = st.button("Fetch Metrics", type="primary")
+
+    if fetch_clicked:
+        with st.spinner("Fetching shadow metrics..."):
+            result = fetch_shadow_comparison(
+                start_date=start_date.isoformat(),
+                end_date=end_date.isoformat(),
+            )
+
+        if result is None:
+            st.error("Failed to fetch metrics. Is the API server running?")
+        else:
+            rule_metrics = result.get("rule_metrics", [])
+            total_requests = result.get("total_requests", 0)
+
+            # Summary cards
+            st.markdown("---")
+            st.markdown("### Summary")
+
+            col_a, col_b, col_c, col_d = st.columns(4)
+
+            total_prod = sum(m.get("production_matches", 0) for m in rule_metrics)
+            total_shadow = sum(m.get("shadow_matches", 0) for m in rule_metrics)
+            total_overlap = sum(m.get("overlap_count", 0) for m in rule_metrics)
+
+            with col_a:
+                st.metric("Total Requests", total_requests)
+
+            with col_b:
+                st.metric("Production Matches", total_prod)
+
+            with col_c:
+                st.metric("Shadow Matches", total_shadow)
+
+            with col_d:
+                overlap_pct = (
+                    (total_overlap / max(total_prod, 1)) * 100 if total_prod > 0 else 0
+                )
+                st.metric("Overlap %", f"{overlap_pct:.1f}%")
+
+            # Per-rule metrics table
+            if rule_metrics:
+                st.markdown("### Per-Rule Metrics")
+                metrics_df = pd.DataFrame(rule_metrics)
+
+                # Select display columns
+                display_cols = [
+                    "rule_id",
+                    "production_matches",
+                    "shadow_matches",
+                    "overlap_count",
+                    "production_only_count",
+                    "shadow_only_count",
+                ]
+                available_cols = [c for c in display_cols if c in metrics_df.columns]
+                if available_cols:
+                    st.dataframe(
+                        metrics_df[available_cols],
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+                # Bar chart comparison
+                if len(metrics_df) > 0:
+                    st.markdown("### Production vs Shadow Matches")
+                    chart_data = metrics_df[
+                        ["rule_id", "production_matches", "shadow_matches"]
+                    ].melt(
+                        id_vars=["rule_id"],
+                        var_name="Match Type",
+                        value_name="Count",
+                    )
+                    fig = px.bar(
+                        chart_data,
+                        x="rule_id",
+                        y="Count",
+                        color="Match Type",
+                        barmode="group",
+                        title="Rule Match Comparison",
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info(
+                    "No shadow metrics collected yet. "
+                    "Shadow rules record matches when requests are processed."
+                )
+
+
+def _render_backtest_tab() -> None:
+    """Render the Backtest Results tab."""
+    st.subheader("Backtest Results")
+    st.markdown(
+        "Browse completed backtest results. "
+        "**Read-only view - no backtests can be triggered from here.**"
+    )
+
+    # Filters
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        rule_id_filter = st.text_input(
+            "Rule ID Filter",
+            value="",
+            help="Filter by specific rule ID (optional)",
+        )
+
+    with col2:
+        limit = st.slider(
+            "Max Results",
+            min_value=10,
+            max_value=100,
+            value=50,
+            help="Maximum results to display",
+        )
+
+    with col3:
+        fetch_clicked = st.button("Fetch Results", type="primary")
+
+    if fetch_clicked or "backtest_results" not in st.session_state:
+        with st.spinner("Fetching backtest results..."):
+            result = fetch_backtest_results(
+                rule_id=rule_id_filter if rule_id_filter else None,
+                limit=limit,
+            )
+
+        if result is None:
+            st.error("Failed to fetch results. Is the API server running?")
+            st.session_state.backtest_results = None
+        else:
+            st.session_state.backtest_results = result
+
+    results = st.session_state.get("backtest_results")
+    if results:
+        results_list = results.get("results", [])
+        total = results.get("total", 0)
+
+        st.markdown(f"**{total} result(s) found**")
+
+        if results_list:
+            # Results table
+            table_data = []
+            for r in results_list:
+                metrics = r.get("metrics", {})
+                table_data.append(
+                    {
+                        "Job ID": r.get("job_id", ""),
+                        "Rule ID": r.get("rule_id") or "All",
+                        "Ruleset Version": r.get("ruleset_version", ""),
+                        "Match Rate": f"{metrics.get('match_rate', 0) * 100:.1f}%",
+                        "Total Records": metrics.get("total_records", 0),
+                        "Completed At": r.get("completed_at", "")[:19],
+                    }
+                )
+
+            results_df = pd.DataFrame(table_data)
+            st.dataframe(results_df, use_container_width=True, hide_index=True)
+
+            # Detail view
+            st.markdown("### Result Details")
+            selected_job = st.selectbox(
+                "Select Job ID for Details",
+                options=[r.get("job_id", "") for r in results_list],
+                help="View detailed metrics for a specific backtest",
+            )
+
+            if selected_job:
+                selected_result = next(
+                    (r for r in results_list if r.get("job_id") == selected_job), None
+                )
+                if selected_result:
+                    metrics = selected_result.get("metrics", {})
+
+                    col_a, col_b, col_c, col_d = st.columns(4)
+                    with col_a:
+                        st.metric("Total Records", metrics.get("total_records", 0))
+                    with col_b:
+                        st.metric("Matched Count", metrics.get("matched_count", 0))
+                    with col_c:
+                        st.metric(
+                            "Match Rate",
+                            f"{metrics.get('match_rate', 0) * 100:.1f}%",
+                        )
+                    with col_d:
+                        st.metric("Rejected Count", metrics.get("rejected_count", 0))
+
+                    # Score distribution
+                    score_dist = metrics.get("score_distribution", {})
+                    if score_dist:
+                        st.markdown("#### Score Distribution")
+                        dist_df = pd.DataFrame(
+                            [
+                                {"Range": k, "Count": v}
+                                for k, v in score_dist.items()
+                            ]
+                        )
+                        fig = px.bar(
+                            dist_df,
+                            x="Range",
+                            y="Count",
+                            title="Score Distribution",
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+
+                    # Error display
+                    error = selected_result.get("error")
+                    if error:
+                        st.error(f"Backtest Error: {error}")
+
+                    # Full details
+                    with st.expander("View Full Details"):
+                        st.json(selected_result)
+        else:
+            st.info(
+                "No backtest results available. "
+                "Backtests must be triggered via CLI or API."
+            )
+
+
+def _render_suggestions_tab() -> None:
+    """Render the Suggestions tab."""
+    st.subheader("Rule Suggestions")
+    st.markdown(
+        "Heuristic rule suggestions based on feature distribution analysis. "
+        "**Preview only - no rules are created.**"
+    )
+
+    st.warning(
+        "**PREVIEW ONLY** - These are suggestions based on statistical analysis. "
+        "No rules are created or modified. Review carefully before implementing."
+    )
+
+    # Filters
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        field_options = [
+            "",
+            "velocity_24h",
+            "amount_to_avg_ratio_30d",
+            "balance_volatility_z_score",
+        ]
+        field_filter = st.selectbox(
+            "Field Filter",
+            options=field_options,
+            help="Filter suggestions by field (optional)",
+        )
+
+    with col2:
+        min_confidence = st.slider(
+            "Min Confidence",
+            min_value=0.5,
+            max_value=1.0,
+            value=0.7,
+            step=0.05,
+            help="Minimum confidence threshold",
+        )
+
+    with col3:
+        min_samples = st.number_input(
+            "Min Samples",
+            min_value=10,
+            max_value=10000,
+            value=100,
+            step=50,
+            help="Minimum samples required",
+        )
+
+    with col4:
+        generate_clicked = st.button("Generate Suggestions", type="primary")
+
+    if generate_clicked:
+        with st.spinner("Analyzing feature distributions..."):
+            result = fetch_heuristic_suggestions(
+                field=field_filter if field_filter else None,
+                min_confidence=min_confidence,
+                min_samples=min_samples,
+            )
+
+        if result is None:
+            st.error("Failed to generate suggestions. Is the API server running?")
+        else:
+            suggestions = result.get("suggestions", [])
+            total = result.get("total", 0)
+
+            st.markdown(f"**{total} suggestion(s) generated**")
+
+            if suggestions:
+                # Suggestions table
+                table_data = []
+                for s in suggestions:
+                    table_data.append(
+                        {
+                            "Field": s.get("field", ""),
+                            "Operator": s.get("operator", ""),
+                            "Threshold": f"{s.get('threshold', 0):.2f}",
+                            "Action": s.get("action", ""),
+                            "Score": s.get("suggested_score", 0),
+                            "Confidence": f"{s.get('confidence', 0) * 100:.0f}%",
+                            "Reason": s.get("reason", ""),
+                        }
+                    )
+
+                suggestions_df = pd.DataFrame(table_data)
+                st.dataframe(suggestions_df, use_container_width=True, hide_index=True)
+
+                # Evidence details
+                st.markdown("### Evidence Details")
+                for i, s in enumerate(suggestions):
+                    evidence = s.get("evidence", {})
+                    with st.expander(
+                        f"{s.get('field')} {s.get('operator')} "
+                        f"{s.get('threshold', 0):.2f}"
+                    ):
+                        col_a, col_b, col_c, col_d = st.columns(4)
+                        with col_a:
+                            st.metric("Mean", f"{evidence.get('mean', 0):.2f}")
+                        with col_b:
+                            st.metric("Std Dev", f"{evidence.get('std', 0):.2f}")
+                        with col_c:
+                            st.metric(
+                                "Threshold Value", f"{evidence.get('value', 0):.2f}"
+                            )
+                        with col_d:
+                            st.metric("Sample Count", evidence.get("sample_count", 0))
+
+                        st.caption(f"Statistic: {evidence.get('statistic', 'N/A')}")
+
+                st.markdown("---")
+                st.info(
+                    "To implement a suggestion, create a rule manually with the "
+                    "suggested parameters via the API or ruleset configuration."
+                )
+            else:
+                st.info(
+                    "No suggestions generated. This could mean insufficient data "
+                    "or no patterns meet the confidence threshold."
+                )
+
+
 def main() -> None:
     """Main application entry point."""
     # Sidebar navigation
@@ -2029,6 +2648,7 @@ def main() -> None:
             "Historical Analytics (DB)",
             "Synthetic Dataset",
             "Model Lab",
+            "Rule Inspector",
         ],
         index=0,
     )
@@ -2046,8 +2666,10 @@ def main() -> None:
         render_analytics()
     elif page == "Synthetic Dataset":
         render_synthetic_dataset()
-    else:
+    elif page == "Model Lab":
         render_model_lab()
+    else:
+        render_rule_inspector()
 
 
 if __name__ == "__main__":

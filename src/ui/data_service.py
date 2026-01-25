@@ -998,3 +998,180 @@ def check_api_health() -> dict[str, Any] | None:
         return response.json()
     except requests.RequestException:
         return None
+
+
+# =============================================================================
+# Rule Inspector API Clients (Phase 1)
+# =============================================================================
+
+
+def fetch_rules() -> dict[str, Any] | None:
+    """Fetch the current production ruleset.
+
+    Returns:
+        Dict with version and rules, or None if unavailable.
+    """
+    url = f"{API_BASE_URL}/rules"
+
+    try:
+        response = requests.get(url, timeout=API_TIMEOUT)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error fetching rules: {e}")
+        return None
+
+
+def sandbox_evaluate(
+    features: dict[str, Any],
+    base_score: int = 50,
+    ruleset: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Evaluate rules in sandbox mode.
+
+    Args:
+        features: Dict of feature values.
+        base_score: Base score before rule application.
+        ruleset: Optional custom ruleset dict.
+
+    Returns:
+        Evaluation result dict or None if request failed.
+    """
+    url = f"{API_BASE_URL}/rules/sandbox/evaluate"
+
+    payload = {
+        "features": features,
+        "base_score": base_score,
+    }
+    if ruleset is not None:
+        payload["ruleset"] = ruleset
+
+    try:
+        response = requests.post(url, json=payload, timeout=API_TIMEOUT * 2)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error in sandbox evaluation: {e}")
+        return None
+
+
+def fetch_shadow_comparison(
+    start_date: str,
+    end_date: str,
+    rule_ids: list[str] | None = None,
+) -> dict[str, Any] | None:
+    """Fetch shadow mode comparison metrics.
+
+    Args:
+        start_date: Start date (ISO format).
+        end_date: End date (ISO format).
+        rule_ids: Optional list of rule IDs to filter.
+
+    Returns:
+        Comparison report dict or None if unavailable.
+    """
+    url = f"{API_BASE_URL}/metrics/shadow/comparison"
+
+    params = {
+        "start_date": start_date,
+        "end_date": end_date,
+    }
+    if rule_ids:
+        params["rule_ids"] = ",".join(rule_ids)
+
+    try:
+        response = requests.get(url, params=params, timeout=API_TIMEOUT * 2)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error fetching shadow comparison: {e}")
+        return None
+
+
+def fetch_backtest_results(
+    rule_id: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    limit: int = 50,
+) -> dict[str, Any] | None:
+    """Fetch backtest results list.
+
+    Args:
+        rule_id: Optional rule ID filter.
+        start_date: Optional start date filter (ISO format).
+        end_date: Optional end date filter (ISO format).
+        limit: Maximum results to return.
+
+    Returns:
+        Dict with results list or None if unavailable.
+    """
+    url = f"{API_BASE_URL}/backtest/results"
+
+    params = {"limit": limit}
+    if rule_id:
+        params["rule_id"] = rule_id
+    if start_date:
+        params["start_date"] = start_date
+    if end_date:
+        params["end_date"] = end_date
+
+    try:
+        response = requests.get(url, params=params, timeout=API_TIMEOUT * 2)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error fetching backtest results: {e}")
+        return None
+
+
+def fetch_backtest_result(job_id: str) -> dict[str, Any] | None:
+    """Fetch a specific backtest result.
+
+    Args:
+        job_id: Backtest job identifier.
+
+    Returns:
+        Backtest result dict or None if not found.
+    """
+    url = f"{API_BASE_URL}/backtest/results/{job_id}"
+
+    try:
+        response = requests.get(url, timeout=API_TIMEOUT)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error fetching backtest result {job_id}: {e}")
+        return None
+
+
+def fetch_heuristic_suggestions(
+    field: str | None = None,
+    min_confidence: float = 0.7,
+    min_samples: int = 100,
+) -> dict[str, Any] | None:
+    """Fetch heuristic rule suggestions.
+
+    Args:
+        field: Optional feature field to filter.
+        min_confidence: Minimum confidence threshold.
+        min_samples: Minimum samples required for analysis.
+
+    Returns:
+        Dict with suggestions list or None if unavailable.
+    """
+    url = f"{API_BASE_URL}/suggestions/heuristic"
+
+    params = {
+        "min_confidence": min_confidence,
+        "min_samples": min_samples,
+    }
+    if field:
+        params["field"] = field
+
+    try:
+        response = requests.get(url, params=params, timeout=API_TIMEOUT * 3)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error fetching suggestions: {e}")
+        return None
