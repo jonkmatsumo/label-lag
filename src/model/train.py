@@ -296,21 +296,24 @@ def train_model(
             params_log["early_stopping_rounds"] = early_stopping_rounds
         mlflow.log_params(params_log)
 
-        clf = XGBClassifier(
-            scale_pos_weight=scale_pos_weight,
-            max_depth=max_depth,
-            n_estimators=n_estimators,
-            learning_rate=learning_rate,
-            min_child_weight=min_child_weight,
-            subsample=subsample,
-            colsample_bytree=colsample_bytree,
-            gamma=gamma,
-            reg_alpha=reg_alpha,
-            reg_lambda=reg_lambda,
-            random_state=random_state,
-            use_label_encoder=False,
-            eval_metric="logloss",
-        )
+        clf_kw: dict = {
+            "scale_pos_weight": scale_pos_weight,
+            "max_depth": max_depth,
+            "n_estimators": n_estimators,
+            "learning_rate": learning_rate,
+            "min_child_weight": min_child_weight,
+            "subsample": subsample,
+            "colsample_bytree": colsample_bytree,
+            "gamma": gamma,
+            "reg_alpha": reg_alpha,
+            "reg_lambda": reg_lambda,
+            "random_state": random_state,
+            "use_label_encoder": False,
+            "eval_metric": "logloss",
+        }
+        if early_stopping_rounds is not None:
+            clf_kw["early_stopping_rounds"] = early_stopping_rounds
+        clf = XGBClassifier(**clf_kw)
 
         # Optional CV loop: log per-fold metrics and aggregates
         do_cv = (
@@ -372,7 +375,33 @@ def train_model(
                     agg[f"{key}_std"] = float(np.std(vals))
                 mlflow.log_metrics(agg)
 
-        clf.fit(split.X_train, split.y_train)
+        fit_kw: dict = {}
+        x_fit = split.X_train
+        y_fit = split.y_train
+        if early_stopping_rounds is not None and split.train_size >= 20:
+            v_frac = 0.2
+            if split_config is not None:
+                v_frac = split_config.validation_fraction
+            n = split.train_size
+            val_size = max(1, int(n * v_frac))
+            train_size = n - val_size
+            if train_size >= 10 and val_size >= 1:
+                x_fit = split.X_train.iloc[:train_size]
+                y_fit = split.y_train.iloc[:train_size]
+                x_val = split.X_train.iloc[train_size:]
+                y_val = split.y_train.iloc[train_size:]
+                fit_kw["eval_set"] = [(x_val, y_val)]
+        if fit_kw:
+            clf.fit(x_fit, y_fit, **fit_kw)
+            if hasattr(clf, "best_iteration") and clf.best_iteration is not None:
+                mlflow.log_metric("best_iteration", int(clf.best_iteration))
+            if hasattr(clf, "best_score") and clf.best_score is not None:
+                try:
+                    mlflow.log_metric("best_score", float(clf.best_score))
+                except (TypeError, ValueError):
+                    pass
+        else:
+            clf.fit(x_fit, y_fit)
 
         y_pred = clf.predict(split.X_test)
         y_pred_proba = clf.predict_proba(split.X_test)[:, 1]
