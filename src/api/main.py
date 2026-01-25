@@ -6,7 +6,7 @@ It does not modify transaction state - it only provides an evaluation.
 
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI, HTTPException, Query
@@ -18,9 +18,16 @@ from api.schemas import (
     BacktestResultResponse,
     BacktestResultsListResponse,
     ClearDataResponse,
+    ConflictResponse,
+    DraftRuleCreateRequest,
+    DraftRuleCreateResponse,
+    DraftRuleListResponse,
+    DraftRuleResponse,
+    DraftRuleUpdateRequest,
     GenerateDataRequest,
     GenerateDataResponse,
     HealthResponse,
+    RedundancyResponse,
     RuleMetricsItem,
     RuleSuggestionResponse,
     SandboxEvaluateRequest,
@@ -33,6 +40,7 @@ from api.schemas import (
     SuggestionsListResponse,
     TrainRequest,
     TrainResponse,
+    ValidationResult,
 )
 from api.services import get_evaluator
 
@@ -862,6 +870,235 @@ async def get_heuristic_suggestions(
     except Exception as e:
         logger.warning(f"Suggestion generation failed: {e}")
         return SuggestionsListResponse(suggestions=[], total=0)
+
+
+# =============================================================================
+# Draft Rule Endpoints
+# =============================================================================
+
+
+@app.post(
+    "/rules/draft",
+    response_model=DraftRuleCreateResponse,
+    tags=["Draft Rules"],
+    summary="Create a new draft rule",
+    description="""
+Create a new rule in draft status.
+
+The rule will be validated for schema correctness, conflicts, and
+redundancies. Validation results are returned but do not block creation.
+""",
+)
+async def create_draft_rule(request: DraftRuleCreateRequest) -> DraftRuleCreateResponse:
+    """Create a new draft rule.
+
+    Args:
+        request: Draft rule creation request with all rule fields and actor.
+
+    Returns:
+        DraftRuleCreateResponse with created rule and validation results.
+
+    Raises:
+        HTTPException: If rule creation fails or rule ID already exists.
+    """
+    from api.draft_store import get_draft_store
+    from api.rules import Rule, RuleStatus
+    from api.validation import validate_ruleset
+
+    store = get_draft_store()
+
+    # Check if rule ID already exists
+    if store.exists(request.id):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Rule with ID '{request.id}' already exists",
+        )
+
+    # Create rule in draft status
+    try:
+        rule = Rule(
+            id=request.id,
+            field=request.field,
+            op=request.op,
+            value=request.value,
+            action=request.action,
+            score=request.score,
+            severity=request.severity,
+            reason=request.reason,
+            status=RuleStatus.DRAFT.value,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid rule: {e}") from e
+
+    # Save to store
+    try:
+        store.save(rule)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    # Run validation against all draft rules and production ruleset
+    from api.rules import RuleSet
+
+    draft_rules = store.list_rules(include_archived=False)
+    manager = get_model_manager()
+    production_ruleset = manager.ruleset
+
+    # Combine draft rules with production rules for validation
+    all_rules = draft_rules.copy()
+    if production_ruleset:
+        # Only include active rules from production
+        all_rules.extend(
+            [r for r in production_ruleset.rules if r.status == "active"]
+        )
+
+    test_ruleset = RuleSet(version="validation", rules=all_rules)
+    conflicts, redundancies = validate_ruleset(test_ruleset, strict=False)
+
+    # Convert to response
+    rule_response = DraftRuleResponse(
+        rule_id=rule.id,
+        field=rule.field,
+        op=rule.op,
+        value=rule.value,
+        action=rule.action,
+        score=rule.score,
+        severity=rule.severity,
+        reason=rule.reason,
+        status=rule.status,
+        created_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+    validation = ValidationResult(
+        conflicts=[
+            ConflictResponse(
+                rule1_id=c.rule1_id,
+                rule2_id=c.rule2_id,
+                conflict_type=c.conflict_type,
+                description=c.description,
+            )
+            for c in conflicts
+        ],
+        redundancies=[
+            RedundancyResponse(
+                rule_id=r.rule_id,
+                redundant_with=r.redundant_with,
+                redundancy_type=r.redundancy_type,
+                description=r.description,
+            )
+            for r in redundancies
+        ],
+        is_valid=len(conflicts) == 0,
+    )
+
+    return DraftRuleCreateResponse(
+        rule_id=rule.id,
+        rule=rule_response,
+        validation=validation,
+        created_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+@app.get(
+    "/rules/draft",
+    response_model=DraftRuleListResponse,
+    tags=["Draft Rules"],
+    summary="List all draft rules",
+    description="""
+List all draft rules with optional status filter.
+
+Returns rules ordered by rule ID. Archived rules are excluded by default.
+""",
+)
+async def list_draft_rules(
+    status: str | None = Query(
+        None,
+        description="Filter by status (draft, archived, etc.)",
+    ),
+    include_archived: bool = Query(
+        False,
+        description="Include archived rules in results",
+    ),
+) -> DraftRuleListResponse:
+    """List all draft rules.
+
+    Args:
+        status: Optional status filter.
+        include_archived: Whether to include archived rules.
+
+    Returns:
+        DraftRuleListResponse with list of draft rules.
+    """
+    from api.draft_store import get_draft_store
+
+    store = get_draft_store()
+    rules = store.list_rules(status=status, include_archived=include_archived)
+
+    # Convert to response
+    rule_responses = [
+        DraftRuleResponse(
+            rule_id=rule.id,
+            field=rule.field,
+            op=rule.op,
+            value=rule.value,
+            action=rule.action,
+            score=rule.score,
+            severity=rule.severity,
+            reason=rule.reason,
+            status=rule.status,
+            created_at=None,  # Created_at not tracked in this sub-phase
+        )
+        for rule in rules
+    ]
+
+    return DraftRuleListResponse(rules=rule_responses, total=len(rule_responses))
+
+
+@app.get(
+    "/rules/draft/{rule_id}",
+    response_model=DraftRuleResponse,
+    tags=["Draft Rules"],
+    summary="Get a draft rule by ID",
+    description="""
+Get a specific draft rule by its identifier.
+
+Returns 404 if rule not found.
+""",
+)
+async def get_draft_rule(rule_id: str) -> DraftRuleResponse:
+    """Get a draft rule by ID.
+
+    Args:
+        rule_id: Rule identifier.
+
+    Returns:
+        DraftRuleResponse with rule details.
+
+    Raises:
+        HTTPException: If rule not found.
+    """
+    from api.draft_store import get_draft_store
+
+    store = get_draft_store()
+    rule = store.get(rule_id)
+
+    if rule is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Draft rule not found: {rule_id}",
+        )
+
+    return DraftRuleResponse(
+        rule_id=rule.id,
+        field=rule.field,
+        op=rule.op,
+        value=rule.value,
+        action=rule.action,
+        score=rule.score,
+        severity=rule.severity,
+        reason=rule.reason,
+        status=rule.status,
+        created_at=None,  # Created_at not tracked in this sub-phase
+    )
 
 
 @app.exception_handler(Exception)
