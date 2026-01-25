@@ -1146,12 +1146,12 @@ def render_synthetic_dataset() -> None:
                             col_b = categorical_cols[j]
 
                             # Check cardinality
-                    card_a = sample_df[col_a].nunique()
-                    card_b = sample_df[col_b].nunique()
-                    if (
-                        card_a > categorical_cardinality_threshold
-                        or card_b > categorical_cardinality_threshold
-                    ):
+                            card_a = sample_df[col_a].nunique()
+                            card_b = sample_df[col_b].nunique()
+                            if (
+                                card_a > categorical_cardinality_threshold
+                                or card_b > categorical_cardinality_threshold
+                            ):
                                 continue
 
                             cramers_v, p_value = _compute_cramers_v(
@@ -1166,8 +1166,10 @@ def render_synthetic_dataset() -> None:
                                     "Column B": col_b,
                                     "Cramér's V": round(cramers_v, 4),
                                     "p-value": (
-                                round(p_value, 4) if p_value is not None else None
-                            ),
+                                        round(p_value, 4)
+                                        if p_value is not None
+                                        else None
+                                    ),
                                 }
                             )
 
@@ -1177,7 +1179,9 @@ def render_synthetic_dataset() -> None:
                             assoc_df.sort_values("Cramér's V", ascending=False)
                             .head(30)
                         )
-                        st.dataframe(assoc_df, use_container_width=True, hide_index=True)
+                        st.dataframe(
+                            assoc_df, use_container_width=True, hide_index=True
+                        )
                     else:
                         st.info(
                             "No valid associations found. This may be due to "

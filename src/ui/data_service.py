@@ -687,7 +687,6 @@ def _sample_generated_records(
     use_tablesample = False
     use_id_range = False
     use_offset = False
-    use_random = False
 
     pg_version = _get_postgres_version(conn)
     if pg_version >= 16 and total_count > 100000:

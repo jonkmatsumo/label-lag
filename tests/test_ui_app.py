@@ -248,7 +248,10 @@ class TestRenderSyntheticDataset:
 
         # Mock API error response
         mock_response = MagicMock()
-        mock_response.json.return_value = {"success": False, "error": "Generation failed"}
+        mock_response.json.return_value = {
+            "success": False,
+            "error": "Generation failed",
+        }
         mock_post.return_value = mock_response
 
         render_synthetic_dataset()
@@ -333,8 +336,10 @@ class TestNavigation:
     @patch("ui.app.render_synthetic_dataset")
     @patch("ui.app.render_analytics")
     @patch("ui.app.render_live_scoring")
-    def test_routing_calls_render_synthetic_dataset(self, mock_live, mock_analytics, mock_synthetic, mock_sidebar):
-        """Test that routing correctly calls render_synthetic_dataset() when selected."""
+    def test_routing_calls_render_synthetic_dataset(
+        self, mock_live, mock_analytics, mock_synthetic, mock_sidebar
+    ):
+        """Test routing calls render_synthetic_dataset() when selected."""
         from ui.app import main
 
         # Mock sidebar radio to return "Synthetic Dataset"
@@ -461,7 +466,11 @@ class TestRenderModelLab:
         assert docstring is not None
         # Verify docstring does not mention data generation
         assert "data generation" not in docstring.lower()
-        assert "generate" not in docstring.lower() or "generate" in docstring.lower()  # Allow if it's about model generation
+        # Allow if it's about model generation
+        assert (
+            "generate" not in docstring.lower()
+            or "generate" in docstring.lower()
+        )
 
     @patch("ui.app.check_mlflow_connection")
     @patch("ui.app.st.success")
@@ -527,9 +536,11 @@ class TestRenderModelLab:
 
         with patch("ui.app.st.header"), patch("ui.app.st.markdown"), patch(
             "ui.app.st.subheader"
-        ), patch("ui.app.st.success"), patch("ui.app.st.columns") as mock_columns, patch(
-            "ui.app.st.slider"
-        ) as mock_slider, patch("ui.app.st.button") as mock_button, patch(
+        ), patch("ui.app.st.success"), patch(
+            "ui.app.st.columns"
+        ) as mock_columns, patch("ui.app.st.slider") as mock_slider, patch(
+            "ui.app.st.button"
+        ) as mock_button, patch(
             "ui.app.st.dataframe"
         ), patch(
             "ui.app.st.selectbox"
@@ -786,7 +797,10 @@ class TestCacheInvalidation:
 
         # Mock API error response
         mock_response = MagicMock()
-        mock_response.json.return_value = {"success": False, "error": "Generation failed"}
+        mock_response.json.return_value = {
+            "success": False,
+            "error": "Generation failed",
+        }
         mock_post.return_value = mock_response
 
         render_synthetic_dataset()
@@ -830,7 +844,10 @@ class TestCacheInvalidation:
 
         # Mock API error response
         mock_response = MagicMock()
-        mock_response.json.return_value = {"success": False, "error": "Generation failed"}
+        mock_response.json.return_value = {
+            "success": False,
+            "error": "Generation failed",
+        }
         mock_post.return_value = mock_response
 
         render_synthetic_dataset()
