@@ -463,6 +463,92 @@ def _get_categorical_columns(df: pd.DataFrame, max_cardinality: int = 50) -> lis
     return categorical_cols
 
 
+def _compute_cramers_v(
+    col1: pd.Series, col2: pd.Series, compute_p_value: bool = False
+) -> tuple[float, float | None]:
+    """Compute Cramér's V association between two categorical columns.
+
+    Args:
+        col1: First categorical column.
+        col2: Second categorical column.
+        compute_p_value: Whether to compute p-value (requires scipy).
+
+    Returns:
+        Tuple of (cramers_v, p_value). p_value is None if not computed.
+    """
+    # Build contingency table
+    contingency = pd.crosstab(col1, col2)
+
+    # Compute chi-square statistic manually
+    chi2 = 0.0
+    n = contingency.sum().sum()
+    if n == 0:
+        return 0.0, None
+
+    col_sums = contingency.sum(axis=0)
+    row_sums = contingency.sum(axis=1)
+
+    for i in range(len(contingency.index)):
+        for j in range(len(contingency.columns)):
+            observed = contingency.iloc[i, j]
+            expected = (row_sums.iloc[i] * col_sums.iloc[j]) / n
+            if expected > 0:
+                chi2 += ((observed - expected) ** 2) / expected
+
+    # Cramér's V
+    min_dim = min(len(contingency.index) - 1, len(contingency.columns) - 1)
+    if min_dim > 0 and n > 0:
+        cramers_v = np.sqrt(chi2 / (n * min_dim))
+    else:
+        cramers_v = 0.0
+
+    # P-value (optional, requires scipy)
+    p_value = None
+    if compute_p_value:
+        try:
+            from scipy.stats import chi2_contingency
+
+            _, p_value, _, _ = chi2_contingency(contingency)
+        except ImportError:
+            pass
+
+    return cramers_v, p_value
+
+
+def _compute_correlation_ratio(categorical: pd.Series, numeric: pd.Series) -> float:
+    """Compute correlation ratio (η) for categorical→numeric association.
+
+    Args:
+        categorical: Categorical column.
+        numeric: Numeric column.
+
+    Returns:
+        Correlation ratio η (0 to 1).
+    """
+    # Remove NaN pairs
+    df = pd.DataFrame({"cat": categorical, "num": numeric}).dropna()
+    if len(df) == 0:
+        return 0.0
+
+    # Group means
+    group_means = df.groupby("cat")["num"].mean()
+    overall_mean = df["num"].mean()
+
+    # SS_between and SS_total
+    n = len(df)
+    ss_between = (
+        (group_means - overall_mean) ** 2 * df.groupby("cat").size()
+    ).sum()
+    ss_total = ((df["num"] - overall_mean) ** 2).sum()
+
+    if ss_total > 0:
+        eta = np.sqrt(ss_between / ss_total)
+    else:
+        eta = 0.0
+
+    return eta
+
+
 def render_synthetic_dataset() -> None:
     """Render the Synthetic Dataset page.
 
@@ -1011,11 +1097,105 @@ def render_synthetic_dataset() -> None:
                 except Exception as e:
                     st.error(f"Error computing correlations: {e}")
 
+    # Tab 2: Categorical ↔ Categorical
     with tab2:
-        st.info("Categorical association analysis will be implemented in the next commit.")
+        if sample_df is None or len(categorical_cols) < 2:
+            if sample_df is None:
+                st.info("No data available for categorical association analysis.")
+            else:
+                st.warning(
+                    f"Need at least 2 categorical columns for association analysis. "
+                    f"Found {len(categorical_cols)} categorical column(s)."
+                )
+        else:
+            with st.spinner("Computing Cramér's V associations..."):
+                try:
+                    associations = []
+                    n_cats = len(categorical_cols)
 
+                    for i in range(n_cats):
+                        for j in range(i + 1, n_cats):
+                            col_a = categorical_cols[i]
+                            col_b = categorical_cols[j]
+
+                            # Check cardinality
+                            if (
+                                sample_df[col_a].nunique() > categorical_cardinality_threshold
+                                or sample_df[col_b].nunique()
+                                > categorical_cardinality_threshold
+                            ):
+                                continue
+
+                            cramers_v, p_value = _compute_cramers_v(
+                                sample_df[col_a],
+                                sample_df[col_b],
+                                compute_p_value=compute_p_values,
+                            )
+
+                            associations.append(
+                                {
+                                    "Column A": col_a,
+                                    "Column B": col_b,
+                                    "Cramér's V": round(cramers_v, 4),
+                                    "p-value": round(p_value, 4) if p_value is not None else None,
+                                }
+                            )
+
+                    if associations:
+                        assoc_df = pd.DataFrame(associations)
+                        assoc_df = assoc_df.sort_values("Cramér's V", ascending=False).head(30)
+                        st.dataframe(assoc_df, use_container_width=True, hide_index=True)
+                    else:
+                        st.info(
+                            "No valid associations found. This may be due to high cardinality "
+                            "or insufficient data."
+                        )
+
+                except Exception as e:
+                    st.error(f"Error computing categorical associations: {e}")
+
+    # Tab 3: Categorical ↔ Numeric
     with tab3:
-        st.info("Categorical-Numeric association analysis will be implemented in the next commit.")
+        if sample_df is None:
+            st.info("No data available for categorical-numeric association analysis.")
+        elif len(categorical_cols) == 0:
+            st.warning("No categorical columns available for association analysis.")
+        elif len(numeric_cols) == 0:
+            st.warning("No numeric columns available for association analysis.")
+        else:
+            with st.spinner("Computing correlation ratios..."):
+                try:
+                    associations = []
+
+                    for cat_col in categorical_cols:
+                        # Check cardinality
+                        if sample_df[cat_col].nunique() > categorical_cardinality_threshold:
+                            continue
+
+                        for num_col in numeric_cols:
+                            eta = _compute_correlation_ratio(
+                                sample_df[cat_col], sample_df[num_col]
+                            )
+
+                            associations.append(
+                                {
+                                    "Categorical Column": cat_col,
+                                    "Numeric Column": num_col,
+                                    "Correlation Ratio (η)": round(eta, 4),
+                                }
+                            )
+
+                    if associations:
+                        assoc_df = pd.DataFrame(associations)
+                        assoc_df = assoc_df.sort_values(
+                            "Correlation Ratio (η)", ascending=False
+                        ).head(30)
+                        st.dataframe(assoc_df, use_container_width=True, hide_index=True)
+                    else:
+                        st.info("No valid associations found.")
+
+                except Exception as e:
+                    st.error(f"Error computing categorical-numeric associations: {e}")
 
     with tab4:
         st.info("Target relations analysis will be implemented in the next commit.")
