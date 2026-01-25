@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 import pandas as pd
 import pytest
 
+from api.schemas import SplitConfig
 from model.loader import DataLoader, TrainTestSplit
 
 
@@ -523,6 +524,78 @@ class TestDataLoaderJoinLogic:
 
         assert "generated_records gr" in query_text
         assert "fs.record_id = gr.record_id" in query_text
+
+
+class TestSplitConfig:
+    """Tests for split_config and manifest."""
+
+    def test_loader_accepts_split_config(self):
+        """With split_config, split_manifest is populated."""
+        loader = DataLoader(database_url="postgresql://test:test@localhost/test")
+        session = MagicMock()
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = [
+            (
+                "rec1",
+                "u1",
+                1,
+                1.0,
+                0.0,
+                None,
+                True,
+                None,
+                False,
+                datetime(2024, 3, 1),
+                0,
+            ),
+        ]
+        mock_result.keys.return_value = [
+            "record_id",
+            "user_id",
+            "velocity_24h",
+            "amount_to_avg_ratio_30d",
+            "balance_volatility_z_score",
+            "experimental_signals",
+            "is_train_eligible",
+            "fraud_confirmed_at",
+            "is_fraudulent",
+            "transaction_timestamp",
+            "label",
+        ]
+        session.execute.return_value = mock_result
+        config = SplitConfig(seed=42)
+        split = loader.load_train_test_split(
+            datetime(2024, 4, 1),
+            session=session,
+            feature_columns=["velocity_24h", "amount_to_avg_ratio_30d"],
+            split_config=config,
+        )
+        assert split.split_manifest is not None
+        assert split.split_manifest["seed"] == 42
+        assert "train_record_ids" in split.split_manifest
+
+    def test_loader_default_config_unchanged(self):
+        """Without split_config, behavior unchanged and split_manifest is None."""
+        loader = DataLoader(database_url="postgresql://test:test@localhost/test")
+        session = MagicMock()
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = []
+        mock_result.keys.return_value = [
+            "record_id",
+            "user_id",
+            "velocity_24h",
+            "amount_to_avg_ratio_30d",
+            "balance_volatility_z_score",
+            "experimental_signals",
+            "is_train_eligible",
+            "fraud_confirmed_at",
+            "is_fraudulent",
+            "transaction_timestamp",
+            "label",
+        ]
+        session.execute.return_value = mock_result
+        split = loader.load_train_test_split(datetime(2024, 4, 1), session=session)
+        assert split.split_manifest is None
 
 
 class TestGetSplitSummary:
