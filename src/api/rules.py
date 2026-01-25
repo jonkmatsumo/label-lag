@@ -67,17 +67,20 @@ class RuleSet:
     rules: list[Rule]
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "RuleSet":
+    def from_dict(cls, data: dict[str, Any], validate: bool = False, strict: bool = False) -> "RuleSet":
         """Create RuleSet from dictionary.
 
         Args:
             data: Dictionary with 'version' and 'rules' keys.
+            validate: If True, run conflict and redundancy detection.
+            strict: If True and validate=True, raise ValueError on conflicts.
 
         Returns:
             RuleSet instance.
 
         Raises:
-            ValueError: If required fields are missing or invalid.
+            ValueError: If required fields are missing or invalid, or if strict=True
+                and conflicts are detected.
         """
         if "version" not in data:
             raise ValueError("RuleSet must have 'version' field")
@@ -95,7 +98,15 @@ class RuleSet:
             except (TypeError, ValueError) as e:
                 raise ValueError(f"Invalid rule at index {i}: {e}") from e
 
-        return cls(version=data["version"], rules=rules)
+        ruleset = cls(version=data["version"], rules=rules)
+
+        # Run validation if requested
+        if validate:
+            from api.validation import validate_ruleset
+
+            validate_ruleset(ruleset, strict=strict)
+
+        return ruleset
 
     @classmethod
     def load_from_file(cls, path: str | Path) -> "RuleSet":
