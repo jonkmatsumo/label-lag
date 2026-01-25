@@ -1197,11 +1197,260 @@ def render_synthetic_dataset() -> None:
                 except Exception as e:
                     st.error(f"Error computing categorical-numeric associations: {e}")
 
+    # Tab 4: Target Relations
     with tab4:
-        st.info("Target relations analysis will be implemented in the next commit.")
+        if sample_df is None:
+            st.info("No data available for target relations analysis.")
+        elif "is_fraudulent" not in sample_df.columns:
+            st.warning("Target column 'is_fraudulent' not found in sampled data.")
+        else:
+            with st.spinner("Computing target associations..."):
+                try:
+                    target_relations = []
 
+                    # Convert target to numeric if boolean
+                    target = sample_df["is_fraudulent"]
+                    if target.dtype == "bool":
+                        target_numeric = target.astype(int)
+                    else:
+                        target_numeric = target
+
+                    # Numeric features
+                    for num_col in numeric_cols:
+                        pearson = target_numeric.corr(sample_df[num_col], method="pearson")
+                        spearman = target_numeric.corr(sample_df[num_col], method="spearman")
+
+                        if pd.notna(pearson) and pd.notna(spearman):
+                            target_relations.append(
+                                {
+                                    "Feature": num_col,
+                                    "Type": "Numeric",
+                                    "Pearson": round(pearson, 4),
+                                    "Spearman": round(spearman, 4),
+                                    "Max Abs Corr": max(abs(pearson), abs(spearman)),
+                                    "Metric": "pearson" if abs(pearson) >= abs(spearman) else "spearman",
+                                }
+                            )
+
+                    # Categorical features
+                    for cat_col in categorical_cols:
+                        if sample_df[cat_col].nunique() > categorical_cardinality_threshold:
+                            continue
+
+                        eta = _compute_correlation_ratio(sample_df[cat_col], target_numeric)
+
+                        if pd.notna(eta):
+                            target_relations.append(
+                                {
+                                    "Feature": cat_col,
+                                    "Type": "Categorical",
+                                    "Correlation Ratio (η)": round(eta, 4),
+                                    "Max Abs Corr": eta,
+                                    "Metric": "eta",
+                                }
+                            )
+
+                    if target_relations:
+                        # Check for potential leakage
+                        leakage_keywords = ["fraud", "label", "target", "confirmed", "evaluation"]
+                        leakage_threshold = 0.8
+
+                        for rel in target_relations:
+                            feature_name = rel["Feature"].lower()
+                            max_assoc = rel.get("Max Abs Corr", 0.0)
+
+                            # Check suspicious names
+                            name_leakage = any(
+                                keyword in feature_name for keyword in leakage_keywords
+                            )
+
+                            # Check high association
+                            high_assoc = max_assoc > leakage_threshold
+
+                            rel["Potential Leakage"] = name_leakage or high_assoc
+
+                        target_df = pd.DataFrame(target_relations)
+                        target_df = target_df.sort_values("Max Abs Corr", ascending=False)
+
+                        # Display warning if leakage detected
+                        leakage_count = target_df["Potential Leakage"].sum()
+                        if leakage_count > 0:
+                            st.warning(
+                                f"⚠️ Potential data leakage detected in {leakage_count} feature(s). "
+                                f"High association (>{leakage_threshold}) or suspicious naming patterns detected. "
+                                f"Note: This is a heuristic check on synthetic data."
+                            )
+
+                        # Format display
+                        display_cols = [
+                            "Feature",
+                            "Type",
+                            "Pearson",
+                            "Spearman",
+                            "Correlation Ratio (η)",
+                            "Potential Leakage",
+                        ]
+                        available_cols = [c for c in display_cols if c in target_df.columns]
+                        display_df = target_df[available_cols].copy()
+
+                        # Highlight leakage rows
+                        st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+                        st.caption(
+                            "Note: Leakage detection is heuristic. Synthetic data may have "
+                            "different characteristics than production data."
+                        )
+                    else:
+                        st.info("No valid target associations found.")
+
+                except Exception as e:
+                    st.error(f"Error computing target relations: {e}")
+
+    # Tab 5: Top Relationships
     with tab5:
-        st.info("Top relationships table will be implemented in the next commit.")
+        if sample_df is None:
+            st.info("No data available for top relationships analysis.")
+        else:
+            with st.spinner("Compiling top relationships..."):
+                try:
+                    top_relationships = []
+
+                    # Collect from Numeric ↔ Numeric
+                    if len(numeric_cols) >= 2:
+                        try:
+                            numeric_df = sample_df[numeric_cols].select_dtypes(
+                                include=["int64", "float64"]
+                            )
+                            pearson_corr = numeric_df.corr(method="pearson")
+                            spearman_corr = numeric_df.corr(method="spearman")
+
+                            n_cols = len(numeric_cols)
+                            for i in range(n_cols):
+                                for j in range(i + 1, n_cols):
+                                    col_a = numeric_cols[i]
+                                    col_b = numeric_cols[j]
+                                    pearson_val = pearson_corr.iloc[i, j]
+                                    spearman_val = spearman_corr.iloc[i, j]
+
+                                    if pd.notna(pearson_val):
+                                        top_relationships.append(
+                                            {
+                                                "relationship_type": "nn",
+                                                "col_a": col_a,
+                                                "col_b": col_b,
+                                                "effect_size": abs(pearson_val),
+                                                "metric_name": "pearson",
+                                                "p_value": None,
+                                                "sample_size": actual_sample_size,
+                                            }
+                                        )
+                                    if pd.notna(spearman_val):
+                                        top_relationships.append(
+                                            {
+                                                "relationship_type": "nn",
+                                                "col_a": col_a,
+                                                "col_b": col_b,
+                                                "effect_size": abs(spearman_val),
+                                                "metric_name": "spearman",
+                                                "p_value": None,
+                                                "sample_size": actual_sample_size,
+                                            }
+                                        )
+                        except Exception:
+                            pass
+
+                    # Collect from Categorical ↔ Categorical
+                    if len(categorical_cols) >= 2:
+                        try:
+                            n_cats = len(categorical_cols)
+                            for i in range(n_cats):
+                                for j in range(i + 1, n_cats):
+                                    col_a = categorical_cols[i]
+                                    col_b = categorical_cols[j]
+
+                                    if (
+                                        sample_df[col_a].nunique()
+                                        > categorical_cardinality_threshold
+                                        or sample_df[col_b].nunique()
+                                        > categorical_cardinality_threshold
+                                    ):
+                                        continue
+
+                                    cramers_v, p_value = _compute_cramers_v(
+                                        sample_df[col_a],
+                                        sample_df[col_b],
+                                        compute_p_value=compute_p_values,
+                                    )
+
+                                    if pd.notna(cramers_v):
+                                        top_relationships.append(
+                                            {
+                                                "relationship_type": "cc",
+                                                "col_a": col_a,
+                                                "col_b": col_b,
+                                                "effect_size": cramers_v,
+                                                "metric_name": "cramers_v",
+                                                "p_value": round(p_value, 4)
+                                                if p_value is not None
+                                                else None,
+                                                "sample_size": actual_sample_size,
+                                            }
+                                        )
+                        except Exception:
+                            pass
+
+                    # Collect from Categorical ↔ Numeric
+                    if len(categorical_cols) > 0 and len(numeric_cols) > 0:
+                        try:
+                            for cat_col in categorical_cols:
+                                if (
+                                    sample_df[cat_col].nunique()
+                                    > categorical_cardinality_threshold
+                                ):
+                                    continue
+
+                                for num_col in numeric_cols:
+                                    eta = _compute_correlation_ratio(
+                                        sample_df[cat_col], sample_df[num_col]
+                                    )
+
+                                    if pd.notna(eta):
+                                        top_relationships.append(
+                                            {
+                                                "relationship_type": "cn",
+                                                "col_a": cat_col,
+                                                "col_b": num_col,
+                                                "effect_size": eta,
+                                                "metric_name": "eta",
+                                                "p_value": None,
+                                                "sample_size": actual_sample_size,
+                                            }
+                                        )
+                        except Exception:
+                            pass
+
+                    if top_relationships:
+                        top_df = pd.DataFrame(top_relationships)
+                        top_df = top_df.sort_values("effect_size", ascending=False).head(50)
+
+                        # Format for display
+                        display_df = top_df.copy()
+                        display_df.columns = [
+                            "Type",
+                            "Column A",
+                            "Column B",
+                            "Effect Size",
+                            "Metric",
+                            "p-value",
+                            "Sample Size",
+                        ]
+
+                        st.dataframe(display_df, use_container_width=True, hide_index=True)
+                    else:
+                        st.info("No relationships found to display.")
+
+                except Exception as e:
+                    st.error(f"Error compiling top relationships: {e}")
 
 
 def render_model_lab() -> None:
