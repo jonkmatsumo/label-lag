@@ -511,3 +511,295 @@ class TestDraftRuleStore:
         """Test that deleting non-existent rule returns False."""
         result = draft_store.delete("nonexistent")
         assert result is False
+
+
+class TestUpdateDraftRule:
+    """Tests for PUT /rules/draft/{rule_id} endpoint."""
+
+    def test_update_draft_rule_returns_200(self, client):
+        """Test that updating a draft rule returns 200."""
+        # Create a rule first
+        client.post(
+            "/rules/draft",
+            json={
+                "id": "update_test_001",
+                "field": "velocity_24h",
+                "op": ">",
+                "value": 5,
+                "action": "clamp_min",
+                "score": 70,
+                "severity": "medium",
+                "reason": "Original",
+                "actor": "test_user",
+            },
+        )
+
+        # Update it
+        response = client.put(
+            "/rules/draft/update_test_001",
+            json={
+                "reason": "Updated reason",
+                "actor": "test_user",
+            },
+        )
+        assert response.status_code == 200
+
+    def test_update_draft_rule_response_structure(self, client):
+        """Test that response has correct structure."""
+        # Create a rule
+        client.post(
+            "/rules/draft",
+            json={
+                "id": "update_test_002",
+                "field": "velocity_24h",
+                "op": ">",
+                "value": 5,
+                "action": "clamp_min",
+                "score": 70,
+                "severity": "medium",
+                "reason": "Original",
+                "actor": "test_user",
+            },
+        )
+
+        # Update it
+        response = client.put(
+            "/rules/draft/update_test_002",
+            json={
+                "score": 80,
+                "actor": "test_user",
+            },
+        )
+        data = response.json()
+
+        assert "rule" in data
+        assert "version_id" in data
+        assert "validation" in data
+        assert data["rule"]["score"] == 80
+
+    def test_update_draft_rule_creates_version(self, client):
+        """Test that update creates a version snapshot."""
+        # Create a rule
+        client.post(
+            "/rules/draft",
+            json={
+                "id": "version_test",
+                "field": "velocity_24h",
+                "op": ">",
+                "value": 5,
+                "action": "clamp_min",
+                "score": 70,
+                "severity": "medium",
+                "reason": "Original",
+                "actor": "test_user",
+            },
+        )
+
+        # Update it
+        response = client.put(
+            "/rules/draft/version_test",
+            json={
+                "score": 75,
+                "actor": "test_user",
+            },
+        )
+        data = response.json()
+
+        assert "version_id" in data
+        assert data["version_id"].startswith("version_test_")
+
+    def test_update_draft_rule_not_found_returns_404(self, client):
+        """Test that updating non-existent rule returns 404."""
+        response = client.put(
+            "/rules/draft/nonexistent",
+            json={"actor": "test_user"},
+        )
+        assert response.status_code == 404
+
+    def test_update_non_draft_rule_returns_400(self, client):
+        """Test that updating non-draft rule returns 400."""
+        # Create a rule
+        client.post(
+            "/rules/draft",
+            json={
+                "id": "non_draft_test",
+                "field": "velocity_24h",
+                "op": ">",
+                "value": 5,
+                "action": "clamp_min",
+                "score": 70,
+                "severity": "medium",
+                "reason": "Test",
+                "actor": "test_user",
+            },
+        )
+
+        # Manually change status to non-draft
+        store = get_draft_store()
+        rule = store.get("non_draft_test")
+        if rule:
+            rule_dict = rule.__dict__.copy()
+            rule_dict["status"] = RuleStatus.ACTIVE.value
+            active_rule = Rule(**rule_dict)
+            store._rules["non_draft_test"] = active_rule
+
+        # Try to update
+        response = client.put(
+            "/rules/draft/non_draft_test",
+            json={"actor": "test_user"},
+        )
+        assert response.status_code == 400
+        assert "Only draft rules" in response.json()["detail"]
+
+    def test_update_partial_fields(self, client):
+        """Test that only provided fields are updated."""
+        # Create a rule
+        client.post(
+            "/rules/draft",
+            json={
+                "id": "partial_update",
+                "field": "velocity_24h",
+                "op": ">",
+                "value": 5,
+                "action": "clamp_min",
+                "score": 70,
+                "severity": "medium",
+                "reason": "Original",
+                "actor": "test_user",
+            },
+        )
+
+        # Update only score
+        response = client.put(
+            "/rules/draft/partial_update",
+            json={
+                "score": 85,
+                "actor": "test_user",
+            },
+        )
+        data = response.json()
+
+        # Other fields should remain unchanged
+        assert data["rule"]["field"] == "velocity_24h"
+        assert data["rule"]["op"] == ">"
+        assert data["rule"]["value"] == 5
+        # Score should be updated
+        assert data["rule"]["score"] == 85
+
+
+class TestDeleteDraftRule:
+    """Tests for DELETE /rules/draft/{rule_id} endpoint."""
+
+    def test_delete_draft_rule_returns_200(self, client):
+        """Test that deleting a draft rule returns 200."""
+        # Create a rule
+        client.post(
+            "/rules/draft",
+            json={
+                "id": "delete_test_001",
+                "field": "velocity_24h",
+                "op": ">",
+                "value": 5,
+                "action": "clamp_min",
+                "score": 70,
+                "severity": "medium",
+                "reason": "Test",
+                "actor": "test_user",
+            },
+        )
+
+        # Delete it
+        response = client.delete("/rules/draft/delete_test_001?actor=test_user")
+        assert response.status_code == 200
+
+    def test_delete_draft_rule_response_structure(self, client):
+        """Test that response has correct structure."""
+        # Create a rule
+        client.post(
+            "/rules/draft",
+            json={
+                "id": "delete_test_002",
+                "field": "velocity_24h",
+                "op": ">",
+                "value": 5,
+                "action": "clamp_min",
+                "score": 70,
+                "severity": "medium",
+                "reason": "Test",
+                "actor": "test_user",
+            },
+        )
+
+        # Delete it
+        response = client.delete("/rules/draft/delete_test_002?actor=test_user")
+        data = response.json()
+
+        assert "success" in data
+        assert "rule_id" in data
+        assert "status" in data
+        assert data["success"] is True
+        assert data["status"] == "archived"
+
+    def test_delete_draft_rule_archives_it(self, client):
+        """Test that delete archives the rule."""
+        # Create a rule
+        client.post(
+            "/rules/draft",
+            json={
+                "id": "archive_test",
+                "field": "velocity_24h",
+                "op": ">",
+                "value": 5,
+                "action": "clamp_min",
+                "score": 70,
+                "severity": "medium",
+                "reason": "Test",
+                "actor": "test_user",
+            },
+        )
+
+        # Delete it
+        client.delete("/rules/draft/archive_test?actor=test_user")
+
+        # Rule should still exist but be archived
+        store = get_draft_store()
+        archived = store.get("archive_test")
+        assert archived is not None
+        assert archived.status == RuleStatus.ARCHIVED.value
+
+    def test_delete_draft_rule_not_found_returns_404(self, client):
+        """Test that deleting non-existent rule returns 404."""
+        response = client.delete("/rules/draft/nonexistent?actor=test_user")
+        assert response.status_code == 404
+
+    def test_delete_non_draft_rule_returns_400(self, client):
+        """Test that deleting non-draft rule returns 400."""
+        # Create a rule
+        client.post(
+            "/rules/draft",
+            json={
+                "id": "non_draft_delete",
+                "field": "velocity_24h",
+                "op": ">",
+                "value": 5,
+                "action": "clamp_min",
+                "score": 70,
+                "severity": "medium",
+                "reason": "Test",
+                "actor": "test_user",
+            },
+        )
+
+        # Manually change status
+        store = get_draft_store()
+        rule = store.get("non_draft_delete")
+        if rule:
+            rule_dict = rule.__dict__.copy()
+            rule_dict["status"] = RuleStatus.ACTIVE.value
+            active_rule = Rule(**rule_dict)
+            store._rules["non_draft_delete"] = active_rule
+
+        # Try to delete
+        response = client.delete("/rules/draft/non_draft_delete?actor=test_user")
+        assert response.status_code == 400
+        assert "Only draft rules" in response.json()["detail"]

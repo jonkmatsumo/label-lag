@@ -662,3 +662,11 @@ class DraftRuleListResponse(BaseModel):
         description="List of draft rules",
     )
     total: int = Field(default=0, description="Total number of rules")
+
+
+class DraftRuleUpdateResponse(BaseModel):
+    """Response schema for updating a draft rule."""
+
+    rule: DraftRuleResponse = Field(..., description="Updated rule")
+    version_id: str = Field(..., description="Version ID of the update")
+    validation: ValidationResult = Field(..., description="Validation results")

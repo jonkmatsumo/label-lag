@@ -24,6 +24,7 @@ from api.schemas import (
     DraftRuleListResponse,
     DraftRuleResponse,
     DraftRuleUpdateRequest,
+    DraftRuleUpdateResponse,
     GenerateDataRequest,
     GenerateDataResponse,
     HealthResponse,
@@ -936,6 +937,41 @@ async def create_draft_rule(request: DraftRuleCreateRequest) -> DraftRuleCreateR
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
+    # Create version snapshot
+    from api.versioning import get_version_store
+
+    version_store = get_version_store()
+    version = version_store.save(
+        rule=rule,
+        created_by=request.actor,
+        reason=f"Created by {request.actor}",
+    )
+
+    # Create audit record
+    from api.audit import get_audit_logger
+
+    audit_logger = get_audit_logger()
+    after_state = {
+        "id": rule.id,
+        "field": rule.field,
+        "op": rule.op,
+        "value": rule.value,
+        "action": rule.action,
+        "score": rule.score,
+        "severity": rule.severity,
+        "reason": rule.reason,
+        "status": rule.status,
+    }
+
+    audit_logger.log(
+        rule_id=rule.id,
+        action="create",
+        actor=request.actor,
+        before_state=None,
+        after_state=after_state,
+        reason=f"Rule created by {request.actor}",
+    )
+
     # Run validation against all draft rules and production ruleset
     from api.rules import RuleSet
 
@@ -1099,6 +1135,264 @@ async def get_draft_rule(rule_id: str) -> DraftRuleResponse:
         status=rule.status,
         created_at=None,  # Created_at not tracked in this sub-phase
     )
+
+
+@app.put(
+    "/rules/draft/{rule_id}",
+    response_model=DraftRuleUpdateResponse,
+    tags=["Draft Rules"],
+    summary="Update a draft rule",
+    description="""
+Update an existing draft rule.
+
+Only draft rules can be updated. All fields are optional - only provided
+fields will be updated. Creates a new version and audit record.
+""",
+)
+async def update_draft_rule(
+    rule_id: str, request: DraftRuleUpdateRequest
+) -> DraftRuleUpdateResponse:
+    """Update a draft rule.
+
+    Args:
+        rule_id: Rule identifier.
+        request: Update request with optional fields and actor.
+
+    Returns:
+        DraftRuleUpdateResponse with updated rule, version ID, and validation.
+
+    Raises:
+        HTTPException: If rule not found, not in draft status, or update fails.
+    """
+    from api.audit import get_audit_logger
+    from api.draft_store import get_draft_store
+    from api.rules import Rule, RuleSet, RuleStatus
+    from api.validation import validate_ruleset
+    from api.versioning import get_version_store
+
+    store = get_draft_store()
+    version_store = get_version_store()
+    audit_logger = get_audit_logger()
+
+    # Get existing rule
+    existing_rule = store.get(rule_id)
+    if existing_rule is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Draft rule not found: {rule_id}",
+        )
+
+    # Enforce draft-only
+    if existing_rule.status != RuleStatus.DRAFT.value:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot update rule {rule_id} with status {existing_rule.status}. "
+            "Only draft rules can be updated.",
+        )
+
+    # Build updated rule dict
+    rule_dict = {
+        "id": existing_rule.id,
+        "field": request.field if request.field is not None else existing_rule.field,
+        "op": request.op if request.op is not None else existing_rule.op,
+        "value": request.value if request.value is not None else existing_rule.value,
+        "action": (
+            request.action if request.action is not None else existing_rule.action
+        ),
+        "score": request.score if request.score is not None else existing_rule.score,
+        "severity": (
+            request.severity
+            if request.severity is not None
+            else existing_rule.severity
+        ),
+        "reason": (
+            request.reason if request.reason is not None else existing_rule.reason
+        ),
+        "status": RuleStatus.DRAFT.value,  # Always keep as draft
+    }
+
+    # Create updated rule
+    try:
+        updated_rule = Rule(**rule_dict)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid rule update: {e}") from e
+
+    # Save before_state for audit
+    before_state = {
+        "id": existing_rule.id,
+        "field": existing_rule.field,
+        "op": existing_rule.op,
+        "value": existing_rule.value,
+        "action": existing_rule.action,
+        "score": existing_rule.score,
+        "severity": existing_rule.severity,
+        "reason": existing_rule.reason,
+        "status": existing_rule.status,
+    }
+
+    # Save updated rule
+    try:
+        store.save(updated_rule)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    # Create version snapshot
+    version = version_store.save(
+        rule=updated_rule,
+        created_by=request.actor,
+        reason=f"Updated by {request.actor}",
+    )
+
+    # Create audit record
+    after_state = {
+        "id": updated_rule.id,
+        "field": updated_rule.field,
+        "op": updated_rule.op,
+        "value": updated_rule.value,
+        "action": updated_rule.action,
+        "score": updated_rule.score,
+        "severity": updated_rule.severity,
+        "reason": updated_rule.reason,
+        "status": updated_rule.status,
+    }
+
+    audit_logger.log(
+        rule_id=rule_id,
+        action="update",
+        actor=request.actor,
+        before_state=before_state,
+        after_state=after_state,
+        reason=f"Rule updated by {request.actor}",
+    )
+
+    # Run validation
+    draft_rules = store.list_rules(include_archived=False)
+    manager = get_model_manager()
+    production_ruleset = manager.ruleset
+
+    all_rules = draft_rules.copy()
+    if production_ruleset:
+        all_rules.extend([r for r in production_ruleset.rules if r.status == "active"])
+
+    test_ruleset = RuleSet(version="validation", rules=all_rules)
+    conflicts, redundancies = validate_ruleset(test_ruleset, strict=False)
+
+    # Convert to response
+    rule_response = DraftRuleResponse(
+        rule_id=updated_rule.id,
+        field=updated_rule.field,
+        op=updated_rule.op,
+        value=updated_rule.value,
+        action=updated_rule.action,
+        score=updated_rule.score,
+        severity=updated_rule.severity,
+        reason=updated_rule.reason,
+        status=updated_rule.status,
+        created_at=None,
+    )
+
+    validation = ValidationResult(
+        conflicts=[
+            ConflictResponse(
+                rule1_id=c.rule1_id,
+                rule2_id=c.rule2_id,
+                conflict_type=c.conflict_type,
+                description=c.description,
+            )
+            for c in conflicts
+        ],
+        redundancies=[
+            RedundancyResponse(
+                rule_id=r.rule_id,
+                redundant_with=r.redundant_with,
+                redundancy_type=r.redundancy_type,
+                description=r.description,
+            )
+            for r in redundancies
+        ],
+        is_valid=len(conflicts) == 0,
+    )
+
+    return DraftRuleUpdateResponse(
+        rule=rule_response,
+        version_id=version.version_id,
+        validation=validation,
+    )
+
+
+@app.delete(
+    "/rules/draft/{rule_id}",
+    tags=["Draft Rules"],
+    summary="Archive a draft rule",
+    description="""
+Archive (soft-delete) a draft rule by changing its status to archived.
+
+Only draft rules can be archived. Creates an audit record for the
+state change.
+""",
+)
+async def delete_draft_rule(rule_id: str, actor: str = Query(..., description="Who is archiving this rule")) -> dict:
+    """Archive a draft rule.
+
+    Args:
+        rule_id: Rule identifier.
+        actor: Who is performing the archive.
+
+    Returns:
+        Dict with success status and rule ID.
+
+    Raises:
+        HTTPException: If rule not found or not in draft status.
+    """
+    from api.audit import get_audit_logger
+    from api.draft_store import get_draft_store
+    from api.rules import RuleStatus
+
+    store = get_draft_store()
+    audit_logger = get_audit_logger()
+
+    # Get existing rule
+    existing_rule = store.get(rule_id)
+    if existing_rule is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Draft rule not found: {rule_id}",
+        )
+
+    # Enforce draft-only
+    if existing_rule.status != RuleStatus.DRAFT.value:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot archive rule {rule_id} with status {existing_rule.status}. "
+            "Only draft rules can be archived.",
+        )
+
+    # Archive the rule
+    success = store.delete(rule_id)
+    if not success:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to archive rule {rule_id}",
+        )
+
+    # Get archived rule for audit
+    archived_rule = store.get(rule_id)
+
+    # Create audit record
+    audit_logger.log(
+        rule_id=rule_id,
+        action="state_change",
+        actor=actor,
+        before_state={"status": RuleStatus.DRAFT.value},
+        after_state={"status": RuleStatus.ARCHIVED.value},
+        reason=f"Rule archived by {actor}",
+    )
+
+    return {
+        "success": True,
+        "rule_id": rule_id,
+        "status": archived_rule.status if archived_rule else "archived",
+    }
 
 
 @app.exception_handler(Exception)
