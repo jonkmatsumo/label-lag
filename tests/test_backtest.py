@@ -1,10 +1,9 @@
 """Tests for backtesting infrastructure."""
 
-import json
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -21,7 +20,13 @@ class TestBacktestMetrics:
             total_records=100,
             matched_count=25,
             match_rate=0.25,
-            score_distribution={"1-20": 10, "21-40": 20, "41-60": 30, "61-80": 25, "81-99": 15},
+            score_distribution={
+                "1-20": 10,
+                "21-40": 20,
+                "41-60": 30,
+                "61-80": 25,
+                "81-99": 15,
+            },
             score_mean=50.0,
             score_std=20.0,
             score_min=10,
@@ -42,20 +47,28 @@ class TestBacktestRunner:
     def mock_db_session(self):
         """Create a mock database session."""
         session = MagicMock()
-        session.get_session.return_value.__enter__.return_value.execute.return_value = iter([
-            MagicMock(
-                velocity_24h=10,
-                amount_to_avg_ratio_30d=3.5,
-                balance_volatility_z_score=-1.5,
-                experimental_signals={"bank_connections_24h": 5, "merchant_risk_score": 75, "has_history": True},
-            ),
-            MagicMock(
-                velocity_24h=2,
-                amount_to_avg_ratio_30d=1.0,
-                balance_volatility_z_score=0.0,
-                experimental_signals=None,
-            ),
-        ])
+        session.get_session.return_value.__enter__.return_value.execute.return_value = (
+            iter(
+                [
+                    MagicMock(
+                        velocity_24h=10,
+                        amount_to_avg_ratio_30d=3.5,
+                        balance_volatility_z_score=-1.5,
+                        experimental_signals={
+                            "bank_connections_24h": 5,
+                            "merchant_risk_score": 75,
+                            "has_history": True,
+                        },
+                    ),
+                    MagicMock(
+                        velocity_24h=2,
+                        amount_to_avg_ratio_30d=1.0,
+                        balance_volatility_z_score=0.0,
+                        experimental_signals=None,
+                    ),
+                ]
+            )
+        )
         return session
 
     @pytest.fixture
@@ -79,7 +92,9 @@ class TestBacktestRunner:
         start_date = datetime.now(timezone.utc) - timedelta(days=7)
         end_date = datetime.now(timezone.utc)
 
-        result = runner.run_backtest(sample_ruleset, start_date, end_date, base_score=50)
+        result = runner.run_backtest(
+            sample_ruleset, start_date, end_date, base_score=50
+        )
 
         assert result.job_id is not None
         assert result.ruleset_version == "v1"
@@ -111,13 +126,17 @@ class TestBacktestRunner:
         assert result.metrics.matched_count == 0
         assert result.metrics.match_rate == 0.0
 
-    def test_run_backtest_computes_score_distribution(self, mock_db_session, sample_ruleset):
+    def test_run_backtest_computes_score_distribution(
+        self, mock_db_session, sample_ruleset
+    ):
         """Test that backtest computes score distribution."""
         runner = BacktestRunner(db_session=mock_db_session)
         start_date = datetime.now(timezone.utc) - timedelta(days=7)
         end_date = datetime.now(timezone.utc)
 
-        result = runner.run_backtest(sample_ruleset, start_date, end_date, base_score=50)
+        result = runner.run_backtest(
+            sample_ruleset, start_date, end_date, base_score=50
+        )
 
         assert "1-20" in result.metrics.score_distribution
         assert "21-40" in result.metrics.score_distribution
@@ -128,13 +147,16 @@ class TestBacktestRunner:
     def test_run_backtest_handles_empty_data(self, mock_db_session, sample_ruleset):
         """Test that backtest handles empty historical data."""
         empty_session = MagicMock()
-        empty_session.get_session.return_value.__enter__.return_value.execute.return_value = iter([])
+        enter_mock = empty_session.get_session.return_value.__enter__.return_value
+        enter_mock.execute.return_value = iter([])
 
         runner = BacktestRunner(db_session=empty_session)
         start_date = datetime.now(timezone.utc) - timedelta(days=7)
         end_date = datetime.now(timezone.utc)
 
-        result = runner.run_backtest(sample_ruleset, start_date, end_date, base_score=50)
+        result = runner.run_backtest(
+            sample_ruleset, start_date, end_date, base_score=50
+        )
 
         assert result.metrics.total_records == 0
         assert result.metrics.match_rate == 0.0
@@ -148,7 +170,9 @@ class TestBacktestRunner:
         start_date = datetime.now(timezone.utc) - timedelta(days=7)
         end_date = datetime.now(timezone.utc)
 
-        result = runner.run_backtest(sample_ruleset, start_date, end_date, base_score=50)
+        result = runner.run_backtest(
+            sample_ruleset, start_date, end_date, base_score=50
+        )
 
         assert result.error is not None
         assert "Database error" in result.error
@@ -266,7 +290,8 @@ class TestBacktestStore:
 
         # Filter by date range
         results = store.list_results(
-            start_date=base_time - timedelta(hours=12), end_date=base_time + timedelta(hours=1)
+            start_date=base_time - timedelta(hours=12),
+            end_date=base_time + timedelta(hours=1),
         )
         assert len(results) == 1
         assert results[0].job_id == "job2"

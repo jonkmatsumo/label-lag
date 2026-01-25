@@ -1,6 +1,5 @@
 """Tests for metrics collection and comparison."""
 
-import json
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -8,7 +7,6 @@ from pathlib import Path
 import pytest
 
 from api.metrics import (
-    ComparisonReport,
     MetricsCollector,
     RuleMetrics,
     get_metrics_collector,
@@ -126,8 +124,12 @@ class TestMetricsCollector:
         base_time = datetime.now(timezone.utc)
 
         # Record matches on different days
-        collector.record_match("rule1", True, False, timestamp=base_time - timedelta(days=2))
-        collector.record_match("rule1", True, False, timestamp=base_time - timedelta(days=1))
+        collector.record_match(
+            "rule1", True, False, timestamp=base_time - timedelta(days=2)
+        )
+        collector.record_match(
+            "rule1", True, False, timestamp=base_time - timedelta(days=1)
+        )
         collector.record_match("rule1", False, True, timestamp=base_time)
 
         metrics = collector.get_rule_metrics(

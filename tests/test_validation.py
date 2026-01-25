@@ -4,8 +4,6 @@ import pytest
 
 from api.rules import Rule, RuleSet
 from api.validation import (
-    Conflict,
-    Redundancy,
     detect_conflicts,
     detect_redundancies,
     validate_ruleset,

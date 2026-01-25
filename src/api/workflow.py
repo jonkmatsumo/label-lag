@@ -2,10 +2,9 @@
 
 import logging
 from dataclasses import asdict
-from typing import Any
 
 from api.audit import get_audit_logger
-from api.rules import Rule, RuleStatus
+from api.rules import Rule
 
 logger = logging.getLogger(__name__)
 
@@ -81,17 +80,20 @@ class RuleStateMachine:
 
         # Check if transition is allowed
         if not self.can_transition(current_status, new_status):
+            allowed = ALLOWED_TRANSITIONS.get(current_status, [])
             raise TransitionError(
-                f"Cannot transition rule '{rule.id}' from '{current_status}' to '{new_status}'. "
-                f"Allowed transitions from '{current_status}': {ALLOWED_TRANSITIONS.get(current_status, [])}"
+                f"Cannot transition '{rule.id}' {current_status} -> {new_status}. "
+                f"Allowed from '{current_status}': {allowed}"
             )
 
         # Check if approval is required
-        if self.require_approval and self._requires_approval(current_status, new_status):
+        if self.require_approval and self._requires_approval(
+            current_status, new_status
+        ):
             if not approver:
                 raise TransitionError(
-                    f"Transition from '{current_status}' to '{new_status}' requires approval. "
-                    f"Please provide an approver."
+                    f"'{current_status}' -> '{new_status}' requires approval. "
+                    "Provide an approver."
                 )
 
         # Create updated rule
@@ -110,7 +112,11 @@ class RuleStateMachine:
         )
 
         logger.info(
-            f"Rule '{rule.id}' transitioned from '{current_status}' to '{new_status}' by {actor}"
+            "Rule '%s' transitioned '%s' -> '%s' by %s",
+            rule.id,
+            current_status,
+            new_status,
+            actor,
         )
 
         return updated_rule

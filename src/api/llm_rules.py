@@ -3,7 +3,6 @@
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any
 
 from api.rules import Rule, RuleSet
 from api.validation import validate_ruleset
@@ -45,7 +44,9 @@ class LLMRuleGenerator:
         self.max_retries = max_retries
         self._cost_tracker: dict[str, int] = {"requests": 0, "tokens": 0}
 
-    def generate_rule(self, description: str, existing_rules: RuleSet | None = None) -> LLMGenerationResult:
+    def generate_rule(
+        self, description: str, existing_rules: RuleSet | None = None
+    ) -> LLMGenerationResult:
         """Generate a rule from natural language description.
 
         Args:
@@ -108,9 +109,11 @@ class LLMRuleGenerator:
         Returns:
             Prompt string.
         """
-        prompt = f"""You are a rule engine assistant. Convert the following natural language description into a JSON rule definition.
+        prompt = f"""You are a rule engine assistant. Convert the natural language \
+description below into a JSON rule definition.
 
-Available fields: velocity_24h, amount_to_avg_ratio_30d, balance_volatility_z_score, bank_connections_24h, merchant_risk_score, has_history, transaction_amount
+Available fields: velocity_24h, amount_to_avg_ratio_30d, balance_volatility_z_score, \
+bank_connections_24h, merchant_risk_score, has_history, transaction_amount
 
 Available operators: >, >=, <, <=, ==, in, not_in
 
@@ -134,7 +137,11 @@ Description: {description}
         if existing_rules and existing_rules.rules:
             prompt += "\n\nExisting rules for context (avoid conflicts):\n"
             for rule in existing_rules.rules[:5]:  # Limit to 5 for context
-                prompt += f"- {rule.id}: {rule.field} {rule.op} {rule.value} -> {rule.action}\n"
+                entry = (
+                    f"- {rule.id}: {rule.field} {rule.op} {rule.value} "
+                    f"-> {rule.action}\n"
+                )
+                prompt += entry
 
         prompt += "\n\nReturn ONLY valid JSON, no additional text."
 
@@ -184,7 +191,10 @@ Description: {description}
             response = client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "You are a helpful assistant that generates JSON rule definitions."},
+                    {
+                        "role": "system",
+                        "content": "You generate JSON rule definitions.",
+                    },
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.3,  # Lower temperature for more deterministic output
@@ -193,12 +203,16 @@ Description: {description}
 
             self._cost_tracker["requests"] += 1
             # Approximate token count (rough estimate)
-            self._cost_tracker["tokens"] += len(prompt.split()) + len(response.choices[0].message.content.split())
+            self._cost_tracker["tokens"] += len(prompt.split()) + len(
+                response.choices[0].message.content.split()
+            )
 
             return response.choices[0].message.content
 
         except ImportError:
-            raise ValueError("openai package not installed. Install with: pip install openai")
+            raise ValueError(
+                "openai package not installed. Install with: pip install openai"
+            )
         except Exception as e:
             logger.error(f"OpenAI API call failed: {e}")
             raise
@@ -230,12 +244,16 @@ Description: {description}
             )
 
             self._cost_tracker["requests"] += 1
-            self._cost_tracker["tokens"] += response.usage.input_tokens + response.usage.output_tokens
+            self._cost_tracker["tokens"] += (
+                response.usage.input_tokens + response.usage.output_tokens
+            )
 
             return response.content[0].text
 
         except ImportError:
-            raise ValueError("anthropic package not installed. Install with: pip install anthropic")
+            raise ValueError(
+                "anthropic package not installed. Install with: pip install anthropic"
+            )
         except Exception as e:
             logger.error(f"Anthropic API call failed: {e}")
             raise
@@ -254,18 +272,22 @@ Description: {description}
         self._cost_tracker["tokens"] += 100  # Mock token count
 
         # Simple mock that generates a basic rule
-        return json.dumps({
-            "id": "llm_generated_rule",
-            "field": "velocity_24h",
-            "op": ">",
-            "value": 10,
-            "action": "clamp_min",
-            "score": 80,
-            "severity": "medium",
-            "reason": "High transaction velocity detected",
-        })
+        return json.dumps(
+            {
+                "id": "llm_generated_rule",
+                "field": "velocity_24h",
+                "op": ">",
+                "value": 10,
+                "action": "clamp_min",
+                "score": 80,
+                "severity": "medium",
+                "reason": "High transaction velocity detected",
+            }
+        )
 
-    def _parse_llm_response(self, response: str, original_description: str) -> tuple[Rule | None, str]:
+    def _parse_llm_response(
+        self, response: str, original_description: str
+    ) -> tuple[Rule | None, str]:
         """Parse LLM response and extract rule.
 
         Args:
@@ -312,7 +334,9 @@ Description: {description}
         """
         # Check for conflicts if existing rules provided
         if existing_rules:
-            test_ruleset = RuleSet(version=existing_rules.version, rules=existing_rules.rules + [rule])
+            test_ruleset = RuleSet(
+                version=existing_rules.version, rules=existing_rules.rules + [rule]
+            )
             conflicts, redundancies = validate_ruleset(test_ruleset, strict=False)
 
             if conflicts:
@@ -342,7 +366,9 @@ def get_llm_generator() -> LLMRuleGenerator:
     """
     global _global_llm_generator
     if _global_llm_generator is None:
-        _global_llm_generator = LLMRuleGenerator(provider="mock")  # Default to mock for safety
+        _global_llm_generator = LLMRuleGenerator(
+            provider="mock"
+        )  # Default to mock for safety
     return _global_llm_generator
 
 

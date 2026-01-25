@@ -62,7 +62,7 @@ class RuleVersionStore:
         """Initialize version store.
 
         Args:
-            storage_path: Path to file for persistent storage. If None, uses in-memory only.
+            storage_path: Path for persistent storage. If None, in-memory only.
         """
         self.storage_path = Path(storage_path) if storage_path else None
         self._versions: dict[str, list[RuleVersion]] = {}  # rule_id -> list of versions
@@ -86,7 +86,9 @@ class RuleVersionStore:
                         RuleVersion.from_dict(v) for v in version_list
                     ]
         except (json.JSONDecodeError, KeyError, ValueError) as e:
-            logger.warning(f"Failed to load rule versions from {self.storage_path}: {e}")
+            logger.warning(
+                f"Failed to load rule versions from {self.storage_path}: {e}"
+            )
             self._versions = {}
 
     def _save_versions(self) -> None:
@@ -105,7 +107,7 @@ class RuleVersionStore:
 
             with open(self.storage_path, "w") as f:
                 json.dump(data, f, indent=2)
-        except (OSError, IOError) as e:
+        except OSError as e:
             logger.error(f"Failed to save rule versions to {self.storage_path}: {e}")
 
     def _generate_version_id(self, rule_id: str) -> str:
@@ -236,12 +238,24 @@ class RuleVersionStore:
             rule_id=rule_id,
             action="rollback",
             actor=rolled_back_by,
-            before_state={"version_id": self.get_latest_version(rule_id).version_id if self.get_latest_version(rule_id) else None},
-            after_state={"version_id": new_version.version_id, "rolled_back_to": version_id},
+            before_state={
+                "version_id": self.get_latest_version(rule_id).version_id
+                if self.get_latest_version(rule_id)
+                else None
+            },
+            after_state={
+                "version_id": new_version.version_id,
+                "rolled_back_to": version_id,
+            },
             reason=rollback_reason,
         )
 
-        logger.info(f"Rolled back rule {rule_id} to version {version_id}, created new version {new_version.version_id}")
+        logger.info(
+            "Rolled back rule %s to version %s, new version %s",
+            rule_id,
+            version_id,
+            new_version.version_id,
+        )
 
         return new_version
 

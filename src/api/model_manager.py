@@ -369,14 +369,18 @@ class ModelManager:
         try:
             # Try to access underlying XGBoost model
             # MLflow pyfunc models wrap the original model
-            underlying_model = self._model._model_impl if hasattr(self._model, "_model_impl") else self._model
+            underlying_model = (
+                self._model._model_impl
+                if hasattr(self._model, "_model_impl")
+                else self._model
+            )
 
             # Check if it's an XGBoost model
             if hasattr(underlying_model, "get_booster"):
                 # XGBoost model - get feature importance
                 booster = underlying_model.get_booster()
                 importance_dict = booster.get_score(importance_type="gain")
-                
+
                 # Map feature indices to feature names
                 feature_names = self.required_features
                 if len(importance_dict) == len(feature_names):
@@ -389,13 +393,20 @@ class ModelManager:
                     return importance_map
                 else:
                     # Try direct mapping if keys are feature names
-                    return {k: float(v) for k, v in importance_dict.items() if k in feature_names}
+                    return {
+                        k: float(v)
+                        for k, v in importance_dict.items()
+                        if k in feature_names
+                    }
             elif hasattr(underlying_model, "feature_importances_"):
                 # Scikit-learn style model
                 importances = underlying_model.feature_importances_
                 feature_names = self.required_features
                 if len(importances) == len(feature_names):
-                    return {name: float(imp) for name, imp in zip(feature_names, importances)}
+                    return {
+                        name: float(imp)
+                        for name, imp in zip(feature_names, importances)
+                    }
         except Exception as e:
             logger.warning(f"Could not extract feature importance: {e}")
 

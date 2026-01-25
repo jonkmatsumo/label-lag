@@ -40,9 +40,13 @@ class RuleTestCase:
         else:
             self.ruleset = RuleSet(version="v1", rules=rules)
         self.current_score = current_score
-        self.expected_score = expected_score if expected_score is not None else current_score
+        self.expected_score = (
+            expected_score if expected_score is not None else current_score
+        )
         self.expected_matched_rules = expected_matched_rules or []
-        self.expected_rejected = expected_rejected if expected_rejected is not None else False
+        self.expected_rejected = (
+            expected_rejected if expected_rejected is not None else False
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """Convert test case to dictionary for golden file storage."""
@@ -95,7 +99,8 @@ class RuleTestCase:
     def assert_result(self, result: dict[str, Any]) -> None:
         """Assert that result matches expected values."""
         assert result["final_score"] == self.expected_score, (
-            f"Score mismatch: expected {self.expected_score}, got {result['final_score']}"
+            f"Score mismatch: expected {self.expected_score}, "
+            f"got {result['final_score']}"
         )
         assert set(result["matched_rules"]) == set(self.expected_matched_rules), (
             f"Matched rules mismatch: expected {self.expected_matched_rules}, "
@@ -276,7 +281,12 @@ class TestDeterministicRuleEvaluation:
         ],
     )
     def test_comparison_operators(
-        self, harness: RuleTestHarness, operator: str, value: int, feature_value: int, should_match: bool
+        self,
+        harness: RuleTestHarness,
+        operator: str,
+        value: int,
+        feature_value: int,
+        should_match: bool,
     ):
         """Test all comparison operators with boundary conditions."""
         test_case = RuleTestCase(
@@ -312,7 +322,12 @@ class TestDeterministicRuleEvaluation:
         ],
     )
     def test_all_actions(
-        self, harness: RuleTestHarness, action: str, current_score: int, rule_score: int | None, expected_score: int
+        self,
+        harness: RuleTestHarness,
+        action: str,
+        current_score: int,
+        rule_score: int | None,
+        expected_score: int,
     ):
         """Test all action types."""
         rule_kwargs = {

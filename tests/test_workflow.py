@@ -3,7 +3,7 @@
 import pytest
 
 from api.audit import AuditLogger, set_audit_logger
-from api.rules import Rule, RuleStatus
+from api.rules import Rule
 from api.workflow import RuleStateMachine, TransitionError, create_state_machine
 
 
@@ -128,7 +128,9 @@ class TestStateMachineTransitionExecution:
             status="pending_review",
         )
 
-        updated = state_machine.transition(rule, "active", actor="approver1", reason="Approved")
+        updated = state_machine.transition(
+            rule, "active", actor="approver1", reason="Approved"
+        )
 
         assert updated.status == "active"
 
@@ -136,11 +138,11 @@ class TestStateMachineTransitionExecution:
         """Test that transitions are logged to audit trail."""
         test_logger = AuditLogger()
         set_audit_logger(test_logger)
-        
+
         # Create state machine after setting logger
         state_machine = RuleStateMachine(require_approval=False)
 
-        updated = state_machine.transition(
+        _ = state_machine.transition(
             draft_rule, "pending_review", actor="user123", reason="Ready for review"
         )
 

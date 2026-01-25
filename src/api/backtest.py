@@ -11,7 +11,7 @@ from typing import Any
 import numpy as np
 from sqlalchemy import text
 
-from api.rules import Rule, RuleSet, evaluate_rules
+from api.rules import RuleSet, evaluate_rules
 from synthetic_pipeline.db.session import DatabaseSession
 
 logger = logging.getLogger(__name__)
@@ -108,7 +108,9 @@ class BacktestRunner:
             features_list = self._fetch_historical_features(start_date, end_date)
 
             if not features_list:
-                logger.warning(f"No features found in date range {start_date} to {end_date}")
+                logger.warning(
+                    f"No features found in date range {start_date} to {end_date}"
+                )
                 return BacktestResult(
                     job_id=job_id,
                     rule_id=rule_id,
@@ -234,9 +236,13 @@ class BacktestRunner:
                     if isinstance(exp_signals, dict):
                         # Extract common experimental features
                         if "bank_connections_24h" in exp_signals:
-                            feature_dict["bank_connections_24h"] = exp_signals["bank_connections_24h"]
+                            feature_dict["bank_connections_24h"] = exp_signals[
+                                "bank_connections_24h"
+                            ]
                         if "merchant_risk_score" in exp_signals:
-                            feature_dict["merchant_risk_score"] = exp_signals["merchant_risk_score"]
+                            feature_dict["merchant_risk_score"] = exp_signals[
+                                "merchant_risk_score"
+                            ]
                         if "has_history" in exp_signals:
                             feature_dict["has_history"] = exp_signals["has_history"]
 
@@ -322,7 +328,7 @@ class BacktestStore:
         """Initialize backtest store.
 
         Args:
-            storage_path: Path to file for persistent storage. If None, uses in-memory only.
+            storage_path: Path for persistent storage. If None, in-memory only.
         """
         self.storage_path = Path(storage_path) if storage_path else None
         self._results: dict[str, BacktestResult] = {}
@@ -344,7 +350,9 @@ class BacktestStore:
                     for job_id, result_dict in data.items()
                 }
         except (json.JSONDecodeError, KeyError, ValueError) as e:
-            logger.warning(f"Failed to load backtest results from {self.storage_path}: {e}")
+            logger.warning(
+                f"Failed to load backtest results from {self.storage_path}: {e}"
+            )
             self._results = {}
 
     def _save_results(self) -> None:
@@ -361,7 +369,7 @@ class BacktestStore:
 
             with open(self.storage_path, "w") as f:
                 json.dump(data, f, indent=2)
-        except (OSError, IOError) as e:
+        except OSError as e:
             logger.error(f"Failed to save backtest results to {self.storage_path}: {e}")
 
     def save(self, result: BacktestResult) -> None:

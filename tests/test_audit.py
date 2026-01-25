@@ -1,11 +1,8 @@
 """Tests for audit trail infrastructure."""
 
-import json
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-
-import pytest
 
 from api.audit import AuditLogger, AuditRecord, get_audit_logger, set_audit_logger
 
@@ -91,7 +88,9 @@ class TestAuditLogger:
         logger = AuditLogger()
         logger.log("rule1", "create", "user1", after_state={"id": "rule1"})
         logger.log("rule2", "create", "user2", after_state={"id": "rule2"})
-        logger.log("rule1", "update", "user1", after_state={"id": "rule1", "status": "active"})
+        logger.log(
+            "rule1", "update", "user1", after_state={"id": "rule1", "status": "active"}
+        )
 
         results = logger.query(rule_id="rule1")
         assert len(results) == 2
@@ -148,8 +147,16 @@ class TestAuditLogger:
         logger = AuditLogger()
         logger.log("rule1", "create", "user1", after_state={"status": "draft"})
         logger.log("rule2", "create", "user2", after_state={"status": "draft"})
-        logger.log("rule1", "state_change", "user1", before_state={"status": "draft"}, after_state={"status": "active"})
-        logger.log("rule1", "update", "user1", after_state={"status": "active", "score": 80})
+        logger.log(
+            "rule1",
+            "state_change",
+            "user1",
+            before_state={"status": "draft"},
+            after_state={"status": "active"},
+        )
+        logger.log(
+            "rule1", "update", "user1", after_state={"status": "active", "score": 80}
+        )
 
         history = logger.get_rule_history("rule1")
         assert len(history) == 3

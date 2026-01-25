@@ -37,7 +37,9 @@ class Rule:
     score: int | None = None
     severity: str = "medium"  # low, medium, high
     reason: str = ""
-    status: str = field(default="active")  # draft, pending_review, active, disabled, archived
+    status: str = field(
+        default="active"
+    )  # draft, pending_review, active, disabled, archived
 
     def __post_init__(self):
         """Validate rule configuration."""
@@ -96,7 +98,9 @@ class RuleSet:
     rules: list[Rule]
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any], validate: bool = False, strict: bool = False) -> "RuleSet":
+    def from_dict(
+        cls, data: dict[str, Any], validate: bool = False, strict: bool = False
+    ) -> "RuleSet":
         """Create RuleSet from dictionary.
 
         Args:
@@ -222,7 +226,6 @@ def evaluate_rules(
 
     # Evaluate active rules (affect score)
     for rule in active_rules:
-
         # Check if feature exists
         if rule.field not in features:
             continue  # Skip rule if feature missing

@@ -26,9 +26,7 @@ class Redundancy:
     description: str
 
 
-def _ranges_overlap(
-    op1: str, value1: Any, op2: str, value2: Any
-) -> bool:
+def _ranges_overlap(op1: str, value1: Any, op2: str, value2: Any) -> bool:
     """Check if two numeric ranges overlap.
 
     Args:
@@ -40,6 +38,7 @@ def _ranges_overlap(
     Returns:
         True if ranges overlap, False otherwise.
     """
+
     # Convert to comparable ranges
     def get_range(op: str, val: Any) -> tuple[float, float]:
         """Get numeric range for operator and value."""
@@ -103,7 +102,13 @@ def _conditions_overlap(rule1: Rule, rule2: Rule) -> bool:
                 return bool(set2 - set1)
 
     # For comparison operators, check numeric range overlap
-    if rule1.op in [">", ">=", "<", "<=", "=="] and rule2.op in [">", ">=", "<", "<=", "=="]:
+    if rule1.op in [">", ">=", "<", "<=", "=="] and rule2.op in [
+        ">",
+        ">=",
+        "<",
+        "<=",
+        "==",
+    ]:
         return _ranges_overlap(rule1.op, rule1.value, rule2.op, rule2.value)
 
     # Mixed operators - assume they might overlap
@@ -151,7 +156,7 @@ def detect_conflicts(ruleset: RuleSet) -> list[Conflict]:
     conflicts = []
 
     for i, rule1 in enumerate(ruleset.rules):
-        for rule2 in ruleset.rules[i + 1:]:
+        for rule2 in ruleset.rules[i + 1 :]:
             # Check if conditions overlap
             if not _conditions_overlap(rule1, rule2):
                 continue
@@ -191,7 +196,7 @@ def detect_redundancies(ruleset: RuleSet) -> list[Redundancy]:
     redundancies = []
 
     for i, rule1 in enumerate(ruleset.rules):
-        for rule2 in ruleset.rules[i + 1:]:
+        for rule2 in ruleset.rules[i + 1 :]:
             # Must be same field and action to be redundant
             if rule1.field != rule2.field or rule1.action != rule2.action:
                 continue
@@ -288,7 +293,9 @@ def _is_subset_condition(rule1: Rule, rule2: Rule) -> bool:
     return range1[0] >= range2[0] and range1[1] <= range2[1]
 
 
-def validate_ruleset(ruleset: RuleSet, strict: bool = False) -> tuple[list[Conflict], list[Redundancy]]:
+def validate_ruleset(
+    ruleset: RuleSet, strict: bool = False
+) -> tuple[list[Conflict], list[Redundancy]]:
     """Validate a ruleset and return conflicts and redundancies.
 
     Args:
@@ -307,7 +314,8 @@ def validate_ruleset(ruleset: RuleSet, strict: bool = False) -> tuple[list[Confl
     if strict and conflicts:
         conflict_msgs = [c.description for c in conflicts]
         raise ValueError(
-            f"Rule conflicts detected:\n" + "\n".join(f"  - {msg}" for msg in conflict_msgs)
+            "Rule conflicts detected:\n"
+            + "\n".join(f"  - {msg}" for msg in conflict_msgs)
         )
 
     return conflicts, redundancies

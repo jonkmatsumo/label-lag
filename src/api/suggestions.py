@@ -2,7 +2,6 @@
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Any
 
 import numpy as np
@@ -55,7 +54,8 @@ class RuleSuggestion:
             action=self.action,
             score=self.suggested_score,
             severity="medium",
-            reason=self.reason or f"Heuristic suggestion: {self.field} {self.operator} {self.threshold}",
+            reason=self.reason
+            or f"Heuristic suggestion: {self.field} {self.operator} {self.threshold}",
             status=RuleStatus.DRAFT.value,
         )
 
@@ -205,7 +205,9 @@ class SuggestionEngine:
                             "std": stats["std"],
                             "sample_count": stats["count"],
                         },
-                        reason=f"High {field_name} threshold ({stat_key}: {threshold:.2f})",
+                        reason=(
+                            f"High {field_name} threshold ({stat_key}: {threshold:.2f})"
+                        ),
                     )
                 )
 
@@ -239,7 +241,9 @@ class SuggestionEngine:
                                 "std": stats["std"],
                                 "sample_count": stats["count"],
                             },
-                            reason=f"Low balance volatility threshold ({threshold:.2f})",
+                            reason=(
+                                f"Low balance volatility threshold ({threshold:.2f})"
+                            ),
                         )
                     )
 
@@ -318,7 +322,9 @@ class ModelAssistedSuggestionEngine:
         manager = get_model_manager()
 
         if not manager.model_loaded:
-            logger.warning("Model not loaded, cannot generate model-assisted suggestions")
+            logger.warning(
+                "Model not loaded, cannot generate model-assisted suggestions"
+            )
             return []
 
         # Get feature importance
@@ -388,11 +394,12 @@ class ModelAssistedSuggestionEngine:
 
             # Use percentiles to suggest thresholds
             # High-importance features with high values suggest risk
-            percentile_90 = float(np.percentile(values_array, 90))
             percentile_95 = float(np.percentile(values_array, 95))
 
             # Confidence based on feature importance
-            base_confidence = min(importance * 2.0, 0.95)  # Scale importance to confidence
+            base_confidence = min(
+                importance * 2.0, 0.95
+            )  # Scale importance to confidence
 
             # Suggest high threshold rule
             if percentile_95 > np.mean(values_array):
@@ -410,7 +417,10 @@ class ModelAssistedSuggestionEngine:
                             "mean": float(np.mean(values_array)),
                             "sample_count": len(values),
                         },
-                        reason=f"High-importance feature ({importance:.3f}): {field_name} > {percentile_95:.2f}",
+                        reason=(
+                            f"High-importance ({importance:.3f}): "
+                            f"{field_name} > {percentile_95:.2f}"
+                        ),
                     )
                 )
 
@@ -432,7 +442,10 @@ class ModelAssistedSuggestionEngine:
                                 "mean": float(np.mean(values_array)),
                                 "sample_count": len(values),
                             },
-                            reason=f"High-importance feature ({importance:.3f}): low balance volatility",
+                            reason=(
+                                f"High-importance ({importance:.3f}): "
+                                "low balance volatility"
+                            ),
                         )
                     )
 

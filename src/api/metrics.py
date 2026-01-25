@@ -74,10 +74,10 @@ class MetricsCollector:
         """Initialize metrics collector.
 
         Args:
-            storage_path: Path to file for persistent storage. If None, uses in-memory only.
+            storage_path: Path for persistent storage. If None, in-memory only.
         """
         self.storage_path = Path(storage_path) if storage_path else None
-        # In-memory counters: (rule_id, date) -> (production_count, shadow_count, overlap_count)
+        # In-memory: (rule_id, date) -> (prod_count, shadow_count, overlap_count)
         self._counters: dict[tuple[str, str], tuple[int, int, int]] = defaultdict(
             lambda: (0, 0, 0)
         )
@@ -123,7 +123,7 @@ class MetricsCollector:
 
             with open(self.storage_path, "w") as f:
                 json.dump(data, f, indent=2)
-        except (OSError, IOError) as e:
+        except OSError as e:
             logger.error(f"Failed to save metrics to {self.storage_path}: {e}")
 
     def record_match(
@@ -176,7 +176,6 @@ class MetricsCollector:
             timestamp = datetime.now(timezone.utc)
 
         all_rules = set(production_matched) | set(shadow_matched)
-        overlap = set(production_matched) & set(shadow_matched)
 
         # Record each rule once, with correct flags
         for rule_id in all_rules:

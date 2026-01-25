@@ -1,6 +1,5 @@
 """Tests for rule versioning and rollback."""
 
-import json
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -8,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from api.audit import AuditLogger, set_audit_logger
-from api.rules import Rule, RuleSet
+from api.rules import Rule
 from api.versioning import (
     RuleVersion,
     RuleVersionStore,
@@ -100,7 +99,9 @@ class TestRuleVersionStore:
 
     def test_save_version(self, version_store, sample_rule):
         """Test saving a rule version."""
-        version = version_store.save(sample_rule, created_by="user123", reason="Initial version")
+        version = version_store.save(
+            sample_rule, created_by="user123", reason="Initial version"
+        )
 
         assert version.rule_id == "test_rule"
         assert version.created_by == "user123"
@@ -143,7 +144,7 @@ class TestRuleVersionStore:
 
     def test_get_latest_version(self, version_store, sample_rule):
         """Test getting the latest version."""
-        version1 = version_store.save(sample_rule, created_by="user1")
+        _ = version_store.save(sample_rule, created_by="user1")
 
         updated_rule = Rule(
             id="test_rule",
@@ -196,7 +197,9 @@ class TestRuleVersionStore:
         version_store.save(sample_rule, created_by="user1")
 
         with pytest.raises(ValueError, match="not found"):
-            version_store.rollback("test_rule", "nonexistent_version", rolled_back_by="user1")
+            version_store.rollback(
+                "test_rule", "nonexistent_version", rolled_back_by="user1"
+            )
 
     def test_get_ruleset_at_timestamp(self, version_store):
         """Test reconstructing ruleset at a point in time."""
@@ -259,9 +262,15 @@ class TestRuleVersionStore:
 
     def test_get_ruleset_at_with_specific_rule_ids(self, version_store):
         """Test reconstructing ruleset with specific rule IDs."""
-        rule1 = Rule(id="rule1", field="v", op=">", value=5, action="clamp_min", score=80)
-        rule2 = Rule(id="rule2", field="a", op=">", value=3, action="clamp_min", score=75)
-        rule3 = Rule(id="rule3", field="b", op=">", value=2, action="clamp_min", score=70)
+        rule1 = Rule(
+            id="rule1", field="v", op=">", value=5, action="clamp_min", score=80
+        )
+        rule2 = Rule(
+            id="rule2", field="a", op=">", value=3, action="clamp_min", score=75
+        )
+        rule3 = Rule(
+            id="rule3", field="b", op=">", value=2, action="clamp_min", score=70
+        )
 
         version_store.save(rule1, created_by="user1")
         version_store.save(rule2, created_by="user1")
@@ -288,7 +297,9 @@ class TestRuleVersionStorePersistence:
 
             # Create store and save versions
             store1 = RuleVersionStore(storage_path=storage_path)
-            rule1 = Rule(id="rule1", field="v", op=">", value=5, action="clamp_min", score=80)
+            rule1 = Rule(
+                id="rule1", field="v", op=">", value=5, action="clamp_min", score=80
+            )
             store1.save(rule1, created_by="user1")
 
             # Create new store and load versions

@@ -1,11 +1,13 @@
 """Tests for LLM-assisted rule authoring."""
 
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
-
-from api.llm_rules import LLMGenerationResult, LLMRuleGenerator, get_llm_generator, set_llm_generator
+from api.llm_rules import (
+    LLMRuleGenerator,
+    get_llm_generator,
+    set_llm_generator,
+)
 from api.rules import Rule, RuleSet
 
 
@@ -58,15 +60,17 @@ class TestLLMRuleGenerator:
 
         # Mock generator to create conflicting rule
         with patch.object(generator, "_call_mock") as mock_call:
-            mock_call.return_value = json.dumps({
-                "id": "conflicting",
-                "field": "velocity_24h",
-                "op": ">",
-                "value": 3,  # Overlaps with existing rule
-                "action": "reject",  # Different action = conflict
-                "severity": "high",
-                "reason": "Conflicting rule",
-            })
+            mock_call.return_value = json.dumps(
+                {
+                    "id": "conflicting",
+                    "field": "velocity_24h",
+                    "op": ">",
+                    "value": 3,  # Overlaps with existing rule
+                    "action": "reject",  # Different action = conflict
+                    "severity": "high",
+                    "reason": "Conflicting rule",
+                }
+            )
 
             result = generator.generate_rule("Test", existing_rules=existing_ruleset)
 
@@ -91,11 +95,13 @@ class TestLLMRuleGenerator:
         generator = LLMRuleGenerator(provider="mock")
 
         with patch.object(generator, "_call_mock") as mock_call:
-            mock_call.return_value = json.dumps({
-                "id": "invalid",
-                "field": "velocity_24h",
-                # Missing required fields
-            })
+            mock_call.return_value = json.dumps(
+                {
+                    "id": "invalid",
+                    "field": "velocity_24h",
+                    # Missing required fields
+                }
+            )
 
             result = generator.generate_rule("Test")
 

@@ -45,7 +45,7 @@ class AuditLogger:
         """Initialize audit logger.
 
         Args:
-            storage_path: Path to file for persistent storage. If None, uses in-memory only.
+            storage_path: Path for persistent storage. If None, in-memory only.
         """
         self.storage_path = Path(storage_path) if storage_path else None
         self._records: list[AuditRecord] = []
@@ -64,7 +64,9 @@ class AuditLogger:
                 data = json.load(f)
                 self._records = [AuditRecord.from_dict(record) for record in data]
         except (json.JSONDecodeError, KeyError, ValueError) as e:
-            logger.warning(f"Failed to load audit records from {self.storage_path}: {e}")
+            logger.warning(
+                f"Failed to load audit records from {self.storage_path}: {e}"
+            )
             self._records = []
 
     def _save_records(self) -> None:
@@ -79,7 +81,7 @@ class AuditLogger:
             # Write all records
             with open(self.storage_path, "w") as f:
                 json.dump([r.to_dict() for r in self._records], f, indent=2)
-        except (OSError, IOError) as e:
+        except OSError as e:
             logger.error(f"Failed to save audit records to {self.storage_path}: {e}")
 
     def log(

@@ -1,12 +1,10 @@
 """Tests for heuristic rule suggestion engine."""
 
-from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from api.model_manager import ModelManager
-from api.rules import RuleSet, RuleStatus
+from api.rules import RuleStatus
 from api.suggestions import (
     ModelAssistedSuggestionEngine,
     RuleSuggestion,
@@ -79,8 +77,8 @@ class TestSuggestionEngine:
             (18,),
         ] * 10  # 100 samples
 
-        session.get_session.return_value.__enter__.return_value.execute.return_value = iter(
-            mock_rows
+        session.get_session.return_value.__enter__.return_value.execute.return_value = (
+            iter(mock_rows)
         )
         return session
 
@@ -265,8 +263,8 @@ class TestModelAssistedSuggestionEngine:
         """Create a mock database session."""
         session = MagicMock()
         mock_rows = [(10.0,), (5.0,), (15.0,), (8.0,), (20.0,)] * 20  # 100 samples
-        session.get_session.return_value.__enter__.return_value.execute.return_value = iter(
-            mock_rows
+        session.get_session.return_value.__enter__.return_value.execute.return_value = (
+            iter(mock_rows)
         )
         return session
 
@@ -299,9 +297,7 @@ class TestModelAssistedSuggestionEngine:
         suggestions = engine.generate_suggestions_from_model()
 
         # Should only include features with importance >= 0.3
-        assert all(
-            s.evidence.get("feature_importance", 0) >= 0.3 for s in suggestions
-        )
+        assert all(s.evidence.get("feature_importance", 0) >= 0.3 for s in suggestions)
 
     @patch("api.suggestions.get_model_manager")
     def test_no_suggestions_when_model_not_loaded(
@@ -334,7 +330,9 @@ class TestModelAssistedSuggestionEngine:
             ),
         ]
 
-        ruleset = engine.create_ruleset_from_suggestions(suggestions, version="model_v1")
+        ruleset = engine.create_ruleset_from_suggestions(
+            suggestions, version="model_v1"
+        )
 
         assert ruleset.version == "model_v1"
         assert len(ruleset.rules) == 1
