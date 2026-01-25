@@ -1478,6 +1478,70 @@ def render_model_lab() -> None:
     # --- Section A: Train New Model ---
     st.subheader("Train New Model")
 
+    # Feature column selection
+    try:
+        schema_df = fetch_schema_summary(table_names=["feature_snapshots"])
+        NON_TRAINABLE_COLUMNS = [
+            "record_id",
+            "snapshot_id",
+            "computed_at",
+            "user_id",
+            "experimental_signals",
+        ]
+
+        # Filter to numeric columns only (exclude JSONB, timestamps, IDs)
+        numeric_types = ["integer", "bigint", "smallint", "real", "double precision", "numeric"]
+        available_columns = schema_df[
+            (schema_df["table_name"] == "feature_snapshots")
+            & (schema_df["data_type"].isin(numeric_types))
+            & (~schema_df["column_name"].isin(NON_TRAINABLE_COLUMNS))
+        ]["column_name"].tolist()
+
+        # Default feature columns (matching DataLoader.FEATURE_COLUMNS)
+        default_feature_columns = [
+            "velocity_24h",
+            "amount_to_avg_ratio_30d",
+            "balance_volatility_z_score",
+        ]
+        # Use defaults if available, otherwise use all available columns
+        default_selection = [
+            col for col in default_feature_columns if col in available_columns
+        ] or available_columns
+
+        # Initialize session state for feature columns if not set
+        if "selected_feature_columns" not in st.session_state:
+            st.session_state.selected_feature_columns = default_selection
+
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            selected_columns = st.multiselect(
+                "Feature Columns",
+                options=available_columns,
+                default=st.session_state.selected_feature_columns,
+                help="Select which feature columns to use for training",
+                key="feature_columns_multiselect",
+            )
+        with col2:
+            if st.button("Reset to Defaults", help="Reset to default feature columns"):
+                st.session_state.selected_feature_columns = default_selection
+                st.session_state.feature_columns_multiselect = default_selection
+                st.rerun()
+
+        # Update session state
+        st.session_state.selected_feature_columns = selected_columns
+
+        # Show summary
+        if selected_columns:
+            st.caption(f"Selected {len(selected_columns)} of {len(available_columns)} feature columns")
+            with st.expander("View Selected Columns"):
+                st.write(", ".join(sorted(selected_columns)))
+        else:
+            st.warning("No feature columns selected. Please select at least one column.")
+
+    except Exception as e:
+        st.error(f"Error loading feature columns: {e}")
+        selected_columns = None
+
     col1, col2 = st.columns(2)
 
     with col1:
@@ -1500,7 +1564,7 @@ def render_model_lab() -> None:
             help="Number of days before today for training cutoff",
         )
 
-    train_clicked = st.button("Start Training", type="primary")
+    train_clicked = st.button("Start Training", type="primary", disabled=not selected_columns)
 
     if train_clicked:
         with st.spinner("Training model... This may take a moment."):
@@ -1512,6 +1576,7 @@ def render_model_lab() -> None:
                     json={
                         "max_depth": max_depth,
                         "training_window_days": training_window,
+                        "selected_feature_columns": selected_columns,
                     },
                     timeout=300,  # Training can take a while
                 )
