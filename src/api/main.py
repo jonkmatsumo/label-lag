@@ -1815,6 +1815,1009 @@ async def submit_draft_rule(
 
 
 @app.exception_handler(Exception)
+    response_model=ApproveRuleResponse,
+    tags=["Draft Rules"],
+    summary="Approve a pending rule",
+    description="""
+Approve a rule that is pending review, transitioning it to active status.
+
+Requires:
+- Rule must be in pending_review status
+- Approver must be different from the actor who submitted
+- Approval requirement must be enabled
+""",
+)
+async def approve_draft_rule(
+    rule_id: str, request: ApproveRuleRequest
+) -> ApproveRuleResponse:
+    """Approve a draft rule for activation.
+
+    Args:
+        rule_id: Rule identifier.
+        request: Approve request with approver and optional reason.
+
+    Returns:
+        ApproveRuleResponse with approved rule.
+
+    Raises:
+        HTTPException: If rule not found, not in pending_review status,
+            or transition fails.
+    """
+    from dataclasses import asdict
+
+    from api.audit import get_audit_logger
+    from api.draft_store import get_draft_store
+    from api.rules import Rule, RuleStatus
+    from api.versioning import get_version_store
+    from api.workflow import TransitionError, create_state_machine
+
+    store = get_draft_store()
+    version_store = get_version_store()
+    audit_logger = get_audit_logger()
+    state_machine = create_state_machine()
+
+    # Get existing rule
+    rule = store.get(rule_id)
+    if rule is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Draft rule not found: {rule_id}",
+        )
+
+    if rule.status != RuleStatus.PENDING_REVIEW.value:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Rule {rule_id} is not pending review (status: {rule.status})",
+        )
+
+    # Check for self-approval: find the actor who submitted this rule
+    rule_history = audit_logger.get_rule_history(rule_id)
+    submitter = None
+    for record in reversed(rule_history):
+        if (
+            record.action == "state_change"
+            and record.after_state.get("status") == "pending_review"
+        ):
+            submitter = record.actor
+            break
+
+    if submitter and submitter == request.approver:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Self-approval not allowed. Actor '{request.approver}' cannot "
+            "approve their own submission.",
+        )
+
+    # Transition to active
+    try:
+        updated_rule = state_machine.transition(
+            rule=rule,
+            new_status=RuleStatus.ACTIVE.value,
+            actor=request.approver,  # Approver is the actor for this transition
+            reason=request.reason or "Approved for activation",
+            approver=request.approver,
+            previous_actor=submitter,  # Pass submitter for self-approval check
+        )
+    except TransitionError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Update in store (store allows active status for approved rules)
+    rule_dict = asdict(updated_rule)
+    rule_dict["status"] = RuleStatus.ACTIVE.value
+    active_rule = Rule(**rule_dict)
+    # Store active rules separately or update existing
+    if rule_id in store._rules:
+        store._rules[rule_id] = active_rule
+        store._save_rules()
+
+    # Create version snapshot
+    version_store.save(
+        rule=active_rule,
+        created_by=request.approver,
+        reason=request.reason or "Approved and activated",
+    )
+
+    # Convert to response
+    rule_response = DraftRuleResponse(
+        rule_id=active_rule.id,
+        field=active_rule.field,
+        op=active_rule.op,
+        value=active_rule.value,
+        action=active_rule.action,
+        score=active_rule.score,
+        severity=active_rule.severity,
+        reason=active_rule.reason,
+        status=active_rule.status,
+        created_at=None,
+    )
+
+    return ApproveRuleResponse(
+        rule=rule_response,
+        approved_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+@app.post(
+    "/rules/draft/{rule_id}/reject",
+    response_model=RejectRuleResponse,
+    tags=["Draft Rules"],
+    summary="Reject a pending rule",
+    description="""
+Reject a rule that is pending review, returning it to draft status.
+
+Requires:
+- Rule must be in pending_review status
+- Reason for rejection (min 10 characters)
+""",
+)
+async def reject_draft_rule(
+    rule_id: str, request: RejectRuleRequest
+) -> RejectRuleResponse:
+    """Reject a draft rule, returning it to draft status.
+
+    Args:
+        rule_id: Rule identifier.
+        request: Reject request with actor and reason.
+
+    Returns:
+        RejectRuleResponse with rejected rule (back to draft).
+
+    Raises:
+        HTTPException: If rule not found, not in pending_review status,
+            or transition fails.
+    """
+    from api.draft_store import get_draft_store
+    from api.rules import RuleStatus
+    from api.versioning import get_version_store
+    from api.workflow import TransitionError, create_state_machine
+
+    store = get_draft_store()
+    version_store = get_version_store()
+    state_machine = create_state_machine()
+
+    # Get existing rule
+    rule = store.get(rule_id)
+    if rule is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Draft rule not found: {rule_id}",
+        )
+
+    if rule.status != RuleStatus.PENDING_REVIEW.value:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Rule {rule_id} is not pending review (status: {rule.status})",
+        )
+
+    # Transition back to draft
+    try:
+        updated_rule = state_machine.transition(
+            rule=rule,
+            new_status=RuleStatus.DRAFT.value,
+            actor=request.actor,
+            reason=request.reason,
+        )
+    except TransitionError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Update in store
+    store.save(updated_rule)
+
+    # Create version snapshot
+    version_store.save(
+        rule=updated_rule,
+        created_by=request.actor,
+        reason=f"Rejected: {request.reason}",
+    )
+
+    # Convert to response
+    rule_response = DraftRuleResponse(
+        rule_id=updated_rule.id,
+        field=updated_rule.field,
+        op=updated_rule.op,
+        value=updated_rule.value,
+        action=updated_rule.action,
+        score=updated_rule.score,
+        severity=updated_rule.severity,
+        reason=updated_rule.reason,
+        status=updated_rule.status,
+        created_at=None,
+    )
+
+    return RejectRuleResponse(
+        rule=rule_response,
+        rejected_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+@app.post(
+    "/rules/{rule_id}/activate",
+    response_model=ActivateRuleResponse,
+    tags=["Rules"],
+    summary="Activate a rule",
+    description="""
+Activate a rule, transitioning it to active status.
+
+Can activate from:
+- pending_review (requires approval)
+- shadow (requires approval)
+- disabled (requires approval)
+
+Requires:
+- Reason for activation (min 10 characters)
+- Approver if transition requires approval
+""",
+)
+async def activate_rule(
+    rule_id: str, request: ActivateRuleRequest
+) -> ActivateRuleResponse:
+    """Activate a rule.
+
+    Args:
+        rule_id: Rule identifier.
+        request: Activate request with actor, optional approver, and reason.
+
+    Returns:
+        ActivateRuleResponse with activated rule.
+
+    Raises:
+        HTTPException: If rule not found, invalid status, or transition fails.
+    """
+    from dataclasses import asdict
+
+    from api.draft_store import get_draft_store
+    from api.model_manager import get_model_manager
+    from api.rules import Rule, RuleStatus
+    from api.versioning import get_version_store
+    from api.workflow import TransitionError, create_state_machine
+
+    store = get_draft_store()
+    version_store = get_version_store()
+    state_machine = create_state_machine()
+
+    # Try to get from draft store first
+    rule = store.get(rule_id)
+    if rule is None:
+        # Try to get from production ruleset
+        manager = get_model_manager()
+        if manager.ruleset:
+            for r in manager.ruleset.rules:
+                if r.id == rule_id:
+                    rule = r
+                    break
+
+    if rule is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Rule not found: {rule_id}",
+        )
+
+    # Check if transition is allowed
+    if rule.status not in [
+        RuleStatus.PENDING_REVIEW.value,
+        RuleStatus.SHADOW.value,
+        RuleStatus.DISABLED.value,
+    ]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot activate rule {rule_id} from status {rule.status}",
+        )
+
+    # Transition to active
+    try:
+        updated_rule = state_machine.transition(
+            rule=rule,
+            new_status=RuleStatus.ACTIVE.value,
+            actor=request.actor,
+            reason=request.reason,
+            approver=request.approver,
+        )
+    except TransitionError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Update in store if it exists there
+    if rule_id in store._rules:
+        rule_dict = asdict(updated_rule)
+        rule_dict["status"] = RuleStatus.ACTIVE.value
+        active_rule = Rule(**rule_dict)
+        store._rules[rule_id] = active_rule
+        store._save_rules()
+
+    # Create version snapshot
+    version_store.save(
+        rule=updated_rule,
+        created_by=request.actor,
+        reason=request.reason,
+    )
+
+    # Convert to response
+    rule_response = DraftRuleResponse(
+        rule_id=updated_rule.id,
+        field=updated_rule.field,
+        op=updated_rule.op,
+        value=updated_rule.value,
+        action=updated_rule.action,
+        score=updated_rule.score,
+        severity=updated_rule.severity,
+        reason=updated_rule.reason,
+        status=updated_rule.status,
+        created_at=None,
+    )
+
+    return ActivateRuleResponse(
+        rule=rule_response,
+        activated_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+@app.post(
+    "/rules/{rule_id}/disable",
+    response_model=DisableRuleResponse,
+    tags=["Rules"],
+    summary="Disable a rule",
+    description="""
+Disable a rule, transitioning it to disabled status.
+
+Can disable from:
+- active
+- shadow
+
+Requires:
+- Optional reason for disabling
+""",
+)
+async def disable_rule(
+    rule_id: str, request: DisableRuleRequest
+) -> DisableRuleResponse:
+    """Disable a rule.
+
+    Args:
+        rule_id: Rule identifier.
+        request: Disable request with actor and optional reason.
+
+    Returns:
+        DisableRuleResponse with disabled rule.
+
+    Raises:
+        HTTPException: If rule not found, invalid status, or transition fails.
+    """
+    from dataclasses import asdict
+
+    from api.draft_store import get_draft_store
+    from api.model_manager import get_model_manager
+    from api.rules import Rule, RuleStatus
+    from api.versioning import get_version_store
+    from api.workflow import TransitionError, create_state_machine
+
+    store = get_draft_store()
+    version_store = get_version_store()
+    state_machine = create_state_machine()
+
+    # Try to get from draft store first
+    rule = store.get(rule_id)
+    if rule is None:
+        # Try to get from production ruleset
+        manager = get_model_manager()
+        if manager.ruleset:
+            for r in manager.ruleset.rules:
+                if r.id == rule_id:
+                    rule = r
+                    break
+
+    if rule is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Rule not found: {rule_id}",
+        )
+
+    # Check if transition is allowed
+    if rule.status not in [RuleStatus.ACTIVE.value, RuleStatus.SHADOW.value]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot disable rule {rule_id} from status {rule.status}",
+        )
+
+    # Transition to disabled
+    try:
+        updated_rule = state_machine.transition(
+            rule=rule,
+            new_status=RuleStatus.DISABLED.value,
+            actor=request.actor,
+            reason=request.reason or f"Disabled by {request.actor}",
+        )
+    except TransitionError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Update in store if it exists there
+    if rule_id in store._rules:
+        rule_dict = asdict(updated_rule)
+        rule_dict["status"] = RuleStatus.DISABLED.value
+        disabled_rule = Rule(**rule_dict)
+        store._rules[rule_id] = disabled_rule
+        store._save_rules()
+
+    # Create version snapshot
+    version_store.save(
+        rule=updated_rule,
+        created_by=request.actor,
+        reason=request.reason or "Disabled",
+    )
+
+    # Convert to response
+    rule_response = DraftRuleResponse(
+        rule_id=updated_rule.id,
+        field=updated_rule.field,
+        op=updated_rule.op,
+        value=updated_rule.value,
+        action=updated_rule.action,
+        score=updated_rule.score,
+        severity=updated_rule.severity,
+        reason=updated_rule.reason,
+        status=updated_rule.status,
+        created_at=None,
+    )
+
+    return DisableRuleResponse(
+        rule=rule_response,
+        disabled_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+@app.post(
+    "/rules/{rule_id}/shadow",
+    response_model=ShadowRuleResponse,
+    tags=["Rules"],
+    summary="Move a rule to shadow mode",
+    description="""
+Move a rule to shadow mode, transitioning it from active to shadow status.
+
+Shadow rules are evaluated but do not affect scores.
+
+Can shadow from:
+- active
+
+Requires:
+- Optional reason for shadow mode
+""",
+)
+async def shadow_rule(rule_id: str, request: ShadowRuleRequest) -> ShadowRuleResponse:
+    """Move a rule to shadow mode.
+
+    Args:
+        rule_id: Rule identifier.
+        request: Shadow request with actor and optional reason.
+
+    Returns:
+        ShadowRuleResponse with shadowed rule.
+
+    Raises:
+        HTTPException: If rule not found, invalid status, or transition fails.
+    """
+    from dataclasses import asdict
+
+    from api.draft_store import get_draft_store
+    from api.model_manager import get_model_manager
+    from api.rules import Rule, RuleStatus
+    from api.versioning import get_version_store
+    from api.workflow import TransitionError, create_state_machine
+
+    store = get_draft_store()
+    version_store = get_version_store()
+    state_machine = create_state_machine()
+
+    # Try to get from draft store first
+    rule = store.get(rule_id)
+    if rule is None:
+        # Try to get from production ruleset
+        manager = get_model_manager()
+        if manager.ruleset:
+            for r in manager.ruleset.rules:
+                if r.id == rule_id:
+                    rule = r
+                    break
+
+    if rule is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Rule not found: {rule_id}",
+        )
+
+    # Check if transition is allowed
+    if rule.status != RuleStatus.ACTIVE.value:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot shadow rule {rule_id} from status {rule.status}",
+        )
+
+    # Transition to shadow
+    try:
+        updated_rule = state_machine.transition(
+            rule=rule,
+            new_status=RuleStatus.SHADOW.value,
+            actor=request.actor,
+            reason=request.reason or f"Moved to shadow by {request.actor}",
+        )
+    except TransitionError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Update in store if it exists there
+    if rule_id in store._rules:
+        rule_dict = asdict(updated_rule)
+        rule_dict["status"] = RuleStatus.SHADOW.value
+        shadow_rule_obj = Rule(**rule_dict)
+        store._rules[rule_id] = shadow_rule_obj
+        store._save_rules()
+
+    # Create version snapshot
+    version_store.save(
+        rule=updated_rule,
+        created_by=request.actor,
+        reason=request.reason or "Moved to shadow",
+    )
+
+    # Convert to response
+    rule_response = DraftRuleResponse(
+        rule_id=updated_rule.id,
+        field=updated_rule.field,
+        op=updated_rule.op,
+        value=updated_rule.value,
+        action=updated_rule.action,
+        score=updated_rule.score,
+        severity=updated_rule.severity,
+        reason=updated_rule.reason,
+        status=updated_rule.status,
+        created_at=None,
+    )
+
+    return ShadowRuleResponse(
+        rule=rule_response,
+        shadowed_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+@app.get(
+    "/rules/{rule_id}/versions",
+    response_model=RuleVersionListResponse,
+    tags=["Rules"],
+    summary="List all versions of a rule",
+    description="Get all versions of a rule, ordered by timestamp (oldest first).",
+)
+async def list_rule_versions(rule_id: str) -> RuleVersionListResponse:
+    """List all versions of a rule.
+
+    Args:
+        rule_id: Rule identifier.
+
+    Returns:
+        RuleVersionListResponse with list of versions.
+    """
+    from api.versioning import get_version_store
+
+    version_store = get_version_store()
+    versions = version_store.list_versions(rule_id)
+
+    version_responses = [
+        RuleVersionResponse(
+            rule_id=v.rule_id,
+            version_id=v.version_id,
+            rule=DraftRuleResponse(
+                rule_id=v.rule.id,
+                field=v.rule.field,
+                op=v.rule.op,
+                value=v.rule.value,
+                action=v.rule.action,
+                score=v.rule.score,
+                severity=v.rule.severity,
+                reason=v.rule.reason,
+                status=v.rule.status,
+                created_at=None,
+            ),
+            timestamp=v.timestamp.isoformat(),
+            created_by=v.created_by,
+            reason=v.reason,
+        )
+        for v in versions
+    ]
+
+    return RuleVersionListResponse(
+        versions=version_responses, total=len(version_responses)
+    )
+
+
+@app.get(
+    "/rules/{rule_id}/versions/{version_id}",
+    response_model=RuleVersionResponse,
+    tags=["Rules"],
+    summary="Get a specific version of a rule",
+    description="Get details of a specific version of a rule.",
+)
+async def get_rule_version(rule_id: str, version_id: str) -> RuleVersionResponse:
+    """Get a specific version of a rule.
+
+    Args:
+        rule_id: Rule identifier.
+        version_id: Version identifier.
+
+    Returns:
+        RuleVersionResponse with version details.
+
+    Raises:
+        HTTPException: If version not found.
+    """
+    from api.versioning import get_version_store
+
+    version_store = get_version_store()
+    version = version_store.get_version(rule_id, version_id)
+
+    if version is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Version {version_id} not found for rule {rule_id}",
+        )
+
+    return RuleVersionResponse(
+        rule_id=version.rule_id,
+        version_id=version.version_id,
+        rule=DraftRuleResponse(
+            rule_id=version.rule.id,
+            field=version.rule.field,
+            op=version.rule.op,
+            value=version.rule.value,
+            action=version.rule.action,
+            score=version.rule.score,
+            severity=version.rule.severity,
+            reason=version.rule.reason,
+            status=version.rule.status,
+            created_at=None,
+        ),
+        timestamp=version.timestamp.isoformat(),
+        created_by=version.created_by,
+        reason=version.reason,
+    )
+
+
+@app.post(
+    "/rules/{rule_id}/versions/{version_id}/rollback",
+    response_model=RollbackRuleResponse,
+    tags=["Rules"],
+    summary="Rollback a rule to a previous version",
+    description="""
+Rollback a rule to a previous version.
+
+This creates a new version (does not delete history).
+
+Requires:
+- Rule must exist
+- Version must exist
+- Optional reason for rollback
+""",
+)
+async def rollback_rule_version(
+    rule_id: str, version_id: str, request: RollbackRuleRequest
+) -> RollbackRuleResponse:
+    """Rollback a rule to a previous version.
+
+    Args:
+        rule_id: Rule identifier.
+        version_id: Version to rollback to.
+        request: Rollback request with actor and optional reason.
+
+    Returns:
+        RollbackRuleResponse with rolled back rule.
+
+    Raises:
+        HTTPException: If rule or version not found, or rollback fails.
+    """
+    from api.draft_store import get_draft_store
+    from api.versioning import get_version_store
+
+    store = get_draft_store()
+    version_store = get_version_store()
+
+    # Verify version exists
+    version = version_store.get_version(rule_id, version_id)
+    if version is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Version {version_id} not found for rule {rule_id}",
+        )
+
+    # Perform rollback
+    try:
+        new_version = version_store.rollback(
+            rule_id=rule_id,
+            version_id=version_id,
+            rolled_back_by=request.actor,
+            reason=request.reason,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Update rule in store if it exists
+    rule = store.get(rule_id)
+    if rule is not None:
+        # Update to rolled back version
+        store.save(new_version.rule)
+
+    # Convert to response
+    rule_response = DraftRuleResponse(
+        rule_id=new_version.rule.id,
+        field=new_version.rule.field,
+        op=new_version.rule.op,
+        value=new_version.rule.value,
+        action=new_version.rule.action,
+        score=new_version.rule.score,
+        severity=new_version.rule.severity,
+        reason=new_version.rule.reason,
+        status=new_version.rule.status,
+        created_at=None,
+    )
+
+    return RollbackRuleResponse(
+        rule=rule_response,
+        version_id=new_version.version_id,
+        rolled_back_to=version_id,
+        rolled_back_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+@app.get(
+    "/audit/logs",
+    response_model=AuditLogQueryResponse,
+    tags=["Audit"],
+    summary="Query audit logs",
+    description="""
+Query audit logs with optional filters.
+
+Filters:
+- rule_id: Filter by rule ID
+- actor: Filter by actor
+- action: Filter by action type
+- start_date: Filter records after this date (ISO format)
+- end_date: Filter records before this date (ISO format)
+""",
+)
+async def query_audit_logs(
+    rule_id: str | None = Query(None, description="Filter by rule ID"),
+    actor: str | None = Query(None, description="Filter by actor"),
+    action: str | None = Query(None, description="Filter by action type"),
+    start_date: str | None = Query(None, description="Start date (ISO format)"),
+    end_date: str | None = Query(None, description="End date (ISO format)"),
+) -> AuditLogQueryResponse:
+    """Query audit logs with filters.
+
+    Args:
+        rule_id: Optional rule ID filter.
+        actor: Optional actor filter.
+        action: Optional action type filter.
+        start_date: Optional start date (ISO format string).
+        end_date: Optional end date (ISO format string).
+
+    Returns:
+        AuditLogQueryResponse with matching records.
+    """
+    from api.audit import get_audit_logger
+
+    audit_logger = get_audit_logger()
+
+    # Parse dates if provided
+    start_dt = None
+    if start_date:
+        try:
+            start_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(
+                status_code=400, detail=f"Invalid start_date format: {start_date}"
+            )
+
+    end_dt = None
+    if end_date:
+        try:
+            end_dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(
+                status_code=400, detail=f"Invalid end_date format: {end_date}"
+            )
+
+    # Query audit logs
+    records = audit_logger.query(
+        rule_id=rule_id,
+        actor=actor,
+        action=action,
+        start_date=start_dt,
+        end_date=end_dt,
+    )
+
+    # Convert to response
+    record_responses = [
+        AuditRecordResponse(
+            rule_id=r.rule_id,
+            action=r.action,
+            actor=r.actor,
+            timestamp=r.timestamp.isoformat(),
+            before_state=r.before_state,
+            after_state=r.after_state,
+            reason=r.reason,
+        )
+        for r in records
+    ]
+
+    return AuditLogQueryResponse(records=record_responses, total=len(record_responses))
+
+
+@app.get(
+    "/audit/rules/{rule_id}/history",
+    response_model=AuditLogQueryResponse,
+    tags=["Audit"],
+    summary="Get audit history for a rule",
+    description="Get complete audit history for a specific rule, ordered by timestamp.",
+)
+async def get_rule_audit_history(rule_id: str) -> AuditLogQueryResponse:
+    """Get audit history for a rule.
+
+    Args:
+        rule_id: Rule identifier.
+
+    Returns:
+        AuditLogQueryResponse with all audit records for the rule.
+    """
+    from api.audit import get_audit_logger
+
+    audit_logger = get_audit_logger()
+    records = audit_logger.get_rule_history(rule_id)
+
+    # Convert to response
+    record_responses = [
+        AuditRecordResponse(
+            rule_id=r.rule_id,
+            action=r.action,
+            actor=r.actor,
+            timestamp=r.timestamp.isoformat(),
+            before_state=r.before_state,
+            after_state=r.after_state,
+            reason=r.reason,
+        )
+        for r in records
+    ]
+
+    return AuditLogQueryResponse(records=record_responses, total=len(record_responses))
+
+
+@app.get(
+    "/audit/export",
+    tags=["Audit"],
+    summary="Export audit logs",
+    description="""
+Export audit logs in JSON or CSV format.
+
+Query parameters:
+- format: json or csv (default: json)
+- rule_id: Optional filter by rule ID
+- actor: Optional filter by actor
+- action: Optional filter by action type
+- start_date: Optional start date (ISO format)
+- end_date: Optional end date (ISO format)
+""",
+)
+async def export_audit_logs(
+    format: str = Query("json", description="Export format: json or csv"),
+    rule_id: str | None = Query(None, description="Filter by rule ID"),
+    actor: str | None = Query(None, description="Filter by actor"),
+    action: str | None = Query(None, description="Filter by action type"),
+    start_date: str | None = Query(None, description="Start date (ISO format)"),
+    end_date: str | None = Query(None, description="End date (ISO format)"),
+):
+    """Export audit logs.
+
+    Args:
+        format: Export format (json or csv).
+        rule_id: Optional rule ID filter.
+        actor: Optional actor filter.
+        action: Optional action type filter.
+        start_date: Optional start date (ISO format string).
+        end_date: Optional end date (ISO format string).
+
+    Returns:
+        JSON or CSV response with audit records.
+    """
+    import csv
+    import io
+
+    from fastapi.responses import Response
+
+    from api.audit import get_audit_logger
+
+    if format not in ["json", "csv"]:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid format: {format}. Use 'json' or 'csv'"
+        )
+
+    audit_logger = get_audit_logger()
+
+    # Parse dates if provided
+    start_dt = None
+    if start_date:
+        try:
+            start_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(
+                status_code=400, detail=f"Invalid start_date format: {start_date}"
+            )
+
+    end_dt = None
+    if end_date:
+        try:
+            end_dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(
+                status_code=400, detail=f"Invalid end_date format: {end_date}"
+            )
+
+    # Query audit logs
+    records = audit_logger.query(
+        rule_id=rule_id,
+        actor=actor,
+        action=action,
+        start_date=start_dt,
+        end_date=end_dt,
+    )
+
+    if format == "json":
+        import json
+
+        records_dict = [
+            {
+                "rule_id": r.rule_id,
+                "action": r.action,
+                "actor": r.actor,
+                "timestamp": r.timestamp.isoformat(),
+                "before_state": r.before_state,
+                "after_state": r.after_state,
+                "reason": r.reason,
+            }
+            for r in records
+        ]
+        return Response(
+            content=json.dumps(records_dict, indent=2),
+            media_type="application/json",
+            headers={"Content-Disposition": "attachment; filename=audit_logs.json"},
+        )
+    else:  # CSV
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(
+            [
+                "rule_id",
+                "action",
+                "actor",
+                "timestamp",
+                "before_state",
+                "after_state",
+                "reason",
+            ]
+        )
+
+        for r in records:
+            writer.writerow(
+                [
+                    r.rule_id,
+                    r.action,
+                    r.actor,
+                    r.timestamp.isoformat(),
+                    str(r.before_state) if r.before_state else "",
+                    str(r.after_state) if r.after_state else "",
+                    r.reason,
+                ]
+            )
+
+        return Response(
+            content=output.getvalue(),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=audit_logs.csv"},
+        )
+
+
+@app.exception_handler(Exception)
 async def global_exception_handler(request, exc: Exception) -> JSONResponse:
     """Handle unexpected exceptions."""
     return JSONResponse(

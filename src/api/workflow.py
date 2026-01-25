@@ -60,6 +60,7 @@ class RuleStateMachine:
         actor: str,
         reason: str = "",
         approver: str | None = None,
+        previous_actor: str | None = None,
     ) -> Rule:
         """Transition a rule to a new status.
 
@@ -69,6 +70,7 @@ class RuleStateMachine:
             actor: Who is making the transition.
             reason: Optional reason for the transition.
             approver: Optional approver (required for some transitions).
+            previous_actor: Optional previous actor (for self-approval check).
 
         Returns:
             Updated rule with new status.
@@ -94,6 +96,14 @@ class RuleStateMachine:
                 raise TransitionError(
                     f"'{current_status}' -> '{new_status}' requires approval. "
                     "Provide an approver."
+                )
+            # Prevent self-approval: compare approver to previous_actor if provided,
+            # otherwise to current actor
+            check_actor = previous_actor if previous_actor else actor
+            if approver == check_actor:
+                raise TransitionError(
+                    f"Self-approval not allowed. Actor '{check_actor}' cannot approve "
+                    "their own transition."
                 )
 
         # Create updated rule
