@@ -977,3 +977,261 @@ class TestValidateDraftRule:
         assert data["is_valid"] is True
         assert len(data["schema_errors"]) == 0
         assert len(data["conflicts"]) == 0
+
+
+class TestSubmitDraftRule:
+    """Tests for POST /rules/draft/{rule_id}/submit endpoint."""
+
+    def test_submit_draft_rule_returns_200(self, client):
+        """Test that submitting a draft rule returns 200."""
+        # Create a rule
+        client.post(
+            "/rules/draft",
+            json={
+                "id": "submit_test_001",
+                "field": "velocity_24h",
+                "op": ">",
+                "value": 5,
+                "action": "clamp_min",
+                "score": 70,
+                "severity": "medium",
+                "reason": "Test",
+                "actor": "test_user",
+            },
+        )
+
+        # Submit it
+        response = client.post(
+            "/rules/draft/submit_test_001/submit",
+            json={
+                "actor": "test_user",
+                "justification": "This rule is ready for review",
+            },
+        )
+        assert response.status_code == 200
+
+    def test_submit_draft_rule_response_structure(self, client):
+        """Test that response has correct structure."""
+        # Create a rule
+        client.post(
+            "/rules/draft",
+            json={
+                "id": "submit_test_002",
+                "field": "velocity_24h",
+                "op": ">",
+                "value": 5,
+                "action": "clamp_min",
+                "score": 70,
+                "severity": "medium",
+                "reason": "Test",
+                "actor": "test_user",
+            },
+        )
+
+        # Submit it
+        response = client.post(
+            "/rules/draft/submit_test_002/submit",
+            json={
+                "actor": "test_user",
+                "justification": "Ready for review",
+            },
+        )
+        data = response.json()
+
+        assert "rule" in data
+        assert "submitted_at" in data
+        assert data["rule"]["status"] == "pending_review"
+
+    def test_submit_draft_rule_changes_status(self, client):
+        """Test that submission changes status to pending_review."""
+        # Create a rule
+        client.post(
+            "/rules/draft",
+            json={
+                "id": "status_change_test",
+                "field": "velocity_24h",
+                "op": ">",
+                "value": 5,
+                "action": "clamp_min",
+                "score": 70,
+                "severity": "medium",
+                "reason": "Test",
+                "actor": "test_user",
+            },
+        )
+
+        # Submit it
+        client.post(
+            "/rules/draft/status_change_test/submit",
+            json={
+                "actor": "test_user",
+                "justification": "Ready for review",
+            },
+        )
+
+        # Check status changed
+        store = get_draft_store()
+        updated = store.get("status_change_test")
+        assert updated is not None
+        assert updated.status == RuleStatus.PENDING_REVIEW.value
+
+    def test_submit_draft_rule_not_found_returns_404(self, client):
+        """Test that submitting non-existent rule returns 404."""
+        response = client.post(
+            "/rules/draft/nonexistent/submit",
+            json={
+                "actor": "test_user",
+                "justification": "Test justification",
+            },
+        )
+        assert response.status_code == 404
+
+    def test_submit_non_draft_rule_returns_400(self, client):
+        """Test that submitting non-draft rule returns 400."""
+        # Create a rule
+        client.post(
+            "/rules/draft",
+            json={
+                "id": "non_draft_submit",
+                "field": "velocity_24h",
+                "op": ">",
+                "value": 5,
+                "action": "clamp_min",
+                "score": 70,
+                "severity": "medium",
+                "reason": "Test",
+                "actor": "test_user",
+            },
+        )
+
+        # Manually change status
+        store = get_draft_store()
+        rule = store.get("non_draft_submit")
+        if rule:
+            rule_dict = rule.__dict__.copy()
+            rule_dict["status"] = RuleStatus.ACTIVE.value
+            active_rule = Rule(**rule_dict)
+            store._rules["non_draft_submit"] = active_rule
+
+        # Try to submit
+        response = client.post(
+            "/rules/draft/non_draft_submit/submit",
+            json={
+                "actor": "test_user",
+                "justification": "Test justification",
+            },
+        )
+        assert response.status_code == 400
+        assert "Only draft rules" in response.json()["detail"]
+
+    def test_submit_with_conflicts_returns_400(self, client):
+        """Test that submitting rule with conflicts is blocked."""
+        # Create first rule
+        client.post(
+            "/rules/draft",
+            json={
+                "id": "conflict_submit_1",
+                "field": "velocity_24h",
+                "op": ">",
+                "value": 5,
+                "action": "reject",
+                "severity": "high",
+                "reason": "First rule",
+                "actor": "test_user",
+            },
+        )
+
+        # Create conflicting rule
+        client.post(
+            "/rules/draft",
+            json={
+                "id": "conflict_submit_2",
+                "field": "velocity_24h",
+                "op": ">",
+                "value": 3,  # Overlaps with > 5
+                "action": "override_score",  # Conflicts with reject
+                "score": 80,
+                "severity": "high",
+                "reason": "Conflicting rule",
+                "actor": "test_user",
+            },
+        )
+
+        # Try to submit conflicting rule
+        response = client.post(
+            "/rules/draft/conflict_submit_2/submit",
+            json={
+                "actor": "test_user",
+                "justification": "Test justification",
+            },
+        )
+        assert response.status_code == 400
+        assert "conflicts" in response.json()["detail"].lower()
+
+    def test_submit_requires_justification(self, client):
+        """Test that justification is required and has min length."""
+        # Create a rule
+        client.post(
+            "/rules/draft",
+            json={
+                "id": "justification_test",
+                "field": "velocity_24h",
+                "op": ">",
+                "value": 5,
+                "action": "clamp_min",
+                "score": 70,
+                "severity": "medium",
+                "reason": "Test",
+                "actor": "test_user",
+            },
+        )
+
+        # Try to submit with short justification
+        response = client.post(
+            "/rules/draft/justification_test/submit",
+            json={
+                "actor": "test_user",
+                "justification": "short",  # Too short
+            },
+        )
+        assert response.status_code == 422  # Validation error
+
+    def test_submit_creates_audit_record(self, client):
+        """Test that submission creates audit record."""
+        from api.audit import get_audit_logger
+
+        # Create a rule
+        client.post(
+            "/rules/draft",
+            json={
+                "id": "audit_test",
+                "field": "velocity_24h",
+                "op": ">",
+                "value": 5,
+                "action": "clamp_min",
+                "score": 70,
+                "severity": "medium",
+                "reason": "Test",
+                "actor": "test_user",
+            },
+        )
+
+        # Submit it
+        client.post(
+            "/rules/draft/audit_test/submit",
+            json={
+                "actor": "test_user",
+                "justification": "Ready for review with justification",
+            },
+        )
+
+        # Check audit record
+        audit_logger = get_audit_logger()
+        records = audit_logger.get_rule_history("audit_test")
+        assert len(records) > 0
+
+        # Find the state_change record
+        submit_records = [r for r in records if r.action == "state_change"]
+        assert len(submit_records) > 0
+        assert submit_records[-1].after_state["status"] == "pending_review"
+        assert "Ready for review" in submit_records[-1].reason

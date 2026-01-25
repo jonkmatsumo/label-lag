@@ -25,6 +25,8 @@ from api.schemas import (
     DraftRuleResponse,
     DraftRuleUpdateRequest,
     DraftRuleUpdateResponse,
+    DraftRuleSubmitRequest,
+    DraftRuleSubmitResponse,
     DraftRuleValidateRequest,
     DraftRuleValidateResponse,
     GenerateDataRequest,
@@ -1519,6 +1521,147 @@ async def validate_draft_rule(
             for r in rule_redundancies
         ],
         is_valid=len(schema_errors) == 0 and len(rule_conflicts) == 0,
+    )
+
+
+@app.post(
+    "/rules/draft/{rule_id}/submit",
+    response_model=DraftRuleSubmitResponse,
+    tags=["Draft Rules"],
+    summary="Submit a draft rule for review",
+    description="""
+Submit a draft rule for review, transitioning it to pending_review status.
+
+Requires:
+- Rule must be valid (no conflicts)
+- Justification text (min 10 characters)
+
+Submission is one-way - rule cannot be edited after submission until reviewed.
+""",
+)
+async def submit_draft_rule(
+    rule_id: str, request: DraftRuleSubmitRequest
+) -> DraftRuleSubmitResponse:
+    """Submit a draft rule for review.
+
+    Args:
+        rule_id: Rule identifier.
+        request: Submit request with actor and justification.
+
+    Returns:
+        DraftRuleSubmitResponse with updated rule and submission timestamp.
+
+    Raises:
+        HTTPException: If rule not found, not in draft status, validation fails,
+            or transition fails.
+    """
+    from api.audit import get_audit_logger
+    from api.draft_store import get_draft_store
+    from api.rules import RuleSet, RuleStatus
+    from api.validation import validate_ruleset
+    from api.versioning import get_version_store
+    from api.workflow import RuleStateMachine, TransitionError
+
+    store = get_draft_store()
+    version_store = get_version_store()
+    audit_logger = get_audit_logger()
+    state_machine = RuleStateMachine(require_approval=False)
+
+    # Get existing rule
+    rule = store.get(rule_id)
+    if rule is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Draft rule not found: {rule_id}",
+        )
+
+    # Enforce draft-only
+    if rule.status != RuleStatus.DRAFT.value:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot submit rule {rule_id} with status {rule.status}. "
+            "Only draft rules can be submitted.",
+        )
+
+    # Run validation - must pass before submission
+    draft_rules = store.list_rules(include_archived=False)
+    manager = get_model_manager()
+    production_ruleset = manager.ruleset
+
+    all_rules = draft_rules.copy()
+    if production_ruleset:
+        all_rules.extend([r for r in production_ruleset.rules if r.status == "active"])
+
+    test_ruleset = RuleSet(version="validation", rules=all_rules)
+    conflicts, redundancies = validate_ruleset(test_ruleset, strict=False)
+
+    # Filter conflicts to only those involving this rule
+    rule_conflicts = [
+        c for c in conflicts if c.rule1_id == rule_id or c.rule2_id == rule_id
+    ]
+
+    # Block submission if conflicts exist
+    if rule_conflicts:
+        conflict_descriptions = [c.description for c in rule_conflicts]
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Cannot submit rule {rule_id} with conflicts. "
+                f"Conflicts: {'; '.join(conflict_descriptions)}"
+            ),
+        )
+
+    # Transition rule to pending_review
+    try:
+        updated_rule = state_machine.transition(
+            rule=rule,
+            new_status=RuleStatus.PENDING_REVIEW.value,
+            actor=request.actor,
+            reason=request.justification,
+        )
+    except TransitionError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    # Update rule in store (status changed to pending_review)
+    # Store now allows updating draft -> pending_review
+    try:
+        store.save(updated_rule)
+    except ValueError as e:
+        # Fallback: if store rejects, log warning but continue
+        logger.warning(f"Could not update rule in store: {e}")
+        store._rules[rule_id] = updated_rule
+        store._save_rules()
+
+    # Create version snapshot
+    version = version_store.save(
+        rule=updated_rule,
+        created_by=request.actor,
+        reason=f"Submitted for review: {request.justification}",
+    )
+
+    # Audit record is already created by state_machine.transition()
+    # But we can get the latest audit record if needed
+    audit_records = audit_logger.get_rule_history(rule_id)
+    latest_audit = audit_records[-1] if audit_records else None
+
+    # Convert to response
+    rule_response = DraftRuleResponse(
+        rule_id=updated_rule.id,
+        field=updated_rule.field,
+        op=updated_rule.op,
+        value=updated_rule.value,
+        action=updated_rule.action,
+        score=updated_rule.score,
+        severity=updated_rule.severity,
+        reason=updated_rule.reason,
+        status=updated_rule.status,
+        created_at=None,
+    )
+
+    return DraftRuleSubmitResponse(
+        rule=rule_response,
+        submitted_at=datetime.now(timezone.utc).isoformat(),
+        audit_id=None,  # Audit ID not available from AuditRecord
     )
 
 

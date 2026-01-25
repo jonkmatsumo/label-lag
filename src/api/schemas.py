@@ -697,3 +697,22 @@ class DraftRuleValidateResponse(BaseModel):
         description="List of redundancies",
     )
     is_valid: bool = Field(..., description="Whether rule is valid (no errors or conflicts)")
+
+
+class DraftRuleSubmitRequest(BaseModel):
+    """Request schema for submitting a draft rule for review."""
+
+    actor: str = Field(..., description="Who is submitting this rule")
+    justification: str = Field(
+        ...,
+        min_length=10,
+        description="Justification for submission (min 10 characters)",
+    )
+
+
+class DraftRuleSubmitResponse(BaseModel):
+    """Response schema for submitting a draft rule."""
+
+    rule: DraftRuleResponse = Field(..., description="Rule with pending_review status")
+    submitted_at: str = Field(..., description="Submission timestamp (ISO format)")
+    audit_id: str | None = Field(None, description="Audit record ID if available")

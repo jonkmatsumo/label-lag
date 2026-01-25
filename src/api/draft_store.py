@@ -76,23 +76,36 @@ class DraftRuleStore:
             logger.error(f"Failed to save draft rules to {self.storage_path}: {e}")
 
     def save(self, rule: Rule) -> None:
-        """Save a draft rule.
+        """Save a draft rule or update an existing rule's status.
 
         Args:
-            rule: Rule to save. Must have status="draft".
+            rule: Rule to save. Must have status="draft" for new rules,
+                or can be pending_review if updating existing draft.
 
         Raises:
-            ValueError: If rule status is not "draft".
+            ValueError: If rule status is invalid for this operation.
         """
-        if rule.status != RuleStatus.DRAFT.value:
+        # Allow saving draft rules
+        if rule.status == RuleStatus.DRAFT.value:
+            self._rules[rule.id] = rule
+            self._save_rules()
+            logger.debug(f"Saved draft rule {rule.id}")
+        # Allow updating existing draft to pending_review
+        elif rule.status == RuleStatus.PENDING_REVIEW.value and rule.id in self._rules:
+            existing = self._rules[rule.id]
+            if existing.status == RuleStatus.DRAFT.value:
+                self._rules[rule.id] = rule
+                self._save_rules()
+                logger.debug(f"Updated rule {rule.id} to pending_review")
+            else:
+                raise ValueError(
+                    f"Cannot update rule {rule.id} from {existing.status} to pending_review"
+                )
+        else:
             raise ValueError(
                 f"Cannot save rule {rule.id} with status {rule.status}. "
-                "Only draft rules can be saved to DraftRuleStore."
+                "Only draft rules can be created, or existing drafts can be updated to pending_review."
             )
-
-        self._rules[rule.id] = rule
-        self._save_rules()
-        logger.debug(f"Saved draft rule {rule.id}")
 
     def get(self, rule_id: str) -> Rule | None:
         """Get a draft rule by ID.
