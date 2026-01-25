@@ -109,12 +109,47 @@ class SignalEvaluator:
             Probability of fraud.
         """
         try:
-            feature_dict = {
-                "velocity_24h": features.velocity_24h,
-                "amount_to_avg_ratio_30d": features.amount_to_avg_ratio_30d,
-                "balance_volatility_z_score": features.balance_volatility_z_score,
-            }
+            # Get required features from the model
+            required_features = manager.required_features
+
+            # Build feature dict using only required features
+            # Map from FeatureVector attributes (which may not have all features)
+            feature_dict = {}
+            for feature_name in required_features:
+                # Try to get attribute from FeatureVector (case-insensitive)
+                attr_name = feature_name
+                if hasattr(features, attr_name):
+                    feature_dict[feature_name] = getattr(features, attr_name)
+                else:
+                    # Feature not available in FeatureVector - will trigger fallback
+                    logger.debug(
+                        f"Required feature '{feature_name}' not available in FeatureVector"
+                    )
+                    feature_dict[feature_name] = None
+
+            # Check if any required features are missing
+            missing_features = [
+                f for f, v in feature_dict.items() if v is None
+            ]
+            if missing_features:
+                logger.warning(
+                    f"Cannot use ML model: missing features {missing_features}. "
+                    "Falling back to rule-based scoring."
+                )
+                return self._calculate_probability(features)
+
+            # Remove None values before prediction
+            feature_dict = {k: v for k, v in feature_dict.items() if v is not None}
+
             probability = manager.predict_single(feature_dict)
+            if probability is None:
+                # predict_single returned None due to missing features
+                logger.warning(
+                    "ML model prediction failed due to missing features. "
+                    "Falling back to rule-based scoring."
+                )
+                return self._calculate_probability(features)
+
             logger.debug(f"ML model prediction: {probability}")
             return float(probability)
         except Exception as e:
