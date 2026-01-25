@@ -38,8 +38,9 @@ class TestRenderSyntheticDataset:
 
         # Setup mocks
         def columns_side_effect(*args, **kwargs):
-            num = args[0] if args else kwargs.get('spec', 3)
+            num = args[0] if args else kwargs.get("spec", 3)
             return [MagicMock() for _ in range(num)]
+
         mock_columns.side_effect = columns_side_effect
         mock_slider.return_value = 500
         mock_checkbox.return_value = True
@@ -105,8 +106,9 @@ class TestRenderSyntheticDataset:
         ):
             # st.columns can be called with different numbers, return 3 by default
             def columns_side_effect(*args, **kwargs):
-                num = args[0] if args else kwargs.get('spec', 3)
+                num = args[0] if args else kwargs.get("spec", 3)
                 return [MagicMock() for _ in range(num)]
+
             mock_columns.side_effect = columns_side_effect
             mock_slider.return_value = 500
             mock_checkbox.return_value = True
@@ -144,8 +146,9 @@ class TestRenderSyntheticDataset:
 
         # Setup mocks
         def columns_side_effect(*args, **kwargs):
-            num = args[0] if args else kwargs.get('spec', 3)
+            num = args[0] if args else kwargs.get("spec", 3)
             return [MagicMock() for _ in range(num)]
+
         mock_columns.side_effect = columns_side_effect
         mock_slider.return_value = 500
         mock_checkbox.return_value = True
@@ -197,8 +200,9 @@ class TestRenderSyntheticDataset:
 
         # Setup mocks
         def columns_side_effect(*args, **kwargs):
-            num = args[0] if args else kwargs.get('spec', 3)
+            num = args[0] if args else kwargs.get("spec", 3)
             return [MagicMock() for _ in range(num)]
+
         mock_columns.side_effect = columns_side_effect
         mock_slider.return_value = 500
         mock_checkbox.return_value = True
@@ -255,8 +259,9 @@ class TestRenderSyntheticDataset:
 
         # Setup mocks
         def columns_side_effect(*args, **kwargs):
-            num = args[0] if args else kwargs.get('spec', 3)
+            num = args[0] if args else kwargs.get("spec", 3)
             return [MagicMock() for _ in range(num)]
+
         mock_columns.side_effect = columns_side_effect
         mock_slider.return_value = 500
         mock_checkbox.return_value = True
@@ -302,8 +307,9 @@ class TestRenderSyntheticDataset:
 
         # Setup mocks
         def columns_side_effect(*args, **kwargs):
-            num = args[0] if args else kwargs.get('spec', 3)
+            num = args[0] if args else kwargs.get("spec", 3)
             return [MagicMock() for _ in range(num)]
+
         mock_columns.side_effect = columns_side_effect
         mock_slider.return_value = 500
         mock_checkbox.return_value = True
@@ -621,8 +627,9 @@ class TestCacheInvalidation:
 
         # Setup mocks
         def columns_side_effect(*args, **kwargs):
-            num = args[0] if args else kwargs.get('spec', 3)
+            num = args[0] if args else kwargs.get("spec", 3)
             return [MagicMock() for _ in range(num)]
+
         mock_columns.side_effect = columns_side_effect
         mock_slider.return_value = 500
         mock_checkbox.return_value = True
@@ -673,8 +680,9 @@ class TestCacheInvalidation:
 
         # Setup mocks
         def columns_side_effect(*args, **kwargs):
-            num = args[0] if args else kwargs.get('spec', 3)
+            num = args[0] if args else kwargs.get("spec", 3)
             return [MagicMock() for _ in range(num)]
+
         mock_columns.side_effect = columns_side_effect
         mock_slider.return_value = 500
         mock_checkbox.return_value = True
@@ -728,8 +736,9 @@ class TestCacheInvalidation:
 
         # Setup mocks
         def columns_side_effect(*args, **kwargs):
-            num = args[0] if args else kwargs.get('spec', 3)
+            num = args[0] if args else kwargs.get("spec", 3)
             return [MagicMock() for _ in range(num)]
+
         mock_columns.side_effect = columns_side_effect
         mock_slider.return_value = 500
         mock_checkbox.return_value = True
@@ -779,8 +788,9 @@ class TestCacheInvalidation:
 
         # Setup mocks
         def columns_side_effect(*args, **kwargs):
-            num = args[0] if args else kwargs.get('spec', 3)
+            num = args[0] if args else kwargs.get("spec", 3)
             return [MagicMock() for _ in range(num)]
+
         mock_columns.side_effect = columns_side_effect
         mock_slider.return_value = 500
         mock_checkbox.return_value = True
@@ -837,8 +847,9 @@ class TestCacheInvalidation:
 
         # Setup mocks
         def columns_side_effect(*args, **kwargs):
-            num = args[0] if args else kwargs.get('spec', 3)
+            num = args[0] if args else kwargs.get("spec", 3)
             return [MagicMock() for _ in range(num)]
+
         mock_columns.side_effect = columns_side_effect
         mock_slider.return_value = 500
         mock_checkbox.return_value = True
@@ -887,8 +898,9 @@ class TestCacheInvalidation:
 
         # Setup mocks
         def columns_side_effect(*args, **kwargs):
-            num = args[0] if args else kwargs.get('spec', 3)
+            num = args[0] if args else kwargs.get("spec", 3)
             return [MagicMock() for _ in range(num)]
+
         mock_columns.side_effect = columns_side_effect
         mock_slider.return_value = 500
         mock_checkbox.return_value = True
@@ -935,8 +947,9 @@ class TestCacheInvalidation:
 
         # Setup mocks
         def columns_side_effect(*args, **kwargs):
-            num = args[0] if args else kwargs.get('spec', 3)
+            num = args[0] if args else kwargs.get("spec", 3)
             return [MagicMock() for _ in range(num)]
+
         mock_columns.side_effect = columns_side_effect
         mock_slider.return_value = 500
         mock_checkbox.return_value = True
@@ -980,8 +993,9 @@ class TestCacheInvalidation:
 
         # Setup mocks
         def columns_side_effect(*args, **kwargs):
-            num = args[0] if args else kwargs.get('spec', 3)
+            num = args[0] if args else kwargs.get("spec", 3)
             return [MagicMock() for _ in range(num)]
+
         mock_columns.side_effect = columns_side_effect
         mock_slider.return_value = 500
         mock_checkbox.return_value = True
