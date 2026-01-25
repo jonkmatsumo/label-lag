@@ -73,6 +73,8 @@ def get_experiment_runs(
             "metrics.precision": "Precision",
             "metrics.recall": "Recall",
             "metrics.pr_auc": "PR-AUC",
+            "metrics.f1": "F1",
+            "metrics.roc_auc": "ROC-AUC",
         }
 
         available_cols = [c for c in columns_map.keys() if c in runs.columns]
@@ -214,6 +216,51 @@ def _trigger_api_model_reload() -> str:
             return "API model reload failed."
     except Exception as e:
         return f"Could not trigger API reload: {e}"
+
+
+def get_run_details(run_id: str) -> dict[str, Any]:
+    """Fetch all params, metrics, and tags for a run.
+
+    Returns:
+        Dict with keys params, metrics, tags. Empty dict on error.
+    """
+    try:
+        client = get_client()
+        r = client.get_run(run_id)
+        return {
+            "params": dict(r.data.params),
+            "metrics": dict(r.data.metrics),
+            "tags": dict(r.data.tags),
+        }
+    except MlflowException:
+        return {"params": {}, "metrics": {}, "tags": {}}
+
+
+def get_run_artifacts(run_id: str) -> list[dict[str, Any]]:
+    """List artifacts for a run.
+
+    Returns:
+        List of dicts with path, is_dir. Empty list on error.
+    """
+    try:
+        client = get_client()
+        items = client.list_artifacts(run_id)
+        return [{"path": a.path, "is_dir": a.is_dir} for a in items]
+    except MlflowException:
+        return []
+
+
+def fetch_artifact_path(run_id: str, artifact_path: str) -> str | None:
+    """Download an artifact and return local path.
+
+    Returns:
+        Local path to the artifact, or None on error.
+    """
+    try:
+        client = get_client()
+        return client.download_artifacts(run_id, artifact_path)
+    except MlflowException:
+        return None
 
 
 def check_mlflow_connection() -> bool:

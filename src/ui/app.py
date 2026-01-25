@@ -33,9 +33,12 @@ from ui.data_service import (
 )
 from ui.mlflow_utils import (
     check_mlflow_connection,
+    fetch_artifact_path,
     get_experiment_runs,
     get_model_versions,
     get_production_model_version,
+    get_run_artifacts,
+    get_run_details,
     promote_to_production,
 )
 
@@ -1828,6 +1831,41 @@ def render_model_lab() -> None:
             use_container_width=True,
             hide_index=True,
         )
+
+        st.markdown("**Run details**")
+        for _, row in runs_df.iterrows():
+            run_id = row["Run ID"]
+            pr_auc = row.get("PR-AUC", "")
+            label = f"Run `{run_id}` — PR-AUC {pr_auc}"
+            with st.expander(label):
+                details = get_run_details(run_id)
+                c1, c2 = st.columns(2)
+                with c1:
+                    if details["params"]:
+                        st.markdown("**Parameters**")
+                        st.json(details["params"])
+                with c2:
+                    if details["metrics"]:
+                        st.markdown("**Metrics**")
+                        st.json(details["metrics"])
+                arts = get_run_artifacts(run_id)
+                for a in arts:
+                    if a["is_dir"]:
+                        continue
+                    path = a["path"]
+                    if path.endswith("confusion_matrix.png"):
+                        local = fetch_artifact_path(run_id, path)
+                        if local:
+                            st.image(local, caption="Confusion matrix")
+                    elif path.endswith("feature_importance_plot.png"):
+                        local = fetch_artifact_path(run_id, path)
+                        if local:
+                            st.image(local, caption="Feature importance")
+                if arts:
+                    st.markdown("**Artifacts**")
+                    for a in arts:
+                        if not a["is_dir"]:
+                            st.caption(a["path"])
 
         st.markdown("---")
 
