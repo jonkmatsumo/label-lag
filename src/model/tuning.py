@@ -4,9 +4,22 @@ from __future__ import annotations
 
 import optuna
 import pandas as pd
+from sklearn.metrics import (
+    average_precision_score,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+)
 from xgboost import XGBClassifier
 
-from model.train import _compute_metrics
+_METRIC_FNS = {
+    "pr_auc": lambda y, p, prob: average_precision_score(y, prob),
+    "roc_auc": lambda y, p, prob: roc_auc_score(y, prob) if len(set(y)) > 1 else 0.0,
+    "f1": lambda y, p, prob: f1_score(y, p, zero_division=0),
+    "precision": lambda y, p, prob: precision_score(y, p, zero_division=0),
+    "recall": lambda y, p, prob: recall_score(y, p, zero_division=0),
+}
 
 DEFAULT_SEARCH_SPACE = {
     "max_depth": (2, 12),
@@ -71,8 +84,8 @@ def _create_objective(
         clf.fit(x_train, y_train, eval_set=[(x_val, y_val)], verbose=False)
         y_prob = clf.predict_proba(x_val)[:, 1]
         y_pred = clf.predict(x_val)
-        metrics = _compute_metrics(y_val, y_pred, y_prob)
-        return float(metrics[metric])
+        fn = _METRIC_FNS.get(metric, _METRIC_FNS["pr_auc"])
+        return float(fn(y_val, y_pred, y_prob))
 
     return objective
 

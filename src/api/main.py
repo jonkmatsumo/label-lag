@@ -368,6 +368,7 @@ async def train_model_endpoint(request: TrainRequest) -> TrainResponse:
             reg_lambda=request.reg_lambda,
             random_state=request.random_state,
             early_stopping_rounds=request.early_stopping_rounds,
+            tuning_config=request.tuning_config,
         )
         return TrainResponse(success=True, run_id=run_id)
     except ValueError as e:

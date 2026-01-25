@@ -11,6 +11,7 @@ from pathlib import Path
 
 import matplotlib
 import numpy as np
+import pandas as pd
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -30,8 +31,9 @@ from sklearn.metrics import (
 )
 from xgboost import XGBClassifier
 
-from api.schemas import SplitConfig, SplitStrategy
+from api.schemas import SplitConfig, SplitStrategy, TuningConfig
 from model.loader import DataLoader
+from model.tuning import run_tuning_study
 
 # MLflow configuration from environment
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
@@ -194,6 +196,7 @@ def train_model(
     reg_lambda: float = 1.0,
     random_state: int = 42,
     early_stopping_rounds: int | None = None,
+    tuning_config: TuningConfig | None = None,
 ) -> str:
     """Train an XGBoost model with MLflow tracking.
 
@@ -218,6 +221,8 @@ def train_model(
         reg_lambda: L2 regularization. Default 1.0.
         random_state: Random seed. Default 42.
         early_stopping_rounds: Optional early stopping rounds. Default None.
+        tuning_config: Optional tuning config. When enabled, runs Optuna study
+            and uses best params for training.
 
     Returns:
         The MLflow run ID.
@@ -271,6 +276,49 @@ def train_model(
                 "xgboost_version": xgb_pkg.__version__,
             }
         )
+
+        trials_df: pd.DataFrame | None = None
+        if (
+            tuning_config is not None
+            and tuning_config.enabled
+            and split.train_size >= 30
+        ):
+            v_frac = 0.2
+            if split_config is not None:
+                v_frac = split_config.validation_fraction
+            n = split.train_size
+            val_size = max(5, int(n * v_frac))
+            train_size = n - val_size
+            if train_size >= 10:
+                x_tr = split.X_train.iloc[:train_size]
+                y_tr = split.y_train.iloc[:train_size]
+                x_val = split.X_train.iloc[train_size:]
+                y_val = split.y_train.iloc[train_size:]
+                timeout_s = tuning_config.timeout_minutes * 60
+                seed = split_config.seed if split_config else 42
+                best, trials_df = run_tuning_study(
+                    x_tr,
+                    y_tr,
+                    x_val,
+                    y_val,
+                    n_trials=tuning_config.n_trials,
+                    metric=tuning_config.metric,
+                    timeout_seconds=timeout_s,
+                    seed=seed,
+                    scale_pos_weight=scale_pos_weight,
+                )
+                if best:
+                    max_depth = best.get("max_depth", max_depth)
+                    n_estimators = best.get("n_estimators", n_estimators)
+                    learning_rate = best.get("learning_rate", learning_rate)
+                    min_child_weight = best.get("min_child_weight", min_child_weight)
+                    subsample = best.get("subsample", subsample)
+                    colsample_bytree = best.get("colsample_bytree", colsample_bytree)
+                    gamma = best.get("gamma", gamma)
+                    reg_alpha = best.get("reg_alpha", reg_alpha)
+                    reg_lambda = best.get("reg_lambda", reg_lambda)
+                    for k, v in best.items():
+                        mlflow.log_param(f"tuning_best_{k}", v)
 
         params_log: dict = {
             "scale_pos_weight": scale_pos_weight,
@@ -463,6 +511,10 @@ def train_model(
                 with open(manifest_path, "w") as f:
                     json.dump(split.split_manifest, f, indent=2)
                 mlflow.log_artifact(manifest_path)
+            if trials_df is not None and len(trials_df) > 0:
+                tuning_path = os.path.join(tmpdir, "tuning_trials.csv")
+                trials_df.to_csv(tuning_path, index=False)
+                mlflow.log_artifact(tuning_path)
 
         # Register the model
         model_uri = f"runs:/{run.info.run_id}/model"
