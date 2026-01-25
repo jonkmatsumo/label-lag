@@ -18,6 +18,8 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+from plotly.subplots import make_subplots
+
 from ui.data_service import (
     check_api_health,
     fetch_daily_stats,
@@ -36,7 +38,6 @@ from ui.mlflow_utils import (
     get_production_model_version,
     promote_to_production,
 )
-from plotly.subplots import make_subplots
 
 # Configuration from environment
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
