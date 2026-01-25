@@ -1,8 +1,5 @@
 """Tests for draft rule API endpoints."""
 
-from datetime import datetime, timezone
-from unittest.mock import patch
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -346,7 +343,7 @@ class TestGetDraftRule:
     def test_get_draft_rule_response_structure(self, client):
         """Test that response has correct structure."""
         # Create a rule
-        create_response = client.post(
+        client.post(
             "/rules/draft",
             json={
                 "id": "get_test_002",
@@ -1357,7 +1354,8 @@ class TestAcceptSuggestion:
             create_records = [r for r in records if r.action == "create"]
             assert len(create_records) > 0
             # Check that audit reason contains suggestion metadata
-            assert "confidence" in create_records[-1].reason.lower() or "suggestion" in create_records[-1].reason.lower()
+            reason_lower = create_records[-1].reason.lower()
+            assert "confidence" in reason_lower or "suggestion" in reason_lower
 
     def test_accept_suggestion_with_edits(self, client):
         """Test that edits can override suggestion fields."""

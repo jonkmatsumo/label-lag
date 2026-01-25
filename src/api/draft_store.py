@@ -7,9 +7,7 @@ persistent storage and status enforcement.
 import json
 import logging
 from dataclasses import asdict
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 from api.rules import Rule, RuleStatus
 
@@ -99,12 +97,14 @@ class DraftRuleStore:
                 logger.debug(f"Updated rule {rule.id} to pending_review")
             else:
                 raise ValueError(
-                    f"Cannot update rule {rule.id} from {existing.status} to pending_review"
+                    f"Cannot update rule {rule.id} from {existing.status} "
+                    "to pending_review"
                 )
         else:
             raise ValueError(
                 f"Cannot save rule {rule.id} with status {rule.status}. "
-                "Only draft rules can be created, or existing drafts can be updated to pending_review."
+                "Only draft rules can be created, or existing drafts can be "
+                "updated to pending_review."
             )
 
     def get(self, rule_id: str) -> Rule | None:

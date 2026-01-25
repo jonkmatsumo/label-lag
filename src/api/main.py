@@ -14,12 +14,12 @@ from fastapi.responses import JSONResponse
 
 from api.model_manager import get_model_manager
 from api.schemas import (
+    AcceptSuggestionRequest,
+    AcceptSuggestionResponse,
     BacktestMetricsResponse,
     BacktestResultResponse,
     BacktestResultsListResponse,
     ClearDataResponse,
-    AcceptSuggestionRequest,
-    AcceptSuggestionResponse,
     ConflictResponse,
     DraftRuleCreateRequest,
     DraftRuleCreateResponse,
@@ -891,14 +891,17 @@ Preserves suggestion metadata (confidence, evidence) in audit trail
 for traceability. All accepted rules start in draft status.
 """,
 )
-async def accept_suggestion(request: AcceptSuggestionRequest) -> AcceptSuggestionResponse:
+async def accept_suggestion(
+    request: AcceptSuggestionRequest,
+) -> AcceptSuggestionResponse:
     """Accept a suggestion and create a draft rule.
 
     The UI should pass the full suggestion data from the suggestions list.
     Optional edits can override any field before creating the draft rule.
 
     Args:
-        request: Accept request with suggestion data, actor, optional custom_id and edits.
+        request: Accept request with suggestion data, actor, optional custom_id
+            and edits.
 
     Returns:
         AcceptSuggestionResponse with created draft rule and source metadata.
@@ -908,7 +911,7 @@ async def accept_suggestion(request: AcceptSuggestionRequest) -> AcceptSuggestio
     """
     from api.audit import get_audit_logger
     from api.draft_store import get_draft_store
-    from api.rules import Rule, RuleStatus
+    from api.rules import RuleStatus
     from api.suggestions import RuleSuggestion
     from api.versioning import get_version_store
 
@@ -970,7 +973,7 @@ async def accept_suggestion(request: AcceptSuggestionRequest) -> AcceptSuggestio
         raise HTTPException(status_code=400, detail=str(e)) from e
 
     # Create version snapshot
-    version = version_store.save(
+    version_store.save(
         rule=rule,
         created_by=request.actor,
         reason=f"Accepted suggestion with confidence {suggestion.confidence:.2f}",
@@ -1100,7 +1103,7 @@ async def create_draft_rule(request: DraftRuleCreateRequest) -> DraftRuleCreateR
     from api.versioning import get_version_store
 
     version_store = get_version_store()
-    version = version_store.save(
+    version_store.save(
         rule=rule,
         created_by=request.actor,
         reason=f"Created by {request.actor}",
@@ -1490,7 +1493,10 @@ Only draft rules can be archived. Creates an audit record for the
 state change.
 """,
 )
-async def delete_draft_rule(rule_id: str, actor: str = Query(..., description="Who is archiving this rule")) -> dict:
+async def delete_draft_rule(
+    rule_id: str,
+    actor: str = Query(..., description="Who is archiving this rule"),
+) -> dict:
     """Archive a draft rule.
 
     Args:
@@ -1583,7 +1589,7 @@ async def validate_draft_rule(
         HTTPException: If rule not found.
     """
     from api.draft_store import get_draft_store
-    from api.rules import Rule, RuleSet, RuleStatus
+    from api.rules import RuleSet, RuleStatus
     from api.validation import validate_ruleset
 
     store = get_draft_store()
@@ -1788,16 +1794,13 @@ async def submit_draft_rule(
         store._save_rules()
 
     # Create version snapshot
-    version = version_store.save(
+    version_store.save(
         rule=updated_rule,
         created_by=request.actor,
         reason=f"Submitted for review: {request.justification}",
     )
 
     # Audit record is already created by state_machine.transition()
-    # But we can get the latest audit record if needed
-    audit_records = audit_logger.get_rule_history(rule_id)
-    latest_audit = audit_records[-1] if audit_records else None
 
     # Convert to response
     rule_response = DraftRuleResponse(

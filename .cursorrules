@@ -1,0 +1,92 @@
+# Cursor Rules for Label Lag
+
+## Code Style and Linting
+
+### Ruff Configuration
+- **Line length**: 88 characters maximum (E501)
+- **Enabled rules**: E (errors), F (pyflakes), I (isort), N (pep8-naming), W (pycodestyle), UP (pyupgrade)
+- Run `uv run ruff check src tests` before committing
+- Auto-fix with `uv run ruff check --fix src tests`
+
+### Import Organization
+- **Standard library imports** first
+- **Third-party imports** second (alphabetically sorted)
+- **Local imports** last (alphabetically sorted)
+- Use `from typing import TYPE_CHECKING` for type-only imports
+- Remove unused imports (F401)
+
+### Code Quality Rules
+
+1. **Unused Imports (F401)**
+   - Remove all unused imports
+   - Check both explicit imports and type-only imports
+   - Use `TYPE_CHECKING` guard for type-only imports that aren't needed at runtime
+
+2. **Unused Variables (F841)**
+   - Remove assignments to variables that are never used
+   - If a function call's return value isn't needed, don't assign it to a variable
+   - Example: `version_store.save(...)` instead of `version = version_store.save(...)`
+
+3. **Line Length (E501)**
+   - Maximum 88 characters per line
+   - Break long lines using:
+     - Parentheses for implicit continuation
+     - String concatenation for long strings
+     - Parameter alignment for function signatures
+     - Multi-line f-strings when appropriate
+
+4. **Import Sorting (I001)**
+   - Sort imports alphabetically within each group
+   - Use ruff's automatic import sorting: `ruff check --select I --fix`
+
+### Examples
+
+**Good - Line Length:**
+```python
+async def accept_suggestion(
+    request: AcceptSuggestionRequest,
+) -> AcceptSuggestionResponse:
+    """Accept a suggestion and create a draft rule."""
+    pass
+```
+
+**Bad - Line Length:**
+```python
+async def accept_suggestion(request: AcceptSuggestionRequest) -> AcceptSuggestionResponse:
+    """Accept a suggestion and create a draft rule."""
+    pass
+```
+
+**Good - Unused Variables:**
+```python
+version_store.save(rule=rule, created_by=actor, reason="Created")
+```
+
+**Bad - Unused Variables:**
+```python
+version = version_store.save(rule=rule, created_by=actor, reason="Created")
+```
+
+**Good - Import Organization:**
+```python
+import logging
+from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING
+
+from fastapi import FastAPI, HTTPException
+
+from api.model_manager import get_model_manager
+from api.schemas import AcceptSuggestionRequest
+```
+
+**Bad - Import Organization:**
+```python
+from api.schemas import AcceptSuggestionRequest
+import logging
+from fastapi import FastAPI
+```
+
+### Pre-commit Checks
+- Always run `uv run ruff check src tests` before committing
+- Fix all F401 (unused imports), F841 (unused variables), E501 (line too long), and I001 (import sorting) errors
+- Use `uv run ruff check --fix src tests` to auto-fix issues where possible

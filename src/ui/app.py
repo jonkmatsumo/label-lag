@@ -2611,7 +2611,8 @@ def _render_suggestions_tab() -> None:
                             st.markdown(
                                 f"**{s.get('field')}** {s.get('operator')} "
                                 f"**{s.get('threshold', 0):.2f}** → "
-                                f"{s.get('action')} (score: {s.get('suggested_score', 0)})"
+                                f"{s.get('action')} "
+                                f"(score: {s.get('suggested_score', 0)})"
                             )
                             st.caption(
                                 f"Confidence: {s.get('confidence', 0) * 100:.0f}% | "
@@ -2644,8 +2645,10 @@ def _render_suggestions_tab() -> None:
                             f"- Operator: {suggestion.get('operator')}\n"
                             f"- Threshold: {suggestion.get('threshold', 0):.2f}\n"
                             f"- Action: {suggestion.get('action')}\n"
-                            f"- Suggested Score: {suggestion.get('suggested_score', 0)}\n"
-                            f"- Confidence: {suggestion.get('confidence', 0) * 100:.0f}%"
+                            f"- Suggested Score: "
+                            f"{suggestion.get('suggested_score', 0)}\n"
+                            f"- Confidence: "
+                            f"{suggestion.get('confidence', 0) * 100:.0f}%"
                         )
 
                         evidence = suggestion.get("evidence", {})
@@ -2694,7 +2697,9 @@ def _render_suggestions_tab() -> None:
                                 if edit_reason:
                                     edits["reason"] = edit_reason
 
-                                with st.spinner("Creating draft rule from suggestion..."):
+                                with st.spinner(
+                                    "Creating draft rule from suggestion..."
+                                ):
                                     result = accept_suggestion(
                                         suggestion=suggestion,
                                         actor="ui_user",
@@ -2705,7 +2710,8 @@ def _render_suggestions_tab() -> None:
                                 if result:
                                     rule_id = result.get("rule_id", "unknown")
                                     st.success(
-                                        f"✅ Suggestion accepted! Draft rule '{rule_id}' created."
+                                        f"✅ Suggestion accepted! "
+                                        f"Draft rule '{rule_id}' created."
                                     )
                                     st.info(
                                         "**Next steps:** Navigate to the Draft Rules tab to "
@@ -2855,7 +2861,9 @@ def _render_draft_rules_tab() -> None:
             col1, col2 = st.columns(2)
 
             with col1:
-                rule_id = st.text_input("Rule ID *", help="Unique identifier for the rule")
+                rule_id = st.text_input(
+                    "Rule ID *", help="Unique identifier for the rule"
+                )
                 field = st.selectbox(
                     "Field *",
                     options=[
@@ -2914,9 +2922,14 @@ def _render_draft_rules_tab() -> None:
                             value = [int(x.strip()) for x in value_input.split(",")]
                         except ValueError:
                             try:
-                                value = [float(x.strip()) for x in value_input.split(",")]
+                                value = [
+                                    float(x.strip()) for x in value_input.split(",")
+                                ]
                             except ValueError:
-                                errors.append("Value must be comma-separated numbers for 'in'/'not_in'")
+                                errors.append(
+                                    "Value must be comma-separated numbers "
+                                    "for 'in'/'not_in'"
+                                )
                     else:
                         try:
                             value = int(value_input)
@@ -3071,7 +3084,8 @@ def _render_draft_rules_tab() -> None:
                             ):
                                 st.error(conflict.get("description", ""))
                                 st.caption(
-                                    f"Conflict type: {conflict.get('conflict_type', 'unknown')}"
+                                    f"Conflict type: "
+                                    f"{conflict.get('conflict_type', 'unknown')}"
                                 )
 
                     # Redundancies section (warnings)
@@ -3101,7 +3115,8 @@ def _render_draft_rules_tab() -> None:
                         st.success("Rule is ready for submission!")
                     elif conflicts:
                         st.error(
-                            f"**{len(conflicts)} conflict(s) must be resolved before submission.**"
+                            f"**{len(conflicts)} conflict(s) must be resolved "
+                            "before submission.**"
                         )
                     elif redundancies:
                         st.warning(
@@ -3122,7 +3137,10 @@ def _render_draft_rules_tab() -> None:
                 with st.form("submit_rule_form"):
                     justification = st.text_area(
                         "Justification *",
-                        help="Explain why this rule should be reviewed (min 10 characters)",
+                        help=(
+                            "Explain why this rule should be reviewed "
+                            "(min 10 characters)"
+                        ),
                         min_chars=10,
                     )
 
@@ -3157,8 +3175,8 @@ def _render_draft_rules_tab() -> None:
 
                             if result:
                                 st.success(
-                                    f"✅ Rule '{rule_id}' submitted for review successfully! "
-                                    "Status changed to PENDING_REVIEW."
+                                    f"✅ Rule '{rule_id}' submitted for review "
+                                    "successfully! Status changed to PENDING_REVIEW."
                                 )
                                 st.info(
                                     "**No production impact** - This rule will not affect "
@@ -3223,12 +3241,20 @@ def _render_draft_rules_tab() -> None:
                                 if current_field in field_options
                                 else 0
                             )
-                            new_field = st.selectbox("Field", options=field_options, index=field_index)
+                            new_field = st.selectbox(
+                                "Field", options=field_options, index=field_index
+                            )
 
                             op_options = [">", ">=", "<", "<=", "==", "in", "not_in"]
                             current_op = rule_data.get("op", ">")
-                            op_index = op_options.index(current_op) if current_op in op_options else 0
-                            new_op = st.selectbox("Operator", options=op_options, index=op_index)
+                            op_index = (
+                                op_options.index(current_op)
+                                if current_op in op_options
+                                else 0
+                            )
+                            new_op = st.selectbox(
+                                "Operator", options=op_options, index=op_index
+                            )
                             current_value = rule_data.get("value", "")
                             if isinstance(current_value, list):
                                 value_str = ",".join(str(v) for v in current_value)
@@ -3237,7 +3263,12 @@ def _render_draft_rules_tab() -> None:
                             new_value_input = st.text_input("Value", value=value_str)
 
                         with col2:
-                            action_options = ["override_score", "clamp_min", "clamp_max", "reject"]
+                            action_options = [
+                                "override_score",
+                                "clamp_min",
+                                "clamp_max",
+                                "reject",
+                            ]
                             current_action = rule_data.get("action", "clamp_min")
                             action_index = (
                                 action_options.index(current_action)
@@ -3264,13 +3295,17 @@ def _render_draft_rules_tab() -> None:
                                 else 1
                             )
                             new_severity = st.selectbox(
-                                "Severity", options=severity_options, index=severity_index
+                                "Severity",
+                                options=severity_options,
+                                index=severity_index,
                             )
                             new_reason = st.text_area(
                                 "Reason", value=rule_data.get("reason", "")
                             )
 
-                        submitted = st.form_submit_button("Save Changes", type="primary")
+                        submitted = st.form_submit_button(
+                            "Save Changes", type="primary"
+                        )
 
                         if submitted:
                             # Parse value
@@ -3303,7 +3338,9 @@ def _render_draft_rules_tab() -> None:
                             }
 
                             with st.spinner("Updating draft rule..."):
-                                result = update_draft_rule(rule_id, updates, actor="ui_user")
+                                result = update_draft_rule(
+                                    rule_id, updates, actor="ui_user"
+                                )
 
                             if result:
                                 st.success("Rule updated successfully!")

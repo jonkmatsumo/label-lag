@@ -696,7 +696,9 @@ class DraftRuleValidateResponse(BaseModel):
         default_factory=list,
         description="List of redundancies",
     )
-    is_valid: bool = Field(..., description="Whether rule is valid (no errors or conflicts)")
+    is_valid: bool = Field(
+        ..., description="Whether rule is valid (no errors or conflicts)"
+    )
 
 
 class DraftRuleSubmitRequest(BaseModel):
@@ -743,5 +745,7 @@ class AcceptSuggestionResponse(BaseModel):
     rule_id: str = Field(..., description="Rule identifier")
     source_suggestion: dict[str, Any] = Field(
         ...,
-        description="Source suggestion metadata (confidence, evidence, field, threshold)",
+        description=(
+            "Source suggestion metadata (confidence, evidence, field, threshold)"
+        ),
     )
