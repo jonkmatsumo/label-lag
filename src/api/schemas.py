@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 from enum import Enum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -716,3 +716,32 @@ class DraftRuleSubmitResponse(BaseModel):
     rule: DraftRuleResponse = Field(..., description="Rule with pending_review status")
     submitted_at: str = Field(..., description="Submission timestamp (ISO format)")
     audit_id: str | None = Field(None, description="Audit record ID if available")
+
+
+class AcceptSuggestionRequest(BaseModel):
+    """Request schema for accepting a suggestion as a draft rule."""
+
+    actor: str = Field(..., description="Who is accepting this suggestion")
+    suggestion: RuleSuggestionResponse = Field(
+        ...,
+        description="The suggestion to accept (from suggestions list)",
+    )
+    custom_id: str | None = Field(
+        None,
+        description="Custom rule ID (overrides auto-generated)",
+    )
+    edits: dict[str, Any] | None = Field(
+        None,
+        description="Optional field overrides (field, op, value, action, score, etc.)",
+    )
+
+
+class AcceptSuggestionResponse(BaseModel):
+    """Response schema for accepting a suggestion."""
+
+    rule: DraftRuleResponse = Field(..., description="Created draft rule")
+    rule_id: str = Field(..., description="Rule identifier")
+    source_suggestion: dict[str, Any] = Field(
+        ...,
+        description="Source suggestion metadata (confidence, evidence, field, threshold)",
+    )

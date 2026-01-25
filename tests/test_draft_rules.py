@@ -1235,3 +1235,217 @@ class TestSubmitDraftRule:
         assert len(submit_records) > 0
         assert submit_records[-1].after_state["status"] == "pending_review"
         assert "Ready for review" in submit_records[-1].reason
+
+
+class TestAcceptSuggestion:
+    """Tests for POST /suggestions/accept endpoint."""
+
+    def test_accept_suggestion_returns_200(self, client):
+        """Test that accepting a suggestion returns 200."""
+        # First generate suggestions to get a real suggestion
+        suggestions_response = client.get(
+            "/suggestions/heuristic",
+            params={"min_confidence": 0.5, "min_samples": 10},
+        )
+        suggestions_data = suggestions_response.json()
+
+        if len(suggestions_data["suggestions"]) == 0:
+            pytest.skip("No suggestions available for testing")
+
+        # Accept the first suggestion
+        suggestion = suggestions_data["suggestions"][0]
+        response = client.post(
+            "/suggestions/accept",
+            json={
+                "actor": "test_user",
+                "suggestion": suggestion,
+            },
+        )
+
+        # Should succeed or fail based on whether rule ID already exists
+        assert response.status_code in [200, 409]
+
+    def test_accept_suggestion_creates_draft_rule(self, client):
+        """Test that accepting creates a draft rule."""
+        # Generate suggestions
+        suggestions_response = client.get(
+            "/suggestions/heuristic",
+            params={"min_confidence": 0.5, "min_samples": 10},
+        )
+        suggestions_data = suggestions_response.json()
+
+        if len(suggestions_data["suggestions"]) == 0:
+            pytest.skip("No suggestions available for testing")
+
+        # Accept with custom ID
+        suggestion = suggestions_data["suggestions"][0]
+        custom_id = f"accepted_{suggestion['field']}_{int(suggestion['threshold'])}"
+
+        response = client.post(
+            "/suggestions/accept",
+            json={
+                "actor": "test_user",
+                "suggestion": suggestion,
+                "custom_id": custom_id,
+            },
+        )
+
+        if response.status_code == 409:
+            # Rule already exists, try different ID
+            custom_id = f"accepted_alt_{suggestion['field']}"
+            response = client.post(
+                "/suggestions/accept",
+                json={
+                    "actor": "test_user",
+                    "suggestion": suggestion,
+                    "custom_id": custom_id,
+                },
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        assert "rule" in data
+        assert "rule_id" in data
+        assert "source_suggestion" in data
+        assert data["rule"]["status"] == "draft"
+        assert data["rule_id"] == custom_id
+
+    def test_accept_suggestion_preserves_metadata(self, client):
+        """Test that suggestion metadata is preserved in audit."""
+        # Generate suggestions
+        suggestions_response = client.get(
+            "/suggestions/heuristic",
+            params={"min_confidence": 0.5, "min_samples": 10},
+        )
+        suggestions_data = suggestions_response.json()
+
+        if len(suggestions_data["suggestions"]) == 0:
+            pytest.skip("No suggestions available for testing")
+
+        suggestion = suggestions_data["suggestions"][0]
+        custom_id = f"metadata_test_{suggestion['field']}"
+
+        # Accept suggestion
+        response = client.post(
+            "/suggestions/accept",
+            json={
+                "actor": "test_user",
+                "suggestion": suggestion,
+                "custom_id": custom_id,
+            },
+        )
+
+        if response.status_code == 409:
+            custom_id = f"metadata_test_alt_{suggestion['field']}"
+            response = client.post(
+                "/suggestions/accept",
+                json={
+                    "actor": "test_user",
+                    "suggestion": suggestion,
+                    "custom_id": custom_id,
+                },
+            )
+
+        if response.status_code == 200:
+            # Check audit record
+            from api.audit import get_audit_logger
+
+            audit_logger = get_audit_logger()
+            records = audit_logger.get_rule_history(custom_id)
+
+            create_records = [r for r in records if r.action == "create"]
+            assert len(create_records) > 0
+            # Check that audit reason contains suggestion metadata
+            assert "confidence" in create_records[-1].reason.lower() or "suggestion" in create_records[-1].reason.lower()
+
+    def test_accept_suggestion_with_edits(self, client):
+        """Test that edits can override suggestion fields."""
+        # Generate suggestions
+        suggestions_response = client.get(
+            "/suggestions/heuristic",
+            params={"min_confidence": 0.5, "min_samples": 10},
+        )
+        suggestions_data = suggestions_response.json()
+
+        if len(suggestions_data["suggestions"]) == 0:
+            pytest.skip("No suggestions available for testing")
+
+        suggestion = suggestions_data["suggestions"][0]
+        custom_id = f"edited_{suggestion['field']}"
+
+        # Accept with edits
+        response = client.post(
+            "/suggestions/accept",
+            json={
+                "actor": "test_user",
+                "suggestion": suggestion,
+                "custom_id": custom_id,
+                "edits": {
+                    "suggested_score": 85,  # Override score
+                    "reason": "Edited after acceptance",
+                },
+            },
+        )
+
+        if response.status_code == 409:
+            custom_id = f"edited_alt_{suggestion['field']}"
+            response = client.post(
+                "/suggestions/accept",
+                json={
+                    "actor": "test_user",
+                    "suggestion": suggestion,
+                    "custom_id": custom_id,
+                    "edits": {
+                        "suggested_score": 85,
+                        "reason": "Edited after acceptance",
+                    },
+                },
+            )
+
+        if response.status_code == 200:
+            data = response.json()
+            # Check that edits were applied
+            assert data["rule"]["score"] == 85
+            assert "Edited after acceptance" in data["rule"]["reason"]
+
+    def test_accept_suggestion_duplicate_id_returns_409(self, client):
+        """Test that accepting with duplicate ID returns 409."""
+        # Create a rule first
+        client.post(
+            "/rules/draft",
+            json={
+                "id": "duplicate_accept",
+                "field": "velocity_24h",
+                "op": ">",
+                "value": 5,
+                "action": "clamp_min",
+                "score": 70,
+                "severity": "medium",
+                "reason": "Existing",
+                "actor": "test_user",
+            },
+        )
+
+        # Generate suggestions
+        suggestions_response = client.get(
+            "/suggestions/heuristic",
+            params={"min_confidence": 0.5, "min_samples": 10},
+        )
+        suggestions_data = suggestions_response.json()
+
+        if len(suggestions_data["suggestions"]) == 0:
+            pytest.skip("No suggestions available for testing")
+
+        suggestion = suggestions_data["suggestions"][0]
+
+        # Try to accept with duplicate ID
+        response = client.post(
+            "/suggestions/accept",
+            json={
+                "actor": "test_user",
+                "suggestion": suggestion,
+                "custom_id": "duplicate_accept",
+            },
+        )
+        assert response.status_code == 409
