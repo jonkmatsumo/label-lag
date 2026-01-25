@@ -37,6 +37,7 @@ from mlflow_utils import (
 from plotly.subplots import make_subplots
 
 import pandas as pd
+import numpy as np
 
 # Configuration from environment
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
@@ -440,6 +441,28 @@ def _get_numeric_columns(df: pd.DataFrame) -> list[str]:
     return [col for col in numeric_cols if col not in exclude]
 
 
+def _get_categorical_columns(df: pd.DataFrame, max_cardinality: int = 50) -> list[str]:
+    """Get list of categorical column names with cardinality guardrails.
+
+    Args:
+        df: DataFrame to analyze.
+        max_cardinality: Maximum unique values to consider a column categorical.
+
+    Returns:
+        List of categorical column names (object/string/bool with low cardinality).
+    """
+    categorical_cols = []
+    for col in df.columns:
+        if col in ["record_id"]:
+            continue
+        dtype = df[col].dtype
+        if dtype in ["object", "string", "bool"] or dtype.name == "category":
+            nunique = df[col].nunique()
+            if nunique <= max_cardinality and nunique > 1:
+                categorical_cols.append(col)
+    return categorical_cols
+
+
 def render_synthetic_dataset() -> None:
     """Render the Synthetic Dataset page.
 
@@ -786,6 +809,136 @@ def render_synthetic_dataset() -> None:
                                     )
             except Exception as e:
                 st.error(f"Error loading outlier data: {e}")
+
+    st.markdown("---")
+
+    # --- Relationships section ---
+    st.subheader("Relationships")
+
+    # Settings area
+    with st.expander("Settings", expanded=False):
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            sample_size = st.number_input(
+                "Sample Size",
+                min_value=100,
+                max_value=50000,
+                value=5000,
+                step=500,
+                help="Number of rows to sample for relationship analysis",
+            )
+
+        with col2:
+            max_numeric_cols = st.number_input(
+                "Max Numeric Columns",
+                min_value=5,
+                max_value=50,
+                value=30,
+                step=5,
+                help="Maximum number of numeric columns to include in correlation matrices",
+            )
+
+        with col3:
+            max_categorical_cols = st.number_input(
+                "Max Categorical Columns",
+                min_value=5,
+                max_value=50,
+                value=30,
+                step=5,
+                help="Maximum number of categorical columns for association analysis",
+            )
+
+        col4, col5 = st.columns(2)
+
+        with col4:
+            categorical_cardinality_threshold = st.number_input(
+                "Categorical Cardinality Threshold",
+                min_value=2,
+                max_value=200,
+                value=50,
+                step=5,
+                help="Maximum unique values to consider a column categorical",
+            )
+
+        with col5:
+            compute_p_values = st.checkbox(
+                "Compute p-values",
+                value=False,
+                help="Compute statistical significance (slower, requires scipy)",
+            )
+
+    # Load sampled data and identify columns
+    with st.spinner("Loading sampled data..."):
+        try:
+            sample_df = fetch_feature_sample(sample_size=sample_size, stratify=True)
+
+            if sample_df.empty:
+                st.info("No data available for relationship analysis.")
+                sample_df = None
+                numeric_cols = []
+                categorical_cols = []
+                actual_sample_size = 0
+            else:
+                actual_sample_size = len(sample_df)
+                numeric_cols = _get_numeric_columns(sample_df)
+                categorical_cols = _get_categorical_columns(
+                    sample_df, max_cardinality=categorical_cardinality_threshold
+                )
+
+                # Apply column caps
+                if len(numeric_cols) > max_numeric_cols:
+                    # Select top columns by variance
+                    variances = sample_df[numeric_cols].var().sort_values(ascending=False)
+                    numeric_cols = variances.head(max_numeric_cols).index.tolist()
+                    st.warning(
+                        f"Limited to top {max_numeric_cols} numeric columns by variance. "
+                        f"({len(_get_numeric_columns(sample_df))} total available)"
+                    )
+
+                if len(categorical_cols) > max_categorical_cols:
+                    # Select top columns by frequency (most common categories)
+                    categorical_cols = categorical_cols[:max_categorical_cols]
+                    st.warning(
+                        f"Limited to {max_categorical_cols} categorical columns. "
+                        f"({len(_get_categorical_columns(sample_df, categorical_cardinality_threshold))} total available)"
+                    )
+
+                st.caption(f"Using {actual_sample_size:,} rows for analysis")
+
+        except Exception as e:
+            st.error(f"Error loading sampled data: {e}")
+            sample_df = None
+            numeric_cols = []
+            categorical_cols = []
+            actual_sample_size = 0
+
+    # Create tabs
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+        [
+            "Numeric ↔ Numeric",
+            "Categorical ↔ Categorical",
+            "Categorical ↔ Numeric",
+            "Target Relations",
+            "Top Relationships",
+        ]
+    )
+
+    # Tab implementations will be added in subsequent commits
+    with tab1:
+        st.info("Numeric correlation analysis will be implemented in the next commit.")
+
+    with tab2:
+        st.info("Categorical association analysis will be implemented in the next commit.")
+
+    with tab3:
+        st.info("Categorical-Numeric association analysis will be implemented in the next commit.")
+
+    with tab4:
+        st.info("Target relations analysis will be implemented in the next commit.")
+
+    with tab5:
+        st.info("Top relationships table will be implemented in the next commit.")
 
 
 def render_model_lab() -> None:
