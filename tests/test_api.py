@@ -498,7 +498,7 @@ class TestTrainEndpoint:
 
     def test_train_endpoint_accepts_selected_feature_columns(self, client):
         """Test that /train accepts selected_feature_columns parameter."""
-        with patch("api.main.train_model") as mock_train:
+        with patch("model.train.train_model") as mock_train:
             mock_train.return_value = "test_run_123"
 
             response = client.post(
@@ -526,7 +526,7 @@ class TestTrainEndpoint:
 
     def test_train_endpoint_works_without_feature_columns(self, client):
         """Test /train works without selected_feature_columns (backward compatible)."""
-        with patch("api.main.train_model") as mock_train:
+        with patch("model.train.train_model") as mock_train:
             mock_train.return_value = "test_run_456"
 
             response = client.post(
@@ -560,7 +560,7 @@ class TestTrainEndpoint:
 
     def test_train_endpoint_handles_invalid_columns_error(self, client):
         """Test that /train returns error when invalid columns are provided."""
-        with patch("api.main.train_model") as mock_train:
+        with patch("model.train.train_model") as mock_train:
             mock_train.side_effect = ValueError(
                 "Requested feature columns not found in data: ['invalid_col']"
             )

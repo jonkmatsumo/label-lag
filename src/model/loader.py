@@ -131,19 +131,21 @@ class DataLoader:
         train_df = self._load_train_set(session, cutoff)
         test_df = self._load_test_set(session, cutoff)
 
-        # Validate that all requested columns exist
+        # Validate that all requested columns exist (only if data exists)
         all_columns = set()
         if len(train_df) > 0:
             all_columns.update(train_df.columns)
         if len(test_df) > 0:
             all_columns.update(test_df.columns)
 
-        missing_columns = [col for col in feature_columns if col not in all_columns]
-        if missing_columns:
-            raise ValueError(
-                f"Requested feature columns not found in data: {missing_columns}. "
-                f"Available columns: {sorted(all_columns)}"
-            )
+        # Skip validation for empty datasets (no data = no validation needed)
+        if len(all_columns) > 0:
+            missing_columns = [col for col in feature_columns if col not in all_columns]
+            if missing_columns:
+                raise ValueError(
+                    f"Requested feature columns not found in data: {missing_columns}. "
+                    f"Available columns: {sorted(all_columns)}"
+                )
 
         # Extract features and labels
         if len(train_df) > 0:
