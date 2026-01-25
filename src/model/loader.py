@@ -57,6 +57,14 @@ class DataLoader:
         "balance_volatility_z_score",
     ]
 
+    # Columns that should not be used as training features
+    DEFAULT_NON_FEATURE_COLUMNS = [
+        "record_id",
+        "snapshot_id",
+        "computed_at",
+        "user_id",
+    ]
+
     def __init__(self, database_url: str | None = None):
         """Initialize DataLoader.
 
@@ -69,6 +77,7 @@ class DataLoader:
         self,
         training_cutoff_date: str | datetime,
         session: Session | None = None,
+        feature_columns: list[str] | None = None,
     ) -> TrainTestSplit:
         """Load train/test split with temporal splitting and label maturity.
 
@@ -76,43 +85,81 @@ class DataLoader:
             training_cutoff_date: Cutoff date for train/test split (e.g., '2024-04-01').
                 Records with created_at < cutoff go to train, >= cutoff go to test.
             session: Optional existing database session.
+            feature_columns: Optional list of feature columns to use. If None, uses
+                default FEATURE_COLUMNS.
 
         Returns:
             TrainTestSplit containing X_train, y_train, X_test, y_test.
+
+        Raises:
+            ValueError: If any requested feature columns are missing from the data.
         """
         if isinstance(training_cutoff_date, str):
             cutoff = datetime.fromisoformat(training_cutoff_date)
         else:
             cutoff = training_cutoff_date
 
+        # Use default columns if none provided
+        if feature_columns is None:
+            feature_columns = self.FEATURE_COLUMNS
+
         if session is not None:
-            return self._load_with_session(session, cutoff)
+            return self._load_with_session(session, cutoff, feature_columns)
 
         with self.db_session.get_session() as session:
-            return self._load_with_session(session, cutoff)
+            return self._load_with_session(session, cutoff, feature_columns)
 
     def _load_with_session(
         self,
         session: Session,
         cutoff: datetime,
+        feature_columns: list[str],
     ) -> TrainTestSplit:
-        """Load data using provided session."""
+        """Load data using provided session.
+
+        Args:
+            session: Database session.
+            cutoff: Training cutoff date.
+            feature_columns: List of feature columns to extract.
+
+        Returns:
+            TrainTestSplit with selected features.
+
+        Raises:
+            ValueError: If any requested feature columns are missing from the data.
+        """
         train_df = self._load_train_set(session, cutoff)
         test_df = self._load_test_set(session, cutoff)
 
+        # Validate that all requested columns exist (only if data exists)
+        all_columns = set()
+        if len(train_df) > 0:
+            all_columns.update(train_df.columns)
+        if len(test_df) > 0:
+            all_columns.update(test_df.columns)
+
+        # Skip validation for empty datasets (no data = no validation needed)
+        if len(all_columns) > 0:
+            missing_columns = [col for col in feature_columns if col not in all_columns]
+            if missing_columns:
+                raise ValueError(
+                    f"Requested feature columns not found in data: {missing_columns}. "
+                    f"Available columns: {sorted(all_columns)}"
+                )
+
         # Extract features and labels
         if len(train_df) > 0:
-            features_train = train_df[self.FEATURE_COLUMNS]
+            features_train = train_df[feature_columns]
             labels_train = train_df["label"]
         else:
-            features_train = pd.DataFrame()
+            features_train = pd.DataFrame(columns=feature_columns)
             labels_train = pd.Series(dtype=int)
 
         if len(test_df) > 0:
-            features_test = test_df[self.FEATURE_COLUMNS]
+            features_test = test_df[feature_columns]
             labels_test = test_df["label"]
         else:
-            features_test = pd.DataFrame()
+            features_test = pd.DataFrame(columns=feature_columns)
             labels_test = pd.Series(dtype=int)
 
         return TrainTestSplit(

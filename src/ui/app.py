@@ -1,8 +1,9 @@
 """ACH Risk Inspector Dashboard.
 
-A Streamlit dashboard for fraud risk analysis with three modes:
+A Streamlit dashboard for fraud risk analysis with four modes:
 - Live Scoring: Real-time transaction evaluation via API
 - Historical Analytics: Analysis of historical data from database
+- Synthetic Dataset: Generate and manage synthetic training data
 - Model Lab: Train models and manage the model registry
 
 NOTE: This service is isolated and does NOT import from src.model or src.generator.
@@ -12,25 +13,31 @@ import json
 import os
 import time
 
+import numpy as np
+import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
-from data_service import (
+from plotly.subplots import make_subplots
+
+from ui.data_service import (
     check_api_health,
     fetch_daily_stats,
+    fetch_feature_sample,
     fetch_fraud_summary,
+    fetch_overview_metrics,
     fetch_recent_alerts,
+    fetch_schema_summary,
     fetch_transaction_details,
     predict_risk,
 )
-from mlflow_utils import (
+from ui.mlflow_utils import (
     check_mlflow_connection,
     get_experiment_runs,
     get_model_versions,
     get_production_model_version,
     promote_to_production,
 )
-from plotly.subplots import make_subplots
 
 # Configuration from environment
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
@@ -419,83 +426,212 @@ def render_analytics() -> None:
         )
 
 
-def render_model_lab() -> None:
-    """Render the Model Lab page.
+def _get_numeric_columns(df: pd.DataFrame) -> list[str]:
+    """Get list of numeric column names, excluding record_id and boolean columns.
 
-    This page provides model training and registry management:
-    - Train new models with configurable hyperparameters
-    - View experiment runs and metrics
-    - Promote models to production
+    Args:
+        df: DataFrame to analyze.
+
+    Returns:
+        List of numeric column names.
     """
-    st.header("Model Lab")
-    st.markdown("Train models and manage the model registry.")
+    numeric_cols = df.select_dtypes(include=["int64", "float64"]).columns.tolist()
+    # Exclude record_id and boolean columns
+    exclude = ["record_id"]
+    return [col for col in numeric_cols if col not in exclude]
 
-    # Check MLflow connection
-    mlflow_connected = check_mlflow_connection()
-    if not mlflow_connected:
-        st.error(
-            "Cannot connect to MLflow tracking server. "
-            "Make sure the MLflow service is running."
-        )
-        return
 
-    st.success("Connected to MLflow tracking server")
+def _get_categorical_columns(df: pd.DataFrame, max_cardinality: int = 50) -> list[str]:
+    """Get list of categorical column names with cardinality guardrails.
 
-    # --- Section A: Train New Model ---
-    st.subheader("Train New Model")
+    Args:
+        df: DataFrame to analyze.
+        max_cardinality: Maximum unique values to consider a column categorical.
 
-    col1, col2 = st.columns(2)
+    Returns:
+        List of categorical column names (object/string/bool with low cardinality).
+    """
+    categorical_cols = []
+    for col in df.columns:
+        if col in ["record_id"]:
+            continue
+        dtype = df[col].dtype
+        if dtype in ["object", "string", "bool"] or dtype.name == "category":
+            nunique = df[col].nunique()
+            if nunique <= max_cardinality and nunique > 1:
+                categorical_cols.append(col)
+    return categorical_cols
 
-    with col1:
-        max_depth = st.slider(
-            "Max Depth",
-            min_value=2,
-            max_value=12,
-            value=6,
-            step=1,
-            help="Maximum depth of XGBoost trees",
-        )
 
-    with col2:
-        training_window = st.slider(
-            "Training Window (days)",
-            min_value=7,
-            max_value=90,
-            value=30,
-            step=7,
-            help="Number of days before today for training cutoff",
-        )
+def _compute_cramers_v(
+    col1: pd.Series, col2: pd.Series, compute_p_value: bool = False
+) -> tuple[float, float | None]:
+    """Compute Cramér's V association between two categorical columns.
 
-    train_clicked = st.button("Start Training", type="primary")
+    Args:
+        col1: First categorical column.
+        col2: Second categorical column.
+        compute_p_value: Whether to compute p-value (requires scipy).
 
-    if train_clicked:
-        with st.spinner("Training model... This may take a moment."):
-            try:
-                import requests
+    Returns:
+        Tuple of (cramers_v, p_value). p_value is None if not computed.
+    """
+    # Build contingency table
+    contingency = pd.crosstab(col1, col2)
 
-                response = requests.post(
-                    f"{API_BASE_URL}/train",
-                    json={
-                        "max_depth": max_depth,
-                        "training_window_days": training_window,
-                    },
-                    timeout=300,  # Training can take a while
+    # Compute chi-square statistic manually
+    chi2 = 0.0
+    n = contingency.sum().sum()
+    if n == 0:
+        return 0.0, None
+
+    col_sums = contingency.sum(axis=0)
+    row_sums = contingency.sum(axis=1)
+
+    for i in range(len(contingency.index)):
+        for j in range(len(contingency.columns)):
+            observed = contingency.iloc[i, j]
+            expected = (row_sums.iloc[i] * col_sums.iloc[j]) / n
+            if expected > 0:
+                chi2 += ((observed - expected) ** 2) / expected
+
+    # Cramér's V
+    min_dim = min(len(contingency.index) - 1, len(contingency.columns) - 1)
+    if min_dim > 0 and n > 0:
+        cramers_v = np.sqrt(chi2 / (n * min_dim))
+    else:
+        cramers_v = 0.0
+
+    # P-value (optional, requires scipy)
+    p_value = None
+    if compute_p_value:
+        try:
+            from scipy.stats import chi2_contingency
+
+            _, p_value, _, _ = chi2_contingency(contingency)
+        except ImportError:
+            pass
+
+    return cramers_v, p_value
+
+
+def _compute_correlation_ratio(categorical: pd.Series, numeric: pd.Series) -> float:
+    """Compute correlation ratio (η) for categorical→numeric association.
+
+    Args:
+        categorical: Categorical column.
+        numeric: Numeric column.
+
+    Returns:
+        Correlation ratio η (0 to 1).
+    """
+    # Remove NaN pairs
+    df = pd.DataFrame({"cat": categorical, "num": numeric}).dropna()
+    if len(df) == 0:
+        return 0.0
+
+    # Group means
+    group_means = df.groupby("cat")["num"].mean()
+    overall_mean = df["num"].mean()
+
+    # SS_between and SS_total
+    ss_between = ((group_means - overall_mean) ** 2 * df.groupby("cat").size()).sum()
+    ss_total = ((df["num"] - overall_mean) ** 2).sum()
+
+    if ss_total > 0:
+        eta = np.sqrt(ss_between / ss_total)
+    else:
+        eta = 0.0
+
+    return eta
+
+
+def render_synthetic_dataset() -> None:
+    """Render the Synthetic Dataset page.
+
+    This page provides controls for generating and managing
+    synthetic training data.
+    """
+    st.header("Synthetic Dataset")
+    st.markdown("Generate and manage synthetic training data for model development.")
+
+    # --- Dataset Overview section ---
+    st.subheader("Dataset Overview")
+
+    try:
+        overview = fetch_overview_metrics()
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            total_records = overview.get("total_records", 0)
+            fraud_records = overview.get("fraud_records", 0)
+            st.metric(
+                label="Total Records",
+                value=f"{total_records:,}" if total_records > 0 else "—",
+            )
+            st.metric(
+                label="Fraud Records",
+                value=f"{fraud_records:,}" if fraud_records > 0 else "—",
+            )
+
+        with col2:
+            fraud_rate = overview.get("fraud_rate", 0.0)
+            unique_users = overview.get("unique_users", 0)
+            st.metric(
+                label="Fraud Rate",
+                value=f"{fraud_rate:.2f}%" if fraud_rate > 0 else "—",
+            )
+            st.metric(
+                label="Unique Users",
+                value=f"{unique_users:,}" if unique_users > 0 else "—",
+            )
+
+        with col3:
+            min_ts = overview.get("min_transaction_timestamp")
+            max_ts = overview.get("max_transaction_timestamp")
+            if min_ts and max_ts:
+                date_range = (
+                    f"{min_ts.strftime('%Y-%m-%d')} → {max_ts.strftime('%Y-%m-%d')}"
                 )
-                result = response.json()
-
-                if result.get("success"):
-                    st.success(f"Training complete! Run ID: `{result.get('run_id')}`")
-                    st.balloons()
-                else:
-                    st.error(f"Training failed: {result.get('error')}")
-            except requests.exceptions.RequestException as e:
-                st.error(f"API request failed: {e}")
+            else:
+                date_range = "—"
+            st.metric(
+                label="Transaction Date Range",
+                value=date_range,
+            )
+    except Exception as e:
+        st.error(f"Error loading dataset overview: {e}")
 
     st.markdown("---")
 
-    # --- Section B: Data Management ---
-    st.subheader("Data Management")
-    st.markdown("Generate synthetic training data or clear existing data.")
+    # --- Schema Summary section ---
+    st.subheader("Schema Summary")
+
+    try:
+        schema_df = fetch_schema_summary()
+
+        if schema_df.empty:
+            st.info("No schema information available.")
+        else:
+            # Display only relevant columns
+            display_cols = ["table_name", "column_name", "data_type", "is_nullable"]
+            available_cols = [col for col in display_cols if col in schema_df.columns]
+            if available_cols:
+                st.dataframe(
+                    schema_df[available_cols],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            else:
+                st.dataframe(schema_df, use_container_width=True, hide_index=True)
+    except Exception as e:
+        st.error(f"Error loading schema summary: {e}")
+
+    st.markdown("---")
+
+    # --- Generate Dataset section ---
+    st.subheader("Generate Dataset")
 
     col1, col2 = st.columns(2)
 
@@ -526,13 +662,7 @@ def render_model_lab() -> None:
         help="If checked, existing data will be deleted before generating new data",
     )
 
-    col_gen, col_clear = st.columns(2)
-
-    with col_gen:
-        generate_clicked = st.button("Generate Data", type="primary")
-
-    with col_clear:
-        clear_clicked = st.button("Clear All Data", type="secondary")
+    generate_clicked = st.button("Generate Data", type="primary")
 
     if generate_clicked:
         with st.spinner(f"Generating data for {num_users} users..."):
@@ -558,27 +688,984 @@ def render_model_lab() -> None:
                         f"Generated {total} records ({fraud} fraud). "
                         f"Materialized {features} feature snapshots."
                     )
+                    # Clear caches and refresh UI
+                    st.cache_data.clear()
+                    st.rerun()
                 else:
                     st.error(f"Generation failed: {result.get('error')}")
             except requests.exceptions.RequestException as e:
                 st.error(f"API request failed: {e}")
 
-    if clear_clicked:
-        with st.spinner("Clearing all data..."):
+    st.markdown("---")
+
+    # --- Danger Zone section ---
+    with st.expander("Danger Zone"):
+        clear_clicked = st.button("Clear All Data", type="secondary")
+
+        if clear_clicked:
+            with st.spinner("Clearing all data..."):
+                try:
+                    import requests
+
+                    response = requests.delete(
+                        f"{API_BASE_URL}/data/clear",
+                        timeout=60,
+                    )
+                    result = response.json()
+
+                    if result.get("success"):
+                        tables = ", ".join(result.get("tables_cleared", []))
+                        st.success(f"Cleared tables: {tables}")
+                        # Clear caches and refresh UI
+                        st.cache_data.clear()
+                        st.rerun()
+                    else:
+                        st.error(f"Clear failed: {result.get('error')}")
+                except requests.exceptions.RequestException as e:
+                    st.error(f"API request failed: {e}")
+
+    st.markdown("---")
+
+    # --- Diagnostics section ---
+    st.subheader("Diagnostics")
+
+    tab1, tab2, tab3 = st.tabs(["Distributions", "Missingness", "Outliers"])
+
+    with tab1:
+        # Distributions Tab
+        with st.spinner("Loading sampled data..."):
+            try:
+                sample_df = fetch_feature_sample(sample_size=5000, stratify=True)
+
+                if sample_df.empty:
+                    st.info("No data available for distribution analysis.")
+                else:
+                    numeric_cols = _get_numeric_columns(sample_df)
+
+                    if not numeric_cols:
+                        st.warning(
+                            "No numeric columns available for distribution analysis."
+                        )
+                    else:
+                        selected_col = st.selectbox(
+                            "Select Feature Column",
+                            options=numeric_cols,
+                            help="Choose a numeric feature to visualize",
+                        )
+
+                        if selected_col:
+                            # Histogram
+                            color_col = None
+                            if "is_fraudulent" in sample_df.columns:
+                                color_col = "is_fraudulent"
+
+                            fig_hist = px.histogram(
+                                sample_df,
+                                x=selected_col,
+                                color=color_col,
+                                title=f"Distribution of {selected_col}",
+                                labels={
+                                    selected_col: selected_col,
+                                    "count": "Frequency",
+                                },
+                                nbins=50,
+                            )
+                            fig_hist.update_layout(height=400)
+                            st.plotly_chart(fig_hist, use_container_width=True)
+
+                            # Box plot
+                            fig_box = px.box(
+                                sample_df,
+                                y=selected_col,
+                                color=color_col,
+                                title=f"Box Plot of {selected_col}",
+                                labels={selected_col: selected_col},
+                            )
+                            fig_box.update_layout(height=400)
+                            st.plotly_chart(fig_box, use_container_width=True)
+            except Exception as e:
+                st.error(f"Error loading distribution data: {e}")
+
+    with tab2:
+        # Missingness Tab
+        with st.spinner("Loading sampled data..."):
+            try:
+                sample_df = fetch_feature_sample(sample_size=5000, stratify=True)
+
+                if sample_df.empty:
+                    st.info("No data available for missingness analysis.")
+                else:
+                    # Compute missingness percentage per column
+                    missingness_data = []
+                    for col in sample_df.columns:
+                        missing_count = sample_df[col].isna().sum()
+                        missing_pct = (
+                            (missing_count / len(sample_df) * 100)
+                            if len(sample_df) > 0
+                            else 0
+                        )
+                        missingness_data.append(
+                            {"column": col, "missingness_pct": missing_pct}
+                        )
+
+                    missingness_df = pd.DataFrame(missingness_data)
+
+                    if missingness_df.empty:
+                        st.info("No columns available for missingness analysis.")
+                    else:
+                        # Create horizontal bar chart
+                        fig = px.bar(
+                            missingness_df,
+                            x="missingness_pct",
+                            y="column",
+                            orientation="h",
+                            title="Missingness by Column (%)",
+                            labels={
+                                "missingness_pct": "Missingness (%)",
+                                "column": "Column Name",
+                            },
+                        )
+                        fig.update_layout(height=max(400, len(missingness_df) * 30))
+                        st.plotly_chart(fig, use_container_width=True)
+            except Exception as e:
+                st.error(f"Error loading missingness data: {e}")
+
+    with tab3:
+        # Outliers Tab
+        with st.spinner("Loading sampled data..."):
+            try:
+                sample_df = fetch_feature_sample(sample_size=5000, stratify=True)
+
+                if sample_df.empty:
+                    st.info("No data available for outlier analysis.")
+                else:
+                    numeric_cols = _get_numeric_columns(sample_df)
+
+                    if not numeric_cols:
+                        st.warning("No numeric columns available for outlier analysis.")
+                    else:
+                        selected_col = st.selectbox(
+                            "Select Feature Column",
+                            options=numeric_cols,
+                            help="Choose a numeric feature to analyze for outliers",
+                            key="outlier_column",
+                        )
+
+                        if selected_col:
+                            # Compute IQR-based outliers
+                            col_data = sample_df[selected_col].dropna()
+
+                            if len(col_data) == 0:
+                                st.warning(f"No valid data in column {selected_col}.")
+                            else:
+                                q1 = col_data.quantile(0.25)
+                                q3 = col_data.quantile(0.75)
+                                iqr = q3 - q1
+                                lower_bound = q1 - 1.5 * iqr
+                                upper_bound = q3 + 1.5 * iqr
+
+                                outliers = col_data[
+                                    (col_data < lower_bound) | (col_data > upper_bound)
+                                ]
+                                outlier_count = len(outliers)
+                                outlier_pct = (
+                                    (outlier_count / len(col_data) * 100)
+                                    if len(col_data) > 0
+                                    else 0
+                                )
+
+                                # Box plot
+                                color_col = None
+                                if "is_fraudulent" in sample_df.columns:
+                                    color_col = "is_fraudulent"
+
+                                fig = px.box(
+                                    sample_df,
+                                    y=selected_col,
+                                    color=color_col,
+                                    title=f"Outlier Detection for {selected_col}",
+                                    labels={selected_col: selected_col},
+                                )
+                                fig.update_layout(height=400)
+                                st.plotly_chart(fig, use_container_width=True)
+
+                                # Text summary
+                                st.markdown("**Outlier Summary**")
+                                col1, col2, col3 = st.columns(3)
+                                with col1:
+                                    st.metric("Outlier Count", f"{outlier_count:,}")
+                                with col2:
+                                    st.metric(
+                                        "Outlier Percentage", f"{outlier_pct:.2f}%"
+                                    )
+                                with col3:
+                                    st.metric(
+                                        "Bounds",
+                                        f"[{lower_bound:.2f}, {upper_bound:.2f}]",
+                                    )
+            except Exception as e:
+                st.error(f"Error loading outlier data: {e}")
+
+    st.markdown("---")
+
+    # --- Relationships section ---
+    st.subheader("Relationships")
+
+    # Settings area
+    with st.expander("Settings", expanded=False):
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            sample_size = st.number_input(
+                "Sample Size",
+                min_value=100,
+                max_value=50000,
+                value=5000,
+                step=500,
+                help="Number of rows to sample for relationship analysis",
+            )
+
+        with col2:
+            max_numeric_cols = st.number_input(
+                "Max Numeric Columns",
+                min_value=5,
+                max_value=50,
+                value=30,
+                step=5,
+                help=(
+                    "Maximum number of numeric columns to include "
+                    "in correlation matrices"
+                ),
+            )
+
+        with col3:
+            max_categorical_cols = st.number_input(
+                "Max Categorical Columns",
+                min_value=5,
+                max_value=50,
+                value=30,
+                step=5,
+                help="Maximum number of categorical columns for association analysis",
+            )
+
+        col4, col5 = st.columns(2)
+
+        with col4:
+            categorical_cardinality_threshold = st.number_input(
+                "Categorical Cardinality Threshold",
+                min_value=2,
+                max_value=200,
+                value=50,
+                step=5,
+                help="Maximum unique values to consider a column categorical",
+            )
+
+        with col5:
+            compute_p_values = st.checkbox(
+                "Compute p-values",
+                value=False,
+                help="Compute statistical significance (slower, requires scipy)",
+            )
+
+    # Load sampled data and identify columns
+    with st.spinner("Loading sampled data..."):
+        try:
+            sample_df = fetch_feature_sample(sample_size=sample_size, stratify=True)
+
+            if sample_df.empty:
+                st.info("No data available for relationship analysis.")
+                sample_df = None
+                numeric_cols = []
+                categorical_cols = []
+                actual_sample_size = 0
+            else:
+                actual_sample_size = len(sample_df)
+                numeric_cols = _get_numeric_columns(sample_df)
+                categorical_cols = _get_categorical_columns(
+                    sample_df, max_cardinality=categorical_cardinality_threshold
+                )
+
+                # Apply column caps
+                if len(numeric_cols) > max_numeric_cols:
+                    # Select top columns by variance
+                    variances = (
+                        sample_df[numeric_cols].var().sort_values(ascending=False)
+                    )
+                    numeric_cols = variances.head(max_numeric_cols).index.tolist()
+                    total_numeric = len(_get_numeric_columns(sample_df))
+                    st.warning(
+                        f"Limited to top {max_numeric_cols} numeric columns "
+                        f"by variance. ({total_numeric} total available)"
+                    )
+
+                if len(categorical_cols) > max_categorical_cols:
+                    # Select top columns by frequency (most common categories)
+                    categorical_cols = categorical_cols[:max_categorical_cols]
+                    total_categorical = len(
+                        _get_categorical_columns(
+                            sample_df, categorical_cardinality_threshold
+                        )
+                    )
+                    st.warning(
+                        f"Limited to {max_categorical_cols} categorical columns. "
+                        f"({total_categorical} total available)"
+                    )
+
+                st.caption(f"Using {actual_sample_size:,} rows for analysis")
+
+        except Exception as e:
+            st.error(f"Error loading sampled data: {e}")
+            sample_df = None
+            numeric_cols = []
+            categorical_cols = []
+            actual_sample_size = 0
+
+    # Create tabs
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+        [
+            "Numeric ↔ Numeric",
+            "Categorical ↔ Categorical",
+            "Categorical ↔ Numeric",
+            "Target Relations",
+            "Top Relationships",
+        ]
+    )
+
+    # Tab 1: Numeric ↔ Numeric
+    with tab1:
+        if sample_df is None or len(numeric_cols) < 2:
+            if sample_df is None:
+                st.info("No data available for numeric correlation analysis.")
+            else:
+                st.warning(
+                    f"Need at least 2 numeric columns for correlation analysis. "
+                    f"Found {len(numeric_cols)} numeric column(s)."
+                )
+        else:
+            with st.spinner("Computing correlation matrices..."):
+                try:
+                    # Compute correlation matrices
+                    numeric_df = sample_df[numeric_cols].select_dtypes(
+                        include=["int64", "float64"]
+                    )
+
+                    pearson_corr = numeric_df.corr(method="pearson")
+                    spearman_corr = numeric_df.corr(method="spearman")
+
+                    # Display Pearson heatmap
+                    st.markdown("**Pearson Correlation Matrix**")
+                    fig_pearson = px.imshow(
+                        pearson_corr,
+                        labels=dict(x="Column", y="Column", color="Correlation"),
+                        x=pearson_corr.columns,
+                        y=pearson_corr.columns,
+                        color_continuous_scale="RdYlBu_r",
+                        aspect="auto",
+                        title="Pearson Correlation Matrix",
+                    )
+                    fig_pearson.update_layout(height=600)
+                    st.plotly_chart(fig_pearson, use_container_width=True)
+
+                    # Display Spearman heatmap
+                    st.markdown("**Spearman Correlation Matrix**")
+                    fig_spearman = px.imshow(
+                        spearman_corr,
+                        labels=dict(x="Column", y="Column", color="Correlation"),
+                        x=spearman_corr.columns,
+                        y=spearman_corr.columns,
+                        color_continuous_scale="RdYlBu_r",
+                        aspect="auto",
+                        title="Spearman Correlation Matrix",
+                    )
+                    fig_spearman.update_layout(height=600)
+                    st.plotly_chart(fig_spearman, use_container_width=True)
+
+                    # Top pairs table
+                    st.markdown("**Top Correlations**")
+                    # Flatten correlation matrices (exclude diagonal)
+                    top_pairs = []
+                    n_cols = len(numeric_cols)
+                    for i in range(n_cols):
+                        for j in range(i + 1, n_cols):
+                            col_a = numeric_cols[i]
+                            col_b = numeric_cols[j]
+                            pearson_val = pearson_corr.iloc[i, j]
+                            spearman_val = spearman_corr.iloc[i, j]
+
+                            # Skip NaN values
+                            if pd.notna(pearson_val) and pd.notna(spearman_val):
+                                top_pairs.append(
+                                    {
+                                        "Column A": col_a,
+                                        "Column B": col_b,
+                                        "Pearson": round(pearson_val, 4),
+                                        "Spearman": round(spearman_val, 4),
+                                        "Abs Pearson": abs(pearson_val),
+                                    }
+                                )
+
+                    if top_pairs:
+                        top_pairs_df = pd.DataFrame(top_pairs)
+                        top_pairs_df = top_pairs_df.sort_values(
+                            "Abs Pearson", ascending=False
+                        ).head(20)
+                        # Remove the sorting column for display
+                        display_df = top_pairs_df.drop(columns=["Abs Pearson"])
+                        st.dataframe(
+                            display_df, use_container_width=True, hide_index=True
+                        )
+                    else:
+                        st.info("No valid correlations found (all NaN).")
+
+                except Exception as e:
+                    st.error(f"Error computing correlations: {e}")
+
+    # Tab 2: Categorical ↔ Categorical
+    with tab2:
+        if sample_df is None or len(categorical_cols) < 2:
+            if sample_df is None:
+                st.info("No data available for categorical association analysis.")
+            else:
+                st.warning(
+                    f"Need at least 2 categorical columns for association analysis. "
+                    f"Found {len(categorical_cols)} categorical column(s)."
+                )
+        else:
+            with st.spinner("Computing Cramér's V associations..."):
+                try:
+                    associations = []
+                    n_cats = len(categorical_cols)
+
+                    for i in range(n_cats):
+                        for j in range(i + 1, n_cats):
+                            col_a = categorical_cols[i]
+                            col_b = categorical_cols[j]
+
+                            # Check cardinality
+                            card_a = sample_df[col_a].nunique()
+                            card_b = sample_df[col_b].nunique()
+                            if (
+                                card_a > categorical_cardinality_threshold
+                                or card_b > categorical_cardinality_threshold
+                            ):
+                                continue
+
+                            cramers_v, p_value = _compute_cramers_v(
+                                sample_df[col_a],
+                                sample_df[col_b],
+                                compute_p_value=compute_p_values,
+                            )
+
+                            associations.append(
+                                {
+                                    "Column A": col_a,
+                                    "Column B": col_b,
+                                    "Cramér's V": round(cramers_v, 4),
+                                    "p-value": (
+                                        round(p_value, 4)
+                                        if p_value is not None
+                                        else None
+                                    ),
+                                }
+                            )
+
+                    if associations:
+                        assoc_df = pd.DataFrame(associations)
+                        assoc_df = assoc_df.sort_values(
+                            "Cramér's V", ascending=False
+                        ).head(30)
+                        st.dataframe(
+                            assoc_df, use_container_width=True, hide_index=True
+                        )
+                    else:
+                        st.info(
+                            "No valid associations found. This may be due to "
+                            "high cardinality or insufficient data."
+                        )
+
+                except Exception as e:
+                    st.error(f"Error computing categorical associations: {e}")
+
+    # Tab 3: Categorical ↔ Numeric
+    with tab3:
+        if sample_df is None:
+            st.info("No data available for categorical-numeric association analysis.")
+        elif len(categorical_cols) == 0:
+            st.warning("No categorical columns available for association analysis.")
+        elif len(numeric_cols) == 0:
+            st.warning("No numeric columns available for association analysis.")
+        else:
+            with st.spinner("Computing correlation ratios..."):
+                try:
+                    associations = []
+
+                    for cat_col in categorical_cols:
+                        # Check cardinality
+                        card = sample_df[cat_col].nunique()
+                        if card > categorical_cardinality_threshold:
+                            continue
+
+                        for num_col in numeric_cols:
+                            eta = _compute_correlation_ratio(
+                                sample_df[cat_col], sample_df[num_col]
+                            )
+
+                            associations.append(
+                                {
+                                    "Categorical Column": cat_col,
+                                    "Numeric Column": num_col,
+                                    "Correlation Ratio (η)": round(eta, 4),
+                                }
+                            )
+
+                    if associations:
+                        assoc_df = pd.DataFrame(associations)
+                        assoc_df = assoc_df.sort_values(
+                            "Correlation Ratio (η)", ascending=False
+                        ).head(30)
+                        st.dataframe(
+                            assoc_df, use_container_width=True, hide_index=True
+                        )
+                    else:
+                        st.info("No valid associations found.")
+
+                except Exception as e:
+                    st.error(f"Error computing categorical-numeric associations: {e}")
+
+    # Tab 4: Target Relations
+    with tab4:
+        if sample_df is None:
+            st.info("No data available for target relations analysis.")
+        elif "is_fraudulent" not in sample_df.columns:
+            st.warning("Target column 'is_fraudulent' not found in sampled data.")
+        else:
+            with st.spinner("Computing target associations..."):
+                try:
+                    target_relations = []
+
+                    # Convert target to numeric if boolean
+                    target = sample_df["is_fraudulent"]
+                    if target.dtype == "bool":
+                        target_numeric = target.astype(int)
+                    else:
+                        target_numeric = target
+
+                    # Numeric features
+                    for num_col in numeric_cols:
+                        pearson = target_numeric.corr(
+                            sample_df[num_col], method="pearson"
+                        )
+                        spearman = target_numeric.corr(
+                            sample_df[num_col], method="spearman"
+                        )
+
+                        if pd.notna(pearson) and pd.notna(spearman):
+                            target_relations.append(
+                                {
+                                    "Feature": num_col,
+                                    "Type": "Numeric",
+                                    "Pearson": round(pearson, 4),
+                                    "Spearman": round(spearman, 4),
+                                    "Max Abs Corr": max(abs(pearson), abs(spearman)),
+                                    "Metric": (
+                                        "pearson"
+                                        if abs(pearson) >= abs(spearman)
+                                        else "spearman"
+                                    ),
+                                }
+                            )
+
+                    # Categorical features
+                    for cat_col in categorical_cols:
+                        card = sample_df[cat_col].nunique()
+                        if card > categorical_cardinality_threshold:
+                            continue
+
+                        eta = _compute_correlation_ratio(
+                            sample_df[cat_col], target_numeric
+                        )
+
+                        if pd.notna(eta):
+                            target_relations.append(
+                                {
+                                    "Feature": cat_col,
+                                    "Type": "Categorical",
+                                    "Correlation Ratio (η)": round(eta, 4),
+                                    "Max Abs Corr": eta,
+                                    "Metric": "eta",
+                                }
+                            )
+
+                    if target_relations:
+                        # Check for potential leakage
+                        leakage_keywords = [
+                            "fraud",
+                            "label",
+                            "target",
+                            "confirmed",
+                            "evaluation",
+                        ]
+                        leakage_threshold = 0.8
+
+                        for rel in target_relations:
+                            feature_name = rel["Feature"].lower()
+                            max_assoc = rel.get("Max Abs Corr", 0.0)
+
+                            # Check suspicious names
+                            name_leakage = any(
+                                keyword in feature_name for keyword in leakage_keywords
+                            )
+
+                            # Check high association
+                            high_assoc = max_assoc > leakage_threshold
+
+                            rel["Potential Leakage"] = name_leakage or high_assoc
+
+                        target_df = pd.DataFrame(target_relations)
+                        target_df = target_df.sort_values(
+                            "Max Abs Corr", ascending=False
+                        )
+
+                        # Display warning if leakage detected
+                        leakage_count = target_df["Potential Leakage"].sum()
+                        if leakage_count > 0:
+                            st.warning(
+                                f"⚠️ Potential data leakage detected in "
+                                f"{leakage_count} feature(s). "
+                                f"High association (>{leakage_threshold}) or "
+                                f"suspicious naming patterns detected. "
+                                f"Note: This is a heuristic check on synthetic data."
+                            )
+
+                        # Format display
+                        display_cols = [
+                            "Feature",
+                            "Type",
+                            "Pearson",
+                            "Spearman",
+                            "Correlation Ratio (η)",
+                            "Potential Leakage",
+                        ]
+                        available_cols = [
+                            c for c in display_cols if c in target_df.columns
+                        ]
+                        display_df = target_df[available_cols].copy()
+
+                        # Highlight leakage rows
+                        st.dataframe(
+                            display_df, use_container_width=True, hide_index=True
+                        )
+
+                        st.caption(
+                            "Note: Leakage detection is heuristic. "
+                            "Synthetic data may have different characteristics "
+                            "than production data."
+                        )
+                    else:
+                        st.info("No valid target associations found.")
+
+                except Exception as e:
+                    st.error(f"Error computing target relations: {e}")
+
+    # Tab 5: Top Relationships
+    with tab5:
+        if sample_df is None:
+            st.info("No data available for top relationships analysis.")
+        else:
+            with st.spinner("Compiling top relationships..."):
+                try:
+                    top_relationships = []
+
+                    # Collect from Numeric ↔ Numeric
+                    if len(numeric_cols) >= 2:
+                        try:
+                            numeric_df = sample_df[numeric_cols].select_dtypes(
+                                include=["int64", "float64"]
+                            )
+                            pearson_corr = numeric_df.corr(method="pearson")
+                            spearman_corr = numeric_df.corr(method="spearman")
+
+                            n_cols = len(numeric_cols)
+                            for i in range(n_cols):
+                                for j in range(i + 1, n_cols):
+                                    col_a = numeric_cols[i]
+                                    col_b = numeric_cols[j]
+                                    pearson_val = pearson_corr.iloc[i, j]
+                                    spearman_val = spearman_corr.iloc[i, j]
+
+                                    if pd.notna(pearson_val):
+                                        top_relationships.append(
+                                            {
+                                                "relationship_type": "nn",
+                                                "col_a": col_a,
+                                                "col_b": col_b,
+                                                "effect_size": abs(pearson_val),
+                                                "metric_name": "pearson",
+                                                "p_value": None,
+                                                "sample_size": actual_sample_size,
+                                            }
+                                        )
+                                    if pd.notna(spearman_val):
+                                        top_relationships.append(
+                                            {
+                                                "relationship_type": "nn",
+                                                "col_a": col_a,
+                                                "col_b": col_b,
+                                                "effect_size": abs(spearman_val),
+                                                "metric_name": "spearman",
+                                                "p_value": None,
+                                                "sample_size": actual_sample_size,
+                                            }
+                                        )
+                        except Exception:
+                            pass
+
+                    # Collect from Categorical ↔ Categorical
+                    if len(categorical_cols) >= 2:
+                        try:
+                            n_cats = len(categorical_cols)
+                            for i in range(n_cats):
+                                for j in range(i + 1, n_cats):
+                                    col_a = categorical_cols[i]
+                                    col_b = categorical_cols[j]
+
+                                    if (
+                                        sample_df[col_a].nunique()
+                                        > categorical_cardinality_threshold
+                                        or sample_df[col_b].nunique()
+                                        > categorical_cardinality_threshold
+                                    ):
+                                        continue
+
+                                    cramers_v, p_value = _compute_cramers_v(
+                                        sample_df[col_a],
+                                        sample_df[col_b],
+                                        compute_p_value=compute_p_values,
+                                    )
+
+                                    if pd.notna(cramers_v):
+                                        top_relationships.append(
+                                            {
+                                                "relationship_type": "cc",
+                                                "col_a": col_a,
+                                                "col_b": col_b,
+                                                "effect_size": cramers_v,
+                                                "metric_name": "cramers_v",
+                                                "p_value": round(p_value, 4)
+                                                if p_value is not None
+                                                else None,
+                                                "sample_size": actual_sample_size,
+                                            }
+                                        )
+                        except Exception:
+                            pass
+
+                    # Collect from Categorical ↔ Numeric
+                    if len(categorical_cols) > 0 and len(numeric_cols) > 0:
+                        try:
+                            for cat_col in categorical_cols:
+                                if (
+                                    sample_df[cat_col].nunique()
+                                    > categorical_cardinality_threshold
+                                ):
+                                    continue
+
+                                for num_col in numeric_cols:
+                                    eta = _compute_correlation_ratio(
+                                        sample_df[cat_col], sample_df[num_col]
+                                    )
+
+                                    if pd.notna(eta):
+                                        top_relationships.append(
+                                            {
+                                                "relationship_type": "cn",
+                                                "col_a": cat_col,
+                                                "col_b": num_col,
+                                                "effect_size": eta,
+                                                "metric_name": "eta",
+                                                "p_value": None,
+                                                "sample_size": actual_sample_size,
+                                            }
+                                        )
+                        except Exception:
+                            pass
+
+                    if top_relationships:
+                        top_df = pd.DataFrame(top_relationships)
+                        top_df = top_df.sort_values(
+                            "effect_size", ascending=False
+                        ).head(50)
+
+                        # Format for display
+                        display_df = top_df.copy()
+                        display_df.columns = [
+                            "Type",
+                            "Column A",
+                            "Column B",
+                            "Effect Size",
+                            "Metric",
+                            "p-value",
+                            "Sample Size",
+                        ]
+
+                        st.dataframe(
+                            display_df, use_container_width=True, hide_index=True
+                        )
+                    else:
+                        st.info("No relationships found to display.")
+
+                except Exception as e:
+                    st.error(f"Error compiling top relationships: {e}")
+
+
+def render_model_lab() -> None:
+    """Render the Model Lab page.
+
+    This page provides model training and registry management:
+    - Train new models with configurable hyperparameters
+    - View experiment runs and metrics
+    - Promote models to production
+    """
+    st.header("Model Lab")
+    st.markdown("Train models and manage the model registry.")
+
+    # Check MLflow connection
+    mlflow_connected = check_mlflow_connection()
+    if not mlflow_connected:
+        st.error(
+            "Cannot connect to MLflow tracking server. "
+            "Make sure the MLflow service is running."
+        )
+        return
+
+    st.success("Connected to MLflow tracking server")
+
+    # --- Section A: Train New Model ---
+    st.subheader("Train New Model")
+
+    # Feature column selection
+    try:
+        schema_df = fetch_schema_summary(table_names=["feature_snapshots"])
+        non_trainable_columns = [
+            "record_id",
+            "snapshot_id",
+            "computed_at",
+            "user_id",
+            "experimental_signals",
+        ]
+
+        # Filter to numeric columns only (exclude JSONB, timestamps, IDs)
+        numeric_types = [
+            "integer",
+            "bigint",
+            "smallint",
+            "real",
+            "double precision",
+            "numeric",
+        ]
+        available_columns = schema_df[
+            (schema_df["table_name"] == "feature_snapshots")
+            & (schema_df["data_type"].isin(numeric_types))
+            & (~schema_df["column_name"].isin(non_trainable_columns))
+        ]["column_name"].tolist()
+
+        # Default feature columns (matching DataLoader.FEATURE_COLUMNS)
+        default_feature_columns = [
+            "velocity_24h",
+            "amount_to_avg_ratio_30d",
+            "balance_volatility_z_score",
+        ]
+        # Use defaults if available, otherwise use all available columns
+        default_selection = [
+            col for col in default_feature_columns if col in available_columns
+        ] or available_columns
+
+        # Initialize session state for feature columns if not set
+        if "selected_feature_columns" not in st.session_state:
+            st.session_state.selected_feature_columns = default_selection
+
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            selected_columns = st.multiselect(
+                "Feature Columns",
+                options=available_columns,
+                default=st.session_state.selected_feature_columns,
+                help="Select which feature columns to use for training",
+                key="feature_columns_multiselect",
+            )
+        with col2:
+            if st.button("Reset to Defaults", help="Reset to default feature columns"):
+                st.session_state.selected_feature_columns = default_selection
+                st.session_state.feature_columns_multiselect = default_selection
+                st.rerun()
+
+        # Update session state
+        st.session_state.selected_feature_columns = selected_columns
+
+        # Show summary
+        if selected_columns:
+            st.caption(
+                f"Selected {len(selected_columns)} of "
+                f"{len(available_columns)} feature columns"
+            )
+            with st.expander("View Selected Columns"):
+                st.write(", ".join(sorted(selected_columns)))
+        else:
+            st.warning(
+                "No feature columns selected. Please select at least one column."
+            )
+
+    except Exception as e:
+        st.error(f"Error loading feature columns: {e}")
+        selected_columns = None
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        max_depth = st.slider(
+            "Max Depth",
+            min_value=2,
+            max_value=12,
+            value=6,
+            step=1,
+            help="Maximum depth of XGBoost trees",
+        )
+
+    with col2:
+        training_window = st.slider(
+            "Training Window (days)",
+            min_value=7,
+            max_value=90,
+            value=30,
+            step=7,
+            help="Number of days before today for training cutoff",
+        )
+
+    train_clicked = st.button(
+        "Start Training", type="primary", disabled=not selected_columns
+    )
+
+    if train_clicked:
+        with st.spinner("Training model... This may take a moment."):
             try:
                 import requests
 
-                response = requests.delete(
-                    f"{API_BASE_URL}/data/clear",
-                    timeout=60,
+                response = requests.post(
+                    f"{API_BASE_URL}/train",
+                    json={
+                        "max_depth": max_depth,
+                        "training_window_days": training_window,
+                        "selected_feature_columns": selected_columns,
+                    },
+                    timeout=300,  # Training can take a while
                 )
                 result = response.json()
 
                 if result.get("success"):
-                    tables = ", ".join(result.get("tables_cleared", []))
-                    st.success(f"Cleared tables: {tables}")
+                    st.success(f"Training complete! Run ID: `{result.get('run_id')}`")
+                    st.balloons()
                 else:
-                    st.error(f"Clear failed: {result.get('error')}")
+                    st.error(f"Training failed: {result.get('error')}")
             except requests.exceptions.RequestException as e:
                 st.error(f"API request failed: {e}")
 
@@ -641,7 +1728,12 @@ def main() -> None:
 
     page = st.sidebar.radio(
         "Navigation",
-        options=["Live Scoring (API)", "Historical Analytics (DB)", "Model Lab"],
+        options=[
+            "Live Scoring (API)",
+            "Historical Analytics (DB)",
+            "Synthetic Dataset",
+            "Model Lab",
+        ],
         index=0,
     )
 
@@ -656,6 +1748,8 @@ def main() -> None:
         render_live_scoring()
     elif page == "Historical Analytics (DB)":
         render_analytics()
+    elif page == "Synthetic Dataset":
+        render_synthetic_dataset()
     else:
         render_model_lab()
 

@@ -491,3 +491,145 @@ class TestClearDataEndpoint:
         data = response.json()
         assert data["success"] is False
         assert "Connection failed" in data["error"]
+
+
+class TestTrainEndpoint:
+    """Tests for model training endpoint."""
+
+    def test_train_endpoint_accepts_selected_feature_columns(self, client):
+        """Test that /train accepts selected_feature_columns parameter."""
+        with patch("model.train.train_model") as mock_train:
+            mock_train.return_value = "test_run_123"
+
+            response = client.post(
+                "/train",
+                json={
+                    "max_depth": 6,
+                    "training_window_days": 30,
+                    "selected_feature_columns": [
+                        "velocity_24h",
+                        "amount_to_avg_ratio_30d",
+                    ],
+                },
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is True
+            assert data["run_id"] == "test_run_123"
+
+            # Verify train_model was called with feature_columns
+            mock_train.assert_called_once()
+            call_kwargs = mock_train.call_args[1]
+            expected_cols = ["velocity_24h", "amount_to_avg_ratio_30d"]
+            assert call_kwargs["feature_columns"] == expected_cols
+
+    def test_train_endpoint_works_without_feature_columns(self, client):
+        """Test /train works without selected_feature_columns (backward compatible)."""
+        with patch("model.train.train_model") as mock_train:
+            mock_train.return_value = "test_run_456"
+
+            response = client.post(
+                "/train",
+                json={
+                    "max_depth": 6,
+                    "training_window_days": 30,
+                },
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is True
+
+            # Verify train_model was called with feature_columns=None
+            call_kwargs = mock_train.call_args[1]
+            assert call_kwargs.get("feature_columns") is None
+
+    def test_train_endpoint_rejects_empty_feature_columns(self, client):
+        """Test that /train rejects empty selected_feature_columns list."""
+        response = client.post(
+            "/train",
+            json={
+                "max_depth": 6,
+                "training_window_days": 30,
+                "selected_feature_columns": [],
+            },
+        )
+
+        assert response.status_code == 422  # Validation error
+
+    def test_train_endpoint_handles_invalid_columns_error(self, client):
+        """Test that /train returns error when invalid columns are provided."""
+        with patch("model.train.train_model") as mock_train:
+            mock_train.side_effect = ValueError(
+                "Requested feature columns not found in data: ['invalid_col']"
+            )
+
+            response = client.post(
+                "/train",
+                json={
+                    "max_depth": 6,
+                    "training_window_days": 30,
+                    "selected_feature_columns": ["invalid_col"],
+                },
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is False
+            assert "invalid_col" in data["error"]
+
+
+class TestRulesIntegration:
+    """Tests for rule integration in inference."""
+
+    def test_inference_with_no_rules_unchanged(self, client):
+        """Test that inference behavior is unchanged when no rules are present."""
+        response = client.post(
+            "/evaluate/signal",
+            json={
+                "user_id": "user_test_no_rules",
+                "amount": 100.00,
+                "currency": "USD",
+                "client_transaction_id": "txn_test",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Response should have matched_rules field (empty)
+        assert "matched_rules" in data
+        assert data["matched_rules"] == []
+
+        # model_score and rules_version should be None when no rules
+        assert "model_score" in data
+        assert data["model_score"] is None
+        assert "rules_version" in data
+        assert data["rules_version"] is None
+
+    def test_response_includes_matched_rules_field(self, client):
+        """Test that response includes matched_rules field structure."""
+        response = client.post(
+            "/evaluate/signal",
+            json={
+                "user_id": "user_test",
+                "amount": 100.00,
+                "currency": "USD",
+                "client_transaction_id": "txn_test",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Verify matched_rules field exists and is a list
+        assert "matched_rules" in data
+        assert isinstance(data["matched_rules"], list)
+
+        # If rules matched, verify structure
+        if data["matched_rules"]:
+            for rule in data["matched_rules"]:
+                assert "rule_id" in rule
+                assert "severity" in rule
+                assert "reason" in rule

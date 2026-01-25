@@ -19,8 +19,11 @@ RUN pip install --no-cache-dir \
     mlflow>=3.8.0 \
     boto3>=1.34.0
 
-# Copy only the UI application
-COPY src/ui/ /app/
+# Copy source code maintaining package structure
+COPY src/ /app/src/
+
+# Set PYTHONPATH so imports work correctly
+ENV PYTHONPATH=/app/src
 
 # Expose Streamlit port
 EXPOSE 8501
@@ -30,4 +33,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl --fail http://localhost:8501/_stcore/health || exit 1
 
 # Run Streamlit
-ENTRYPOINT ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+ENTRYPOINT ["streamlit", "run", "src/ui/app.py", "--server.port=8501", "--server.address=0.0.0.0"]

@@ -1,5 +1,6 @@
 """MLflow-enabled training pipeline for fraud detection model."""
 
+import json
 import os
 import tempfile
 from datetime import UTC, datetime, timedelta
@@ -30,6 +31,7 @@ def train_model(
     max_depth: int = 6,
     training_window_days: int = 30,
     database_url: str | None = None,
+    feature_columns: list[str] | None = None,
 ) -> str:
     """Train an XGBoost model with MLflow tracking.
 
@@ -40,6 +42,8 @@ def train_model(
         training_window_days: Number of days before today for training cutoff.
             Default 30.
         database_url: Optional database URL override.
+        feature_columns: Optional list of feature columns to use. If None, uses
+            default FEATURE_COLUMNS from DataLoader.
 
     Returns:
         The MLflow run ID.
@@ -52,7 +56,14 @@ def train_model(
 
     # Load data
     loader = DataLoader(database_url=database_url)
-    split = loader.load_train_test_split(training_cutoff_date)
+    split = loader.load_train_test_split(
+        training_cutoff_date, feature_columns=feature_columns
+    )
+
+    # Determine actual feature columns used (for logging)
+    actual_feature_columns = (
+        feature_columns if feature_columns is not None else loader.FEATURE_COLUMNS
+    )
 
     # Handle empty dataset
     if split.train_size == 0:
@@ -90,6 +101,7 @@ def train_model(
                 "test_size": split.test_size,
                 "train_fraud_rate": split.train_fraud_rate,
                 "test_fraud_rate": split.test_fraud_rate,
+                "feature_columns": json.dumps(actual_feature_columns),
             }
         )
 
@@ -138,6 +150,12 @@ def train_model(
             reference_path = os.path.join(tmpdir, "reference_data.parquet")
             split.X_test.to_parquet(reference_path, index=False)
             mlflow.log_artifact(reference_path)
+
+            # Save feature columns list as artifact for inference
+            feature_columns_path = os.path.join(tmpdir, "feature_columns.json")
+            with open(feature_columns_path, "w") as f:
+                json.dump(actual_feature_columns, f, indent=2)
+            mlflow.log_artifact(feature_columns_path)
 
         # Register the model
         model_uri = f"runs:/{run.info.run_id}/model"

@@ -356,6 +356,7 @@ async def train_model_endpoint(request: TrainRequest) -> TrainResponse:
         run_id = train_model(
             max_depth=request.max_depth,
             training_window_days=request.training_window_days,
+            feature_columns=request.selected_feature_columns,
         )
         return TrainResponse(success=True, run_id=run_id)
     except ValueError as e:
