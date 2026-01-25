@@ -2,6 +2,7 @@
 
 from decimal import Decimal
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -184,6 +185,36 @@ class SplitConfig(BaseModel):
     seed: int = Field(default=42, description="Random seed for reproducibility")
 
 
+class TuningStrategy(str, Enum):
+    """Hyperparameter tuning strategy."""
+
+    GRID = "grid"
+    RANDOM = "random"
+    BAYESIAN = "bayesian"
+
+
+class TuningConfig(BaseModel):
+    """Configuration for hyperparameter tuning."""
+
+    enabled: bool = Field(default=False, description="Enable tuning")
+    strategy: TuningStrategy = Field(
+        default=TuningStrategy.BAYESIAN,
+        description="Tuning strategy",
+    )
+    n_trials: int = Field(default=20, ge=5, le=100, description="Number of trials")
+    timeout_minutes: int = Field(
+        default=30,
+        ge=5,
+        le=120,
+        description="Max tuning time in minutes",
+    )
+    metric: str = Field(default="pr_auc", description="Metric to optimize")
+    direction: Literal["maximize", "minimize"] = Field(
+        default="maximize",
+        description="Optimization direction",
+    )
+
+
 class TrainRequest(BaseModel):
     """Request schema for model training endpoint."""
 
@@ -206,6 +237,10 @@ class TrainRequest(BaseModel):
     split_config: SplitConfig = Field(
         default_factory=SplitConfig,
         description="Split and optional CV configuration",
+    )
+    tuning_config: TuningConfig = Field(
+        default_factory=TuningConfig,
+        description="Hyperparameter tuning configuration",
     )
     n_estimators: int = Field(default=100, ge=50, le=500)
     learning_rate: float = Field(default=0.1, ge=0.01, le=0.3)
