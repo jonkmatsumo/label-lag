@@ -94,4 +94,6 @@ networks:
 
 volumes:
   labellag_postgres_data:
+    name: labellag_postgres_data
   labellag_minio_data:
+    name: labellag_minio_data
