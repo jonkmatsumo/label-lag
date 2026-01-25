@@ -22,6 +22,7 @@ from plotly.subplots import make_subplots
 
 from ui.data_service import (
     accept_suggestion,
+    approve_draft_rule,
     check_api_health,
     create_draft_rule,
     delete_draft_rule,
@@ -38,7 +39,11 @@ from ui.data_service import (
     fetch_transaction_details,
     get_draft_rule,
     list_draft_rules,
+    list_rule_versions,
     predict_risk,
+    query_audit_logs,
+    reject_draft_rule,
+    rollback_rule_version,
     sandbox_evaluate,
     submit_draft_rule,
     update_draft_rule,
@@ -2051,13 +2056,15 @@ def render_rule_inspector() -> None:
     )
 
     # Create tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
         [
             "Sandbox (Testing)",
             "Shadow Metrics (Read-Only)",
             "Backtest Results (Read-Only)",
             "Suggestions (Read-Only)",
             "Draft Rules",
+            "Approval Queue",
+            "Audit Logs",
         ]
     )
 
@@ -2080,6 +2087,14 @@ def render_rule_inspector() -> None:
     # --- Tab 5: Draft Rules ---
     with tab5:
         _render_draft_rules_tab()
+
+    # --- Tab 6: Approval Queue ---
+    with tab6:
+        _render_approval_queue_tab()
+
+    # --- Tab 7: Audit Logs ---
+    with tab7:
+        _render_audit_logs_tab()
 
 
 def _render_sandbox_tab() -> None:
@@ -3349,6 +3364,86 @@ def _render_draft_rules_tab() -> None:
                                 st.rerun()
                             else:
                                 st.error("Failed to update rule. Check the API server.")
+
+            # Version History
+            st.markdown("---")
+            st.markdown("### Version History")
+
+            versions_result = list_rule_versions(rule_id)
+            if versions_result:
+                versions = versions_result.get("versions", [])
+                if versions:
+                    st.markdown(f"**{len(versions)} version(s) found**")
+
+                    # Version selector
+                    def format_version_option(v: dict) -> str:
+                        vid = v.get("version_id", "")
+                        ts = v.get("timestamp", "")
+                        creator = v.get("created_by", "")
+                        return f"{vid} - {ts} - {creator}"
+
+                    version_options = [format_version_option(v) for v in versions]
+                    selected_version_idx = st.selectbox(
+                        "Select version to view",
+                        options=range(len(versions)),
+                        format_func=lambda x: version_options[x],
+                    )
+
+                    if selected_version_idx is not None:
+                        selected_version = versions[selected_version_idx]
+                        version_id = selected_version.get("version_id", "")
+
+                        col_v1, col_v2 = st.columns(2)
+                        with col_v1:
+                            st.markdown(f"**Version ID:** {version_id}")
+                            created_by = selected_version.get("created_by", "")
+                            st.markdown(f"**Created By:** {created_by}")
+                            timestamp = selected_version.get("timestamp", "")
+                            st.markdown(f"**Timestamp:** {timestamp}")
+                        with col_v2:
+                            reason = selected_version.get("reason", "")
+                            st.markdown(f"**Reason:** {reason}")
+
+                        # Version rule details
+                        version_rule = selected_version.get("rule", {})
+                        st.markdown("**Version Rule Details:**")
+                        st.json(version_rule)
+
+                        # Rollback button (only if not latest)
+                        if selected_version_idx < len(versions) - 1:
+                            st.markdown("---")
+                            with st.form(key=f"rollback_{version_id}"):
+                                rollback_reason = st.text_area(
+                                    "Rollback Reason (optional)",
+                                    key=f"rollback_reason_{version_id}",
+                                )
+                                rollback_btn = st.form_submit_button(
+                                    "Rollback to This Version", type="primary"
+                                )
+
+                                if rollback_btn:
+                                    with st.spinner("Rolling back rule..."):
+                                        result = rollback_rule_version(
+                                            rule_id=rule_id,
+                                            version_id=version_id,
+                                            reason=rollback_reason,
+                                            actor="ui_user",
+                                        )
+                                    if result:
+                                        st.success(
+                                            f"Rule '{rule_id}' rolled back to version "
+                                            f"{version_id} successfully!"
+                                        )
+                                        st.rerun()
+                                    else:
+                                        st.error(
+                                            "Failed to rollback rule. "
+                                            "Check the API server."
+                                        )
+                else:
+                    st.info("No versions found for this rule.")
+            else:
+                st.warning("Could not load version history. Check the API server.")
         else:
             st.error(f"Could not load rule {rule_id}")
 
@@ -3388,6 +3483,239 @@ def main() -> None:
         render_model_lab()
     else:
         render_rule_inspector()
+
+
+def _render_approval_queue_tab() -> None:
+    """Render the Approval Queue tab."""
+    st.subheader("Approval Queue")
+    st.markdown(
+        "Review and approve or reject rules that are pending review. "
+        "Approved rules will be activated and can affect production scoring."
+    )
+
+    # Get pending rules
+    all_rules = list_draft_rules()
+    pending_rules = [
+        r
+        for r in (all_rules.get("rules", []) if all_rules else [])
+        if r.get("status") == "pending_review"
+    ]
+
+    if not pending_rules:
+        st.info("No rules pending review.")
+        return
+
+    st.markdown(f"**{len(pending_rules)} rule(s) pending review**")
+
+    # Display pending rules
+    for rule in pending_rules:
+        with st.expander(f"Rule: {rule.get('rule_id', 'Unknown')}", expanded=True):
+            col1, col2 = st.columns([2, 1])
+
+            with col1:
+                st.markdown(f"**Field:** {rule.get('field', '')}")
+                st.markdown(f"**Operator:** {rule.get('op', '')}")
+                st.markdown(f"**Value:** {rule.get('value', '')}")
+                st.markdown(f"**Action:** {rule.get('action', '')}")
+                if rule.get("score"):
+                    st.markdown(f"**Score:** {rule.get('score', '')}")
+                st.markdown(f"**Severity:** {rule.get('severity', '')}")
+                st.markdown(f"**Reason:** {rule.get('reason', '')}")
+
+            with col2:
+                # Validation status
+                rule_id = rule.get("rule_id", "")
+                validation = validate_draft_rule(rule_id, include_existing_rules=True)
+
+                if validation:
+                    is_valid = validation.get("is_valid", False)
+                    if is_valid:
+                        st.success("✓ Valid")
+                    else:
+                        st.error("✗ Invalid")
+                        conflicts = validation.get("conflicts", [])
+                        if conflicts:
+                            st.warning(f"{len(conflicts)} conflict(s)")
+
+                # Approve/Reject buttons
+                st.markdown("---")
+
+                # Approve form
+                with st.form(key=f"approve_{rule_id}"):
+                    approver = st.text_input(
+                        "Approver",
+                        value="ui_user",
+                        key=f"approver_{rule_id}",
+                    )
+                    reason = st.text_area(
+                        "Approval Reason (optional)",
+                        key=f"approve_reason_{rule_id}",
+                    )
+                    approve_btn = st.form_submit_button("Approve", type="primary")
+
+                    if approve_btn:
+                        if not approver:
+                            st.error("Approver is required")
+                        else:
+                            with st.spinner("Approving rule..."):
+                                result = approve_draft_rule(
+                                    rule_id=rule_id,
+                                    approver=approver,
+                                    reason=reason,
+                                )
+                            if result:
+                                st.success(f"Rule '{rule_id}' approved successfully!")
+                                st.rerun()
+                            else:
+                                st.error(
+                                    "Failed to approve rule. Check the API server."
+                                )
+
+                # Reject form
+                with st.form(key=f"reject_{rule_id}"):
+                    reject_reason = st.text_area(
+                        "Rejection Reason (min 10 characters)",
+                        key=f"reject_reason_{rule_id}",
+                    )
+                    reject_btn = st.form_submit_button("Reject", type="secondary")
+
+                    if reject_btn:
+                        if len(reject_reason) < 10:
+                            st.error("Rejection reason must be at least 10 characters")
+                        else:
+                            with st.spinner("Rejecting rule..."):
+                                result = reject_draft_rule(
+                                    rule_id=rule_id,
+                                    reason=reject_reason,
+                                    actor="ui_user",
+                                )
+                            if result:
+                                st.success(
+                                    f"Rule '{rule_id}' rejected and returned to draft."
+                                )
+                                st.rerun()
+                            else:
+                                st.error("Failed to reject rule. Check the API server.")
+
+
+def _render_audit_logs_tab() -> None:
+    """Render the Audit Logs tab."""
+    st.subheader("Audit Logs")
+    st.markdown("View audit trail of all rule changes and actions.")
+
+    # Filters
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        rule_id_filter = st.text_input("Rule ID Filter", key="audit_rule_id")
+    with col2:
+        actor_filter = st.text_input("Actor Filter", key="audit_actor")
+    with col3:
+        action_filter = st.selectbox(
+            "Action Filter",
+            options=["", "create", "update", "state_change", "delete", "rollback"],
+            key="audit_action",
+        )
+
+    col4, col5 = st.columns(2)
+    with col4:
+        start_date = st.date_input("Start Date", key="audit_start_date")
+    with col5:
+        end_date = st.date_input("End Date", key="audit_end_date")
+
+    # Query button
+    if st.button("Query Audit Logs", type="primary"):
+        with st.spinner("Loading audit logs..."):
+            start_str = start_date.isoformat() if start_date else None
+            end_str = end_date.isoformat() if end_date else None
+
+            result = query_audit_logs(
+                rule_id=rule_id_filter if rule_id_filter else None,
+                actor=actor_filter if actor_filter else None,
+                action=action_filter if action_filter else None,
+                start_date=start_str,
+                end_date=end_str,
+            )
+
+            if result:
+                st.session_state.audit_logs = result
+            else:
+                st.error("Failed to query audit logs. Check the API server.")
+
+    # Display results
+    if "audit_logs" in st.session_state:
+        logs = st.session_state.audit_logs.get("records", [])
+        total = st.session_state.audit_logs.get("total", 0)
+
+        st.markdown(f"**{total} record(s) found**")
+
+        if logs:
+            # Create DataFrame for display
+            df_data = []
+            for log in logs:
+                df_data.append(
+                    {
+                        "Timestamp": log.get("timestamp", ""),
+                        "Rule ID": log.get("rule_id", ""),
+                        "Action": log.get("action", ""),
+                        "Actor": log.get("actor", ""),
+                        "Reason": log.get("reason", ""),
+                    }
+                )
+
+            df = pd.DataFrame(df_data)
+            st.dataframe(df, use_container_width=True)
+
+            # Export button
+            if st.button("Export as CSV"):
+                csv = df.to_csv(index=False)
+                st.download_button(
+                    label="Download CSV",
+                    data=csv,
+                    file_name="audit_logs.csv",
+                    mime="text/csv",
+                )
+
+            # Detailed view
+            st.markdown("---")
+            st.markdown("### Detailed View")
+
+            def format_log_entry(x: int) -> str:
+                log = logs[x]
+                timestamp = log.get("timestamp", "")
+                action = log.get("action", "")
+                rule_id = log.get("rule_id", "")
+                return f"{timestamp} - {action} - {rule_id}"
+
+            selected_idx = st.selectbox(
+                "Select record to view details",
+                options=range(len(logs)),
+                format_func=format_log_entry,
+            )
+
+            if selected_idx is not None:
+                log = logs[selected_idx]
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.markdown(f"**Rule ID:** {log.get('rule_id', '')}")
+                    st.markdown(f"**Action:** {log.get('action', '')}")
+                    st.markdown(f"**Actor:** {log.get('actor', '')}")
+                    st.markdown(f"**Timestamp:** {log.get('timestamp', '')}")
+
+                with col2:
+                    st.markdown(f"**Reason:** {log.get('reason', '')}")
+                    before_state = log.get("before_state")
+                    after_state = log.get("after_state")
+
+                    if before_state:
+                        st.markdown("**Before State:**")
+                        st.json(before_state)
+                    if after_state:
+                        st.markdown("**After State:**")
+                        st.json(after_state)
+        else:
+            st.info("No audit records found matching the filters.")
 
 
 if __name__ == "__main__":

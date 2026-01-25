@@ -749,3 +749,168 @@ class AcceptSuggestionResponse(BaseModel):
             "Source suggestion metadata (confidence, evidence, field, threshold)"
         ),
     )
+
+
+# =============================================================================
+# Approval and Activation Schemas
+# =============================================================================
+
+
+class ApproveRuleRequest(BaseModel):
+    """Request schema for approving a pending rule."""
+
+    approver: str = Field(..., description="Who is approving this rule")
+    reason: str = Field(
+        default="",
+        description="Optional reason for approval",
+    )
+
+
+class ApproveRuleResponse(BaseModel):
+    """Response schema for approving a rule."""
+
+    rule: DraftRuleResponse = Field(..., description="Approved rule")
+    approved_at: str = Field(..., description="Approval timestamp (ISO format)")
+
+
+class RejectRuleRequest(BaseModel):
+    """Request schema for rejecting a pending rule."""
+
+    actor: str = Field(..., description="Who is rejecting this rule")
+    reason: str = Field(
+        ...,
+        min_length=10,
+        description="Reason for rejection (min 10 characters)",
+    )
+
+
+class RejectRuleResponse(BaseModel):
+    """Response schema for rejecting a rule."""
+
+    rule: DraftRuleResponse = Field(..., description="Rejected rule (back to draft)")
+    rejected_at: str = Field(..., description="Rejection timestamp (ISO format)")
+
+
+class ActivateRuleRequest(BaseModel):
+    """Request schema for activating a rule."""
+
+    actor: str = Field(..., description="Who is activating this rule")
+    approver: str | None = Field(
+        None, description="Approver (required for approval-required transitions)"
+    )
+    reason: str = Field(
+        ...,
+        min_length=10,
+        description="Reason for activation (min 10 characters)",
+    )
+
+
+class ActivateRuleResponse(BaseModel):
+    """Response schema for activating a rule."""
+
+    rule: DraftRuleResponse = Field(..., description="Activated rule")
+    activated_at: str = Field(..., description="Activation timestamp (ISO format)")
+
+
+class DisableRuleRequest(BaseModel):
+    """Request schema for disabling a rule."""
+
+    actor: str = Field(..., description="Who is disabling this rule")
+    reason: str = Field(
+        default="",
+        description="Optional reason for disabling",
+    )
+
+
+class DisableRuleResponse(BaseModel):
+    """Response schema for disabling a rule."""
+
+    rule: DraftRuleResponse = Field(..., description="Disabled rule")
+    disabled_at: str = Field(..., description="Disable timestamp (ISO format)")
+
+
+class ShadowRuleRequest(BaseModel):
+    """Request schema for moving a rule to shadow mode."""
+
+    actor: str = Field(..., description="Who is moving this rule to shadow")
+    reason: str = Field(
+        default="",
+        description="Optional reason for shadow mode",
+    )
+
+
+class ShadowRuleResponse(BaseModel):
+    """Response schema for moving a rule to shadow mode."""
+
+    rule: DraftRuleResponse = Field(..., description="Rule in shadow mode")
+    shadowed_at: str = Field(..., description="Shadow timestamp (ISO format)")
+
+
+# =============================================================================
+# Version and Rollback Schemas
+# =============================================================================
+
+
+class RuleVersionResponse(BaseModel):
+    """Response schema for a rule version."""
+
+    rule_id: str = Field(..., description="Rule identifier")
+    version_id: str = Field(..., description="Version identifier")
+    rule: DraftRuleResponse = Field(..., description="Rule at this version")
+    timestamp: str = Field(..., description="Version timestamp (ISO format)")
+    created_by: str = Field(..., description="Who created this version")
+    reason: str = Field(default="", description="Reason for this version")
+
+
+class RuleVersionListResponse(BaseModel):
+    """Response schema for listing rule versions."""
+
+    versions: list[RuleVersionResponse] = Field(
+        ..., description="List of versions (oldest first)"
+    )
+    total: int = Field(..., description="Total number of versions")
+
+
+class RollbackRuleRequest(BaseModel):
+    """Request schema for rolling back a rule."""
+
+    actor: str = Field(..., description="Who is performing the rollback")
+    reason: str = Field(
+        default="",
+        description="Optional reason for rollback",
+    )
+
+
+class RollbackRuleResponse(BaseModel):
+    """Response schema for rolling back a rule."""
+
+    rule: DraftRuleResponse = Field(..., description="Rolled back rule")
+    version_id: str = Field(..., description="New version ID created by rollback")
+    rolled_back_to: str = Field(..., description="Version ID rolled back to")
+    rolled_back_at: str = Field(..., description="Rollback timestamp (ISO format)")
+
+
+# =============================================================================
+# Audit Log Schemas
+# =============================================================================
+
+
+class AuditRecordResponse(BaseModel):
+    """Response schema for an audit record."""
+
+    rule_id: str = Field(..., description="Rule identifier")
+    action: str = Field(..., description="Action type")
+    actor: str = Field(..., description="Who performed the action")
+    timestamp: str = Field(..., description="Timestamp (ISO format)")
+    before_state: dict[str, Any] | None = Field(None, description="State before change")
+    after_state: dict[str, Any] | None = Field(None, description="State after change")
+    reason: str = Field(default="", description="Reason for the action")
+
+
+class AuditLogQueryResponse(BaseModel):
+    """Response schema for audit log query."""
+
+    records: list[AuditRecordResponse] = Field(
+        ..., description="Matching audit records"
+    )
+    total: int = Field(..., description="Total number of matching records")

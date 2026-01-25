@@ -1399,3 +1399,298 @@ def accept_suggestion(
     except requests.RequestException as e:
         print(f"Error accepting suggestion: {e}")
         return None
+
+
+def approve_draft_rule(
+    rule_id: str,
+    approver: str = "ui_user",
+    reason: str = "",
+) -> dict[str, Any] | None:
+    """Approve a pending draft rule.
+
+    Args:
+        rule_id: Rule identifier.
+        approver: Who is approving the rule.
+        reason: Optional reason for approval.
+
+    Returns:
+        Approval response or None if request failed.
+    """
+    url = f"{API_BASE_URL}/rules/draft/{rule_id}/approve"
+
+    payload = {
+        "approver": approver,
+        "reason": reason,
+    }
+
+    try:
+        response = requests.post(url, json=payload, timeout=API_TIMEOUT * 2)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error approving draft rule: {e}")
+        return None
+
+
+def reject_draft_rule(
+    rule_id: str,
+    reason: str,
+    actor: str = "ui_user",
+) -> dict[str, Any] | None:
+    """Reject a pending draft rule.
+
+    Args:
+        rule_id: Rule identifier.
+        reason: Reason for rejection (min 10 characters).
+        actor: Who is rejecting the rule.
+
+    Returns:
+        Rejection response or None if request failed.
+    """
+    url = f"{API_BASE_URL}/rules/draft/{rule_id}/reject"
+
+    payload = {
+        "actor": actor,
+        "reason": reason,
+    }
+
+    try:
+        response = requests.post(url, json=payload, timeout=API_TIMEOUT * 2)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error rejecting draft rule: {e}")
+        return None
+
+
+def activate_rule(
+    rule_id: str,
+    reason: str,
+    actor: str = "ui_user",
+    approver: str | None = None,
+) -> dict[str, Any] | None:
+    """Activate a rule.
+
+    Args:
+        rule_id: Rule identifier.
+        reason: Reason for activation (min 10 characters).
+        actor: Who is activating the rule.
+        approver: Optional approver (required for some transitions).
+
+    Returns:
+        Activation response or None if request failed.
+    """
+    url = f"{API_BASE_URL}/rules/{rule_id}/activate"
+
+    payload = {
+        "actor": actor,
+        "reason": reason,
+    }
+    if approver:
+        payload["approver"] = approver
+
+    try:
+        response = requests.post(url, json=payload, timeout=API_TIMEOUT * 2)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error activating rule: {e}")
+        return None
+
+
+def disable_rule(
+    rule_id: str,
+    reason: str = "",
+    actor: str = "ui_user",
+) -> dict[str, Any] | None:
+    """Disable a rule.
+
+    Args:
+        rule_id: Rule identifier.
+        reason: Optional reason for disabling.
+        actor: Who is disabling the rule.
+
+    Returns:
+        Disable response or None if request failed.
+    """
+    url = f"{API_BASE_URL}/rules/{rule_id}/disable"
+
+    payload = {
+        "actor": actor,
+        "reason": reason,
+    }
+
+    try:
+        response = requests.post(url, json=payload, timeout=API_TIMEOUT * 2)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error disabling rule: {e}")
+        return None
+
+
+def shadow_rule(
+    rule_id: str,
+    reason: str = "",
+    actor: str = "ui_user",
+) -> dict[str, Any] | None:
+    """Move a rule to shadow mode.
+
+    Args:
+        rule_id: Rule identifier.
+        reason: Optional reason for shadow mode.
+        actor: Who is moving the rule to shadow.
+
+    Returns:
+        Shadow response or None if request failed.
+    """
+    url = f"{API_BASE_URL}/rules/{rule_id}/shadow"
+
+    payload = {
+        "actor": actor,
+        "reason": reason,
+    }
+
+    try:
+        response = requests.post(url, json=payload, timeout=API_TIMEOUT * 2)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error shadowing rule: {e}")
+        return None
+
+
+def list_rule_versions(rule_id: str) -> dict[str, Any] | None:
+    """List all versions of a rule.
+
+    Args:
+        rule_id: Rule identifier.
+
+    Returns:
+        Version list response or None if request failed.
+    """
+    url = f"{API_BASE_URL}/rules/{rule_id}/versions"
+
+    try:
+        response = requests.get(url, timeout=API_TIMEOUT)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error listing rule versions: {e}")
+        return None
+
+
+def get_rule_version(rule_id: str, version_id: str) -> dict[str, Any] | None:
+    """Get a specific version of a rule.
+
+    Args:
+        rule_id: Rule identifier.
+        version_id: Version identifier.
+
+    Returns:
+        Version response or None if request failed.
+    """
+    url = f"{API_BASE_URL}/rules/{rule_id}/versions/{version_id}"
+
+    try:
+        response = requests.get(url, timeout=API_TIMEOUT)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error getting rule version: {e}")
+        return None
+
+
+def rollback_rule_version(
+    rule_id: str,
+    version_id: str,
+    reason: str = "",
+    actor: str = "ui_user",
+) -> dict[str, Any] | None:
+    """Rollback a rule to a previous version.
+
+    Args:
+        rule_id: Rule identifier.
+        version_id: Version to rollback to.
+        reason: Optional reason for rollback.
+        actor: Who is performing the rollback.
+
+    Returns:
+        Rollback response or None if request failed.
+    """
+    url = f"{API_BASE_URL}/rules/{rule_id}/versions/{version_id}/rollback"
+
+    payload = {
+        "actor": actor,
+        "reason": reason,
+    }
+
+    try:
+        response = requests.post(url, json=payload, timeout=API_TIMEOUT * 2)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error rolling back rule version: {e}")
+        return None
+
+
+def query_audit_logs(
+    rule_id: str | None = None,
+    actor: str | None = None,
+    action: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> dict[str, Any] | None:
+    """Query audit logs with filters.
+
+    Args:
+        rule_id: Optional rule ID filter.
+        actor: Optional actor filter.
+        action: Optional action type filter.
+        start_date: Optional start date (ISO format).
+        end_date: Optional end date (ISO format).
+
+    Returns:
+        Audit log query response or None if request failed.
+    """
+    url = f"{API_BASE_URL}/audit/logs"
+
+    params = {}
+    if rule_id:
+        params["rule_id"] = rule_id
+    if actor:
+        params["actor"] = actor
+    if action:
+        params["action"] = action
+    if start_date:
+        params["start_date"] = start_date
+    if end_date:
+        params["end_date"] = end_date
+
+    try:
+        response = requests.get(url, params=params, timeout=API_TIMEOUT * 2)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error querying audit logs: {e}")
+        return None
+
+
+def get_rule_audit_history(rule_id: str) -> dict[str, Any] | None:
+    """Get audit history for a rule.
+
+    Args:
+        rule_id: Rule identifier.
+
+    Returns:
+        Audit history response or None if request failed.
+    """
+    url = f"{API_BASE_URL}/audit/rules/{rule_id}/history"
+
+    try:
+        response = requests.get(url, timeout=API_TIMEOUT)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error getting rule audit history: {e}")
+        return None

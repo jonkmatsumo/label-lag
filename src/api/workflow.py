@@ -1,6 +1,7 @@
 """State machine for rule lifecycle transitions."""
 
 import logging
+import os
 from dataclasses import asdict
 
 from api.audit import get_audit_logger
@@ -60,7 +61,6 @@ class RuleStateMachine:
         actor: str,
         reason: str = "",
         approver: str | None = None,
-        previous_actor: str | None = None,
     ) -> Rule:
         """Transition a rule to a new status.
 
@@ -70,7 +70,6 @@ class RuleStateMachine:
             actor: Who is making the transition.
             reason: Optional reason for the transition.
             approver: Optional approver (required for some transitions).
-            previous_actor: Optional previous actor (for self-approval check).
 
         Returns:
             Updated rule with new status.
@@ -97,12 +96,10 @@ class RuleStateMachine:
                     f"'{current_status}' -> '{new_status}' requires approval. "
                     "Provide an approver."
                 )
-            # Prevent self-approval: compare approver to previous_actor if provided,
-            # otherwise to current actor
-            check_actor = previous_actor if previous_actor else actor
-            if approver == check_actor:
+            # Prevent self-approval
+            if approver == actor:
                 raise TransitionError(
-                    f"Self-approval not allowed. Actor '{check_actor}' cannot approve "
+                    f"Self-approval not allowed. Actor '{actor}' cannot approve "
                     "their own transition."
                 )
 
@@ -112,12 +109,16 @@ class RuleStateMachine:
         updated_rule = Rule(**rule_dict)
 
         # Log the transition
+        after_state = {"status": new_status}
+        if approver:
+            after_state["approver"] = approver
+
         self._audit_logger.log(
             rule_id=rule.id,
             action="state_change",
             actor=actor,
             before_state={"status": current_status},
-            after_state={"status": new_status},
+            after_state=after_state,
             reason=reason or f"State transition: {current_status} -> {new_status}",
         )
 
@@ -167,13 +168,17 @@ class RuleStateMachine:
         return ALLOWED_TRANSITIONS.get(current_status, [])
 
 
-def create_state_machine(require_approval: bool = False) -> RuleStateMachine:
+def create_state_machine(require_approval: bool | None = None) -> RuleStateMachine:
     """Create a state machine instance.
 
     Args:
         require_approval: If True, certain transitions require approver role.
+            If None, reads from REQUIRE_APPROVAL env var (defaults to True).
 
     Returns:
         RuleStateMachine instance.
     """
+    if require_approval is None:
+        # Default to True, allow override via env var
+        require_approval = os.getenv("REQUIRE_APPROVAL", "true").lower() == "true"
     return RuleStateMachine(require_approval=require_approval)
