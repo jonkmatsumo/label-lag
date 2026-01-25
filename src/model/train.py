@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -29,6 +30,7 @@ from sklearn.metrics import (
 )
 from xgboost import XGBClassifier
 
+from api.schemas import SplitConfig, SplitStrategy
 from model.loader import DataLoader
 
 # MLflow configuration from environment
@@ -140,12 +142,48 @@ def _generate_model_card(params: dict, metrics: dict, path: str | Path) -> None:
         f.write("\n".join(lines))
 
 
+def _compute_metrics(y_true, y_pred, y_proba):
+    """Compute precision, recall, pr_auc, f1, roc_auc, log_loss, brier, tp/fp/tn/fn."""
+    precision = precision_score(y_true, y_pred, zero_division=0)
+    recall = recall_score(y_true, y_pred, zero_division=0)
+    pr_auc = average_precision_score(y_true, y_proba)
+    f1 = f1_score(y_true, y_pred, zero_division=0)
+    n_classes = len(np.unique(y_true))
+    roc_auc_val = roc_auc_score(y_true, y_proba) if n_classes > 1 else 0.0
+    log_loss_val = log_loss(y_true, y_proba) if n_classes > 1 else 0.0
+    brier = brier_score_loss(y_true, y_proba)
+    cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
+    if cm.shape == (2, 2):
+        tn, fp, fn, tp = cm.ravel()
+    else:
+        yt = np.asarray(y_true)
+        yp = np.asarray(y_pred)
+        tn = int(((yt == 0) & (yp == 0)).sum())
+        fp = int(((yt == 0) & (yp == 1)).sum())
+        fn = int(((yt == 1) & (yp == 0)).sum())
+        tp = int(((yt == 1) & (yp == 1)).sum())
+    return {
+        "precision": precision,
+        "recall": recall,
+        "pr_auc": pr_auc,
+        "f1": f1,
+        "roc_auc": roc_auc_val,
+        "log_loss": log_loss_val,
+        "brier_score": brier,
+        "tp": int(tp),
+        "fp": int(fp),
+        "tn": int(tn),
+        "fn": int(fn),
+    }
+
+
 def train_model(
     scale_pos_weight: float | None = None,
     max_depth: int = 6,
     training_window_days: int = 30,
     database_url: str | None = None,
     feature_columns: list[str] | None = None,
+    split_config: SplitConfig | None = None,
 ) -> str:
     """Train an XGBoost model with MLflow tracking.
 
@@ -158,20 +196,20 @@ def train_model(
         database_url: Optional database URL override.
         feature_columns: Optional list of feature columns to use. If None, uses
             default FEATURE_COLUMNS from DataLoader.
+        split_config: Optional split/CV config. When strategy is KFOLD_TEMPORAL,
+            per-fold metrics are logged and aggregated.
 
     Returns:
         The MLflow run ID.
     """
-    # Set up MLflow experiment
     mlflow.set_experiment(EXPERIMENT_NAME)
-
-    # Calculate training cutoff date
     training_cutoff_date = datetime.now(UTC) - timedelta(days=training_window_days)
 
-    # Load data
     loader = DataLoader(database_url=database_url)
     split = loader.load_train_test_split(
-        training_cutoff_date, feature_columns=feature_columns
+        training_cutoff_date,
+        feature_columns=feature_columns,
+        split_config=split_config,
     )
 
     # Determine actual feature columns used (for logging)
@@ -246,55 +284,67 @@ def train_model(
             eval_metric="logloss",
         )
 
+        # Optional CV loop: log per-fold metrics and aggregates
+        do_cv = (
+            split_config is not None
+            and split_config.strategy == SplitStrategy.KFOLD_TEMPORAL
+        )
+        if do_cv and split.train_size >= split_config.n_folds:
+            k = split_config.n_folds
+            n = split.train_size
+            fold_metrics: list[dict] = []
+            x_tr = split.X_train
+            y_tr = split.y_train
+            fold_size = n // k
+            for fold_i in range(k):
+                val_start = fold_i * fold_size
+                val_end = n if fold_i == k - 1 else (fold_i + 1) * fold_size
+                val_idx = np.arange(val_start, val_end)
+                train_idx = np.concatenate(
+                    [np.arange(0, val_start), np.arange(val_end, n)]
+                )
+                if len(train_idx) == 0 or len(val_idx) == 0:
+                    continue
+                x_fold_train = x_tr.iloc[train_idx]
+                y_fold_train = y_tr.iloc[train_idx]
+                x_fold_val = x_tr.iloc[val_idx]
+                y_fold_val = y_tr.iloc[val_idx]
+                sw = scale_pos_weight
+                if (y_fold_train == 1).sum() == 0:
+                    continue
+                if sw is None:
+                    sw = float((y_fold_train == 0).sum() / (y_fold_train == 1).sum())
+                fold_clf = XGBClassifier(
+                    scale_pos_weight=sw,
+                    max_depth=max_depth,
+                    n_estimators=n_estimators,
+                    learning_rate=learning_rate,
+                    random_state=random_state,
+                    use_label_encoder=False,
+                    eval_metric="logloss",
+                )
+                fold_clf.fit(x_fold_train, y_fold_train)
+                y_vp = fold_clf.predict(x_fold_val)
+                y_vprob = fold_clf.predict_proba(x_fold_val)[:, 1]
+                fm = _compute_metrics(y_fold_val, y_vp, y_vprob)
+                fold_metrics.append(fm)
+                for key, val in fm.items():
+                    mlflow.log_metric(f"cv_{key}_fold_{fold_i}", val, step=fold_i)
+            if fold_metrics:
+                agg = {}
+                for key in fold_metrics[0]:
+                    vals = [m[key] for m in fold_metrics]
+                    agg[f"{key}_mean"] = float(np.mean(vals))
+                    agg[f"{key}_std"] = float(np.std(vals))
+                mlflow.log_metrics(agg)
+
         clf.fit(split.X_train, split.y_train)
 
-        # Generate predictions
         y_pred = clf.predict(split.X_test)
         y_pred_proba = clf.predict_proba(split.X_test)[:, 1]
+        metrics_dict = _compute_metrics(split.y_test, y_pred, y_pred_proba)
 
-        # Calculate metrics
-        precision = precision_score(split.y_test, y_pred, zero_division=0)
-        recall = recall_score(split.y_test, y_pred, zero_division=0)
-        pr_auc = average_precision_score(split.y_test, y_pred_proba)
-        f1 = f1_score(split.y_test, y_pred, zero_division=0)
-        roc_auc_val = (
-            roc_auc_score(split.y_test, y_pred_proba)
-            if len(split.y_test.unique()) > 1
-            else 0.0
-        )
-        log_loss_val = (
-            log_loss(split.y_test, y_pred_proba)
-            if len(split.y_test.unique()) > 1
-            else 0.0
-        )
-        brier = brier_score_loss(split.y_test, y_pred_proba)
-        cm = confusion_matrix(split.y_test, y_pred)
-        if cm.shape == (2, 2):
-            tn, fp, fn, tp = cm.ravel()
-        else:
-            yt = split.y_test.values
-            yp = y_pred
-            tn = int(((yt == 0) & (yp == 0)).sum())
-            fp = int(((yt == 0) & (yp == 1)).sum())
-            fn = int(((yt == 1) & (yp == 0)).sum())
-            tp = int(((yt == 1) & (yp == 1)).sum())
-
-        # Log metrics
-        mlflow.log_metrics(
-            {
-                "precision": precision,
-                "recall": recall,
-                "pr_auc": pr_auc,
-                "f1": f1,
-                "roc_auc": roc_auc_val,
-                "log_loss": log_loss_val,
-                "brier_score": brier,
-                "tp": int(tp),
-                "fp": int(fp),
-                "tn": int(tn),
-                "fn": int(fn),
-            }
-        )
+        mlflow.log_metrics(metrics_dict)
 
         # Log the model with signature and input example
         signature = infer_signature(split.X_train, y_pred_proba)
@@ -305,7 +355,6 @@ def train_model(
             input_example=split.X_train.iloc[:1],
         )
 
-        # Build params/metrics dicts for model card
         params_dict = {
             "train_size": split.train_size,
             "test_size": split.test_size,
@@ -315,19 +364,6 @@ def train_model(
             "n_estimators": n_estimators,
             "learning_rate": learning_rate,
             "training_window_days": training_window_days,
-        }
-        metrics_dict = {
-            "precision": precision,
-            "recall": recall,
-            "pr_auc": pr_auc,
-            "f1": f1,
-            "roc_auc": roc_auc_val,
-            "log_loss": log_loss_val,
-            "brier_score": brier,
-            "tp": int(tp),
-            "fp": int(fp),
-            "tn": int(tn),
-            "fn": int(fn),
         }
 
         # Save and log reference data (X_test) for drift detection
@@ -355,10 +391,15 @@ def train_model(
             mlflow.log_artifact(fi_json)
             mlflow.log_artifact(fi_png)
 
-            # Model card
             card_path = os.path.join(tmpdir, "model_card.md")
             _generate_model_card(params_dict, metrics_dict, card_path)
             mlflow.log_artifact(card_path)
+
+            if split.split_manifest is not None:
+                manifest_path = os.path.join(tmpdir, "split_manifest.json")
+                with open(manifest_path, "w") as f:
+                    json.dump(split.split_manifest, f, indent=2)
+                mlflow.log_artifact(manifest_path)
 
         # Register the model
         model_uri = f"runs:/{run.info.run_id}/model"
