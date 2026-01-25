@@ -8,7 +8,16 @@ from datetime import UTC, datetime, timedelta
 import mlflow
 import mlflow.sklearn
 from mlflow.models import infer_signature
-from sklearn.metrics import average_precision_score, precision_score, recall_score
+from sklearn.metrics import (
+    average_precision_score,
+    brier_score_loss,
+    confusion_matrix,
+    f1_score,
+    log_loss,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+)
 from xgboost import XGBClassifier
 
 from model.loader import DataLoader
@@ -126,6 +135,28 @@ def train_model(
         precision = precision_score(split.y_test, y_pred, zero_division=0)
         recall = recall_score(split.y_test, y_pred, zero_division=0)
         pr_auc = average_precision_score(split.y_test, y_pred_proba)
+        f1 = f1_score(split.y_test, y_pred, zero_division=0)
+        roc_auc_val = (
+            roc_auc_score(split.y_test, y_pred_proba)
+            if len(split.y_test.unique()) > 1
+            else 0.0
+        )
+        log_loss_val = (
+            log_loss(split.y_test, y_pred_proba)
+            if len(split.y_test.unique()) > 1
+            else 0.0
+        )
+        brier = brier_score_loss(split.y_test, y_pred_proba)
+        cm = confusion_matrix(split.y_test, y_pred)
+        if cm.shape == (2, 2):
+            tn, fp, fn, tp = cm.ravel()
+        else:
+            yt = split.y_test.values
+            yp = y_pred
+            tn = int(((yt == 0) & (yp == 0)).sum())
+            fp = int(((yt == 0) & (yp == 1)).sum())
+            fn = int(((yt == 1) & (yp == 0)).sum())
+            tp = int(((yt == 1) & (yp == 1)).sum())
 
         # Log metrics
         mlflow.log_metrics(
@@ -133,6 +164,14 @@ def train_model(
                 "precision": precision,
                 "recall": recall,
                 "pr_auc": pr_auc,
+                "f1": f1,
+                "roc_auc": roc_auc_val,
+                "log_loss": log_loss_val,
+                "brier_score": brier,
+                "tp": int(tp),
+                "fp": int(fp),
+                "tn": int(tn),
+                "fn": int(fn),
             }
         )
 
