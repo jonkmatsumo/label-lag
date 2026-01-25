@@ -1,4 +1,4 @@
-"""Heuristic rule suggestion engine based on feature distributions."""
+"""Heuristic and model-assisted rule suggestion engine."""
 
 import logging
 from dataclasses import dataclass
@@ -8,6 +8,7 @@ from typing import Any
 import numpy as np
 from sqlalchemy import text
 
+from api.model_manager import get_model_manager
 from api.rules import Rule, RuleSet, RuleStatus
 from synthetic_pipeline.db.session import DatabaseSession
 
@@ -284,3 +285,170 @@ def set_suggestion_engine(engine: SuggestionEngine) -> None:
     """
     global _global_suggestion_engine
     _global_suggestion_engine = engine
+
+
+class ModelAssistedSuggestionEngine:
+    """Generates rule suggestions using model feature importance and SHAP values."""
+
+    def __init__(
+        self,
+        db_session: DatabaseSession | None = None,
+        min_importance: float = 0.1,
+    ):
+        """Initialize model-assisted suggestion engine.
+
+        Args:
+            db_session: Database session. If None, creates a new one.
+            min_importance: Minimum feature importance threshold for suggestions.
+        """
+        self.db_session = db_session or DatabaseSession()
+        self.min_importance = min_importance
+
+    def generate_suggestions_from_model(
+        self, sample_size: int = 1000
+    ) -> list[RuleSuggestion]:
+        """Generate rule suggestions based on model feature importance.
+
+        Args:
+            sample_size: Number of samples to analyze for decision boundaries.
+
+        Returns:
+            List of RuleSuggestion objects.
+        """
+        manager = get_model_manager()
+
+        if not manager.model_loaded:
+            logger.warning("Model not loaded, cannot generate model-assisted suggestions")
+            return []
+
+        # Get feature importance
+        feature_importance = manager.get_feature_importance()
+        if feature_importance is None:
+            logger.warning("Could not extract feature importance from model")
+            return []
+
+        suggestions = []
+
+        # For each high-importance feature, analyze decision boundaries
+        sorted_features = sorted(
+            feature_importance.items(), key=lambda x: x[1], reverse=True
+        )
+
+        for field_name, importance in sorted_features:
+            if importance < self.min_importance:
+                continue
+
+            # Analyze feature distribution and decision boundaries
+            field_suggestions = self._analyze_feature_with_model(
+                field_name, importance, sample_size
+            )
+            suggestions.extend(field_suggestions)
+
+        # Sort by confidence (highest first)
+        suggestions.sort(key=lambda s: s.confidence, reverse=True)
+
+        logger.info(
+            f"Generated {len(suggestions)} model-assisted rule suggestions from "
+            f"{len(sorted_features)} features"
+        )
+
+        return suggestions
+
+    def _analyze_feature_with_model(
+        self, field_name: str, importance: float, sample_size: int
+    ) -> list[RuleSuggestion]:
+        """Analyze a feature using model insights.
+
+        Args:
+            field_name: Name of the feature.
+            importance: Feature importance score.
+            sample_size: Number of samples to analyze.
+
+        Returns:
+            List of RuleSuggestion objects.
+        """
+        suggestions = []
+
+        # Get feature distribution
+        with self.db_session.get_session() as session:
+            query = text(f"""
+                SELECT {field_name}
+                FROM feature_snapshots
+                WHERE {field_name} IS NOT NULL
+                LIMIT :limit
+            """)
+
+            result = session.execute(query, {"limit": sample_size})
+            values = [float(row[0]) for row in result]
+
+            if len(values) < 10:
+                return []
+
+            values_array = np.array(values)
+
+            # Use percentiles to suggest thresholds
+            # High-importance features with high values suggest risk
+            percentile_90 = float(np.percentile(values_array, 90))
+            percentile_95 = float(np.percentile(values_array, 95))
+
+            # Confidence based on feature importance
+            base_confidence = min(importance * 2.0, 0.95)  # Scale importance to confidence
+
+            # Suggest high threshold rule
+            if percentile_95 > np.mean(values_array):
+                suggestions.append(
+                    RuleSuggestion(
+                        field=field_name,
+                        operator=">",
+                        threshold=percentile_95,
+                        action="clamp_min",
+                        suggested_score=85,
+                        confidence=base_confidence,
+                        evidence={
+                            "feature_importance": importance,
+                            "percentile_95": percentile_95,
+                            "mean": float(np.mean(values_array)),
+                            "sample_count": len(values),
+                        },
+                        reason=f"High-importance feature ({importance:.3f}): {field_name} > {percentile_95:.2f}",
+                    )
+                )
+
+            # For balance volatility (negative z-scores), suggest low threshold
+            if field_name == "balance_volatility_z_score":
+                percentile_10 = float(np.percentile(values_array, 10))
+                if percentile_10 < -2.0:
+                    suggestions.append(
+                        RuleSuggestion(
+                            field=field_name,
+                            operator="<",
+                            threshold=percentile_10,
+                            action="clamp_min",
+                            suggested_score=80,
+                            confidence=base_confidence * 0.9,
+                            evidence={
+                                "feature_importance": importance,
+                                "percentile_10": percentile_10,
+                                "mean": float(np.mean(values_array)),
+                                "sample_count": len(values),
+                            },
+                            reason=f"High-importance feature ({importance:.3f}): low balance volatility",
+                        )
+                    )
+
+        return suggestions
+
+    def create_ruleset_from_suggestions(
+        self, suggestions: list[RuleSuggestion], version: str = "model_suggested_v1"
+    ) -> RuleSet:
+        """Create a RuleSet from model-assisted suggestions.
+
+        Args:
+            suggestions: List of RuleSuggestion objects.
+            version: Version string for the ruleset.
+
+        Returns:
+            RuleSet with suggested rules in draft status.
+        """
+        rules = [s.to_rule() for s in suggestions]
+        return RuleSet(version=version, rules=rules)
