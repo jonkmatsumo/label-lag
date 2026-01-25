@@ -60,6 +60,6 @@ services:
     stdin_open: true
     tty: true
 
-networks:
-  labellag_net:
-    external: true
+# Network labellag_net is defined in docker-compose.infra.yml.
+# Run app with infra: -f docker-compose.infra.yml -f docker-compose.app.yml,
+# or use the convenience wrapper (include). Do not run app compose alone.
