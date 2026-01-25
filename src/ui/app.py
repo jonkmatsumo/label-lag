@@ -2894,42 +2894,92 @@ def _render_draft_rules_tab() -> None:
                         st.session_state.show_edit_form = True
 
                 with action_col2:
-                    if st.button("Validate Rule", key="validate_btn"):
-                        with st.spinner("Validating rule..."):
-                            validation = validate_draft_rule(rule_id)
+                    validate_clicked = st.button("Validate Rule", key="validate_btn")
+                    if validate_clicked:
+                        st.session_state.show_validation = True
 
-                        if validation:
-                            st.markdown("#### Validation Results")
+            # Validation results panel
+            if st.session_state.get("show_validation", False):
+                st.markdown("---")
+                st.markdown("#### Validation Results")
 
-                            if validation.get("is_valid"):
-                                st.success("✅ Rule is valid (no conflicts)")
-                            else:
-                                st.error("❌ Rule has validation issues")
+                col_val1, col_val2 = st.columns([3, 1])
+                with col_val1:
+                    include_prod = st.checkbox(
+                        "Include production ruleset in validation",
+                        value=True,
+                        key="include_prod_check",
+                    )
+                with col_val2:
+                    if st.button("Re-validate", key="revalidate_btn"):
+                        st.session_state.validation_result = None
 
-                            conflicts = validation.get("conflicts", [])
-                            if conflicts:
-                                st.markdown("**Conflicts:**")
-                                for conflict in conflicts:
-                                    st.error(
-                                        f"- {conflict.get('description', '')} "
-                                        f"(Rule: {conflict.get('rule1_id', '')} vs "
-                                        f"{conflict.get('rule2_id', '')})"
-                                    )
+                if (
+                    "validation_result" not in st.session_state
+                    or st.session_state.validation_result is None
+                ):
+                    with st.spinner("Validating rule..."):
+                        validation = validate_draft_rule(
+                            rule_id, include_existing_rules=include_prod
+                        )
+                        st.session_state.validation_result = validation
 
-                            redundancies = validation.get("redundancies", [])
-                            if redundancies:
-                                st.markdown("**Redundancies (warnings):**")
-                                for redundancy in redundancies:
-                                    st.warning(
-                                        f"- {redundancy.get('description', '')} "
-                                        f"(Redundant with: {redundancy.get('redundant_with', '')})"
-                                    )
+                validation = st.session_state.get("validation_result")
+                if validation:
+                    # Validation status badge
+                    if validation.get("is_valid"):
+                        st.success("✅ **Valid** - No conflicts detected")
+                    else:
+                        st.error("❌ **Invalid** - Conflicts must be resolved")
 
-                            schema_errors = validation.get("schema_errors", [])
-                            if schema_errors:
-                                st.markdown("**Schema Errors:**")
-                                for error in schema_errors:
-                                    st.error(f"- {error}")
+                    # Conflicts section
+                    conflicts = validation.get("conflicts", [])
+                    if conflicts:
+                        st.markdown("**⚠️ Conflicts (must be resolved):**")
+                        for conflict in conflicts:
+                            with st.expander(
+                                f"Conflict: {conflict.get('rule1_id', '')} vs "
+                                f"{conflict.get('rule2_id', '')}"
+                            ):
+                                st.error(conflict.get("description", ""))
+                                st.caption(
+                                    f"Conflict type: {conflict.get('conflict_type', 'unknown')}"
+                                )
+
+                    # Redundancies section (warnings)
+                    redundancies = validation.get("redundancies", [])
+                    if redundancies:
+                        st.markdown("**ℹ️ Redundancies (warnings - can proceed):**")
+                        for redundancy in redundancies:
+                            with st.expander(
+                                f"Redundancy: {redundancy.get('rule_id', '')} "
+                                f"redundant with {redundancy.get('redundant_with', '')}"
+                            ):
+                                st.warning(redundancy.get("description", ""))
+                                st.caption(
+                                    f"Redundancy type: "
+                                    f"{redundancy.get('redundancy_type', 'unknown')}"
+                                )
+
+                    # Schema errors
+                    schema_errors = validation.get("schema_errors", [])
+                    if schema_errors:
+                        st.markdown("**❌ Schema Errors:**")
+                        for error in schema_errors:
+                            st.error(f"- {error}")
+
+                    # Summary
+                    if validation.get("is_valid") and not schema_errors:
+                        st.success("Rule is ready for submission!")
+                    elif conflicts:
+                        st.error(
+                            f"**{len(conflicts)} conflict(s) must be resolved before submission.**"
+                        )
+                    elif redundancies:
+                        st.warning(
+                            f"**{len(redundancies)} redundancy warning(s). "
+                            "You can proceed, but consider reviewing.**"
+                        )
 
                 with action_col3:
                     if st.button("Delete Rule", type="secondary", key="delete_btn"):
