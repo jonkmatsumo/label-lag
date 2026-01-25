@@ -157,7 +157,7 @@ class TrainRequest(BaseModel):
     )
     selected_feature_columns: list[str] | None = Field(
         default=None,
-        description="Feature columns to use for training. If None, uses default columns.",
+        description="Feature columns for training. If None, uses defaults.",
     )
 
     def model_post_init(self, __context) -> None:

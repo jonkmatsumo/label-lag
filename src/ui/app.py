@@ -13,6 +13,8 @@ import json
 import os
 import time
 
+import numpy as np
+import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
@@ -35,9 +37,6 @@ from mlflow_utils import (
     promote_to_production,
 )
 from plotly.subplots import make_subplots
-
-import pandas as pd
-import numpy as np
 
 # Configuration from environment
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
@@ -535,7 +534,6 @@ def _compute_correlation_ratio(categorical: pd.Series, numeric: pd.Series) -> fl
     overall_mean = df["num"].mean()
 
     # SS_between and SS_total
-    n = len(df)
     ss_between = (
         (group_means - overall_mean) ** 2 * df.groupby("cat").size()
     ).sum()
@@ -594,7 +592,10 @@ def render_synthetic_dataset() -> None:
             min_ts = overview.get("min_transaction_timestamp")
             max_ts = overview.get("max_transaction_timestamp")
             if min_ts and max_ts:
-                date_range = f"{min_ts.strftime('%Y-%m-%d')} → {max_ts.strftime('%Y-%m-%d')}"
+                date_range = (
+                    f"{min_ts.strftime('%Y-%m-%d')} → "
+                    f"{max_ts.strftime('%Y-%m-%d')}"
+                )
             else:
                 date_range = "—"
             st.metric(
@@ -744,7 +745,9 @@ def render_synthetic_dataset() -> None:
                     numeric_cols = _get_numeric_columns(sample_df)
 
                     if not numeric_cols:
-                        st.warning("No numeric columns available for distribution analysis.")
+                        st.warning(
+                            "No numeric columns available for distribution analysis."
+                        )
                     else:
                         selected_col = st.selectbox(
                             "Select Feature Column",
@@ -763,7 +766,10 @@ def render_synthetic_dataset() -> None:
                                 x=selected_col,
                                 color=color_col,
                                 title=f"Distribution of {selected_col}",
-                                labels={selected_col: selected_col, "count": "Frequency"},
+                                labels={
+                                    selected_col: selected_col,
+                                    "count": "Frequency",
+                                },
                                 nbins=50,
                             )
                             fig_hist.update_layout(height=400)
@@ -795,7 +801,11 @@ def render_synthetic_dataset() -> None:
                     missingness_data = []
                     for col in sample_df.columns:
                         missing_count = sample_df[col].isna().sum()
-                        missing_pct = (missing_count / len(sample_df) * 100) if len(sample_df) > 0 else 0
+                        missing_pct = (
+                            (missing_count / len(sample_df) * 100)
+                            if len(sample_df) > 0
+                            else 0
+                        )
                         missingness_data.append(
                             {"column": col, "missingness_pct": missing_pct}
                         )
@@ -850,11 +860,11 @@ def render_synthetic_dataset() -> None:
                             if len(col_data) == 0:
                                 st.warning(f"No valid data in column {selected_col}.")
                             else:
-                                Q1 = col_data.quantile(0.25)
-                                Q3 = col_data.quantile(0.75)
-                                IQR = Q3 - Q1
-                                lower_bound = Q1 - 1.5 * IQR
-                                upper_bound = Q3 + 1.5 * IQR
+                                q1 = col_data.quantile(0.25)
+                                q3 = col_data.quantile(0.75)
+                                iqr = q3 - q1
+                                lower_bound = q1 - 1.5 * iqr
+                                upper_bound = q3 + 1.5 * iqr
 
                                 outliers = col_data[
                                     (col_data < lower_bound) | (col_data > upper_bound)
@@ -887,7 +897,9 @@ def render_synthetic_dataset() -> None:
                                 with col1:
                                     st.metric("Outlier Count", f"{outlier_count:,}")
                                 with col2:
-                                    st.metric("Outlier Percentage", f"{outlier_pct:.2f}%")
+                                    st.metric(
+                            "Outlier Percentage", f"{outlier_pct:.2f}%"
+                        )
                                 with col3:
                                     st.metric(
                                         "Bounds",
@@ -922,7 +934,10 @@ def render_synthetic_dataset() -> None:
                 max_value=50,
                 value=30,
                 step=5,
-                help="Maximum number of numeric columns to include in correlation matrices",
+                help=(
+                    "Maximum number of numeric columns to include "
+                    "in correlation matrices"
+                ),
             )
 
         with col3:
@@ -975,19 +990,29 @@ def render_synthetic_dataset() -> None:
                 # Apply column caps
                 if len(numeric_cols) > max_numeric_cols:
                     # Select top columns by variance
-                    variances = sample_df[numeric_cols].var().sort_values(ascending=False)
+                    variances = (
+                        sample_df[numeric_cols]
+                        .var()
+                        .sort_values(ascending=False)
+                    )
                     numeric_cols = variances.head(max_numeric_cols).index.tolist()
+                    total_numeric = len(_get_numeric_columns(sample_df))
                     st.warning(
-                        f"Limited to top {max_numeric_cols} numeric columns by variance. "
-                        f"({len(_get_numeric_columns(sample_df))} total available)"
+                        f"Limited to top {max_numeric_cols} numeric columns "
+                        f"by variance. ({total_numeric} total available)"
                     )
 
                 if len(categorical_cols) > max_categorical_cols:
                     # Select top columns by frequency (most common categories)
                     categorical_cols = categorical_cols[:max_categorical_cols]
+                    total_categorical = len(
+                        _get_categorical_columns(
+                            sample_df, categorical_cardinality_threshold
+                        )
+                    )
                     st.warning(
                         f"Limited to {max_categorical_cols} categorical columns. "
-                        f"({len(_get_categorical_columns(sample_df, categorical_cardinality_threshold))} total available)"
+                        f"({total_categorical} total available)"
                     )
 
                 st.caption(f"Using {actual_sample_size:,} rows for analysis")
@@ -1090,7 +1115,9 @@ def render_synthetic_dataset() -> None:
                         ).head(20)
                         # Remove the sorting column for display
                         display_df = top_pairs_df.drop(columns=["Abs Pearson"])
-                        st.dataframe(display_df, use_container_width=True, hide_index=True)
+                        st.dataframe(
+                            display_df, use_container_width=True, hide_index=True
+                        )
                     else:
                         st.info("No valid correlations found (all NaN).")
 
@@ -1119,11 +1146,12 @@ def render_synthetic_dataset() -> None:
                             col_b = categorical_cols[j]
 
                             # Check cardinality
-                            if (
-                                sample_df[col_a].nunique() > categorical_cardinality_threshold
-                                or sample_df[col_b].nunique()
-                                > categorical_cardinality_threshold
-                            ):
+                    card_a = sample_df[col_a].nunique()
+                    card_b = sample_df[col_b].nunique()
+                    if (
+                        card_a > categorical_cardinality_threshold
+                        or card_b > categorical_cardinality_threshold
+                    ):
                                 continue
 
                             cramers_v, p_value = _compute_cramers_v(
@@ -1137,18 +1165,23 @@ def render_synthetic_dataset() -> None:
                                     "Column A": col_a,
                                     "Column B": col_b,
                                     "Cramér's V": round(cramers_v, 4),
-                                    "p-value": round(p_value, 4) if p_value is not None else None,
+                                    "p-value": (
+                                round(p_value, 4) if p_value is not None else None
+                            ),
                                 }
                             )
 
                     if associations:
                         assoc_df = pd.DataFrame(associations)
-                        assoc_df = assoc_df.sort_values("Cramér's V", ascending=False).head(30)
+                        assoc_df = (
+                            assoc_df.sort_values("Cramér's V", ascending=False)
+                            .head(30)
+                        )
                         st.dataframe(assoc_df, use_container_width=True, hide_index=True)
                     else:
                         st.info(
-                            "No valid associations found. This may be due to high cardinality "
-                            "or insufficient data."
+                            "No valid associations found. This may be due to "
+                            "high cardinality or insufficient data."
                         )
 
                 except Exception as e:
@@ -1169,7 +1202,8 @@ def render_synthetic_dataset() -> None:
 
                     for cat_col in categorical_cols:
                         # Check cardinality
-                        if sample_df[cat_col].nunique() > categorical_cardinality_threshold:
+                        card = sample_df[cat_col].nunique()
+                        if card > categorical_cardinality_threshold:
                             continue
 
                         for num_col in numeric_cols:
@@ -1187,10 +1221,15 @@ def render_synthetic_dataset() -> None:
 
                     if associations:
                         assoc_df = pd.DataFrame(associations)
-                        assoc_df = assoc_df.sort_values(
-                            "Correlation Ratio (η)", ascending=False
-                        ).head(30)
-                        st.dataframe(assoc_df, use_container_width=True, hide_index=True)
+                        assoc_df = (
+                            assoc_df.sort_values(
+                                "Correlation Ratio (η)", ascending=False
+                            )
+                            .head(30)
+                        )
+                        st.dataframe(
+                            assoc_df, use_container_width=True, hide_index=True
+                        )
                     else:
                         st.info("No valid associations found.")
 
@@ -1217,8 +1256,12 @@ def render_synthetic_dataset() -> None:
 
                     # Numeric features
                     for num_col in numeric_cols:
-                        pearson = target_numeric.corr(sample_df[num_col], method="pearson")
-                        spearman = target_numeric.corr(sample_df[num_col], method="spearman")
+                        pearson = target_numeric.corr(
+                            sample_df[num_col], method="pearson"
+                        )
+                        spearman = target_numeric.corr(
+                            sample_df[num_col], method="spearman"
+                        )
 
                         if pd.notna(pearson) and pd.notna(spearman):
                             target_relations.append(
@@ -1228,16 +1271,23 @@ def render_synthetic_dataset() -> None:
                                     "Pearson": round(pearson, 4),
                                     "Spearman": round(spearman, 4),
                                     "Max Abs Corr": max(abs(pearson), abs(spearman)),
-                                    "Metric": "pearson" if abs(pearson) >= abs(spearman) else "spearman",
+                                    "Metric": (
+                                "pearson"
+                                if abs(pearson) >= abs(spearman)
+                                else "spearman"
+                            ),
                                 }
                             )
 
                     # Categorical features
                     for cat_col in categorical_cols:
-                        if sample_df[cat_col].nunique() > categorical_cardinality_threshold:
+                        card = sample_df[cat_col].nunique()
+                        if card > categorical_cardinality_threshold:
                             continue
 
-                        eta = _compute_correlation_ratio(sample_df[cat_col], target_numeric)
+                        eta = _compute_correlation_ratio(
+                            sample_df[cat_col], target_numeric
+                        )
 
                         if pd.notna(eta):
                             target_relations.append(
@@ -1252,7 +1302,13 @@ def render_synthetic_dataset() -> None:
 
                     if target_relations:
                         # Check for potential leakage
-                        leakage_keywords = ["fraud", "label", "target", "confirmed", "evaluation"]
+                        leakage_keywords = [
+                            "fraud",
+                            "label",
+                            "target",
+                            "confirmed",
+                            "evaluation",
+                        ]
                         leakage_threshold = 0.8
 
                         for rel in target_relations:
@@ -1270,14 +1326,18 @@ def render_synthetic_dataset() -> None:
                             rel["Potential Leakage"] = name_leakage or high_assoc
 
                         target_df = pd.DataFrame(target_relations)
-                        target_df = target_df.sort_values("Max Abs Corr", ascending=False)
+                        target_df = target_df.sort_values(
+                            "Max Abs Corr", ascending=False
+                        )
 
                         # Display warning if leakage detected
                         leakage_count = target_df["Potential Leakage"].sum()
                         if leakage_count > 0:
                             st.warning(
-                                f"⚠️ Potential data leakage detected in {leakage_count} feature(s). "
-                                f"High association (>{leakage_threshold}) or suspicious naming patterns detected. "
+                                f"⚠️ Potential data leakage detected in "
+                                f"{leakage_count} feature(s). "
+                                f"High association (>{leakage_threshold}) or "
+                                f"suspicious naming patterns detected. "
                                 f"Note: This is a heuristic check on synthetic data."
                             )
 
@@ -1290,15 +1350,20 @@ def render_synthetic_dataset() -> None:
                             "Correlation Ratio (η)",
                             "Potential Leakage",
                         ]
-                        available_cols = [c for c in display_cols if c in target_df.columns]
+                        available_cols = [
+                            c for c in display_cols if c in target_df.columns
+                        ]
                         display_df = target_df[available_cols].copy()
 
                         # Highlight leakage rows
-                        st.dataframe(display_df, use_container_width=True, hide_index=True)
+                        st.dataframe(
+                            display_df, use_container_width=True, hide_index=True
+                        )
 
                         st.caption(
-                            "Note: Leakage detection is heuristic. Synthetic data may have "
-                            "different characteristics than production data."
+                            "Note: Leakage detection is heuristic. "
+                            "Synthetic data may have different characteristics "
+                            "than production data."
                         )
                     else:
                         st.info("No valid target associations found.")
@@ -1431,7 +1496,10 @@ def render_synthetic_dataset() -> None:
 
                     if top_relationships:
                         top_df = pd.DataFrame(top_relationships)
-                        top_df = top_df.sort_values("effect_size", ascending=False).head(50)
+                        top_df = (
+                            top_df.sort_values("effect_size", ascending=False)
+                            .head(50)
+                        )
 
                         # Format for display
                         display_df = top_df.copy()
@@ -1445,7 +1513,9 @@ def render_synthetic_dataset() -> None:
                             "Sample Size",
                         ]
 
-                        st.dataframe(display_df, use_container_width=True, hide_index=True)
+                        st.dataframe(
+                            display_df, use_container_width=True, hide_index=True
+                        )
                     else:
                         st.info("No relationships found to display.")
 
@@ -1481,7 +1551,7 @@ def render_model_lab() -> None:
     # Feature column selection
     try:
         schema_df = fetch_schema_summary(table_names=["feature_snapshots"])
-        NON_TRAINABLE_COLUMNS = [
+        non_trainable_columns = [
             "record_id",
             "snapshot_id",
             "computed_at",
@@ -1490,11 +1560,18 @@ def render_model_lab() -> None:
         ]
 
         # Filter to numeric columns only (exclude JSONB, timestamps, IDs)
-        numeric_types = ["integer", "bigint", "smallint", "real", "double precision", "numeric"]
+        numeric_types = [
+            "integer",
+            "bigint",
+            "smallint",
+            "real",
+            "double precision",
+            "numeric",
+        ]
         available_columns = schema_df[
             (schema_df["table_name"] == "feature_snapshots")
             & (schema_df["data_type"].isin(numeric_types))
-            & (~schema_df["column_name"].isin(NON_TRAINABLE_COLUMNS))
+            & (~schema_df["column_name"].isin(non_trainable_columns))
         ]["column_name"].tolist()
 
         # Default feature columns (matching DataLoader.FEATURE_COLUMNS)
@@ -1532,11 +1609,16 @@ def render_model_lab() -> None:
 
         # Show summary
         if selected_columns:
-            st.caption(f"Selected {len(selected_columns)} of {len(available_columns)} feature columns")
+            st.caption(
+                f"Selected {len(selected_columns)} of "
+                f"{len(available_columns)} feature columns"
+            )
             with st.expander("View Selected Columns"):
                 st.write(", ".join(sorted(selected_columns)))
         else:
-            st.warning("No feature columns selected. Please select at least one column.")
+            st.warning(
+                "No feature columns selected. Please select at least one column."
+            )
 
     except Exception as e:
         st.error(f"Error loading feature columns: {e}")
@@ -1564,7 +1646,9 @@ def render_model_lab() -> None:
             help="Number of days before today for training cutoff",
         )
 
-    train_clicked = st.button("Start Training", type="primary", disabled=not selected_columns)
+    train_clicked = st.button(
+        "Start Training", type="primary", disabled=not selected_columns
+    )
 
     if train_clicked:
         with st.spinner("Training model... This may take a moment."):

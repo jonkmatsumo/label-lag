@@ -186,16 +186,18 @@ class ModelManager:
                         artifact_path = client.download_artifacts(
                             run_id, "feature_columns.json"
                         )
-                        with open(artifact_path, "r") as f:
+                        with open(artifact_path) as f:
                             self._required_features = json.load(f)
                         logger.info(
-                            f"Loaded feature columns from artifact: {self._required_features}"
+                            f"Loaded feature columns from artifact: "
+                            f"{self._required_features}"
                         )
                         return
                     except Exception:
                         # Artifact not found - this is OK for older models
                         logger.debug(
-                            "feature_columns.json artifact not found, using default columns"
+                            "feature_columns.json artifact not found, "
+                            "using default columns"
                         )
                         break
         except Exception as e:
@@ -216,23 +218,28 @@ class ModelManager:
                     run_id = v.run_id
                     try:
                         artifact_path = client.download_artifacts(run_id, "rules.json")
-                        with open(artifact_path, "r") as f:
+                        with open(artifact_path) as f:
                             data = json.load(f)
                         self._ruleset = RuleSet.from_dict(data)
                         logger.info(
-                            f"Loaded rules version {self._ruleset.version} from MLflow artifact"
+                            f"Loaded rules version {self._ruleset.version} "
+                            f"from MLflow artifact"
                         )
                         return
                     except Exception:
                         # Artifact not found - try fallback
-                        logger.debug("rules.json artifact not found in MLflow, trying fallback")
+                        logger.debug(
+                            "rules.json artifact not found in MLflow, trying fallback"
+                        )
                         break
         except Exception as e:
             logger.debug(f"Could not load rules from MLflow: {e}")
 
         # Fallback to default rules file
         try:
-            default_rules_path = Path(__file__).parent.parent / "config" / "default_rules.json"
+            default_rules_path = (
+                Path(__file__).parent.parent / "config" / "default_rules.json"
+            )
             self._ruleset = RuleSet.load_from_file(default_rules_path)
             logger.info(
                 f"Loaded rules version {self._ruleset.version} from default file"

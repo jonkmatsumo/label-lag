@@ -1,13 +1,11 @@
 """Tests for training with feature column selection."""
 
 import json
-import tempfile
-from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
-import pytest
+import pandas as pd
 
-from model.loader import DataLoader
+from model.loader import DataLoader, TrainTestSplit
 from model.train import train_model
 
 
@@ -23,10 +21,6 @@ class TestTrainModelWithFeatureColumns:
         mock_loader_cls.return_value = mock_loader
 
         # Mock train/test split
-        from model.loader import TrainTestSplit
-
-        import pandas as pd
-
         mock_split = TrainTestSplit(
             X_train=pd.DataFrame(
                 {
@@ -78,10 +72,6 @@ class TestTrainModelWithFeatureColumns:
         mock_loader_cls.return_value = mock_loader
 
         # Mock train/test split
-        from model.loader import TrainTestSplit
-
-        import pandas as pd
-
         mock_split = TrainTestSplit(
             X_train=pd.DataFrame({"velocity_24h": [1, 2, 3]}),
             y_train=pd.Series([0, 1, 0]),
@@ -109,11 +99,15 @@ class TestTrainModelWithFeatureColumns:
         assert mock_mlflow.log_artifact.called
 
         # Check that feature_columns.json was written
-        artifact_calls = [call[0][0] for call in mock_mlflow.log_artifact.call_args_list]
+        artifact_calls = [
+            call[0][0] for call in mock_mlflow.log_artifact.call_args_list
+        ]
         feature_columns_artifact = any(
             "feature_columns.json" in str(call) for call in artifact_calls
         )
-        assert feature_columns_artifact, "feature_columns.json artifact should be logged"
+        assert (
+            feature_columns_artifact
+        ), "feature_columns.json artifact should be logged"
 
     @patch("model.train.mlflow")
     @patch("model.train.DataLoader")
@@ -127,10 +121,6 @@ class TestTrainModelWithFeatureColumns:
         mock_loader_cls.return_value = mock_loader
 
         # Mock train/test split
-        from model.loader import TrainTestSplit
-
-        import pandas as pd
-
         mock_split = TrainTestSplit(
             X_train=pd.DataFrame(
                 {

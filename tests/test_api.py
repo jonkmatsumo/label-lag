@@ -506,7 +506,10 @@ class TestTrainEndpoint:
                 json={
                     "max_depth": 6,
                     "training_window_days": 30,
-                    "selected_feature_columns": ["velocity_24h", "amount_to_avg_ratio_30d"],
+                    "selected_feature_columns": [
+                        "velocity_24h",
+                        "amount_to_avg_ratio_30d",
+                    ],
                 },
             )
 
@@ -518,10 +521,11 @@ class TestTrainEndpoint:
             # Verify train_model was called with feature_columns
             mock_train.assert_called_once()
             call_kwargs = mock_train.call_args[1]
-            assert call_kwargs["feature_columns"] == ["velocity_24h", "amount_to_avg_ratio_30d"]
+            expected_cols = ["velocity_24h", "amount_to_avg_ratio_30d"]
+            assert call_kwargs["feature_columns"] == expected_cols
 
     def test_train_endpoint_works_without_feature_columns(self, client):
-        """Test that /train works without selected_feature_columns (backward compatible)."""
+        """Test /train works without selected_feature_columns (backward compatible)."""
         with patch("api.main.train_model") as mock_train:
             mock_train.return_value = "test_run_456"
 

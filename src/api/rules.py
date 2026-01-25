@@ -38,14 +38,17 @@ class Rule:
                 f"Invalid action: {self.action}. Must be one of {valid_actions}"
             )
 
-        if self.action in ["override_score", "clamp_min", "clamp_max"] and self.score is None:
+        score_actions = ["override_score", "clamp_min", "clamp_max"]
+        if self.action in score_actions and self.score is None:
             raise ValueError(f"Action {self.action} requires 'score' field")
 
         if self.op in ["in", "not_in"] and not isinstance(self.value, list):
             raise ValueError(f"Operator {self.op} requires 'value' to be a list")
 
         if self.severity not in ["low", "medium", "high"]:
-            raise ValueError(f"Invalid severity: {self.severity}. Must be low, medium, or high")
+            raise ValueError(
+                f"Invalid severity: {self.severity}. Use low/medium/high"
+            )
 
 
 @dataclass
@@ -115,7 +118,7 @@ class RuleSet:
             raise FileNotFoundError(f"Rules file not found: {path}")
 
         try:
-            with open(path, "r") as f:
+            with open(path) as f:
                 data = json.load(f)
             return cls.from_dict(data)
         except json.JSONDecodeError as e:

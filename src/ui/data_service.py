@@ -421,7 +421,8 @@ def get_dataset_fingerprint() -> dict[str, Any]:
 
     Returns:
         Dictionary with stable keys:
-        - generated_records: dict with count, max_created_at, max_transaction_timestamp, max_id
+        - generated_records: dict with count, max_created_at,
+          max_transaction_timestamp, max_id
         - feature_snapshots: dict with count, max_computed_at, max_snapshot_id
         All timestamp and ID fields are None if the table is empty.
     """
@@ -518,7 +519,9 @@ def _cached_overview_metrics(fingerprint: dict[str, Any]) -> dict[str, Any]:
                 total_records = row.total_records or 0
                 fraud_records = row.fraud_records or 0
                 fraud_rate = (
-                    (fraud_records / total_records * 100.0) if total_records > 0 else 0.0
+                    (fraud_records / total_records * 100.0)
+                    if total_records > 0
+                    else 0.0
                 )
 
                 return {
@@ -693,8 +696,6 @@ def _sample_generated_records(
         use_id_range = True
     elif total_count < 100000:
         use_offset = True
-    else:
-        use_random = True
 
     if stratify:
         fraud_sample_size, non_fraud_sample_size = split_stratified_counts(
@@ -707,7 +708,8 @@ def _sample_generated_records(
             if use_tablesample:
                 fraction = compute_sample_fraction(total_count, fraud_sample_size)
                 query = text(
-                    f"SELECT * FROM generated_records TABLESAMPLE SYSTEM ({fraction * 100}) "
+                    f"SELECT * FROM generated_records "
+                    f"TABLESAMPLE SYSTEM ({fraction * 100}) "
                     f"WHERE is_fraudulent = true LIMIT {fraud_sample_size}"
                 )
             elif use_id_range and max_id > min_id:
@@ -747,7 +749,8 @@ def _sample_generated_records(
             if use_tablesample:
                 fraction = compute_sample_fraction(total_count, non_fraud_sample_size)
                 query = text(
-                    f"SELECT * FROM generated_records TABLESAMPLE SYSTEM ({fraction * 100}) "
+                    f"SELECT * FROM generated_records "
+                    f"TABLESAMPLE SYSTEM ({fraction * 100}) "
                     f"WHERE is_fraudulent = false LIMIT {non_fraud_sample_size}"
                 )
             elif use_id_range and max_id > min_id:
@@ -806,7 +809,8 @@ def _sample_generated_records(
                 step = max(1, (max_id - min_id) // sample_size)
                 query = text(
                     f"SELECT * FROM generated_records "
-                    f"WHERE id IN (SELECT generate_series({min_id}, {max_id}, {step}) LIMIT {sample_size})"
+                    f"WHERE id IN (SELECT generate_series({min_id}, {max_id}, {step}) "
+                    f"LIMIT {sample_size})"
                 )
             elif use_offset:
                 query = text(
@@ -814,7 +818,8 @@ def _sample_generated_records(
                 )
             else:
                 query = text(
-                    f"SELECT * FROM generated_records ORDER BY random() LIMIT {sample_size}"
+                    f"SELECT * FROM generated_records "
+                    f"ORDER BY random() LIMIT {sample_size}"
                 )
 
             result = conn.execute(query)

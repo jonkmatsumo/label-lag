@@ -2,7 +2,6 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 import requests
 
 
@@ -24,7 +23,15 @@ class TestRenderSyntheticDataset:
     @patch("ui.app.st.button")
     @patch("ui.app.st.expander")
     def test_page_renders_header_and_description(
-        self, mock_expander, mock_button, mock_checkbox, mock_slider, mock_columns, mock_subheader, mock_markdown, mock_header
+        self,
+        mock_expander,
+        mock_button,
+        mock_checkbox,
+        mock_slider,
+        mock_columns,
+        mock_subheader,
+        mock_markdown,
+        mock_header,
     ):
         """Test that page renders header and description."""
         from ui.app import render_synthetic_dataset
@@ -81,7 +88,9 @@ class TestRenderSyntheticDataset:
 
         # Setup mocks
         mock_expander_context = MagicMock()
-        mock_expander.return_value.__enter__ = MagicMock(return_value=mock_expander_context)
+        mock_expander.return_value.__enter__ = MagicMock(
+            return_value=mock_expander_context
+        )
         mock_expander.return_value.__exit__ = MagicMock(return_value=None)
         mock_button.return_value = False
 
@@ -121,7 +130,7 @@ class TestRenderSyntheticDataset:
         mock_rerun,
         mock_cache_data,
     ):
-        """Test that st.cache_data.clear() and st.rerun() are called after successful generation."""
+        """Test st.cache_data.clear() and st.rerun() called after generation."""
         from ui.app import render_synthetic_dataset
 
         # Setup mocks
@@ -171,7 +180,7 @@ class TestRenderSyntheticDataset:
         mock_rerun,
         mock_cache_data,
     ):
-        """Test that st.cache_data.clear() and st.rerun() are called after successful clear."""
+        """Test st.cache_data.clear() and st.rerun() called after clear."""
         from ui.app import render_synthetic_dataset
 
         # Setup mocks
@@ -181,7 +190,9 @@ class TestRenderSyntheticDataset:
 
         # Mock expander context for Danger Zone
         mock_expander_context = MagicMock()
-        mock_expander.return_value.__enter__ = MagicMock(return_value=mock_expander_context)
+        mock_expander.return_value.__enter__ = MagicMock(
+            return_value=mock_expander_context
+        )
         mock_expander.return_value.__exit__ = MagicMock(return_value=None)
 
         # First button call is Generate (False), second is Clear (True)
@@ -298,7 +309,9 @@ class TestNavigation:
     @patch("ui.app.render_synthetic_dataset")
     @patch("ui.app.render_analytics")
     @patch("ui.app.render_live_scoring")
-    def test_navigation_includes_synthetic_dataset(self, mock_live, mock_analytics, mock_synthetic, mock_sidebar):
+    def test_navigation_includes_synthetic_dataset(
+        self, mock_live, mock_analytics, mock_synthetic, mock_sidebar
+    ):
         """Test that navigation includes 'Synthetic Dataset' option."""
         from ui.app import main
 
@@ -347,7 +360,14 @@ class TestRenderModelLab:
     @patch("ui.app.st.markdown")
     @patch("ui.app.st.subheader")
     @patch("ui.app.st.success")
-    def test_data_management_section_absent(self, mock_success, mock_subheader, mock_markdown, mock_header, mock_mlflow):
+    def test_data_management_section_absent(
+        self,
+        mock_success,
+        mock_subheader,
+        mock_markdown,
+        mock_header,
+        mock_mlflow,
+    ):
         """Test that 'Data Management' section is absent from render_model_lab()."""
         from ui.app import render_model_lab
 
@@ -451,7 +471,14 @@ class TestRenderModelLab:
     @patch("ui.app.st.slider")
     @patch("ui.app.st.columns")
     def test_training_functionality_still_works(
-        self, mock_columns, mock_slider, mock_button, mock_post, mock_spinner, mock_success, mock_mlflow
+        self,
+        mock_columns,
+        mock_slider,
+        mock_button,
+        mock_post,
+        mock_spinner,
+        mock_success,
+        mock_mlflow,
     ):
         """Verify all existing Model Lab functionality (training) still works."""
         from ui.app import render_model_lab
@@ -542,7 +569,7 @@ class TestCacheInvalidation:
         mock_rerun,
         mock_cache_data,
     ):
-        """Test that st.cache_data.clear() is called exactly once after successful generate."""
+        """Test st.cache_data.clear() called exactly once after generate."""
         from ui.app import render_synthetic_dataset
 
         # Setup mocks
@@ -591,7 +618,7 @@ class TestCacheInvalidation:
         mock_rerun,
         mock_cache_data,
     ):
-        """Test that st.cache_data.clear() is called exactly once after successful clear."""
+        """Test st.cache_data.clear() called exactly once after clear."""
         from ui.app import render_synthetic_dataset
 
         # Setup mocks
@@ -601,7 +628,9 @@ class TestCacheInvalidation:
 
         # Mock expander context for Danger Zone
         mock_expander_context = MagicMock()
-        mock_expander.return_value.__enter__ = MagicMock(return_value=mock_expander_context)
+        mock_expander.return_value.__enter__ = MagicMock(
+            return_value=mock_expander_context
+        )
         mock_expander.return_value.__exit__ = MagicMock(return_value=None)
 
         # First button call is Generate (False), second is Clear (True)
@@ -699,7 +728,9 @@ class TestCacheInvalidation:
 
         # Mock expander context for Danger Zone
         mock_expander_context = MagicMock()
-        mock_expander.return_value.__enter__ = MagicMock(return_value=mock_expander_context)
+        mock_expander.return_value.__enter__ = MagicMock(
+            return_value=mock_expander_context
+        )
         mock_expander.return_value.__exit__ = MagicMock(return_value=None)
 
         # First button call is Generate (False), second is Clear (True)

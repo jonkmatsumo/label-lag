@@ -109,7 +109,8 @@ class SignalEvaluator:
             risk_components.append(
                 RiskComponent(
                     key=f"rule_{explanation['rule_id']}",
-                    label=explanation["reason"] or f"rule_matched:{explanation['rule_id']}",
+                    label=explanation["reason"]
+                    or f"rule_matched:{explanation['rule_id']}",
                 )
             )
 
@@ -155,7 +156,8 @@ class SignalEvaluator:
                 else:
                     # Feature not available in FeatureVector - will trigger fallback
                     logger.debug(
-                        f"Required feature '{feature_name}' not available in FeatureVector"
+                        f"Required feature '{feature_name}' "
+                        f"not available in FeatureVector"
                     )
                     feature_dict[feature_name] = None
 

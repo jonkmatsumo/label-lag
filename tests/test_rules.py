@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from api.rules import Rule, RuleResult, RuleSet, evaluate_rules
+from api.rules import Rule, RuleSet, evaluate_rules
 
 
 class TestRuleValidation:
