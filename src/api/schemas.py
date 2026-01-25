@@ -207,6 +207,16 @@ class TrainRequest(BaseModel):
         default_factory=SplitConfig,
         description="Split and optional CV configuration",
     )
+    n_estimators: int = Field(default=100, ge=50, le=500)
+    learning_rate: float = Field(default=0.1, ge=0.01, le=0.3)
+    min_child_weight: int = Field(default=1, ge=1, le=10)
+    subsample: float = Field(default=1.0, ge=0.5, le=1.0)
+    colsample_bytree: float = Field(default=1.0, ge=0.5, le=1.0)
+    gamma: float = Field(default=0.0, ge=0.0, le=5.0)
+    reg_alpha: float = Field(default=0.0, ge=0.0, le=1.0)
+    reg_lambda: float = Field(default=1.0, ge=0.0, le=10.0)
+    random_state: int = Field(default=42)
+    early_stopping_rounds: int | None = Field(default=None, ge=5, le=50)
 
     def model_post_init(self, __context) -> None:
         """Validate selected_feature_columns if provided."""
