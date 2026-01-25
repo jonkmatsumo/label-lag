@@ -95,9 +95,11 @@ class TestRenderSyntheticDataset:
         mock_button.return_value = False
 
         # Mock other required components
-        with patch("ui.app.st.columns") as mock_columns, patch(
-            "ui.app.st.slider"
-        ) as mock_slider, patch("ui.app.st.checkbox") as mock_checkbox:
+        with (
+            patch("ui.app.st.columns") as mock_columns,
+            patch("ui.app.st.slider") as mock_slider,
+            patch("ui.app.st.checkbox") as mock_checkbox,
+        ):
             mock_columns.return_value = [MagicMock(), MagicMock()]
             mock_slider.return_value = 500
             mock_checkbox.return_value = True
@@ -293,9 +295,10 @@ class TestRenderSyntheticDataset:
         # Mock request exception
         mock_post.side_effect = requests.exceptions.RequestException("Connection error")
 
-        with patch("ui.app.st.cache_data") as mock_cache_data, patch(
-            "ui.app.st.rerun"
-        ) as mock_rerun:
+        with (
+            patch("ui.app.st.cache_data") as mock_cache_data,
+            patch("ui.app.st.rerun") as mock_rerun,
+        ):
             render_synthetic_dataset()
 
             # Verify cache clear and rerun are NOT called
@@ -381,16 +384,20 @@ class TestRenderModelLab:
         mock_subheader_call_args = []
         mock_subheader.side_effect = lambda x: mock_subheader_call_args.append(x)
 
-        with patch("ui.app.st.columns") as mock_columns, patch(
-            "ui.app.st.slider"
-        ) as mock_slider, patch("ui.app.st.button") as mock_button:
+        with (
+            patch("ui.app.st.columns") as mock_columns,
+            patch("ui.app.st.slider") as mock_slider,
+            patch("ui.app.st.button") as mock_button,
+        ):
             mock_columns.return_value = [MagicMock(), MagicMock()]
             mock_slider.return_value = 6
             mock_button.return_value = False
 
-            with patch("ui.app.get_production_model_version"), patch(
-                "ui.app.get_experiment_runs"
-            ) as mock_runs, patch("ui.app.promote_to_production"):
+            with (
+                patch("ui.app.get_production_model_version"),
+                patch("ui.app.get_experiment_runs") as mock_runs,
+                patch("ui.app.promote_to_production"),
+            ):
                 mock_runs.return_value = []
 
                 render_model_lab()
@@ -409,18 +416,23 @@ class TestRenderModelLab:
         mock_subheader_call_args = []
         mock_subheader.side_effect = lambda x: mock_subheader_call_args.append(x)
 
-        with patch("ui.app.st.header"), patch("ui.app.st.markdown"), patch(
-            "ui.app.st.success"
-        ), patch("ui.app.st.columns") as mock_columns, patch(
-            "ui.app.st.slider"
-        ) as mock_slider, patch("ui.app.st.button") as mock_button:
+        with (
+            patch("ui.app.st.header"),
+            patch("ui.app.st.markdown"),
+            patch("ui.app.st.success"),
+            patch("ui.app.st.columns") as mock_columns,
+            patch("ui.app.st.slider") as mock_slider,
+            patch("ui.app.st.button") as mock_button,
+        ):
             mock_columns.return_value = [MagicMock(), MagicMock()]
             mock_slider.return_value = 6
             mock_button.return_value = False
 
-            with patch("ui.app.get_production_model_version"), patch(
-                "ui.app.get_experiment_runs"
-            ) as mock_runs, patch("ui.app.promote_to_production"):
+            with (
+                patch("ui.app.get_production_model_version"),
+                patch("ui.app.get_experiment_runs") as mock_runs,
+                patch("ui.app.promote_to_production"),
+            ):
                 mock_runs.return_value = []
 
                 render_model_lab()
@@ -439,18 +451,23 @@ class TestRenderModelLab:
         mock_subheader_call_args = []
         mock_subheader.side_effect = lambda x: mock_subheader_call_args.append(x)
 
-        with patch("ui.app.st.header"), patch("ui.app.st.markdown"), patch(
-            "ui.app.st.success"
-        ), patch("ui.app.st.columns") as mock_columns, patch(
-            "ui.app.st.slider"
-        ) as mock_slider, patch("ui.app.st.button") as mock_button:
+        with (
+            patch("ui.app.st.header"),
+            patch("ui.app.st.markdown"),
+            patch("ui.app.st.success"),
+            patch("ui.app.st.columns") as mock_columns,
+            patch("ui.app.st.slider") as mock_slider,
+            patch("ui.app.st.button") as mock_button,
+        ):
             mock_columns.return_value = [MagicMock(), MagicMock()]
             mock_slider.return_value = 6
             mock_button.return_value = False
 
-            with patch("ui.app.get_production_model_version"), patch(
-                "ui.app.get_experiment_runs"
-            ) as mock_runs, patch("ui.app.promote_to_production"):
+            with (
+                patch("ui.app.get_production_model_version"),
+                patch("ui.app.get_experiment_runs") as mock_runs,
+                patch("ui.app.promote_to_production"),
+            ):
                 mock_runs.return_value = []
 
                 render_model_lab()
@@ -467,10 +484,7 @@ class TestRenderModelLab:
         # Verify docstring does not mention data generation
         assert "data generation" not in docstring.lower()
         # Allow if it's about model generation
-        assert (
-            "generate" not in docstring.lower()
-            or "generate" in docstring.lower()
-        )
+        assert "generate" not in docstring.lower() or "generate" in docstring.lower()
 
     @patch("ui.app.check_mlflow_connection")
     @patch("ui.app.st.success")
@@ -505,11 +519,14 @@ class TestRenderModelLab:
         mock_response.json.return_value = {"success": True, "run_id": "test_run_123"}
         mock_post.return_value = mock_response
 
-        with patch("ui.app.st.header"), patch("ui.app.st.markdown"), patch(
-            "ui.app.st.subheader"
-        ), patch("ui.app.get_production_model_version"), patch(
-            "ui.app.get_experiment_runs"
-        ) as mock_runs, patch("ui.app.promote_to_production"):
+        with (
+            patch("ui.app.st.header"),
+            patch("ui.app.st.markdown"),
+            patch("ui.app.st.subheader"),
+            patch("ui.app.get_production_model_version"),
+            patch("ui.app.get_experiment_runs") as mock_runs,
+            patch("ui.app.promote_to_production"),
+        ):
             mock_runs.return_value = []
 
             render_model_lab()
@@ -534,16 +551,16 @@ class TestRenderModelLab:
         mock_prod_version.return_value = "1"
         mock_runs.return_value = []
 
-        with patch("ui.app.st.header"), patch("ui.app.st.markdown"), patch(
-            "ui.app.st.subheader"
-        ), patch("ui.app.st.success"), patch(
-            "ui.app.st.columns"
-        ) as mock_columns, patch("ui.app.st.slider") as mock_slider, patch(
-            "ui.app.st.button"
-        ) as mock_button, patch(
-            "ui.app.st.dataframe"
-        ), patch(
-            "ui.app.st.selectbox"
+        with (
+            patch("ui.app.st.header"),
+            patch("ui.app.st.markdown"),
+            patch("ui.app.st.subheader"),
+            patch("ui.app.st.success"),
+            patch("ui.app.st.columns") as mock_columns,
+            patch("ui.app.st.slider") as mock_slider,
+            patch("ui.app.st.button") as mock_button,
+            patch("ui.app.st.dataframe"),
+            patch("ui.app.st.selectbox"),
         ):
             mock_columns.return_value = [MagicMock(), MagicMock()]
             mock_slider.return_value = 6

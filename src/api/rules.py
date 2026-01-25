@@ -46,9 +46,7 @@ class Rule:
             raise ValueError(f"Operator {self.op} requires 'value' to be a list")
 
         if self.severity not in ["low", "medium", "high"]:
-            raise ValueError(
-                f"Invalid severity: {self.severity}. Use low/medium/high"
-            )
+            raise ValueError(f"Invalid severity: {self.severity}. Use low/medium/high")
 
 
 @dataclass

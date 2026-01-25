@@ -105,9 +105,9 @@ class TestTrainModelWithFeatureColumns:
         feature_columns_artifact = any(
             "feature_columns.json" in str(call) for call in artifact_calls
         )
-        assert (
-            feature_columns_artifact
-        ), "feature_columns.json artifact should be logged"
+        assert feature_columns_artifact, (
+            "feature_columns.json artifact should be logged"
+        )
 
     @patch("model.train.mlflow")
     @patch("model.train.DataLoader")

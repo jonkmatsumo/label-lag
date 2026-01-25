@@ -534,9 +534,7 @@ def _compute_correlation_ratio(categorical: pd.Series, numeric: pd.Series) -> fl
     overall_mean = df["num"].mean()
 
     # SS_between and SS_total
-    ss_between = (
-        (group_means - overall_mean) ** 2 * df.groupby("cat").size()
-    ).sum()
+    ss_between = ((group_means - overall_mean) ** 2 * df.groupby("cat").size()).sum()
     ss_total = ((df["num"] - overall_mean) ** 2).sum()
 
     if ss_total > 0:
@@ -593,8 +591,7 @@ def render_synthetic_dataset() -> None:
             max_ts = overview.get("max_transaction_timestamp")
             if min_ts and max_ts:
                 date_range = (
-                    f"{min_ts.strftime('%Y-%m-%d')} → "
-                    f"{max_ts.strftime('%Y-%m-%d')}"
+                    f"{min_ts.strftime('%Y-%m-%d')} → {max_ts.strftime('%Y-%m-%d')}"
                 )
             else:
                 date_range = "—"
@@ -898,8 +895,8 @@ def render_synthetic_dataset() -> None:
                                     st.metric("Outlier Count", f"{outlier_count:,}")
                                 with col2:
                                     st.metric(
-                            "Outlier Percentage", f"{outlier_pct:.2f}%"
-                        )
+                                        "Outlier Percentage", f"{outlier_pct:.2f}%"
+                                    )
                                 with col3:
                                     st.metric(
                                         "Bounds",
@@ -991,9 +988,7 @@ def render_synthetic_dataset() -> None:
                 if len(numeric_cols) > max_numeric_cols:
                     # Select top columns by variance
                     variances = (
-                        sample_df[numeric_cols]
-                        .var()
-                        .sort_values(ascending=False)
+                        sample_df[numeric_cols].var().sort_values(ascending=False)
                     )
                     numeric_cols = variances.head(max_numeric_cols).index.tolist()
                     total_numeric = len(_get_numeric_columns(sample_df))
@@ -1175,10 +1170,9 @@ def render_synthetic_dataset() -> None:
 
                     if associations:
                         assoc_df = pd.DataFrame(associations)
-                        assoc_df = (
-                            assoc_df.sort_values("Cramér's V", ascending=False)
-                            .head(30)
-                        )
+                        assoc_df = assoc_df.sort_values(
+                            "Cramér's V", ascending=False
+                        ).head(30)
                         st.dataframe(
                             assoc_df, use_container_width=True, hide_index=True
                         )
@@ -1225,12 +1219,9 @@ def render_synthetic_dataset() -> None:
 
                     if associations:
                         assoc_df = pd.DataFrame(associations)
-                        assoc_df = (
-                            assoc_df.sort_values(
-                                "Correlation Ratio (η)", ascending=False
-                            )
-                            .head(30)
-                        )
+                        assoc_df = assoc_df.sort_values(
+                            "Correlation Ratio (η)", ascending=False
+                        ).head(30)
                         st.dataframe(
                             assoc_df, use_container_width=True, hide_index=True
                         )
@@ -1276,10 +1267,10 @@ def render_synthetic_dataset() -> None:
                                     "Spearman": round(spearman, 4),
                                     "Max Abs Corr": max(abs(pearson), abs(spearman)),
                                     "Metric": (
-                                "pearson"
-                                if abs(pearson) >= abs(spearman)
-                                else "spearman"
-                            ),
+                                        "pearson"
+                                        if abs(pearson) >= abs(spearman)
+                                        else "spearman"
+                                    ),
                                 }
                             )
 
@@ -1500,10 +1491,9 @@ def render_synthetic_dataset() -> None:
 
                     if top_relationships:
                         top_df = pd.DataFrame(top_relationships)
-                        top_df = (
-                            top_df.sort_values("effect_size", ascending=False)
-                            .head(50)
-                        )
+                        top_df = top_df.sort_values(
+                            "effect_size", ascending=False
+                        ).head(50)
 
                         # Format for display
                         display_df = top_df.copy()

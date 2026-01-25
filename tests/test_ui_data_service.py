@@ -347,9 +347,7 @@ class TestSplitStratifiedCounts:
         from ui.data_service import split_stratified_counts
 
         # 1000 total, 5% fraud rate, 100 sample, min 10 per class
-        fraud_sample, non_fraud_sample = split_stratified_counts(
-            1000, 0.05, 100, 10
-        )
+        fraud_sample, non_fraud_sample = split_stratified_counts(1000, 0.05, 100, 10)
         # Should maintain ratio: ~5 fraud, ~95 non-fraud, but enforce minimums
         assert fraud_sample >= 10
         assert non_fraud_sample >= 10
@@ -359,9 +357,7 @@ class TestSplitStratifiedCounts:
         from ui.data_service import split_stratified_counts
 
         # 10000 total, 1% fraud rate, 200 sample, min 10 per class
-        fraud_sample, non_fraud_sample = split_stratified_counts(
-            10000, 0.01, 200, 10
-        )
+        fraud_sample, non_fraud_sample = split_stratified_counts(10000, 0.01, 200, 10)
         # Should enforce minimums
         assert fraud_sample >= 10
         assert non_fraud_sample >= 10
@@ -388,9 +384,7 @@ class TestSplitStratifiedCounts:
         from ui.data_service import split_stratified_counts
 
         # Large dataset with very low fraud rate
-        fraud_sample, non_fraud_sample = split_stratified_counts(
-            100000, 0.001, 100, 20
-        )
+        fraud_sample, non_fraud_sample = split_stratified_counts(100000, 0.001, 100, 20)
         # Should enforce minimum for fraud class
         assert fraud_sample >= 20
         assert non_fraud_sample >= 20

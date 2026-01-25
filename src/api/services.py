@@ -9,7 +9,12 @@ import numpy as np
 from sqlalchemy import text
 
 from api.rules import RuleResult, evaluate_rules
-from api.schemas import MatchedRule, RiskComponent, SignalRequest, SignalResponse
+from api.schemas import (
+    MatchedRule,
+    RiskComponent,
+    SignalRequest,
+    SignalResponse,
+)
 from model.evaluate import ScoreCalibrator
 from synthetic_pipeline.db.session import DatabaseSession
 
@@ -162,9 +167,7 @@ class SignalEvaluator:
                     feature_dict[feature_name] = None
 
             # Check if any required features are missing
-            missing_features = [
-                f for f, v in feature_dict.items() if v is None
-            ]
+            missing_features = [f for f, v in feature_dict.items() if v is None]
             if missing_features:
                 logger.warning(
                     f"Cannot use ML model: missing features {missing_features}. "
@@ -328,9 +331,7 @@ class SignalEvaluator:
         scores = self.calibrator.transform(prob_array)
         return int(scores[0])
 
-    def _apply_rules(
-        self, manager, features: FeatureVector, score: int
-    ) -> RuleResult:
+    def _apply_rules(self, manager, features: FeatureVector, score: int) -> RuleResult:
         """Apply decision rules to the current score.
 
         Args:
