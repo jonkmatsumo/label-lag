@@ -184,6 +184,16 @@ def train_model(
     database_url: str | None = None,
     feature_columns: list[str] | None = None,
     split_config: SplitConfig | None = None,
+    n_estimators: int = 100,
+    learning_rate: float = 0.1,
+    min_child_weight: int = 1,
+    subsample: float = 1.0,
+    colsample_bytree: float = 1.0,
+    gamma: float = 0.0,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 1.0,
+    random_state: int = 42,
+    early_stopping_rounds: int | None = None,
 ) -> str:
     """Train an XGBoost model with MLflow tracking.
 
@@ -198,6 +208,16 @@ def train_model(
             default FEATURE_COLUMNS from DataLoader.
         split_config: Optional split/CV config. When strategy is KFOLD_TEMPORAL,
             per-fold metrics are logged and aggregated.
+        n_estimators: Number of boosting rounds. Default 100.
+        learning_rate: Step size shrinkage. Default 0.1.
+        min_child_weight: Minimum sum of instance weight in a child. Default 1.
+        subsample: Row subsample ratio. Default 1.0.
+        colsample_bytree: Column subsample ratio. Default 1.0.
+        gamma: Min loss reduction for split. Default 0.0.
+        reg_alpha: L1 regularization. Default 0.0.
+        reg_lambda: L2 regularization. Default 1.0.
+        random_state: Random seed. Default 42.
+        early_stopping_rounds: Optional early stopping rounds. Default None.
 
     Returns:
         The MLflow run ID.
@@ -252,33 +272,41 @@ def train_model(
             }
         )
 
-        # Log parameters (including previously hardcoded hyperparams)
-        n_estimators = 100
-        learning_rate = 0.1
-        random_state = 42
-        mlflow.log_params(
-            {
-                "scale_pos_weight": scale_pos_weight,
-                "max_depth": max_depth,
-                "training_window_days": training_window_days,
-                "training_cutoff_date": training_cutoff_date.isoformat(),
-                "train_size": split.train_size,
-                "test_size": split.test_size,
-                "train_fraud_rate": split.train_fraud_rate,
-                "test_fraud_rate": split.test_fraud_rate,
-                "feature_columns": json.dumps(actual_feature_columns),
-                "n_estimators": n_estimators,
-                "learning_rate": learning_rate,
-                "random_state": random_state,
-            }
-        )
+        params_log: dict = {
+            "scale_pos_weight": scale_pos_weight,
+            "max_depth": max_depth,
+            "training_window_days": training_window_days,
+            "training_cutoff_date": training_cutoff_date.isoformat(),
+            "train_size": split.train_size,
+            "test_size": split.test_size,
+            "train_fraud_rate": split.train_fraud_rate,
+            "test_fraud_rate": split.test_fraud_rate,
+            "feature_columns": json.dumps(actual_feature_columns),
+            "n_estimators": n_estimators,
+            "learning_rate": learning_rate,
+            "min_child_weight": min_child_weight,
+            "subsample": subsample,
+            "colsample_bytree": colsample_bytree,
+            "gamma": gamma,
+            "reg_alpha": reg_alpha,
+            "reg_lambda": reg_lambda,
+            "random_state": random_state,
+        }
+        if early_stopping_rounds is not None:
+            params_log["early_stopping_rounds"] = early_stopping_rounds
+        mlflow.log_params(params_log)
 
-        # Train XGBoost model
         clf = XGBClassifier(
             scale_pos_weight=scale_pos_weight,
             max_depth=max_depth,
             n_estimators=n_estimators,
             learning_rate=learning_rate,
+            min_child_weight=min_child_weight,
+            subsample=subsample,
+            colsample_bytree=colsample_bytree,
+            gamma=gamma,
+            reg_alpha=reg_alpha,
+            reg_lambda=reg_lambda,
             random_state=random_state,
             use_label_encoder=False,
             eval_metric="logloss",
@@ -319,6 +347,12 @@ def train_model(
                     max_depth=max_depth,
                     n_estimators=n_estimators,
                     learning_rate=learning_rate,
+                    min_child_weight=min_child_weight,
+                    subsample=subsample,
+                    colsample_bytree=colsample_bytree,
+                    gamma=gamma,
+                    reg_alpha=reg_alpha,
+                    reg_lambda=reg_lambda,
                     random_state=random_state,
                     use_label_encoder=False,
                     eval_metric="logloss",
