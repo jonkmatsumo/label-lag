@@ -114,6 +114,19 @@ class SignalEvaluator:
                 f"model_score={score}, would_have_been={final_score}"
             )
 
+        # Record metrics for rule matches
+        try:
+            from api.metrics import get_metrics_collector
+
+            metrics_collector = get_metrics_collector()
+            metrics_collector.record_request_matches(
+                production_matched=rule_result.matched_rules,
+                shadow_matched=rule_result.shadow_matched_rules,
+            )
+        except Exception as e:
+            # Don't fail inference if metrics collection fails
+            logger.warning(f"Failed to record metrics: {e}")
+
         # Identify risk components based on feature values
         risk_components = self._identify_risk_components(features)
 
