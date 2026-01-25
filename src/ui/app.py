@@ -19,6 +19,7 @@ import streamlit as st
 from data_service import (
     check_api_health,
     fetch_daily_stats,
+    fetch_feature_sample,
     fetch_fraud_summary,
     fetch_overview_metrics,
     fetch_recent_alerts,
@@ -34,6 +35,8 @@ from mlflow_utils import (
     promote_to_production,
 )
 from plotly.subplots import make_subplots
+
+import pandas as pd
 
 # Configuration from environment
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
@@ -422,6 +425,21 @@ def render_analytics() -> None:
         )
 
 
+def _get_numeric_columns(df: pd.DataFrame) -> list[str]:
+    """Get list of numeric column names, excluding record_id and boolean columns.
+
+    Args:
+        df: DataFrame to analyze.
+
+    Returns:
+        List of numeric column names.
+    """
+    numeric_cols = df.select_dtypes(include=["int64", "float64"]).columns.tolist()
+    # Exclude record_id and boolean columns
+    exclude = ["record_id"]
+    return [col for col in numeric_cols if col not in exclude]
+
+
 def render_synthetic_dataset() -> None:
     """Render the Synthetic Dataset page.
 
@@ -597,6 +615,177 @@ def render_synthetic_dataset() -> None:
                         st.error(f"Clear failed: {result.get('error')}")
                 except requests.exceptions.RequestException as e:
                     st.error(f"API request failed: {e}")
+
+    st.markdown("---")
+
+    # --- Diagnostics section ---
+    st.subheader("Diagnostics")
+
+    tab1, tab2, tab3 = st.tabs(["Distributions", "Missingness", "Outliers"])
+
+    with tab1:
+        # Distributions Tab
+        with st.spinner("Loading sampled data..."):
+            try:
+                sample_df = fetch_feature_sample(sample_size=5000, stratify=True)
+
+                if sample_df.empty:
+                    st.info("No data available for distribution analysis.")
+                else:
+                    numeric_cols = _get_numeric_columns(sample_df)
+
+                    if not numeric_cols:
+                        st.warning("No numeric columns available for distribution analysis.")
+                    else:
+                        selected_col = st.selectbox(
+                            "Select Feature Column",
+                            options=numeric_cols,
+                            help="Choose a numeric feature to visualize",
+                        )
+
+                        if selected_col:
+                            # Histogram
+                            color_col = None
+                            if "is_fraudulent" in sample_df.columns:
+                                color_col = "is_fraudulent"
+
+                            fig_hist = px.histogram(
+                                sample_df,
+                                x=selected_col,
+                                color=color_col,
+                                title=f"Distribution of {selected_col}",
+                                labels={selected_col: selected_col, "count": "Frequency"},
+                                nbins=50,
+                            )
+                            fig_hist.update_layout(height=400)
+                            st.plotly_chart(fig_hist, use_container_width=True)
+
+                            # Box plot
+                            fig_box = px.box(
+                                sample_df,
+                                y=selected_col,
+                                color=color_col,
+                                title=f"Box Plot of {selected_col}",
+                                labels={selected_col: selected_col},
+                            )
+                            fig_box.update_layout(height=400)
+                            st.plotly_chart(fig_box, use_container_width=True)
+            except Exception as e:
+                st.error(f"Error loading distribution data: {e}")
+
+    with tab2:
+        # Missingness Tab
+        with st.spinner("Loading sampled data..."):
+            try:
+                sample_df = fetch_feature_sample(sample_size=5000, stratify=True)
+
+                if sample_df.empty:
+                    st.info("No data available for missingness analysis.")
+                else:
+                    # Compute missingness percentage per column
+                    missingness_data = []
+                    for col in sample_df.columns:
+                        missing_count = sample_df[col].isna().sum()
+                        missing_pct = (missing_count / len(sample_df) * 100) if len(sample_df) > 0 else 0
+                        missingness_data.append(
+                            {"column": col, "missingness_pct": missing_pct}
+                        )
+
+                    missingness_df = pd.DataFrame(missingness_data)
+
+                    if missingness_df.empty:
+                        st.info("No columns available for missingness analysis.")
+                    else:
+                        # Create horizontal bar chart
+                        fig = px.bar(
+                            missingness_df,
+                            x="missingness_pct",
+                            y="column",
+                            orientation="h",
+                            title="Missingness by Column (%)",
+                            labels={
+                                "missingness_pct": "Missingness (%)",
+                                "column": "Column Name",
+                            },
+                        )
+                        fig.update_layout(height=max(400, len(missingness_df) * 30))
+                        st.plotly_chart(fig, use_container_width=True)
+            except Exception as e:
+                st.error(f"Error loading missingness data: {e}")
+
+    with tab3:
+        # Outliers Tab
+        with st.spinner("Loading sampled data..."):
+            try:
+                sample_df = fetch_feature_sample(sample_size=5000, stratify=True)
+
+                if sample_df.empty:
+                    st.info("No data available for outlier analysis.")
+                else:
+                    numeric_cols = _get_numeric_columns(sample_df)
+
+                    if not numeric_cols:
+                        st.warning("No numeric columns available for outlier analysis.")
+                    else:
+                        selected_col = st.selectbox(
+                            "Select Feature Column",
+                            options=numeric_cols,
+                            help="Choose a numeric feature to analyze for outliers",
+                            key="outlier_column",
+                        )
+
+                        if selected_col:
+                            # Compute IQR-based outliers
+                            col_data = sample_df[selected_col].dropna()
+
+                            if len(col_data) == 0:
+                                st.warning(f"No valid data in column {selected_col}.")
+                            else:
+                                Q1 = col_data.quantile(0.25)
+                                Q3 = col_data.quantile(0.75)
+                                IQR = Q3 - Q1
+                                lower_bound = Q1 - 1.5 * IQR
+                                upper_bound = Q3 + 1.5 * IQR
+
+                                outliers = col_data[
+                                    (col_data < lower_bound) | (col_data > upper_bound)
+                                ]
+                                outlier_count = len(outliers)
+                                outlier_pct = (
+                                    (outlier_count / len(col_data) * 100)
+                                    if len(col_data) > 0
+                                    else 0
+                                )
+
+                                # Box plot
+                                color_col = None
+                                if "is_fraudulent" in sample_df.columns:
+                                    color_col = "is_fraudulent"
+
+                                fig = px.box(
+                                    sample_df,
+                                    y=selected_col,
+                                    color=color_col,
+                                    title=f"Outlier Detection for {selected_col}",
+                                    labels={selected_col: selected_col},
+                                )
+                                fig.update_layout(height=400)
+                                st.plotly_chart(fig, use_container_width=True)
+
+                                # Text summary
+                                st.markdown("**Outlier Summary**")
+                                col1, col2, col3 = st.columns(3)
+                                with col1:
+                                    st.metric("Outlier Count", f"{outlier_count:,}")
+                                with col2:
+                                    st.metric("Outlier Percentage", f"{outlier_pct:.2f}%")
+                                with col3:
+                                    st.metric(
+                                        "Bounds",
+                                        f"[{lower_bound:.2f}, {upper_bound:.2f}]",
+                                    )
+            except Exception as e:
+                st.error(f"Error loading outlier data: {e}")
 
 
 def render_model_lab() -> None:
