@@ -2,6 +2,9 @@
 
 import json
 import os
+import platform
+import subprocess
+import sys
 import tempfile
 from datetime import UTC, datetime, timedelta
 
@@ -18,6 +21,7 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
+import xgboost as xgb_pkg
 from xgboost import XGBClassifier
 
 from model.loader import DataLoader
@@ -33,6 +37,20 @@ mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 
 # Experiment name
 EXPERIMENT_NAME = "ach-fraud-detection"
+
+
+def _get_git_sha() -> str | None:
+    """Return current git commit SHA, or None if not in a git repo."""
+    try:
+        out = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        return out.strip() or None
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
 
 
 def train_model(
@@ -99,7 +117,20 @@ def train_model(
         scale_pos_weight = n_negative / n_positive
 
     with mlflow.start_run() as run:
-        # Log parameters
+        # Log run metadata as tags
+        mlflow.set_tags(
+            {
+                "git_sha": _get_git_sha() or "unknown",
+                "python_version": sys.version.split()[0],
+                "platform": platform.platform(),
+                "xgboost_version": xgb_pkg.__version__,
+            }
+        )
+
+        # Log parameters (including previously hardcoded hyperparams)
+        n_estimators = 100
+        learning_rate = 0.1
+        random_state = 42
         mlflow.log_params(
             {
                 "scale_pos_weight": scale_pos_weight,
@@ -111,6 +142,9 @@ def train_model(
                 "train_fraud_rate": split.train_fraud_rate,
                 "test_fraud_rate": split.test_fraud_rate,
                 "feature_columns": json.dumps(actual_feature_columns),
+                "n_estimators": n_estimators,
+                "learning_rate": learning_rate,
+                "random_state": random_state,
             }
         )
 
@@ -118,9 +152,9 @@ def train_model(
         clf = XGBClassifier(
             scale_pos_weight=scale_pos_weight,
             max_depth=max_depth,
-            n_estimators=100,
-            learning_rate=0.1,
-            random_state=42,
+            n_estimators=n_estimators,
+            learning_rate=learning_rate,
+            random_state=random_state,
             use_label_encoder=False,
             eval_metric="logloss",
         )
