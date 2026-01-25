@@ -6,11 +6,23 @@ in a versioned and explainable way.
 
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+class RuleStatus(str, Enum):
+    """Lifecycle status of a rule."""
+
+    DRAFT = "draft"
+    PENDING_REVIEW = "pending_review"
+    ACTIVE = "active"
+    SHADOW = "shadow"
+    DISABLED = "disabled"
+    ARCHIVED = "archived"
 
 
 @dataclass
@@ -25,9 +37,19 @@ class Rule:
     score: int | None = None
     severity: str = "medium"  # low, medium, high
     reason: str = ""
+    status: str = field(
+        default="active"
+    )  # draft, pending_review, active, disabled, archived
 
     def __post_init__(self):
         """Validate rule configuration."""
+        # Validate status
+        valid_statuses = [s.value for s in RuleStatus]
+        if self.status not in valid_statuses:
+            raise ValueError(
+                f"Invalid status: {self.status}. Must be one of {valid_statuses}"
+            )
+
         valid_ops = [">", ">=", "<", "<=", "==", "in", "not_in"]
         if self.op not in valid_ops:
             raise ValueError(f"Invalid operator: {self.op}. Must be one of {valid_ops}")
@@ -57,6 +79,15 @@ class RuleResult:
     matched_rules: list[str]  # rule IDs
     explanations: list[dict[str, Any]]  # {rule_id, severity, reason}
     rejected: bool = False
+    shadow_matched_rules: list[str] = None  # rule IDs for shadow rules
+    shadow_explanations: list[dict[str, Any]] = None  # shadow rule explanations
+
+    def __post_init__(self):
+        """Initialize shadow fields if None."""
+        if self.shadow_matched_rules is None:
+            self.shadow_matched_rules = []
+        if self.shadow_explanations is None:
+            self.shadow_explanations = []
 
 
 @dataclass
@@ -67,17 +98,22 @@ class RuleSet:
     rules: list[Rule]
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "RuleSet":
+    def from_dict(
+        cls, data: dict[str, Any], validate: bool = False, strict: bool = False
+    ) -> "RuleSet":
         """Create RuleSet from dictionary.
 
         Args:
             data: Dictionary with 'version' and 'rules' keys.
+            validate: If True, run conflict and redundancy detection.
+            strict: If True and validate=True, raise ValueError on conflicts.
 
         Returns:
             RuleSet instance.
 
         Raises:
-            ValueError: If required fields are missing or invalid.
+            ValueError: If required fields are missing or invalid, or if strict=True
+                and conflicts are detected.
         """
         if "version" not in data:
             raise ValueError("RuleSet must have 'version' field")
@@ -90,12 +126,24 @@ class RuleSet:
         rules = []
         for i, rule_dict in enumerate(data["rules"]):
             try:
+                # Backward compatibility: if status is missing, default to "active"
+                if "status" not in rule_dict:
+                    rule_dict = rule_dict.copy()
+                    rule_dict["status"] = "active"
                 rule = Rule(**rule_dict)
                 rules.append(rule)
             except (TypeError, ValueError) as e:
                 raise ValueError(f"Invalid rule at index {i}: {e}") from e
 
-        return cls(version=data["version"], rules=rules)
+        ruleset = cls(version=data["version"], rules=rules)
+
+        # Run validation if requested
+        if validate:
+            from api.validation import validate_ruleset
+
+            validate_ruleset(ruleset, strict=strict)
+
+        return ruleset
 
     @classmethod
     def load_from_file(cls, path: str | Path) -> "RuleSet":
@@ -160,15 +208,24 @@ def evaluate_rules(
             final_score=current_score,
             matched_rules=[],
             explanations=[],
+            shadow_matched_rules=[],
+            shadow_explanations=[],
         )
 
     score = current_score
     matched_rules = []
     explanations = []
+    shadow_matched_rules = []
+    shadow_explanations = []
     rejected = False
     override_applied = False
 
-    for rule in ruleset.rules:
+    # Separate active and shadow rules
+    active_rules = [r for r in ruleset.rules if r.status == RuleStatus.ACTIVE.value]
+    shadow_rules = [r for r in ruleset.rules if r.status == RuleStatus.SHADOW.value]
+
+    # Evaluate active rules (affect score)
+    for rule in active_rules:
         # Check if feature exists
         if rule.field not in features:
             continue  # Skip rule if feature missing
@@ -223,6 +280,47 @@ def evaluate_rules(
         elif rule.action == "clamp_max" and not override_applied:
             score = min(score, rule.score)
 
+    # Evaluate shadow rules (do not affect score, just log)
+    for rule in shadow_rules:
+        # Check if feature exists
+        if rule.field not in features:
+            continue  # Skip rule if feature missing
+
+        feature_value = features[rule.field]
+
+        # Evaluate condition
+        matches = False
+        try:
+            if rule.op == ">":
+                matches = feature_value > rule.value
+            elif rule.op == ">=":
+                matches = feature_value >= rule.value
+            elif rule.op == "<":
+                matches = feature_value < rule.value
+            elif rule.op == "<=":
+                matches = feature_value <= rule.value
+            elif rule.op == "==":
+                matches = feature_value == rule.value
+            elif rule.op == "in":
+                matches = feature_value in rule.value
+            elif rule.op == "not_in":
+                matches = feature_value not in rule.value
+        except (TypeError, ValueError):
+            # Type mismatch - rule does not match
+            continue
+
+        if matches:
+            # Shadow rule matched - record it (but don't affect score)
+            shadow_matched_rules.append(rule.id)
+            shadow_explanations.append(
+                {
+                    "rule_id": rule.id,
+                    "severity": rule.severity,
+                    "reason": rule.reason or f"shadow_rule_matched:{rule.id}",
+                }
+            )
+            logger.debug(f"Shadow rule '{rule.id}' matched but not applied")
+
     # Ensure score is in valid range
     score = max(1, min(99, score))
 
@@ -231,4 +329,6 @@ def evaluate_rules(
         matched_rules=matched_rules,
         explanations=explanations,
         rejected=rejected,
+        shadow_matched_rules=shadow_matched_rules,
+        shadow_explanations=shadow_explanations,
     )

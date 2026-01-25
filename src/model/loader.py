@@ -7,6 +7,7 @@ import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from api.schemas import SplitConfig
 from synthetic_pipeline.db.session import DatabaseSession
 
 
@@ -18,6 +19,7 @@ class TrainTestSplit:
     y_train: pd.Series
     X_test: pd.DataFrame
     y_test: pd.Series
+    split_manifest: dict | None = None
 
     @property
     def train_size(self) -> int:
@@ -78,6 +80,7 @@ class DataLoader:
         training_cutoff_date: str | datetime,
         session: Session | None = None,
         feature_columns: list[str] | None = None,
+        split_config: SplitConfig | None = None,
     ) -> TrainTestSplit:
         """Load train/test split with temporal splitting and label maturity.
 
@@ -87,9 +90,12 @@ class DataLoader:
             session: Optional existing database session.
             feature_columns: Optional list of feature columns to use. If None, uses
                 default FEATURE_COLUMNS.
+            split_config: Optional split/CV config. When provided, split_manifest
+                is populated on the returned TrainTestSplit.
 
         Returns:
-            TrainTestSplit containing X_train, y_train, X_test, y_test.
+            TrainTestSplit containing X_train, y_train, X_test, y_test, and
+            optionally split_manifest.
 
         Raises:
             ValueError: If any requested feature columns are missing from the data.
@@ -99,21 +105,25 @@ class DataLoader:
         else:
             cutoff = training_cutoff_date
 
-        # Use default columns if none provided
         if feature_columns is None:
             feature_columns = self.FEATURE_COLUMNS
 
         if session is not None:
-            return self._load_with_session(session, cutoff, feature_columns)
+            return self._load_with_session(
+                session, cutoff, feature_columns, split_config
+            )
 
         with self.db_session.get_session() as session:
-            return self._load_with_session(session, cutoff, feature_columns)
+            return self._load_with_session(
+                session, cutoff, feature_columns, split_config
+            )
 
     def _load_with_session(
         self,
         session: Session,
         cutoff: datetime,
         feature_columns: list[str],
+        split_config: SplitConfig | None = None,
     ) -> TrainTestSplit:
         """Load data using provided session.
 
@@ -121,9 +131,10 @@ class DataLoader:
             session: Database session.
             cutoff: Training cutoff date.
             feature_columns: List of feature columns to extract.
+            split_config: Optional split config for manifest generation.
 
         Returns:
-            TrainTestSplit with selected features.
+            TrainTestSplit with selected features and optionally split_manifest.
 
         Raises:
             ValueError: If any requested feature columns are missing from the data.
@@ -131,14 +142,12 @@ class DataLoader:
         train_df = self._load_train_set(session, cutoff)
         test_df = self._load_test_set(session, cutoff)
 
-        # Validate that all requested columns exist (only if data exists)
         all_columns = set()
         if len(train_df) > 0:
             all_columns.update(train_df.columns)
         if len(test_df) > 0:
             all_columns.update(test_df.columns)
 
-        # Skip validation for empty datasets (no data = no validation needed)
         if len(all_columns) > 0:
             missing_columns = [col for col in feature_columns if col not in all_columns]
             if missing_columns:
@@ -147,7 +156,6 @@ class DataLoader:
                     f"Available columns: {sorted(all_columns)}"
                 )
 
-        # Extract features and labels
         if len(train_df) > 0:
             features_train = train_df[feature_columns]
             labels_train = train_df["label"]
@@ -162,11 +170,38 @@ class DataLoader:
             features_test = pd.DataFrame(columns=feature_columns)
             labels_test = pd.Series(dtype=int)
 
+        manifest: dict | None = None
+        if split_config is not None and "record_id" in all_columns:
+            train_ids = (
+                train_df["record_id"].astype(str).tolist() if len(train_df) > 0 else []
+            )
+            test_ids = (
+                test_df["record_id"].astype(str).tolist() if len(test_df) > 0 else []
+            )
+            s = split_config.strategy
+            manifest = {
+                "strategy": s.value if hasattr(s, "value") else str(s),
+                "seed": split_config.seed,
+                "training_cutoff_date": cutoff.isoformat(),
+                "train_record_ids": train_ids,
+                "test_record_ids": test_ids,
+                "fold_assignments": None,
+                "train_size": len(features_train),
+                "test_size": len(features_test),
+                "train_fraud_rate": (
+                    float(labels_train.mean()) if len(labels_train) > 0 else 0.0
+                ),
+                "test_fraud_rate": (
+                    float(labels_test.mean()) if len(labels_test) > 0 else 0.0
+                ),
+            }
+
         return TrainTestSplit(
             X_train=features_train,
             y_train=labels_train,
             X_test=features_test,
             y_test=labels_test,
+            split_manifest=manifest,
         )
 
     def _load_train_set(self, session: Session, cutoff: datetime) -> pd.DataFrame:

@@ -356,6 +356,62 @@ class ModelManager:
         predictions = self.predict(df)
         return float(predictions[0])
 
+    def get_feature_importance(self) -> dict[str, float] | None:
+        """Get feature importance from the loaded model.
+
+        Returns:
+            Dictionary mapping feature names to importance scores, or None if
+            feature importance cannot be extracted.
+        """
+        if self._model is None:
+            return None
+
+        try:
+            # Try to access underlying XGBoost model
+            # MLflow pyfunc models wrap the original model
+            underlying_model = (
+                self._model._model_impl
+                if hasattr(self._model, "_model_impl")
+                else self._model
+            )
+
+            # Check if it's an XGBoost model
+            if hasattr(underlying_model, "get_booster"):
+                # XGBoost model - get feature importance
+                booster = underlying_model.get_booster()
+                importance_dict = booster.get_score(importance_type="gain")
+
+                # Map feature indices to feature names
+                feature_names = self.required_features
+                if len(importance_dict) == len(feature_names):
+                    # Importance dict uses f0, f1, etc. as keys
+                    importance_map = {}
+                    for i, feature_name in enumerate(feature_names):
+                        key = f"f{i}"
+                        if key in importance_dict:
+                            importance_map[feature_name] = float(importance_dict[key])
+                    return importance_map
+                else:
+                    # Try direct mapping if keys are feature names
+                    return {
+                        k: float(v)
+                        for k, v in importance_dict.items()
+                        if k in feature_names
+                    }
+            elif hasattr(underlying_model, "feature_importances_"):
+                # Scikit-learn style model
+                importances = underlying_model.feature_importances_
+                feature_names = self.required_features
+                if len(importances) == len(feature_names):
+                    return {
+                        name: float(imp)
+                        for name, imp in zip(feature_names, importances)
+                    }
+        except Exception as e:
+            logger.warning(f"Could not extract feature importance: {e}")
+
+        return None
+
 
 # Module-level singleton instance
 _manager: ModelManager | None = None

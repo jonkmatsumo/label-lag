@@ -1,0 +1,24 @@
+{
+  "version": "v1",
+  "rules": [
+    {
+      "id": "velocity_high",
+      "field": "velocity_24h",
+      "op": ">",
+      "value": 5,
+      "action": "clamp_min",
+      "score": 80,
+      "severity": "high",
+      "reason": "High transaction velocity"
+    },
+    {
+      "id": "amount_ratio_high",
+      "field": "amount_to_avg_ratio_30d",
+      "op": ">",
+      "value": 3.0,
+      "action": "clamp_min",
+      "score": 75,
+      "severity": "medium"
+    }
+  ]
+}
