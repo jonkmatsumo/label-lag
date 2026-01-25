@@ -1893,6 +1893,16 @@ def render_model_lab() -> None:
                         local = fetch_artifact_path(run_id, path)
                         if local:
                             st.image(local, caption="Feature importance")
+                    elif path.endswith("model_card.md"):
+                        local = fetch_artifact_path(run_id, path)
+                        if local:
+                            try:
+                                with open(local, encoding="utf-8") as f:
+                                    raw = f.read()
+                                st.markdown("**Model card**")
+                                st.markdown(raw)
+                            except OSError:
+                                st.caption(path)
                 if arts:
                     st.markdown("**Artifacts**")
                     for a in arts:
@@ -1935,6 +1945,36 @@ def render_model_lab() -> None:
                     yaxis_title="Value",
                 )
                 st.plotly_chart(fig, use_container_width=True)
+                pr_aucs = [
+                    details_list[i].get("metrics", {}).get("pr_auc")
+                    for i in range(len(compare_ids))
+                ]
+                f1s = [
+                    details_list[i].get("metrics", {}).get("f1")
+                    for i in range(len(compare_ids))
+                ]
+                valid = [
+                    (p, f, rid)
+                    for p, f, rid in zip(pr_aucs, f1s, compare_ids)
+                    if p is not None and f is not None
+                ]
+                if len(valid) >= 2:
+                    px_, fx_, tx_ = zip(*valid)
+                    fig2 = go.Figure(
+                        go.Scatter(
+                            x=px_,
+                            y=fx_,
+                            text=[t[:12] for t in tx_],
+                            mode="markers+text",
+                            textposition="top center",
+                        )
+                    )
+                    fig2.update_layout(
+                        title="Tradeoff: PR-AUC vs F1",
+                        xaxis_title="PR-AUC",
+                        yaxis_title="F1",
+                    )
+                    st.plotly_chart(fig2, use_container_width=True)
                 all_params = set()
                 for d in details_list:
                     all_params.update(d.get("params", {}).keys())
