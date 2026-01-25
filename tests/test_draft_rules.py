@@ -803,3 +803,177 @@ class TestDeleteDraftRule:
         response = client.delete("/rules/draft/non_draft_delete?actor=test_user")
         assert response.status_code == 400
         assert "Only draft rules" in response.json()["detail"]
+
+
+class TestValidateDraftRule:
+    """Tests for POST /rules/draft/{rule_id}/validate endpoint."""
+
+    def test_validate_draft_rule_returns_200(self, client):
+        """Test that validating a draft rule returns 200."""
+        # Create a rule
+        client.post(
+            "/rules/draft",
+            json={
+                "id": "validate_test_001",
+                "field": "velocity_24h",
+                "op": ">",
+                "value": 5,
+                "action": "clamp_min",
+                "score": 70,
+                "severity": "medium",
+                "reason": "Test",
+                "actor": "test_user",
+            },
+        )
+
+        # Validate it
+        response = client.post(
+            "/rules/draft/validate_test_001/validate",
+            json={"include_existing_rules": True},
+        )
+        assert response.status_code == 200
+
+    def test_validate_draft_rule_response_structure(self, client):
+        """Test that response has correct structure."""
+        # Create a rule
+        client.post(
+            "/rules/draft",
+            json={
+                "id": "validate_test_002",
+                "field": "velocity_24h",
+                "op": ">",
+                "value": 5,
+                "action": "clamp_min",
+                "score": 70,
+                "severity": "medium",
+                "reason": "Test",
+                "actor": "test_user",
+            },
+        )
+
+        # Validate it
+        response = client.post(
+            "/rules/draft/validate_test_002/validate",
+            json={"include_existing_rules": True},
+        )
+        data = response.json()
+
+        assert "schema_errors" in data
+        assert "conflicts" in data
+        assert "redundancies" in data
+        assert "is_valid" in data
+        assert isinstance(data["schema_errors"], list)
+        assert isinstance(data["conflicts"], list)
+        assert isinstance(data["redundancies"], list)
+        assert isinstance(data["is_valid"], bool)
+
+    def test_validate_draft_rule_not_found_returns_404(self, client):
+        """Test that validating non-existent rule returns 404."""
+        response = client.post(
+            "/rules/draft/nonexistent/validate",
+            json={"include_existing_rules": True},
+        )
+        assert response.status_code == 404
+
+    def test_validate_draft_rule_with_conflicts(self, client):
+        """Test validation detects conflicts."""
+        # Create first rule
+        client.post(
+            "/rules/draft",
+            json={
+                "id": "conflict_rule_1",
+                "field": "velocity_24h",
+                "op": ">",
+                "value": 5,
+                "action": "reject",
+                "severity": "high",
+                "reason": "First rule",
+                "actor": "test_user",
+            },
+        )
+
+        # Create conflicting rule (same field, overlapping range, conflicting action)
+        client.post(
+            "/rules/draft",
+            json={
+                "id": "conflict_rule_2",
+                "field": "velocity_24h",
+                "op": ">",
+                "value": 3,  # Overlaps with > 5
+                "action": "override_score",  # Conflicts with reject
+                "score": 80,
+                "severity": "high",
+                "reason": "Conflicting rule",
+                "actor": "test_user",
+            },
+        )
+
+        # Validate second rule (should detect conflict with first)
+        response = client.post(
+            "/rules/draft/conflict_rule_2/validate",
+            json={"include_existing_rules": True},
+        )
+        data = response.json()
+
+        # Should have conflicts
+        assert len(data["conflicts"]) > 0
+        assert data["is_valid"] is False
+
+    def test_validate_draft_rule_without_existing_rules(self, client):
+        """Test validation without including existing rules."""
+        # Create a rule
+        client.post(
+            "/rules/draft",
+            json={
+                "id": "isolated_validate",
+                "field": "velocity_24h",
+                "op": ">",
+                "value": 5,
+                "action": "clamp_min",
+                "score": 70,
+                "severity": "medium",
+                "reason": "Test",
+                "actor": "test_user",
+            },
+        )
+
+        # Validate without existing rules
+        response = client.post(
+            "/rules/draft/isolated_validate/validate",
+            json={"include_existing_rules": False},
+        )
+        data = response.json()
+
+        # Should be valid (no conflicts with itself)
+        assert data["is_valid"] is True
+        assert len(data["conflicts"]) == 0
+
+    def test_validate_draft_rule_valid_rule(self, client):
+        """Test validation on a valid rule returns is_valid=True."""
+        # Create a valid rule
+        client.post(
+            "/rules/draft",
+            json={
+                "id": "valid_rule_test",
+                "field": "velocity_24h",
+                "op": ">",
+                "value": 5,
+                "action": "clamp_min",
+                "score": 70,
+                "severity": "medium",
+                "reason": "Test",
+                "actor": "test_user",
+            },
+        )
+
+        # Validate it
+        response = client.post(
+            "/rules/draft/valid_rule_test/validate",
+            json={"include_existing_rules": False},
+        )
+        data = response.json()
+
+        # Should be valid (no conflicts with itself)
+        assert data["is_valid"] is True
+        assert len(data["schema_errors"]) == 0
+        assert len(data["conflicts"]) == 0

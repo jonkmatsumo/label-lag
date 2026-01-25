@@ -670,3 +670,30 @@ class DraftRuleUpdateResponse(BaseModel):
     rule: DraftRuleResponse = Field(..., description="Updated rule")
     version_id: str = Field(..., description="Version ID of the update")
     validation: ValidationResult = Field(..., description="Validation results")
+
+
+class DraftRuleValidateRequest(BaseModel):
+    """Request schema for validating a draft rule."""
+
+    include_existing_rules: bool = Field(
+        default=True,
+        description="Validate against production ruleset",
+    )
+
+
+class DraftRuleValidateResponse(BaseModel):
+    """Response schema for draft rule validation."""
+
+    schema_errors: list[str] = Field(
+        default_factory=list,
+        description="Schema validation errors",
+    )
+    conflicts: list[ConflictResponse] = Field(
+        default_factory=list,
+        description="List of conflicts",
+    )
+    redundancies: list[RedundancyResponse] = Field(
+        default_factory=list,
+        description="List of redundancies",
+    )
+    is_valid: bool = Field(..., description="Whether rule is valid (no errors or conflicts)")

@@ -25,6 +25,8 @@ from api.schemas import (
     DraftRuleResponse,
     DraftRuleUpdateRequest,
     DraftRuleUpdateResponse,
+    DraftRuleValidateRequest,
+    DraftRuleValidateResponse,
     GenerateDataRequest,
     GenerateDataResponse,
     HealthResponse,
@@ -1393,6 +1395,131 @@ async def delete_draft_rule(rule_id: str, actor: str = Query(..., description="W
         "rule_id": rule_id,
         "status": archived_rule.status if archived_rule else "archived",
     }
+
+
+@app.post(
+    "/rules/draft/{rule_id}/validate",
+    response_model=DraftRuleValidateResponse,
+    tags=["Draft Rules"],
+    summary="Validate a draft rule",
+    description="""
+Run full validation suite on a draft rule.
+
+Validates schema, checks for conflicts and redundancies. Can optionally
+validate against production ruleset or draft-only. Deterministic and
+read-only - does not modify rule state.
+""",
+)
+async def validate_draft_rule(
+    rule_id: str, request: DraftRuleValidateRequest
+) -> DraftRuleValidateResponse:
+    """Validate a draft rule.
+
+    Args:
+        rule_id: Rule identifier.
+        request: Validation request with optional include_existing_rules flag.
+
+    Returns:
+        DraftRuleValidateResponse with validation results.
+
+    Raises:
+        HTTPException: If rule not found.
+    """
+    from api.draft_store import get_draft_store
+    from api.rules import Rule, RuleSet, RuleStatus
+    from api.validation import validate_ruleset
+
+    store = get_draft_store()
+
+    # Get the rule
+    rule = store.get(rule_id)
+    if rule is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Draft rule not found: {rule_id}",
+        )
+
+    # Collect schema errors
+    schema_errors = []
+
+    # Validate rule schema (basic checks)
+    try:
+        # Rule.__post_init__ validates these, but we'll check explicitly
+        if rule.op not in [">", ">=", "<", "<=", "==", "in", "not_in"]:
+            schema_errors.append(f"Invalid operator: {rule.op}")
+
+        if rule.action not in ["override_score", "clamp_min", "clamp_max", "reject"]:
+            schema_errors.append(f"Invalid action: {rule.action}")
+
+        score_actions = ["override_score", "clamp_min", "clamp_max"]
+        if rule.action in score_actions and rule.score is None:
+            schema_errors.append(f"Action {rule.action} requires 'score' field")
+
+        if rule.op in ["in", "not_in"] and not isinstance(rule.value, list):
+            schema_errors.append(f"Operator {rule.op} requires 'value' to be a list")
+
+        if rule.severity not in ["low", "medium", "high"]:
+            schema_errors.append(f"Invalid severity: {rule.severity}")
+
+        if rule.status not in [s.value for s in RuleStatus]:
+            schema_errors.append(f"Invalid status: {rule.status}")
+
+    except Exception as e:
+        schema_errors.append(f"Schema validation error: {e}")
+
+    # Build ruleset for validation
+    rules_to_validate = [rule]
+
+    if request.include_existing_rules:
+        # Include other draft rules
+        other_drafts = [
+            r for r in store.list_rules(include_archived=False) if r.id != rule_id
+        ]
+        rules_to_validate.extend(other_drafts)
+
+        # Include production active rules
+        manager = get_model_manager()
+        production_ruleset = manager.ruleset
+        if production_ruleset:
+            rules_to_validate.extend(
+                [r for r in production_ruleset.rules if r.status == "active"]
+            )
+
+    # Run validation
+    test_ruleset = RuleSet(version="validation", rules=rules_to_validate)
+    conflicts, redundancies = validate_ruleset(test_ruleset, strict=False)
+
+    # Filter conflicts and redundancies to only those involving this rule
+    rule_conflicts = [
+        c for c in conflicts if c.rule1_id == rule_id or c.rule2_id == rule_id
+    ]
+    rule_redundancies = [
+        r for r in redundancies if r.rule_id == rule_id
+    ]
+
+    # Convert to response
+    return DraftRuleValidateResponse(
+        schema_errors=schema_errors,
+        conflicts=[
+            ConflictResponse(
+                rule1_id=c.rule1_id,
+                rule2_id=c.rule2_id,
+                conflict_type=c.conflict_type,
+                description=c.description,
+            )
+            for c in rule_conflicts
+        ],
+        redundancies=[
+            RedundancyResponse(
+                rule_id=r.rule_id,
+                redundant_with=r.redundant_with,
+                redundancy_type=r.redundancy_type,
+                description=r.description,
+            )
+            for r in rule_redundancies
+        ],
+        is_valid=len(schema_errors) == 0 and len(rule_conflicts) == 0,
+    )
 
 
 @app.exception_handler(Exception)
