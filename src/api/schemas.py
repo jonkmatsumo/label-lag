@@ -144,6 +144,46 @@ class HealthResponse(BaseModel):
     version: str = Field(default="0.1.0")
 
 
+class SplitStrategy(str, Enum):
+    """Supported train/test split strategies."""
+
+    TEMPORAL = "temporal"
+    TEMPORAL_STRATIFIED = "temporal_stratified"
+    GROUP_TEMPORAL = "group_temporal"
+    KFOLD_TEMPORAL = "kfold_temporal"
+    EXPANDING_WINDOW = "expanding_window"
+
+
+class SplitConfig(BaseModel):
+    """Configuration for train/test split and optional CV."""
+
+    strategy: SplitStrategy = Field(
+        default=SplitStrategy.TEMPORAL,
+        description="Split strategy",
+    )
+    n_folds: int = Field(
+        default=5,
+        ge=2,
+        le=10,
+        description="Number of folds for CV strategies",
+    )
+    stratify_column: str | None = Field(
+        default=None,
+        description="Column to stratify on (e.g. is_fraudulent)",
+    )
+    group_column: str | None = Field(
+        default="user_id",
+        description="Column for group-based splits",
+    )
+    validation_fraction: float = Field(
+        default=0.2,
+        ge=0.1,
+        le=0.5,
+        description="Validation fraction when using validation split",
+    )
+    seed: int = Field(default=42, description="Random seed for reproducibility")
+
+
 class TrainRequest(BaseModel):
     """Request schema for model training endpoint."""
 
@@ -162,6 +202,10 @@ class TrainRequest(BaseModel):
     selected_feature_columns: list[str] | None = Field(
         default=None,
         description="Feature columns for training. If None, uses defaults.",
+    )
+    split_config: SplitConfig = Field(
+        default_factory=SplitConfig,
+        description="Split and optional CV configuration",
     )
 
     def model_post_init(self, __context) -> None:
