@@ -8,6 +8,7 @@ from decimal import Decimal
 import numpy as np
 from sqlalchemy import text
 
+from api.rules import RuleResult, evaluate_rules
 from api.schemas import RiskComponent, SignalRequest, SignalResponse
 from model.evaluate import ScoreCalibrator
 from synthetic_pipeline.db.session import DatabaseSession
@@ -88,12 +89,33 @@ class SignalEvaluator:
         # Calibrate to 1-99 score
         score = self._calibrate_score(raw_probability)
 
+        # Apply decision rules
+        rule_result = self._apply_rules(manager, features, score)
+        final_score = rule_result.final_score
+
+        # Log rule application if rules matched
+        if rule_result.matched_rules:
+            logger.info(
+                f"Rules applied: version={manager.rules_version}, "
+                f"matched={rule_result.matched_rules}, "
+                f"model_score={score}, final_score={final_score}"
+            )
+
         # Identify risk components based on feature values
         risk_components = self._identify_risk_components(features)
 
+        # Add rule-based components
+        for explanation in rule_result.explanations:
+            risk_components.append(
+                RiskComponent(
+                    key=f"rule_{explanation['rule_id']}",
+                    label=explanation["reason"] or f"rule_matched:{explanation['rule_id']}",
+                )
+            )
+
         return SignalResponse(
             request_id=request_id,
-            score=score,
+            score=final_score,
             risk_components=risk_components,
             model_version=model_version,
         )
@@ -293,6 +315,40 @@ class SignalEvaluator:
         prob_array = np.array([probability])
         scores = self.calibrator.transform(prob_array)
         return int(scores[0])
+
+    def _apply_rules(
+        self, manager, features: FeatureVector, score: int
+    ) -> RuleResult:
+        """Apply decision rules to the current score.
+
+        Args:
+            manager: ModelManager instance.
+            features: Feature vector.
+            score: Current score (1-99).
+
+        Returns:
+            RuleResult with final score and matched rules.
+        """
+        try:
+            ruleset = manager.ruleset
+            if ruleset is None or not ruleset.rules:
+                return RuleResult(final_score=score, matched_rules=[], explanations=[])
+
+            # Build feature dict from FeatureVector
+            feature_dict = {
+                "velocity_24h": features.velocity_24h,
+                "amount_to_avg_ratio_30d": features.amount_to_avg_ratio_30d,
+                "balance_volatility_z_score": features.balance_volatility_z_score,
+                "bank_connections_24h": features.bank_connections_24h,
+                "merchant_risk_score": features.merchant_risk_score,
+                "has_history": features.has_history,
+                "transaction_amount": float(features.transaction_amount),
+            }
+
+            return evaluate_rules(feature_dict, score, ruleset)
+        except Exception as e:
+            logger.warning(f"Rule evaluation failed, using model score: {e}")
+            return RuleResult(final_score=score, matched_rules=[], explanations=[])
 
     def _identify_risk_components(self, features: FeatureVector) -> list[RiskComponent]:
         """Identify risk components based on feature thresholds.
