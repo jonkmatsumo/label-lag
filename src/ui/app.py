@@ -1641,6 +1641,85 @@ def render_model_lab() -> None:
             help="Number of days before today for training cutoff",
         )
 
+    with st.expander("Advanced Hyperparameters"):
+        ah1, ah2 = st.columns(2)
+        with ah1:
+            n_estimators = st.slider(
+                "n_estimators",
+                min_value=50,
+                max_value=500,
+                value=100,
+                step=25,
+                help="Number of boosting rounds",
+            )
+            learning_rate = st.slider(
+                "Learning Rate",
+                min_value=0.01,
+                max_value=0.3,
+                value=0.1,
+                step=0.01,
+                format="%.2f",
+                help="Step size shrinkage",
+            )
+            min_child_weight = st.slider(
+                "min_child_weight",
+                min_value=1,
+                max_value=10,
+                value=1,
+                step=1,
+            )
+            subsample = st.slider(
+                "subsample",
+                min_value=0.5,
+                max_value=1.0,
+                value=1.0,
+                step=0.1,
+                format="%.1f",
+            )
+            colsample_bytree = st.slider(
+                "colsample_bytree",
+                min_value=0.5,
+                max_value=1.0,
+                value=1.0,
+                step=0.1,
+                format="%.1f",
+            )
+        with ah2:
+            gamma = st.slider(
+                "gamma",
+                min_value=0.0,
+                max_value=5.0,
+                value=0.0,
+                step=0.1,
+                format="%.1f",
+            )
+            reg_alpha = st.slider(
+                "reg_alpha",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.0,
+                step=0.1,
+                format="%.1f",
+            )
+            reg_lambda = st.slider(
+                "reg_lambda",
+                min_value=0.0,
+                max_value=10.0,
+                value=1.0,
+                step=0.5,
+                format="%.1f",
+            )
+            early_stopping_rounds = st.number_input(
+                "Early Stopping Rounds",
+                min_value=0,
+                max_value=50,
+                value=0,
+                step=5,
+                help="0 = disabled. Stop if no improvement for N rounds.",
+            )
+            if early_stopping_rounds == 0:
+                early_stopping_rounds = None
+
     train_clicked = st.button(
         "Start Training", type="primary", disabled=not selected_columns
     )
@@ -1650,13 +1729,24 @@ def render_model_lab() -> None:
             try:
                 import requests
 
+                payload = {
+                    "max_depth": max_depth,
+                    "training_window_days": training_window,
+                    "selected_feature_columns": selected_columns,
+                    "n_estimators": n_estimators,
+                    "learning_rate": learning_rate,
+                    "min_child_weight": min_child_weight,
+                    "subsample": subsample,
+                    "colsample_bytree": colsample_bytree,
+                    "gamma": gamma,
+                    "reg_alpha": reg_alpha,
+                    "reg_lambda": reg_lambda,
+                }
+                if early_stopping_rounds is not None:
+                    payload["early_stopping_rounds"] = early_stopping_rounds
                 response = requests.post(
                     f"{API_BASE_URL}/train",
-                    json={
-                        "max_depth": max_depth,
-                        "training_window_days": training_window,
-                        "selected_feature_columns": selected_columns,
-                    },
+                    json=payload,
                     timeout=300,  # Training can take a while
                 )
                 result = response.json()
