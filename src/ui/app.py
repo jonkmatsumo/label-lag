@@ -1762,51 +1762,62 @@ def render_model_lab() -> None:
     )
 
     if train_clicked:
-        spinner_msg = (
-            "Running tuning, then training..."
-            if tuning_enabled
-            else "Training model... This may take a moment."
-        )
-        timeout_sec = (tuning_timeout + 60) if tuning_enabled else 300
-        with st.spinner(spinner_msg):
-            try:
-                import requests
+        import requests
 
-                payload = {
-                    "max_depth": max_depth,
-                    "training_window_days": training_window,
-                    "selected_feature_columns": selected_columns,
-                    "n_estimators": n_estimators,
-                    "learning_rate": learning_rate,
-                    "min_child_weight": min_child_weight,
-                    "subsample": subsample,
-                    "colsample_bytree": colsample_bytree,
-                    "gamma": gamma,
-                    "reg_alpha": reg_alpha,
-                    "reg_lambda": reg_lambda,
-                    "tuning_config": {
-                        "enabled": tuning_enabled,
-                        "n_trials": tuning_n_trials,
-                        "timeout_minutes": tuning_timeout,
-                        "metric": tuning_metric,
-                    },
-                }
-                if early_stopping_rounds is not None:
-                    payload["early_stopping_rounds"] = early_stopping_rounds
+        spinner_msg = (
+            "1. Loading data · 2. Training model · 3. Computing metrics · "
+            "4. Logging artifacts"
+        )
+        if tuning_enabled:
+            spinner_msg = "Running tuning, then " + spinner_msg
+        timeout_sec = (tuning_timeout + 60) if tuning_enabled else 300
+        payload = {
+            "max_depth": max_depth,
+            "training_window_days": training_window,
+            "selected_feature_columns": selected_columns,
+            "n_estimators": n_estimators,
+            "learning_rate": learning_rate,
+            "min_child_weight": min_child_weight,
+            "subsample": subsample,
+            "colsample_bytree": colsample_bytree,
+            "gamma": gamma,
+            "reg_alpha": reg_alpha,
+            "reg_lambda": reg_lambda,
+            "tuning_config": {
+                "enabled": tuning_enabled,
+                "n_trials": tuning_n_trials,
+                "timeout_minutes": tuning_timeout,
+                "metric": tuning_metric,
+            },
+        }
+        if early_stopping_rounds is not None:
+            payload["early_stopping_rounds"] = early_stopping_rounds
+
+        with st.spinner(spinner_msg):
+            start = time.time()
+            try:
                 response = requests.post(
                     f"{API_BASE_URL}/train",
                     json=payload,
                     timeout=timeout_sec,
                 )
+                elapsed = time.time() - start
                 result = response.json()
 
                 if result.get("success"):
-                    st.success(f"Training complete! Run ID: `{result.get('run_id')}`")
+                    st.success(
+                        f"Training complete! Run ID: `{result.get('run_id')}` "
+                        f"(elapsed {elapsed:.0f}s)"
+                    )
                     st.balloons()
                 else:
-                    st.error(f"Training failed: {result.get('error')}")
+                    st.error(
+                        f"Training failed: {result.get('error')} "
+                        f"(elapsed {elapsed:.0f}s)"
+                    )
             except requests.exceptions.RequestException as e:
-                st.error(f"API request failed: {e}")
+                elapsed = time.time() - start
+                st.error(f"API request failed: {e} (elapsed {elapsed:.0f}s)")
 
     st.markdown("---")
 
