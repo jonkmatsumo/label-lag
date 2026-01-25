@@ -924,9 +924,92 @@ def render_synthetic_dataset() -> None:
         ]
     )
 
-    # Tab implementations will be added in subsequent commits
+    # Tab 1: Numeric ↔ Numeric
     with tab1:
-        st.info("Numeric correlation analysis will be implemented in the next commit.")
+        if sample_df is None or len(numeric_cols) < 2:
+            if sample_df is None:
+                st.info("No data available for numeric correlation analysis.")
+            else:
+                st.warning(
+                    f"Need at least 2 numeric columns for correlation analysis. "
+                    f"Found {len(numeric_cols)} numeric column(s)."
+                )
+        else:
+            with st.spinner("Computing correlation matrices..."):
+                try:
+                    # Compute correlation matrices
+                    numeric_df = sample_df[numeric_cols].select_dtypes(
+                        include=["int64", "float64"]
+                    )
+
+                    pearson_corr = numeric_df.corr(method="pearson")
+                    spearman_corr = numeric_df.corr(method="spearman")
+
+                    # Display Pearson heatmap
+                    st.markdown("**Pearson Correlation Matrix**")
+                    fig_pearson = px.imshow(
+                        pearson_corr,
+                        labels=dict(x="Column", y="Column", color="Correlation"),
+                        x=pearson_corr.columns,
+                        y=pearson_corr.columns,
+                        color_continuous_scale="RdYlBu_r",
+                        aspect="auto",
+                        title="Pearson Correlation Matrix",
+                    )
+                    fig_pearson.update_layout(height=600)
+                    st.plotly_chart(fig_pearson, use_container_width=True)
+
+                    # Display Spearman heatmap
+                    st.markdown("**Spearman Correlation Matrix**")
+                    fig_spearman = px.imshow(
+                        spearman_corr,
+                        labels=dict(x="Column", y="Column", color="Correlation"),
+                        x=spearman_corr.columns,
+                        y=spearman_corr.columns,
+                        color_continuous_scale="RdYlBu_r",
+                        aspect="auto",
+                        title="Spearman Correlation Matrix",
+                    )
+                    fig_spearman.update_layout(height=600)
+                    st.plotly_chart(fig_spearman, use_container_width=True)
+
+                    # Top pairs table
+                    st.markdown("**Top Correlations**")
+                    # Flatten correlation matrices (exclude diagonal)
+                    top_pairs = []
+                    n_cols = len(numeric_cols)
+                    for i in range(n_cols):
+                        for j in range(i + 1, n_cols):
+                            col_a = numeric_cols[i]
+                            col_b = numeric_cols[j]
+                            pearson_val = pearson_corr.iloc[i, j]
+                            spearman_val = spearman_corr.iloc[i, j]
+
+                            # Skip NaN values
+                            if pd.notna(pearson_val) and pd.notna(spearman_val):
+                                top_pairs.append(
+                                    {
+                                        "Column A": col_a,
+                                        "Column B": col_b,
+                                        "Pearson": round(pearson_val, 4),
+                                        "Spearman": round(spearman_val, 4),
+                                        "Abs Pearson": abs(pearson_val),
+                                    }
+                                )
+
+                    if top_pairs:
+                        top_pairs_df = pd.DataFrame(top_pairs)
+                        top_pairs_df = top_pairs_df.sort_values(
+                            "Abs Pearson", ascending=False
+                        ).head(20)
+                        # Remove the sorting column for display
+                        display_df = top_pairs_df.drop(columns=["Abs Pearson"])
+                        st.dataframe(display_df, use_container_width=True, hide_index=True)
+                    else:
+                        st.info("No valid correlations found (all NaN).")
+
+                except Exception as e:
+                    st.error(f"Error computing correlations: {e}")
 
     with tab2:
         st.info("Categorical association analysis will be implemented in the next commit.")
