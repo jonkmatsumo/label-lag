@@ -39,6 +39,7 @@ from ui.mlflow_utils import (
     get_production_model_version,
     get_run_artifacts,
     get_run_details,
+    get_version_details,
     promote_to_production,
 )
 
@@ -192,22 +193,28 @@ def _render_model_selector() -> None:
     for v in sorted(all_versions, key=lambda x: int(x["version"]), reverse=True):
         version = v["version"]
         stage = v["stage"]
+        run_id = v.get("run_id", "")
 
         # Build label with indicators
         label = f"v{version}"
         indicators = []
-
         if stage == "Production":
             indicators.append("PRODUCTION")
         if live_model and live_model == f"v{version}":
             indicators.append("LIVE")
-
         if indicators:
             label += f" ({', '.join(indicators)})"
-        elif stage != "None":
+        elif stage and stage != "None":
             label += f" ({stage})"
 
-        options.append({"label": label, "version": version, "stage": stage})
+        options.append(
+            {
+                "label": label,
+                "version": version,
+                "stage": stage,
+                "run_id": run_id,
+            }
+        )
 
     # Display current live model status
     col1, col2 = st.columns([2, 3])
@@ -229,8 +236,22 @@ def _render_model_selector() -> None:
 
         if selected_idx is not None:
             selected = options[selected_idx]
-            # Store in session state for potential future use
             st.session_state["selected_model_version"] = selected["version"]
+
+            with st.expander("Version details"):
+                det = get_version_details(version=selected["version"])
+                if det:
+                    st.markdown(f"**Run ID:** `{det.get('run_id', '—')}`")
+                    m = det.get("metrics", {})
+                    parts = []
+                    if m.get("pr_auc") is not None:
+                        parts.append(f"PR-AUC: {m['pr_auc']:.4f}")
+                    if m.get("f1") is not None:
+                        parts.append(f"F1: {m['f1']:.4f}")
+                    if parts:
+                        st.caption(" · ".join(parts))
+                    if selected["stage"] == "Production":
+                        st.success("Production model")
 
 
 def render_analytics() -> None:

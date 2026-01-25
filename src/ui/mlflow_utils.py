@@ -114,6 +114,39 @@ def get_model_versions(
         return []
 
 
+def get_version_details(
+    model_name: str = EXPERIMENT_NAME,
+    version: str | int = "latest",
+) -> dict[str, Any]:
+    """Get version metadata, run_id, and key metrics from source run.
+
+    Returns:
+        Dict with version, stage, run_id, created, metrics (pr_auc, f1, etc.).
+        Empty dict on error.
+    """
+    try:
+        client = get_client()
+        if version == "latest":
+            vers = client.search_model_versions(f"name='{model_name}'")
+            vers = sorted(vers, key=lambda v: int(v.version), reverse=True)
+            if not vers:
+                return {}
+            v = vers[0]
+        else:
+            v = client.get_model_version(model_name, str(version))
+        run_id = v.run_id
+        details = get_run_details(run_id)
+        return {
+            "version": v.version,
+            "stage": v.current_stage or "None",
+            "run_id": run_id,
+            "created": v.creation_timestamp,
+            "metrics": details.get("metrics", {}),
+        }
+    except MlflowException:
+        return {}
+
+
 def get_production_model_version(model_name: str = EXPERIMENT_NAME) -> str | None:
     """Get the version number of the current production model.
 
