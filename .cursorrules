@@ -91,6 +91,15 @@ from fastapi import FastAPI
 - Fix all F401 (unused imports), F841 (unused variables), E501 (line too long), and I001 (import sorting) errors
 - Use `uv run ruff check --fix src tests` to auto-fix issues where possible
 
+### Task Completion Verification
+- **CRITICAL**: Before marking any task as complete, ALWAYS run `uv run ruff check src tests`
+- **Catch linting errors early**: Run `uv run ruff check src tests` after making code changes, not just before committing
+- If linting errors are found, fix them immediately before considering the task complete
+- Use `uv run ruff check --fix src tests` to auto-fix issues where possible
+- Verify all E501 (line length), I001 (import sorting), and F401 (unused imports) errors are resolved
+- Only mark tasks complete after linting passes with zero errors
+- **Prevention**: Consider running linting checks after each logical code change to catch issues early
+
 ## Commit Message Format
 
 Commit messages must follow this format:
