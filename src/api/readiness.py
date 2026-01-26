@@ -6,16 +6,16 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
-from api.rules import Rule, RuleStatus
+from api.audit import AuditLogger
 from api.metrics import RuleMetrics
-from api.audit import AuditLogger, AuditRecord
+from api.rules import Rule
 
 logger = logging.getLogger(__name__)
 
 
 class PolicyType(str, Enum):
     """Types of readiness policies."""
-    
+
     STABILITY = "stability"      # Has it been unchanged for X hours?
     VOLUME = "volume"            # Has it seen enough traffic?
     PERFORMANCE = "performance"  # Are match rates within safe bounds?
@@ -24,7 +24,7 @@ class PolicyType(str, Enum):
 
 class CheckStatus(str, Enum):
     """Status of a specific check."""
-    
+
     PASS = "pass"
     FAIL = "fail"
     WARN = "warn"
@@ -34,7 +34,7 @@ class CheckStatus(str, Enum):
 @dataclass
 class CheckResult:
     """Result of a single policy check."""
-    
+
     policy_type: PolicyType
     name: str
     status: CheckStatus
@@ -45,12 +45,12 @@ class CheckResult:
 @dataclass
 class ReadinessReport:
     """Full readiness report for a rule."""
-    
+
     rule_id: str
     timestamp: datetime
     overall_status: CheckStatus
     checks: list[CheckResult]
-    
+
     @property
     def passed(self) -> bool:
         """True if all critical checks passed."""
@@ -59,52 +59,52 @@ class ReadinessReport:
 
 class ReadinessEvaluator:
     """Evaluates if a rule is ready for promotion to production."""
-    
+
     def __init__(self, audit_logger: AuditLogger | None = None):
         """Initialize evaluator.
-        
+
         Args:
             audit_logger: Logger to check rule history.
         """
         self.audit_logger = audit_logger
-        
+
         # Policy thresholds
         self.min_shadow_hours = 24
         self.min_matches = 50
         self.max_match_rate = 0.50  # 50% match rate is suspicious for a rule
-        
+
     def evaluate(
-        self, 
-        rule: Rule, 
-        metrics: RuleMetrics | None, 
+        self,
+        rule: Rule,
+        metrics: RuleMetrics | None,
         total_requests: int = 0
     ) -> ReadinessReport:
         """Run all readiness checks.
-        
+
         Args:
             rule: Rule to check.
             metrics: Operational metrics (optional).
             total_requests: Total traffic volume during period.
-            
+
         Returns:
             ReadinessReport.
         """
         checks = []
-        
+
         # 1. Stability Check (Time since creation/modification)
         # We need audit log to know when it was last changed.
         # Fallback to current time if naive, but ideally we check audit history.
         checks.append(self._check_stability(rule))
-        
+
         # 2. Volume Check (Metrics)
         checks.append(self._check_volume(metrics))
-        
+
         # 3. Performance Check (Match Rate)
         checks.append(self._check_performance(metrics, total_requests))
-        
+
         # 4. Approval Check
         checks.append(self._check_approval(rule))
-        
+
         # Determine overall status
         statuses = [c.status for c in checks]
         if CheckStatus.FAIL in statuses:
@@ -113,7 +113,7 @@ class ReadinessEvaluator:
             overall = CheckStatus.WARN
         else:
             overall = CheckStatus.PASS
-            
+
         return ReadinessReport(
             rule_id=rule.id,
             timestamp=datetime.now(timezone.utc),
@@ -125,31 +125,34 @@ class ReadinessEvaluator:
         """Check if rule has been stable (in shadow) for long enough."""
         # Without AuditLogger or detailed rule metadata, we can't fully check this.
         # We'll rely on AuditLogger if provided.
-        
+
         if not self.audit_logger:
             return CheckResult(
-                PolicyType.STABILITY, 
-                "Minimum Aging", 
-                CheckStatus.SKIP, 
+                PolicyType.STABILITY,
+                "Minimum Aging",
+                CheckStatus.SKIP,
                 "Audit logger not available to verify age"
             )
-            
+
         history = self.audit_logger.get_rule_history(rule.id)
         if not history:
              # Created but no history? Means just created.
              return CheckResult(
-                PolicyType.STABILITY, 
-                "Minimum Aging", 
-                CheckStatus.FAIL, 
+                PolicyType.STABILITY,
+                "Minimum Aging",
+                CheckStatus.FAIL,
                 "New rule with no history"
             )
-            
+
         # Find last modification
         last_change = history[-1].timestamp
         age_hours = (datetime.now(timezone.utc) - last_change).total_seconds() / 3600
-        
-        status = CheckStatus.PASS if age_hours >= self.min_shadow_hours else CheckStatus.FAIL
-        
+
+        status = (
+            CheckStatus.PASS if age_hours >= self.min_shadow_hours
+            else CheckStatus.FAIL
+        )
+
         return CheckResult(
             PolicyType.STABILITY,
             "Minimum Aging",
@@ -167,9 +170,9 @@ class ReadinessEvaluator:
                 CheckStatus.FAIL,
                 "No metrics data available"
             )
-            
+
         total_matches = metrics.production_matches + metrics.shadow_matches
-        
+
         # If it's a shadow rule, we expect shadow matches
         if total_matches >= self.min_matches:
             return CheckResult(
@@ -188,7 +191,9 @@ class ReadinessEvaluator:
                  {"matches": total_matches}
             )
 
-    def _check_performance(self, metrics: RuleMetrics | None, total_requests: int) -> CheckResult:
+    def _check_performance(
+        self, metrics: RuleMetrics | None, total_requests: int
+    ) -> CheckResult:
         """Check for anomalies in match rate."""
         if not metrics or total_requests == 0:
              return CheckResult(
@@ -197,19 +202,20 @@ class ReadinessEvaluator:
                 CheckStatus.SKIP,
                 "Insufficient traffic data"
             )
-            
+
         total_matches = metrics.production_matches + metrics.shadow_matches
         match_rate = total_matches / total_requests
-        
+
         if match_rate > self.max_match_rate:
              return CheckResult(
                 PolicyType.PERFORMANCE,
                 "Match Rate Safety",
                 CheckStatus.FAIL,
-                f"Match rate {match_rate:.1%} exceeds safety limit {self.max_match_rate:.1%}",
+                f"Match rate {match_rate:.1%} exceeds safety limit "
+                f"{self.max_match_rate:.1%}",
                 {"match_rate": match_rate}
             )
-            
+
         return CheckResult(
             PolicyType.PERFORMANCE,
             "Match Rate Safety",

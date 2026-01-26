@@ -34,7 +34,7 @@ class RuleMetrics:
     def shadow_only_count(self) -> int:
         """Count of shadow-only matches."""
         return self.shadow_matches - self.overlap_count
-    
+
     @property
     def mean_score_delta(self) -> float:
         """Mean score delta per match."""
@@ -96,7 +96,7 @@ class MetricsCollector:
             storage_path: Path for persistent storage. If None, in-memory only.
         """
         self.storage_path = Path(storage_path) if storage_path else None
-        
+
         # In-memory: (rule_id, date) -> (prod, shadow, overlap, score_delta, exec_ms)
         # We store 5 values now instead of 3
         self._counters: dict[tuple[str, str], list[float]] = defaultdict(
@@ -124,7 +124,9 @@ class MetricsCollector:
                     # Backward compatibility for old format [prod, shadow, overlap]
                     if len(value) == 3:
                         prod, shadow, overlap = value
-                        self._counters[(rule_id, date_str)] = [prod, shadow, overlap, 0.0, 0.0]
+                        self._counters[(rule_id, date_str)] = [
+                            prod, shadow, overlap, 0.0, 0.0
+                        ]
                     else:
                         self._counters[(rule_id, date_str)] = value
         except (json.JSONDecodeError, KeyError, ValueError) as e:
@@ -185,7 +187,7 @@ class MetricsCollector:
             values[1] += 1
         if is_production and is_shadow:
             values[2] += 1
-            
+
         values[3] += score_delta
         values[4] += execution_time_ms
 
@@ -219,13 +221,13 @@ class MetricsCollector:
             is_prod = rule_id in production_matched
             is_shadow = rule_id in shadow_matched
             delta = impacts.get(rule_id, 0.0)
-            
+
             # For execution time, we don't have per-rule granularity yet
             # so we assume 0 or handle it later with more instrumentation
             self.record_match(
-                rule_id, 
-                is_prod, 
-                is_shadow, 
+                rule_id,
+                is_prod,
+                is_shadow,
                 timestamp=timestamp,
                 score_delta=delta
             )
@@ -258,11 +260,11 @@ class MetricsCollector:
 
             # Default is list of 5 zeros
             values = self._counters.get(key, [0, 0, 0, 0.0, 0.0])
-            
+
             # Handle backward compatibility on read if needed (though _load handles it)
             if len(values) == 3:
                 values = list(values) + [0.0, 0.0]
-                
+
             production_total += values[0]
             shadow_total += values[1]
             overlap_total += values[2]

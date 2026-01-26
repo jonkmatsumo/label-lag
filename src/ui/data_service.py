@@ -1361,17 +1361,17 @@ def run_backtest(
         Backtest result dict or None if request failed.
     """
     url = f"{API_BASE_URL}/backtest/run"
-    
+
     payload = {
         "ruleset_version": ruleset_version,
         "start_date": start_date,
         "end_date": end_date,
         "rule_id": rule_id
     }
-    
+
     try:
         # Long timeout for backtests
-        response = requests.post(url, json=payload, timeout=30.0) 
+        response = requests.post(url, json=payload, timeout=30.0)
         response.raise_for_status()
         return response.json()
     except requests.RequestException as e:
@@ -1399,7 +1399,7 @@ def compare_backtests(
         Comparison result dict with deltas or None if request failed.
     """
     url = f"{API_BASE_URL}/backtest/compare"
-    
+
     payload = {
         "base_version": base_version,
         "candidate_version": candidate_version,
@@ -1407,7 +1407,7 @@ def compare_backtests(
         "end_date": end_date,
         "rule_id": rule_id
     }
-    
+
     try:
         # Long timeout for running two backtests
         response = requests.post(url, json=payload, timeout=60.0)
@@ -1430,7 +1430,7 @@ def get_rule_analytics(rule_id: str, days: int = 7) -> dict[str, Any] | None:
     """
     url = f"{API_BASE_URL}/analytics/rules/{rule_id}"
     params = {"days": days}
-    
+
     try:
         response = requests.get(url, params=params, timeout=API_TIMEOUT)
         if response.status_code == 404:
@@ -1444,15 +1444,15 @@ def get_rule_analytics(rule_id: str, days: int = 7) -> dict[str, Any] | None:
 
 def get_readiness_report(rule_id: str) -> dict[str, Any] | None:
     """Fetch readiness report for a rule.
-    
+
     Args:
         rule_id: Rule ID.
-        
+
     Returns:
         Readiness report dict or None if failed.
     """
     url = f"{API_BASE_URL}/rules/{rule_id}/readiness"
-    
+
     try:
         response = requests.get(url, timeout=API_TIMEOUT)
         response.raise_for_status()
@@ -1464,17 +1464,17 @@ def get_readiness_report(rule_id: str) -> dict[str, Any] | None:
 
 def get_rule_attribution(rule_id: str, days: int = 7) -> dict[str, Any] | None:
     """Fetch attribution metrics for a rule.
-    
+
     Args:
         rule_id: Rule ID.
         days: Days lookback.
-        
+
     Returns:
         Attribution dict or None.
     """
     url = f"{API_BASE_URL}/analytics/attribution"
     params = {"rule_id": rule_id, "days": days}
-    
+
     try:
         response = requests.get(url, params=params, timeout=API_TIMEOUT)
         if response.status_code == 404:

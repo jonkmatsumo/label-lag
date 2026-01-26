@@ -2,7 +2,6 @@
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
 
@@ -95,7 +94,8 @@ class RuleHealthEvaluator:
                 return HealthReport(
                     rule.id,
                     RuleHealth.NOISY,
-                    f"Match rate {match_rate:.1%} exceeds threshold {self.noisy_threshold:.1%}",
+                    f"Match rate {match_rate:.1%} exceeds threshold "
+                    f"{self.noisy_threshold:.1%}",
                     metrics,
                 )
 

@@ -4,8 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-
-from api.backtest import BacktestMetrics, BacktestResult, BacktestComparator
+from api.backtest import BacktestComparator, BacktestMetrics, BacktestResult
 from api.schemas import BacktestComparisonResult, BacktestDelta, BacktestResultResponse
 
 
@@ -69,7 +68,7 @@ def test_backtest_delta_schema():
         matched_count_delta=50,
         rejected_count_delta=10,
     )
-    
+
     assert delta.match_rate_delta == 0.05
     assert delta.rejected_count_delta == 10
 
@@ -77,10 +76,10 @@ def test_backtest_delta_schema():
 def test_backtest_comparison_result_schema():
     """Test that BacktestComparisonResult schema is valid."""
     # Mock result response objects (simplified)
-    # Note: We use dicts here because Pydantic models with extra fields might fail validation 
-    # if strictly checked, but usually BaseModel ignores extra args or we construct them properly.
+    # Note: We use dicts here because Pydantic models with extra fields might
+    # fail validation if strictly checked.
     # For schema test we just verify the structure.
-    
+
     base_response = BacktestResultResponse(
         job_id="job1",
         ruleset_version="v1",
@@ -100,7 +99,7 @@ def test_backtest_comparison_result_schema():
             "score_max": 90
         }
     )
-    
+
     candidate_response = BacktestResultResponse(
         job_id="job2",
         ruleset_version="v2",
@@ -120,7 +119,7 @@ def test_backtest_comparison_result_schema():
             "score_max": 90
         }
     )
-    
+
     delta = BacktestDelta(
         match_rate_delta=0.1,
         rejected_rate_delta=0.01,
@@ -129,13 +128,13 @@ def test_backtest_comparison_result_schema():
         matched_count_delta=10,
         rejected_count_delta=1
     )
-    
+
     comparison = BacktestComparisonResult(
         base_result=base_response,
         candidate_result=candidate_response,
         delta=delta
     )
-    
+
     assert comparison.delta.match_rate_delta == 0.1
 
 
@@ -143,7 +142,7 @@ def test_comparator_compute_delta(base_result, candidate_result):
     """Test that comparator correctly computes deltas."""
     comparator = BacktestComparator()
     delta = comparator.compute_delta(base_result.metrics, candidate_result.metrics)
-    
+
     assert delta.match_rate_delta == pytest.approx(0.05)
     assert delta.matched_count_delta == 50
     assert delta.rejected_rate_delta == pytest.approx(0.01)

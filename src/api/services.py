@@ -116,13 +116,13 @@ class SignalEvaluator:
 
         # Record metrics for rule matches
         try:
+
             from api.metrics import get_metrics_collector
-            import time
 
             # Calculate individual rule impacts (approximated)
             impacts = {}
             impact_objects = []
-            
+
             if score != final_score:
                 total_delta = abs(final_score - score)
                 # Split delta among active rules (simplified)
@@ -130,7 +130,7 @@ class SignalEvaluator:
                     per_rule_delta = total_delta / len(rule_result.matched_rules)
                     for rid in rule_result.matched_rules:
                         impacts[rid] = per_rule_delta
-                        
+
             # Create impact objects for logger
             from api.inference_log import RuleImpact
             for rid in rule_result.matched_rules:
@@ -152,11 +152,12 @@ class SignalEvaluator:
                 shadow_matched=rule_result.shadow_matched_rules,
                 match_impacts=impacts
             )
-            
+
             # Phase 3.1: Log structured inference event
-            from api.inference_log import InferenceLogger, InferenceEvent
             from datetime import datetime, timezone
-            
+
+            from api.inference_log import InferenceEvent, InferenceLogger
+
             event_logger = InferenceLogger()
             event = InferenceEvent(
                 request_id=request_id,
@@ -168,7 +169,7 @@ class SignalEvaluator:
                 rule_impacts=impact_objects
             )
             event_logger.log_event(event)
-            
+
         except Exception as e:
             # Don't fail inference if metrics/logging fails
             logger.warning(f"Failed to record metrics/logs: {e}")

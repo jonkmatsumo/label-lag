@@ -13,8 +13,18 @@ from typing import TYPE_CHECKING
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 
+from api.analytics import RuleHealthEvaluator
+from api.attribution import AttributionService
+from api.audit import get_audit_logger
+from api.backtest import (
+    BacktestComparator,
+    BacktestRunner,
+    BacktestStore,
+    get_backtest_store,
+)
 from api.drift_cache import get_drift_cache
 from api.model_manager import get_model_manager
+from api.readiness import ReadinessEvaluator
 from api.schemas import (
     AcceptSuggestionRequest,
     AcceptSuggestionResponse,
@@ -26,7 +36,6 @@ from api.schemas import (
     AuditLogQueryResponse,
     AuditRecordResponse,
     BacktestComparisonResult,
-    BacktestDelta,
     BacktestMetricsResponse,
     BacktestResultResponse,
     BacktestResultsListResponse,
@@ -55,13 +64,17 @@ from api.schemas import (
     HealthResponse,
     PublishRuleRequest,
     PublishRuleResponse,
+    ReadinessReportResponse,
     RedundancyResponse,
     RejectRuleRequest,
     RejectRuleResponse,
     RollbackRuleRequest,
     RollbackRuleResponse,
+    RuleAnalyticsResponse,
+    RuleAttributionResponse,
     RuleDiffResponse,
     RuleFieldChangeResponse,
+    RuleHealthResponse,
     RuleMetricsItem,
     RuleSuggestionResponse,
     RuleVersionListResponse,
@@ -79,22 +92,8 @@ from api.schemas import (
     TrainRequest,
     TrainResponse,
     ValidationResult,
-    RuleAnalyticsResponse,
-    RuleHealthResponse,
-    ReadinessReportResponse,
-    RuleAttributionResponse,
 )
 from api.services import get_evaluator
-from api.analytics import RuleHealthEvaluator, RuleHealth
-from api.readiness import ReadinessEvaluator
-from api.attribution import AttributionService
-from api.audit import get_audit_logger
-from api.backtest import (
-    BacktestRunner, 
-    BacktestStore, 
-    BacktestComparator, 
-    get_backtest_store
-)
 
 if TYPE_CHECKING:
     from synthetic_pipeline.db.models import EvaluationMetadataDB, GeneratedRecordDB
@@ -1042,7 +1041,6 @@ async def list_backtest_results(
     Returns:
         BacktestResultsListResponse with list of results.
     """
-    from api.backtest import BacktestStore
 
     store = BacktestStore()
 
@@ -1125,7 +1123,6 @@ async def get_backtest_result(job_id: str) -> BacktestResultResponse:
     Raises:
         HTTPException: If result not found.
     """
-    from api.backtest import BacktestStore
 
     store = BacktestStore()
     result = store.get(job_id)
@@ -3651,27 +3648,30 @@ def _resolve_ruleset_for_backtest(
 
     Returns:
         RuleSet object.
-    
+
     Raises:
         HTTPException: If resolution fails.
     """
     from api.model_manager import get_model_manager
+    from api.rules import RuleSet
     from api.versioning import get_version_store
-    from api.rules import RuleSet, Rule
 
     # Case 1: Production (current)
     if not version_id or version_id.lower() == "production":
         manager = get_model_manager()
         if not manager.ruleset:
              raise HTTPException(status_code=404, detail="No production ruleset found")
-        
+
         # If specific rule requested, filter it
         if rule_id:
             filtered_rules = [r for r in manager.ruleset.rules if r.id == rule_id]
             if not filtered_rules:
-                raise HTTPException(status_code=404, detail=f"Rule {rule_id} not found in production")
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Rule {rule_id} not found in production"
+                )
             return RuleSet(version=manager.ruleset.version, rules=filtered_rules)
-            
+
         return manager.ruleset
 
     version_store = get_version_store()
@@ -3682,9 +3682,10 @@ def _resolve_ruleset_for_backtest(
         version = version_store.get_version(rule_id, version_id)
         if version:
             return RuleSet(version=version_id, rules=[version.rule])
-        
+
         # If not found as version ID, fall through to timestamp check?
-        # For now, assume version_id MUST be a valid RuleVersion ID if rule_id is present.
+        # For now, assume version_id MUST be a valid RuleVersion ID
+        # if rule_id is present.
         # But wait, what if version_id is a timestamp?
         # Let's try timestamp parsing if get_version failed.
 
@@ -3699,7 +3700,7 @@ def _resolve_ruleset_for_backtest(
 
     # Verification failed
     raise HTTPException(
-        status_code=404, 
+        status_code=404,
         detail=f"Could not resolve ruleset version: {version_id}"
     )
 
@@ -3766,86 +3767,6 @@ async def run_backtest_endpoint(request: BacktestRunRequest) -> BacktestResultRe
     )
 
 
-@app.get(
-    "/backtest/results",
-    response_model=BacktestResultsListResponse,
-    tags=["Backtest"],
-    summary="List backtest results",
-    description="List historical backtest results with filters.",
-)
-async def list_backtest_results(
-    rule_id: str | None = Query(None, description="Filter by rule ID"),
-    start_date: str | None = Query(None, description="Filter results after date"),
-    end_date: str | None = Query(None, description="Filter results before date"),
-    limit: int = Query(50, le=100),
-) -> BacktestResultsListResponse:
-    """List backtest results.
-
-    Args:
-        rule_id: Optional rule filter.
-        start_date: Optional start date filter.
-        end_date: Optional end date filter.
-        limit: Max results.
-
-    Returns:
-        List of backtest results.
-    """
-    store = get_backtest_store()
-    
-    # Parse dates if provided
-    start_dt = None
-    if start_date:
-        try:
-            start_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
-        except ValueError:
-             raise HTTPException(status_code=400, detail="Invalid start_date format")
-             
-    end_dt = None
-    if end_date:
-        try:
-            end_dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
-        except ValueError:
-             raise HTTPException(status_code=400, detail="Invalid end_date format")
-
-    results = store.list_results(
-        rule_id=rule_id,
-        start_date=start_dt,
-        end_date=end_dt
-    )
-
-    # Apply limit
-    results = results[:limit]
-
-    # Convert to response
-    response_list = []
-    for r in results:
-        response_list.append(
-            BacktestResultResponse(
-                job_id=r.job_id,
-                rule_id=r.rule_id,
-                ruleset_version=r.ruleset_version,
-                start_date=r.start_date.isoformat(),
-                end_date=r.end_date.isoformat(),
-                metrics=BacktestMetricsResponse(
-                    total_records=r.metrics.total_records,
-                    matched_count=r.metrics.matched_count,
-                    match_rate=r.metrics.match_rate,
-                    score_distribution=r.metrics.score_distribution,
-                    score_mean=r.metrics.score_mean,
-                    score_std=r.metrics.score_std,
-                    score_min=r.metrics.score_min,
-                    score_max=r.metrics.score_max,
-                    rejected_count=r.metrics.rejected_count,
-                    rejected_rate=r.metrics.rejected_rate,
-                ),
-                completed_at=r.completed_at.isoformat(),
-                error=r.error,
-            )
-        )
-
-    return BacktestResultsListResponse(results=response_list, total=len(response_list))
-
-
 @app.post(
     "/backtest/compare",
     response_model=BacktestComparisonResult,
@@ -3873,7 +3794,7 @@ async def compare_backtests_endpoint(
     # Helper to run a backtest for a version
     def _run_for_version(version_id: str | None) -> BacktestResultResponse:
         ruleset = _resolve_ruleset_for_backtest(version_id, request.rule_id)
-        
+
         runner = BacktestRunner()
         result = runner.run_backtest(
             ruleset=ruleset,
@@ -3881,16 +3802,16 @@ async def compare_backtests_endpoint(
             end_date=end_dt,
             rule_id=request.rule_id,
         )
-        
+
         # Save? Maybe not strictly necessary for comparison, but good for history
         get_backtest_store().save(result)
-        
+
         return result
 
     # Run both
-    base_result_obj = _run_for_version(request.base_version).to_dict() # Wait, internal result is object
+    _run_for_version(request.base_version).to_dict() # Wait, internal result is object
     # Re-running logic
-    
+
     # 1. Resolve and run Base
     base_ruleset = _resolve_ruleset_for_backtest(request.base_version, request.rule_id)
     base_runner = BacktestRunner()
@@ -3901,9 +3822,11 @@ async def compare_backtests_endpoint(
         rule_id=request.rule_id
     )
     get_backtest_store().save(base_res)
-    
+
     # 2. Resolve and run Candidate
-    cand_ruleset = _resolve_ruleset_for_backtest(request.candidate_version, request.rule_id)
+    cand_ruleset = _resolve_ruleset_for_backtest(
+        request.candidate_version, request.rule_id
+    )
     cand_runner = BacktestRunner()
     cand_res = cand_runner.run_backtest(
         ruleset=cand_ruleset,
@@ -3916,7 +3839,7 @@ async def compare_backtests_endpoint(
     # 3. Compare
     comparator = BacktestComparator()
     delta = comparator.compute_delta(base_res.metrics, cand_res.metrics)
-    
+
     # 4. Construct Response
     # Convert internal metrics to response metrics
     def _to_response_metrics(m):
@@ -3943,7 +3866,7 @@ async def compare_backtests_endpoint(
         completed_at=base_res.completed_at.isoformat(),
         error=base_res.error,
     )
-    
+
     cand_response = BacktestResultResponse(
         job_id=cand_res.job_id,
         rule_id=cand_res.rule_id,
@@ -3954,7 +3877,7 @@ async def compare_backtests_endpoint(
         completed_at=cand_res.completed_at.isoformat(),
         error=cand_res.error,
     )
-    
+
     return BacktestComparisonResult(
         base_result=base_response,
         candidate_result=cand_response,
@@ -3980,17 +3903,18 @@ async def get_rule_analytics(
     days: int = Query(7, ge=1, le=90),
 ) -> RuleAnalyticsResponse:
     """Get rule analytics."""
+    from datetime import timedelta
+
     from api.metrics import get_metrics_collector
     from api.model_manager import get_model_manager
-    from datetime import timedelta
-    
+
     # Get stats
     end_date = datetime.now(timezone.utc)
     start_date = end_date - timedelta(days=days)
-    
+
     collector = get_metrics_collector()
     metrics = collector.get_rule_metrics(rule_id, start_date, end_date)
-    
+
     # Get rule definition
     manager = get_model_manager()
     rule = None
@@ -3999,32 +3923,39 @@ async def get_rule_analytics(
             if r.id == rule_id:
                 rule = r
                 break
-                
+
     if not rule:
         # Check shadow/draft? For now return 404 if not in active set
         # Or construct a dummy rule object if we just want stats
-        raise HTTPException(status_code=404, detail=f"Rule {rule_id} not found in active ruleset")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Rule {rule_id} not found in active ruleset"
+        )
 
     # Evaluate health
     # Estimate total requests (approximate from metrics or need global counter)
-    # Using sum of all rule matches as lower bound proxy, or fetch from global stats if available
-    # For now, let's assume we can get total requests from a global counter in collector, or pass 0 if unknown
-    # HACK: Use a placeholder total or add global request tracking. 
-    # Let's assume 1000 for now to avoid zero division in evaluator if we don't track total yet.
+    # Using sum of all rule matches as lower bound proxy,
+    # or fetch from global stats if available
+    # For now, let's assume we can get total requests from a global counter
+    # in collector, or pass 0 if unknown
+    # HACK: Use a placeholder total or add global request tracking.
+    # Let's assume 1000 for now to avoid zero division in evaluator
+    # if we don't track total yet.
     # Note: Phase 1.1 added counters but maybe not global request count.
-    # Let's use max(production_matches) * 5 as a rough guess if needed, or update collector to track total.
+    # Let's use max(production_matches) * 5 as a rough guess if needed,
+    # or update collector to track total.
     # Wait, MetricsCollector doesn't track total requests globally yet.
     # Let's fallback to "unknown" total requests for now.
-    
+
     total_requests = 1000 # Placeholder - TODO: Track global request count
-    
+
     evaluator = RuleHealthEvaluator()
     health_report = evaluator.evaluate(rule, metrics, total_requests)
-    
+
     # Build history summary (daily breakdown)
     # Re-query day by day? Or get_rule_metrics could return breakdown.
     # For now, simple summary.
-    
+
     return RuleAnalyticsResponse(
         rule_id=rule_id,
         health=RuleHealthResponse(
@@ -4063,28 +3994,29 @@ async def check_rule_readiness(
     rule_id: str,
 ) -> ReadinessReportResponse:
     """Check rule readiness."""
+    from datetime import timedelta
+
     from api.metrics import get_metrics_collector
     from api.model_manager import get_model_manager
-    from datetime import timedelta
-    
+
     # Get active draft/shadow/prod rule
     # Ideally checking DRAFT rules for promotion, but could be SHADOW
     manager = get_model_manager()
     rule = None
-    
+
     # 1. Check active ruleset (prod/shadow)
     if manager.ruleset:
         for r in manager.ruleset.rules:
             if r.id == rule_id:
                 rule = r
                 break
-                
+
     # 2. If not in active, check drafts (where most promotions start)
     if not rule:
-        from api.services import get_db
         # ... fetch from DB ...
         # For MVP, let's assume we proceed only if found in loaded rules
-        # Or we can support draft fetching if we had a draft service exposed here easily.
+        # Or we can support draft fetching if we had a draft service
+        # exposed here easily.
         # Given limitations, let's try to fetch from draft store if available or fail.
         # Assuming rule exists in memory or we query basic stats.
         pass
@@ -4095,18 +4027,18 @@ async def check_rule_readiness(
     # Get metrics (past 7 days standard for readiness)
     end_date = datetime.now(timezone.utc)
     start_date = end_date - timedelta(days=7)
-    
+
     collector = get_metrics_collector()
     metrics = collector.get_rule_metrics(rule_id, start_date, end_date)
-    
+
     # Get total requests (placeholder logic, same as analytics)
     total_requests = 1000 # TODO: Real total
-    
+
     audit_logger = get_audit_logger()
     evaluator = ReadinessEvaluator(audit_logger=audit_logger)
-    
+
     report = evaluator.evaluate(rule, metrics, total_requests)
-    
+
     return ReadinessReportResponse(
         rule_id=report.rule_id,
         timestamp=report.timestamp.isoformat(),
@@ -4138,16 +4070,19 @@ async def get_rule_attribution(
 ) -> RuleAttributionResponse:
     """Get attribution metrics."""
     from datetime import timedelta
-    
+
     end_date = datetime.now(timezone.utc)
     start_date = end_date - timedelta(days=days)
-    
+
     service = AttributionService()
     attribution = service.get_rule_attribution(rule_id, start_date, end_date)
-    
+
     if not attribution:
-        raise HTTPException(status_code=404, detail=f"No attribution data found for rule {rule_id}")
-        
+        raise HTTPException(
+            status_code=404,
+            detail=f"No attribution data found for rule {rule_id}"
+        )
+
     return RuleAttributionResponse(
         rule_id=attribution.rule_id,
         total_matches=attribution.total_matches,
