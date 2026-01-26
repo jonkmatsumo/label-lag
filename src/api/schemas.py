@@ -975,6 +975,42 @@ class RuleVersionListResponse(BaseModel):
 
 
 # =============================================================================
+# Rule Version Diff Schemas
+# =============================================================================
+
+
+class RuleFieldChangeResponse(BaseModel):
+    """A single field change between two rule versions."""
+
+    field_name: str = Field(..., description="Name of the rule field")
+    change_type: str = Field(..., description="unchanged | modified")
+    old_value: int | float | str | list | None = Field(
+        None, description="Value in older version"
+    )
+    new_value: int | float | str | list | None = Field(
+        None, description="Value in newer version"
+    )
+
+
+class RuleDiffResponse(BaseModel):
+    """Response schema for rule version diff."""
+
+    version_a_id: str = Field(..., description="Newer version ID")
+    version_b_id: str = Field(..., description="Older version ID")
+    rule_id: str = Field(..., description="Rule identifier")
+    changes: list[RuleFieldChangeResponse] = Field(
+        default_factory=list, description="Field-by-field changes"
+    )
+    is_breaking: bool = Field(
+        ..., description="True if field/op/action changed (behavior-affecting)"
+    )
+    version_a_timestamp: str = Field(..., description="Newer version timestamp (ISO)")
+    version_b_timestamp: str = Field(..., description="Older version timestamp (ISO)")
+    version_a_created_by: str = Field(..., description="Newer version creator")
+    version_b_created_by: str = Field(..., description="Older version creator")
+
+
+# =============================================================================
 # Drift Monitoring Schemas
 # =============================================================================
 

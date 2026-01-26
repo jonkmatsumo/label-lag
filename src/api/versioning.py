@@ -3,7 +3,7 @@
 import json
 import logging
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
@@ -13,6 +13,107 @@ from api.audit import get_audit_logger
 from api.rules import Rule, RuleSet
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Diff Data Structures
+# =============================================================================
+
+
+@dataclass
+class RuleFieldChange:
+    """A single field change between two rule versions."""
+
+    field_name: str
+    change_type: str  # "unchanged" | "modified"
+    old_value: Any | None
+    new_value: Any | None
+
+
+@dataclass
+class RuleDiffResult:
+    """Result of comparing two rule versions."""
+
+    version_a_id: str
+    version_b_id: str
+    rule_id: str
+    changes: list[RuleFieldChange] = field(default_factory=list)
+    is_breaking: bool = False
+    version_a_timestamp: datetime | None = None
+    version_b_timestamp: datetime | None = None
+    version_a_created_by: str = ""
+    version_b_created_by: str = ""
+
+
+# Fields that constitute a breaking change when modified
+# (field/op/action affect rule matching behavior; value is just tuning)
+BREAKING_CHANGE_FIELDS = {"field", "op", "action"}
+
+# All rule fields to compare (in display order)
+DIFF_FIELDS = [
+    "field", "op", "value", "action", "score", "severity", "reason", "status"
+]
+
+
+def diff_rule_versions(
+    version_a: "RuleVersion", version_b: "RuleVersion"
+) -> RuleDiffResult:
+    """Compare two rule versions and return field-by-field differences.
+
+    Args:
+        version_a: First version (typically newer).
+        version_b: Second version (typically older).
+
+    Returns:
+        RuleDiffResult with list of field changes and breaking change flag.
+
+    Note:
+        Breaking changes are defined as modifications to field, op, or action.
+        Value changes are considered tuning, not breaking.
+    """
+    changes: list[RuleFieldChange] = []
+    is_breaking = False
+
+    rule_a = version_a.rule
+    rule_b = version_b.rule
+
+    for field_name in DIFF_FIELDS:
+        old_value = getattr(rule_b, field_name, None)
+        new_value = getattr(rule_a, field_name, None)
+
+        if old_value == new_value:
+            change_type = "unchanged"
+        else:
+            change_type = "modified"
+            # Check if this is a breaking change
+            if field_name in BREAKING_CHANGE_FIELDS:
+                is_breaking = True
+
+        changes.append(
+            RuleFieldChange(
+                field_name=field_name,
+                change_type=change_type,
+                old_value=old_value,
+                new_value=new_value,
+            )
+        )
+
+    return RuleDiffResult(
+        version_a_id=version_a.version_id,
+        version_b_id=version_b.version_id,
+        rule_id=version_a.rule_id,
+        changes=changes,
+        is_breaking=is_breaking,
+        version_a_timestamp=version_a.timestamp,
+        version_b_timestamp=version_b.timestamp,
+        version_a_created_by=version_a.created_by,
+        version_b_created_by=version_b.created_by,
+    )
+
+
+# =============================================================================
+# Version Data Structures
+# =============================================================================
 
 
 @dataclass

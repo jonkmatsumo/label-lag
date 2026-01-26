@@ -11,6 +11,7 @@ from api.rules import Rule
 from api.versioning import (
     RuleVersion,
     RuleVersionStore,
+    diff_rule_versions,
     get_version_store,
     set_version_store,
 )
@@ -343,3 +344,273 @@ class TestGlobalVersionStore:
         # Restore original
         set_version_store(original)
         assert get_version_store() is original
+
+
+class TestDiffRuleVersions:
+    """Tests for diff_rule_versions function."""
+
+    @pytest.fixture
+    def base_rule(self):
+        """Create a base rule for testing."""
+        return Rule(
+            id="test_rule",
+            field="velocity_24h",
+            op=">",
+            value=5,
+            action="clamp_min",
+            score=80,
+            severity="high",
+            reason="High velocity",
+            status="active",
+        )
+
+    @pytest.fixture
+    def version_a(self, base_rule):
+        """Create version A (newer)."""
+        return RuleVersion(
+            rule_id="test_rule",
+            version_id="test_rule_v2",
+            rule=base_rule,
+            timestamp=datetime.now(timezone.utc),
+            created_by="user_a",
+            reason="Version A",
+        )
+
+    @pytest.fixture
+    def version_b(self, base_rule):
+        """Create version B (older) with same rule."""
+        return RuleVersion(
+            rule_id="test_rule",
+            version_id="test_rule_v1",
+            rule=base_rule,
+            timestamp=datetime.now(timezone.utc) - timedelta(hours=1),
+            created_by="user_b",
+            reason="Version B",
+        )
+
+    def test_diff_identical_versions(self, version_a, version_b):
+        """Test that identical rules show all fields unchanged."""
+        result = diff_rule_versions(version_a, version_b)
+
+        assert result.rule_id == "test_rule"
+        assert result.version_a_id == "test_rule_v2"
+        assert result.version_b_id == "test_rule_v1"
+        assert result.is_breaking is False
+
+        # All fields should be unchanged
+        for change in result.changes:
+            assert change.change_type == "unchanged"
+
+    def test_diff_field_change_is_breaking(self, version_a, version_b):
+        """Test that changing field is a breaking change."""
+        # Modify version_a's rule field
+        version_a.rule = Rule(
+            id="test_rule",
+            field="amount_to_avg_ratio_30d",  # Changed
+            op=">",
+            value=5,
+            action="clamp_min",
+            score=80,
+            severity="high",
+            reason="High velocity",
+            status="active",
+        )
+
+        result = diff_rule_versions(version_a, version_b)
+
+        assert result.is_breaking is True
+        field_change = next(c for c in result.changes if c.field_name == "field")
+        assert field_change.change_type == "modified"
+        assert field_change.old_value == "velocity_24h"
+        assert field_change.new_value == "amount_to_avg_ratio_30d"
+
+    def test_diff_op_change_is_breaking(self, version_a, version_b):
+        """Test that changing operator is a breaking change."""
+        version_a.rule = Rule(
+            id="test_rule",
+            field="velocity_24h",
+            op=">=",  # Changed from >
+            value=5,
+            action="clamp_min",
+            score=80,
+            severity="high",
+            reason="High velocity",
+            status="active",
+        )
+
+        result = diff_rule_versions(version_a, version_b)
+
+        assert result.is_breaking is True
+        op_change = next(c for c in result.changes if c.field_name == "op")
+        assert op_change.change_type == "modified"
+        assert op_change.old_value == ">"
+        assert op_change.new_value == ">="
+
+    def test_diff_action_change_is_breaking(self, version_a, version_b):
+        """Test that changing action is a breaking change."""
+        version_a.rule = Rule(
+            id="test_rule",
+            field="velocity_24h",
+            op=">",
+            value=5,
+            action="reject",  # Changed from clamp_min
+            severity="high",
+            reason="High velocity",
+            status="active",
+        )
+
+        result = diff_rule_versions(version_a, version_b)
+
+        assert result.is_breaking is True
+        action_change = next(c for c in result.changes if c.field_name == "action")
+        assert action_change.change_type == "modified"
+        assert action_change.old_value == "clamp_min"
+        assert action_change.new_value == "reject"
+
+    def test_diff_value_change_is_not_breaking(self, version_a, version_b):
+        """Test that changing value is NOT a breaking change (tuning)."""
+        version_a.rule = Rule(
+            id="test_rule",
+            field="velocity_24h",
+            op=">",
+            value=10,  # Changed from 5 (tuning)
+            action="clamp_min",
+            score=80,
+            severity="high",
+            reason="High velocity",
+            status="active",
+        )
+
+        result = diff_rule_versions(version_a, version_b)
+
+        assert result.is_breaking is False  # Value change is NOT breaking
+        value_change = next(c for c in result.changes if c.field_name == "value")
+        assert value_change.change_type == "modified"
+        assert value_change.old_value == 5
+        assert value_change.new_value == 10
+
+    def test_diff_score_change_is_not_breaking(self, version_a, version_b):
+        """Test that changing score is NOT a breaking change."""
+        version_a.rule = Rule(
+            id="test_rule",
+            field="velocity_24h",
+            op=">",
+            value=5,
+            action="clamp_min",
+            score=90,  # Changed from 80
+            severity="high",
+            reason="High velocity",
+            status="active",
+        )
+
+        result = diff_rule_versions(version_a, version_b)
+
+        assert result.is_breaking is False
+        score_change = next(c for c in result.changes if c.field_name == "score")
+        assert score_change.change_type == "modified"
+        assert score_change.old_value == 80
+        assert score_change.new_value == 90
+
+    def test_diff_severity_change_is_not_breaking(self, version_a, version_b):
+        """Test that changing severity is NOT a breaking change."""
+        version_a.rule = Rule(
+            id="test_rule",
+            field="velocity_24h",
+            op=">",
+            value=5,
+            action="clamp_min",
+            score=80,
+            severity="medium",  # Changed from high
+            reason="High velocity",
+            status="active",
+        )
+
+        result = diff_rule_versions(version_a, version_b)
+
+        assert result.is_breaking is False
+        severity_change = next(c for c in result.changes if c.field_name == "severity")
+        assert severity_change.change_type == "modified"
+        assert severity_change.old_value == "high"
+        assert severity_change.new_value == "medium"
+
+    def test_diff_reason_change_is_not_breaking(self, version_a, version_b):
+        """Test that changing reason is NOT a breaking change."""
+        version_a.rule = Rule(
+            id="test_rule",
+            field="velocity_24h",
+            op=">",
+            value=5,
+            action="clamp_min",
+            score=80,
+            severity="high",
+            reason="Updated reason",  # Changed
+            status="active",
+        )
+
+        result = diff_rule_versions(version_a, version_b)
+
+        assert result.is_breaking is False
+        reason_change = next(c for c in result.changes if c.field_name == "reason")
+        assert reason_change.change_type == "modified"
+        assert reason_change.old_value == "High velocity"
+        assert reason_change.new_value == "Updated reason"
+
+    def test_diff_status_change_is_not_breaking(self, version_a, version_b):
+        """Test that changing status is NOT a breaking change."""
+        version_a.rule = Rule(
+            id="test_rule",
+            field="velocity_24h",
+            op=">",
+            value=5,
+            action="clamp_min",
+            score=80,
+            severity="high",
+            reason="High velocity",
+            status="shadow",  # Changed from active
+        )
+
+        result = diff_rule_versions(version_a, version_b)
+
+        assert result.is_breaking is False
+        status_change = next(c for c in result.changes if c.field_name == "status")
+        assert status_change.change_type == "modified"
+        assert status_change.old_value == "active"
+        assert status_change.new_value == "shadow"
+
+    def test_diff_multiple_changes(self, version_a, version_b):
+        """Test diff with multiple field changes."""
+        version_a.rule = Rule(
+            id="test_rule",
+            field="amount_to_avg_ratio_30d",  # Changed (breaking)
+            op=">=",  # Changed (breaking)
+            value=10,  # Changed (not breaking)
+            action="clamp_min",  # Same as original
+            score=80,  # Same as original
+            severity="medium",  # Changed
+            reason="Updated",  # Changed
+            status="shadow",  # Changed
+        )
+
+        result = diff_rule_versions(version_a, version_b)
+
+        assert result.is_breaking is True  # field and op changed
+
+        # Count modified fields
+        modified_count = sum(1 for c in result.changes if c.change_type == "modified")
+        assert modified_count == 6  # field, op, value, severity, reason, status changed
+
+        # Verify score and action are unchanged
+        score_change = next(c for c in result.changes if c.field_name == "score")
+        assert score_change.change_type == "unchanged"
+        action_change = next(c for c in result.changes if c.field_name == "action")
+        assert action_change.change_type == "unchanged"
+
+    def test_diff_includes_metadata(self, version_a, version_b):
+        """Test that diff result includes version metadata."""
+        result = diff_rule_versions(version_a, version_b)
+
+        assert result.version_a_created_by == "user_a"
+        assert result.version_b_created_by == "user_b"
+        assert result.version_a_timestamp is not None
+        assert result.version_b_timestamp is not None
+        assert result.version_a_timestamp > result.version_b_timestamp
