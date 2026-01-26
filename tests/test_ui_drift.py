@@ -49,9 +49,7 @@ class TestFetchDriftStatus:
         import requests
 
         mock_response = MagicMock()
-        mock_response.raise_for_status.side_effect = requests.HTTPError(
-            "404 Not Found"
-        )
+        mock_response.raise_for_status.side_effect = requests.HTTPError("404 Not Found")
         mock_get.return_value = mock_response
 
         result = fetch_drift_status()
@@ -100,9 +98,7 @@ class TestRenderDriftPanel:
         render_drift_panel()
 
         # Should call st.success for ok status
-        success_calls = [
-            call for call in mock_st.method_calls if call[0] == "success"
-        ]
+        success_calls = [call for call in mock_st.method_calls if call[0] == "success"]
         assert len(success_calls) > 0
 
     @patch("ui.data_service._cached_fetch_drift_status")
@@ -132,9 +128,7 @@ class TestRenderDriftPanel:
         render_drift_panel()
 
         # Should call st.warning for warn status
-        warning_calls = [
-            call for call in mock_st.method_calls if call[0] == "warning"
-        ]
+        warning_calls = [call for call in mock_st.method_calls if call[0] == "warning"]
         assert len(warning_calls) > 0
 
     @patch("ui.data_service._cached_fetch_drift_status")
@@ -164,9 +158,7 @@ class TestRenderDriftPanel:
         render_drift_panel()
 
         # Should call st.error for fail status
-        error_calls = [
-            call for call in mock_st.method_calls if call[0] == "error"
-        ]
+        error_calls = [call for call in mock_st.method_calls if call[0] == "error"]
         assert len(error_calls) > 0
 
     @patch("ui.data_service._cached_fetch_drift_status")
@@ -180,9 +172,7 @@ class TestRenderDriftPanel:
         render_drift_panel()
 
         # Should call st.info when API unavailable
-        info_calls = [
-            call for call in mock_st.method_calls if call[0] == "info"
-        ]
+        info_calls = [call for call in mock_st.method_calls if call[0] == "info"]
         assert len(info_calls) > 0
 
     @patch("ui.data_service._cached_fetch_drift_status")
@@ -199,9 +189,7 @@ class TestRenderDriftPanel:
         render_drift_panel()
 
         # Should call st.warning when error present
-        warning_calls = [
-            call for call in mock_st.method_calls if call[0] == "warning"
-        ]
+        warning_calls = [call for call in mock_st.method_calls if call[0] == "warning"]
         assert len(warning_calls) > 0
 
     @patch("ui.data_service._cached_fetch_drift_status")

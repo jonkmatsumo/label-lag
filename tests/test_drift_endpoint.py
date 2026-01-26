@@ -117,9 +117,7 @@ class TestDriftEndpoint:
         assert mock_detect.call_count == 1
 
     @patch("monitor.detect_drift.detect_drift")
-    def test_force_refresh_bypasses_cache(
-        self, mock_detect, client, mock_drift_result
-    ):
+    def test_force_refresh_bypasses_cache(self, mock_detect, client, mock_drift_result):
         """force_refresh=True should bypass cache."""
         mock_detect.return_value = mock_drift_result
 
@@ -145,9 +143,7 @@ class TestDriftEndpoint:
         assert response.status_code == 422
 
     @patch("monitor.detect_drift.detect_drift")
-    def test_error_handling_returns_unknown_status(
-        self, mock_detect, client
-    ):
+    def test_error_handling_returns_unknown_status(self, mock_detect, client):
         """Errors should return status='unknown' with error message."""
         error_result = {
             "timestamp": "2024-01-01T12:00:00+00:00",
@@ -204,9 +200,7 @@ class TestDriftEndpoint:
         assert data["status"] == "warn"
 
     @patch("monitor.detect_drift.detect_drift")
-    def test_status_classification_fail(
-        self, mock_detect, client, mock_drift_result
-    ):
+    def test_status_classification_fail(self, mock_detect, client, mock_drift_result):
         """CRITICAL features should result in status='fail'."""
         mock_detect.return_value = mock_drift_result
 
@@ -216,9 +210,7 @@ class TestDriftEndpoint:
         assert data["status"] == "fail"
 
     @patch("monitor.detect_drift.detect_drift")
-    def test_top_features_sorted_by_psi(
-        self, mock_detect, client, mock_drift_result
-    ):
+    def test_top_features_sorted_by_psi(self, mock_detect, client, mock_drift_result):
         """Top features should be sorted by PSI descending."""
         mock_detect.return_value = mock_drift_result
 

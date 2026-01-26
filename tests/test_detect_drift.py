@@ -257,8 +257,7 @@ class TestDetectDrift:
         assert isinstance(result["features"], dict)
         # Check if any feature has CRITICAL status
         has_critical = any(
-            details["status"] == "CRITICAL"
-            for details in result["features"].values()
+            details["status"] == "CRITICAL" for details in result["features"].values()
         )
         if has_critical:
             assert result["drift_detected"] is True

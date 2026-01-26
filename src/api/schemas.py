@@ -940,6 +940,4 @@ class DriftStatusResponse(BaseModel):
         default_factory=dict,
         description="Threshold values (warn, fail)",
     )
-    error: str | None = Field(
-        None, description="Error message if status=unknown"
-    )
+    error: str | None = Field(None, description="Error message if status=unknown")

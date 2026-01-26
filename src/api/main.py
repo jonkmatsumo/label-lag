@@ -352,9 +352,7 @@ def _build_drift_response(
     hours_analyzed = result.get("hours_analyzed", 24)
     current_window = f"Last {hours_analyzed} hours"
     if result.get("live_size", 0) > 0:
-        current_window = (
-            f"Last {hours_analyzed} hours ({result['live_size']} samples)"
-        )
+        current_window = f"Last {hours_analyzed} hours ({result['live_size']} samples)"
 
     return DriftStatusResponse(
         status=overall_status,
