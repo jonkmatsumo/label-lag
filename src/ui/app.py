@@ -2578,9 +2578,7 @@ def _render_rule_management_tab() -> None:
     from data_service import fetch_draft_rules, publish_rule
 
     st.subheader("Rule Management")
-    st.markdown(
-        "Manage draft rules: view status, approve, and publish to production."
-    )
+    st.markdown("Manage draft rules: view status, approve, and publish to production.")
 
     # Status filter
     status_filter = st.selectbox(
@@ -2667,11 +2665,15 @@ def _render_rule_management_tab() -> None:
                         unavailable = signals_data.get("unavailable_signals", [])
 
                         # Group signals by severity
-                        risk_signals = [s for s in signals if s.get("severity") == "risk"]
+                        risk_signals = [
+                            s for s in signals if s.get("severity") == "risk"
+                        ]
                         warning_signals = [
                             s for s in signals if s.get("severity") == "warning"
                         ]
-                        info_signals = [s for s in signals if s.get("severity") == "info"]
+                        info_signals = [
+                            s for s in signals if s.get("severity") == "info"
+                        ]
 
                         # Risk signals (always visible)
                         if risk_signals:

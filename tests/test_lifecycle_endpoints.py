@@ -160,8 +160,7 @@ class TestApproveDraftRule:
         approval_records = [
             r
             for r in records
-            if r.action == "state_change"
-            and r.after_state.get("status") == "approved"
+            if r.action == "state_change" and r.after_state.get("status") == "approved"
         ]
         assert len(approval_records) > 0
 
@@ -998,9 +997,7 @@ class TestPublishRule:
         records = audit_logger.get_rule_history("publish_test_003")
 
         # Find RULE_PUBLISHED record
-        publish_records = [
-            r for r in records if r.action == "RULE_PUBLISHED"
-        ]
+        publish_records = [r for r in records if r.action == "RULE_PUBLISHED"]
         assert len(publish_records) > 0
 
         publish_record = publish_records[-1]

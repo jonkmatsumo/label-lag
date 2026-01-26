@@ -8,7 +8,11 @@ from api.backtest import BacktestStore
 from api.draft_store import get_draft_store
 from api.metrics import get_metrics_collector
 from api.rules import Rule, RuleSet, RuleStatus
-from api.schemas import ApprovalSignalItem, ApprovalSignalsResponse, ApprovalSignalsSummary
+from api.schemas import (
+    ApprovalSignalItem,
+    ApprovalSignalsResponse,
+    ApprovalSignalsSummary,
+)
 from api.validation import detect_conflicts, detect_redundancies
 from api.versioning import get_version_store
 
@@ -38,9 +42,7 @@ def compute_structural_signals(
             all_rules.extend(production_ruleset.rules)
         if draft_ruleset:
             # Exclude the rule we're analyzing
-            all_rules.extend(
-                [r for r in draft_ruleset.rules if r.id != rule.id]
-            )
+            all_rules.extend([r for r in draft_ruleset.rules if r.id != rule.id])
 
         test_ruleset = RuleSet(version="test", rules=all_rules)
 
@@ -81,9 +83,7 @@ def compute_structural_signals(
 
         # Detect redundancies
         redundancies = detect_redundancies(test_ruleset)
-        rule_redundancies = [
-            r for r in redundancies if r.rule_id == rule.id
-        ]
+        rule_redundancies = [r for r in redundancies if r.rule_id == rule.id]
 
         has_redundancies = len(rule_redundancies) > 0
         redundancy_count = len(rule_redundancies)
@@ -116,12 +116,16 @@ def compute_structural_signals(
 
     except Exception as e:
         logger.warning(f"Failed to compute structural signals: {e}")
-        unavailable.extend(["has_conflicts", "conflict_count", "has_redundancies", "redundancy_count"])
+        unavailable.extend(
+            ["has_conflicts", "conflict_count", "has_redundancies", "redundancy_count"]
+        )
 
     return signals, unavailable
 
 
-def compute_coverage_signals(rule_id: str) -> tuple[list[ApprovalSignalItem], list[str]]:
+def compute_coverage_signals(
+    rule_id: str,
+) -> tuple[list[ApprovalSignalItem], list[str]]:
     """Compute coverage/match impact signals (shadow metrics, backtest).
 
     Args:
@@ -144,7 +148,9 @@ def compute_coverage_signals(rule_id: str) -> tuple[list[ApprovalSignalItem], li
 
         # Get rule metrics
         rule_metrics = collector.get_rule_metrics(rule_id, start_date, end_date)
-        shadow_match_count = rule_metrics.shadow_matches if rule_metrics.shadow_matches > 0 else None
+        shadow_match_count = (
+            rule_metrics.shadow_matches if rule_metrics.shadow_matches > 0 else None
+        )
 
         # Check if rule has been in shadow mode and count days
         draft_store = get_draft_store()
@@ -162,7 +168,9 @@ def compute_coverage_signals(rule_id: str) -> tuple[list[ApprovalSignalItem], li
                     record.after_state
                     and record.after_state.get("status") == RuleStatus.SHADOW.value
                 ):
-                    shadow_days_active = (datetime.now(timezone.utc) - record.timestamp).days
+                    shadow_days_active = (
+                        datetime.now(timezone.utc) - record.timestamp
+                    ).days
                     break
 
         signals.append(
@@ -245,7 +253,9 @@ def compute_coverage_signals(rule_id: str) -> tuple[list[ApprovalSignalItem], li
     return signals, unavailable
 
 
-def compute_governance_signals(rule_id: str) -> tuple[list[ApprovalSignalItem], list[str]]:
+def compute_governance_signals(
+    rule_id: str,
+) -> tuple[list[ApprovalSignalItem], list[str]]:
     """Compute governance/process signals (version count, days in review, submitter).
 
     Args:

@@ -660,7 +660,9 @@ class ApprovalSignalItem(BaseModel):
     """Single approval quality signal."""
 
     signal_id: str = Field(..., description="Stable signal identifier")
-    category: str = Field(..., description="Signal category: structural, coverage, governance")
+    category: str = Field(
+        ..., description="Signal category: structural, coverage, governance"
+    )
     severity: str = Field(..., description="Signal severity: info, warning, risk")
     value: Any = Field(..., description="Signal value (bool, int, float, str, or None)")
     label: str = Field(..., description="Human-readable label")
@@ -682,14 +684,14 @@ class ApprovalSignalsResponse(BaseModel):
     """Approval quality signals for a rule."""
 
     rule_id: str = Field(..., description="Rule identifier")
-    computed_at: str = Field(..., description="When signals were computed (ISO timestamp)")
+    computed_at: str = Field(
+        ..., description="When signals were computed (ISO timestamp)"
+    )
     signals: list[ApprovalSignalItem] = Field(
         default_factory=list, description="List of approval signals"
     )
     summary: ApprovalSignalsSummary = Field(..., description="Signal summary")
-    partial: bool = Field(
-        default=False, description="True if some signals unavailable"
-    )
+    partial: bool = Field(default=False, description="True if some signals unavailable")
     unavailable_signals: list[str] = Field(
         default_factory=list, description="IDs of signals that failed to compute"
     )

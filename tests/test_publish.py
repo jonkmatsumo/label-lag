@@ -34,6 +34,7 @@ class TestPublishFlow:
         manager._ruleset = RuleSet.empty()
         # Set as global manager for testing
         import api.model_manager
+
         api.model_manager._manager = manager
         return manager
 
@@ -172,5 +173,3 @@ class TestPublishFlow:
                 new_status=RuleStatus.ACTIVE.value,
                 actor="test_actor",
             )
-
-
