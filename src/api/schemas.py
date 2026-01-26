@@ -1169,3 +1169,14 @@ class ReadinessReportResponse(BaseModel):
     timestamp: str
     overall_status: str
     checks: list[CheckResultResponse]
+
+
+class RuleAttributionResponse(BaseModel):
+    """Rule attribution metrics response."""
+    
+    rule_id: str
+    total_matches: int
+    mean_model_score: float
+    mean_final_score: float
+    mean_impact: float
+    net_impact: float

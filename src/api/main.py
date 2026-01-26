@@ -82,10 +82,12 @@ from api.schemas import (
     RuleAnalyticsResponse,
     RuleHealthResponse,
     ReadinessReportResponse,
+    RuleAttributionResponse,
 )
 from api.services import get_evaluator
 from api.analytics import RuleHealthEvaluator, RuleHealth
 from api.readiness import ReadinessEvaluator
+from api.attribution import AttributionService
 from api.audit import get_audit_logger
 from api.backtest import (
     BacktestRunner, 
@@ -4119,6 +4121,40 @@ async def check_rule_readiness(
             }
             for c in report.checks
         ]
+    )
+
+
+
+@app.get(
+    "/analytics/attribution",
+    response_model=RuleAttributionResponse,
+    tags=["Analytics"],
+    summary="Get rule attribution metrics",
+    description="Analyze how a rule impacted model scores over time.",
+)
+async def get_rule_attribution(
+    rule_id: str,
+    days: int = Query(7, ge=1, le=90),
+) -> RuleAttributionResponse:
+    """Get attribution metrics."""
+    from datetime import timedelta
+    
+    end_date = datetime.now(timezone.utc)
+    start_date = end_date - timedelta(days=days)
+    
+    service = AttributionService()
+    attribution = service.get_rule_attribution(rule_id, start_date, end_date)
+    
+    if not attribution:
+        raise HTTPException(status_code=404, detail=f"No attribution data found for rule {rule_id}")
+        
+    return RuleAttributionResponse(
+        rule_id=attribution.rule_id,
+        total_matches=attribution.total_matches,
+        mean_model_score=attribution.mean_model_score,
+        mean_final_score=attribution.mean_final_score,
+        mean_impact=attribution.mean_impact,
+        net_impact=attribution.net_impact
     )
 
 

@@ -2833,6 +2833,9 @@ def _render_rule_management_tab() -> None:
                     ):
                         # Show confirmation modal
                         with st.form(key=f"publish_form_{rule_id}"):
+                            st.warning(
+                                f"**Publish Rule to Production**\n\n"
+                                f"This will make rule `{rule_id}` effective for "
                                 f"all live transactions."
                             )
 
