@@ -3615,6 +3615,8 @@ def _render_suggestions_tab() -> None:
 
 def render_what_if_simulation() -> None:
     """Render the What-If Simulation page."""
+    from datetime import datetime, timedelta
+
     st.header("What-If Simulation")
     st.markdown(
         "Compare rule versions or rulesets on historical data to assess impact "
