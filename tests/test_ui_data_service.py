@@ -539,3 +539,142 @@ class TestFetchApprovalSignals:
         )
         result = normalize_schema_df(df)
         assert all(col.islower() for col in result.columns)
+
+
+class TestFetchRuleVersions:
+    """Tests for fetch_rule_versions function."""
+
+    @patch("ui.data_service.requests.get")
+    def test_successful_request(self, mock_get):
+        """Test successful fetch of rule versions."""
+        from ui.data_service import fetch_rule_versions
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "versions": [
+                {
+                    "version_id": "rule_v1",
+                    "rule_id": "test_rule",
+                    "timestamp": "2024-01-01T00:00:00Z",
+                    "created_by": "user1",
+                },
+                {
+                    "version_id": "rule_v2",
+                    "rule_id": "test_rule",
+                    "timestamp": "2024-01-02T00:00:00Z",
+                    "created_by": "user2",
+                },
+            ],
+            "total": 2,
+        }
+        mock_response.raise_for_status.return_value = None
+        mock_get.return_value = mock_response
+
+        result = fetch_rule_versions("test_rule")
+
+        assert result is not None
+        assert len(result) == 2
+        assert result[0]["version_id"] == "rule_v1"
+
+    @patch("ui.data_service.requests.get")
+    def test_empty_versions(self, mock_get):
+        """Test fetch when no versions exist."""
+        from ui.data_service import fetch_rule_versions
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"versions": [], "total": 0}
+        mock_response.raise_for_status.return_value = None
+        mock_get.return_value = mock_response
+
+        result = fetch_rule_versions("test_rule")
+
+        assert result is not None
+        assert len(result) == 0
+
+    @patch("ui.data_service.requests.get")
+    def test_handles_request_exception(self, mock_get):
+        """Test handling of request exceptions."""
+        from ui.data_service import fetch_rule_versions
+
+        mock_get.side_effect = requests.RequestException("Connection error")
+
+        result = fetch_rule_versions("test_rule")
+
+        assert result is None
+
+
+class TestFetchRuleDiff:
+    """Tests for fetch_rule_diff function."""
+
+    @patch("ui.data_service.requests.get")
+    def test_successful_request(self, mock_get):
+        """Test successful fetch of rule diff."""
+        from ui.data_service import fetch_rule_diff
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "version_a_id": "rule_v2",
+            "version_b_id": "rule_v1",
+            "rule_id": "test_rule",
+            "changes": [
+                {
+                    "field_name": "value",
+                    "change_type": "modified",
+                    "old_value": 5,
+                    "new_value": 10,
+                },
+            ],
+            "is_breaking": False,
+            "version_a_timestamp": "2024-01-02T00:00:00Z",
+            "version_b_timestamp": "2024-01-01T00:00:00Z",
+            "version_a_created_by": "user2",
+            "version_b_created_by": "user1",
+        }
+        mock_response.raise_for_status.return_value = None
+        mock_get.return_value = mock_response
+
+        result = fetch_rule_diff("test_rule", "rule_v2", "rule_v1")
+
+        assert result is not None
+        assert result["rule_id"] == "test_rule"
+        assert result["is_breaking"] is False
+        assert len(result["changes"]) == 1
+
+    @patch("ui.data_service.requests.get")
+    def test_with_optional_params(self, mock_get):
+        """Test fetch with no version params (defaults)."""
+        from ui.data_service import fetch_rule_diff
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "version_a_id": "rule_v2",
+            "version_b_id": "rule_v1",
+            "rule_id": "test_rule",
+            "changes": [],
+            "is_breaking": False,
+            "version_a_timestamp": "",
+            "version_b_timestamp": "",
+            "version_a_created_by": "",
+            "version_b_created_by": "",
+        }
+        mock_response.raise_for_status.return_value = None
+        mock_get.return_value = mock_response
+
+        result = fetch_rule_diff("test_rule")
+
+        assert result is not None
+        # Verify no params were sent (defaults used)
+        mock_get.assert_called_once()
+        call_args = mock_get.call_args
+        assert call_args[1].get("params") == {}
+
+    @patch("ui.data_service.requests.get")
+    def test_handles_request_exception(self, mock_get):
+        """Test handling of request exceptions."""
+        from ui.data_service import fetch_rule_diff
+
+        mock_get.side_effect = requests.RequestException("Connection error")
+
+        result = fetch_rule_diff("test_rule")
+
+        assert result is None

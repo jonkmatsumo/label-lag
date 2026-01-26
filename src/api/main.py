@@ -56,6 +56,8 @@ from api.schemas import (
     RejectRuleResponse,
     RollbackRuleRequest,
     RollbackRuleResponse,
+    RuleDiffResponse,
+    RuleFieldChangeResponse,
     RuleMetricsItem,
     RuleSuggestionResponse,
     RuleVersionListResponse,
@@ -3140,6 +3142,136 @@ async def get_rule_version(rule_id: str, version_id: str) -> RuleVersionResponse
         timestamp=version.timestamp.isoformat(),
         created_by=version.created_by,
         reason=version.reason,
+    )
+
+
+@app.get(
+    "/rules/{rule_id}/diff",
+    response_model=RuleDiffResponse,
+    tags=["Rules"],
+    summary="Compare two versions of a rule",
+    description="""
+Compare two versions of a rule and return field-by-field differences.
+
+**Query Parameter Behavior:**
+- Neither version_a nor version_b: Compare latest vs second-latest (previous)
+- Only version_a: Compare version_a vs its predecessor
+- Only version_b: Compare latest vs version_b
+- Both provided: Compare version_a vs version_b
+
+**Breaking Changes:**
+Changes to field, op, or action are considered breaking (affect rule matching).
+Value changes are tuning, not breaking.
+
+**Errors:**
+- 400: Rule has fewer than 2 versions when predecessor needed
+- 400: version_a equals version_b (cannot compare to itself)
+- 404: Rule not found
+- 404: Specified version not found
+""",
+)
+async def get_rule_diff(
+    rule_id: str,
+    version_a: str | None = Query(
+        None, description="Newer version ID (defaults to latest)"
+    ),
+    version_b: str | None = Query(
+        None, description="Older version ID (defaults to predecessor of version_a)"
+    ),
+) -> RuleDiffResponse:
+    """Compare two versions of a rule.
+
+    Args:
+        rule_id: Rule identifier.
+        version_a: Newer version ID (optional, defaults to latest).
+        version_b: Older version ID (optional, defaults to predecessor).
+
+    Returns:
+        RuleDiffResponse with field-by-field changes.
+
+    Raises:
+        HTTPException: If rule/version not found or insufficient versions.
+    """
+    from api.versioning import diff_rule_versions, get_version_store
+
+    version_store = get_version_store()
+    versions = version_store.list_versions(rule_id)
+
+    # Check if rule has any versions
+    if not versions:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Rule not found or has no versions: {rule_id}",
+        )
+
+    # Resolve version_a (newer)
+    if version_a is None:
+        # Default to latest
+        ver_a = versions[-1]
+    else:
+        ver_a = version_store.get_version(rule_id, version_a)
+        if ver_a is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Version not found: {version_a} for rule {rule_id}",
+            )
+
+    # Resolve version_b (older)
+    if version_b is None:
+        # Find predecessor of version_a
+        ver_a_index = next(
+            (i for i, v in enumerate(versions) if v.version_id == ver_a.version_id),
+            None,
+        )
+        if ver_a_index is None or ver_a_index == 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Version {ver_a.version_id} has no predecessor. "
+                "Specify version_b explicitly.",
+            )
+        ver_b = versions[ver_a_index - 1]
+    else:
+        ver_b = version_store.get_version(rule_id, version_b)
+        if ver_b is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Version not found: {version_b} for rule {rule_id}",
+            )
+
+    # Check for same version comparison
+    if ver_a.version_id == ver_b.version_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot compare a version to itself. "
+            "Provide two different versions.",
+        )
+
+    # Compute diff
+    diff_result = diff_rule_versions(ver_a, ver_b)
+
+    # Build response
+    return RuleDiffResponse(
+        version_a_id=diff_result.version_a_id,
+        version_b_id=diff_result.version_b_id,
+        rule_id=diff_result.rule_id,
+        changes=[
+            RuleFieldChangeResponse(
+                field_name=c.field_name,
+                change_type=c.change_type,
+                old_value=c.old_value,
+                new_value=c.new_value,
+            )
+            for c in diff_result.changes
+        ],
+        is_breaking=diff_result.is_breaking,
+        version_a_timestamp=diff_result.version_a_timestamp.isoformat()
+        if diff_result.version_a_timestamp
+        else "",
+        version_b_timestamp=diff_result.version_b_timestamp.isoformat()
+        if diff_result.version_b_timestamp
+        else "",
+        version_a_created_by=diff_result.version_a_created_by,
+        version_b_created_by=diff_result.version_b_created_by,
     )
 
 

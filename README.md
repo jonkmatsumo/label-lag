@@ -108,6 +108,19 @@ The API provides endpoints for:
   - Makes model effective for inference
   - Tracks deployment timestamp and actor
 
+### Rule Version Diff
+
+Compare two versions of a rule to see field-by-field changes:
+
+- `GET /rules/{rule_id}/diff` - Compare rule versions
+  - Query params: `version_a` (newer), `version_b` (older)
+  - Defaults: If no params, compares latest vs previous
+  - Returns: Field-by-field changes with `is_breaking` flag
+  - Breaking changes: `field`, `op`, or `action` modifications
+  - Non-breaking (tuning): `value`, `score`, `severity`, `reason`, `status`
+
+**UI Access:** Rule Inspector → Rule Management tab → expand any rule → "Version History & Diff" section
+
 Full API documentation with request/response schemas available at http://localhost:8000/docs (Swagger UI).
 
 ## CLI Commands

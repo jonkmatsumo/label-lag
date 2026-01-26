@@ -1283,3 +1283,61 @@ def _cached_fetch_drift_status(hours: int = 24) -> dict[str, Any] | None:
         Drift status dict or None if unavailable.
     """
     return fetch_drift_status(hours)
+
+
+# =============================================================================
+# Rule Version Diff Functions
+# =============================================================================
+
+
+def fetch_rule_versions(rule_id: str) -> list[dict[str, Any]] | None:
+    """Fetch all versions of a rule.
+
+    Args:
+        rule_id: Rule identifier.
+
+    Returns:
+        List of version dicts or None if request failed.
+    """
+    url = f"{API_BASE_URL}/rules/{rule_id}/versions"
+
+    try:
+        response = requests.get(url, timeout=API_TIMEOUT)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("versions", [])
+    except requests.RequestException as e:
+        print(f"Error fetching versions for rule {rule_id}: {e}")
+        return None
+
+
+def fetch_rule_diff(
+    rule_id: str,
+    version_a: str | None = None,
+    version_b: str | None = None,
+) -> dict[str, Any] | None:
+    """Fetch diff between two rule versions.
+
+    Args:
+        rule_id: Rule identifier.
+        version_a: Newer version ID (optional, defaults to latest).
+        version_b: Older version ID (optional, defaults to predecessor).
+
+    Returns:
+        Diff result dict or None if request failed.
+    """
+    url = f"{API_BASE_URL}/rules/{rule_id}/diff"
+
+    params = {}
+    if version_a:
+        params["version_a"] = version_a
+    if version_b:
+        params["version_b"] = version_b
+
+    try:
+        response = requests.get(url, params=params, timeout=API_TIMEOUT)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error fetching diff for rule {rule_id}: {e}")
+        return None
