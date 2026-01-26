@@ -2796,6 +2796,140 @@ def _render_rule_management_tab() -> None:
                             elif publish_confirm and not actor:
                                 st.error("Please provide your name/email.")
 
+            # Version History & Diff section
+            _render_version_diff_section(rule_id)
+
+
+def _render_version_diff_section(rule_id: str) -> None:
+    """Render version history and diff section for a rule.
+
+    Args:
+        rule_id: Rule identifier.
+    """
+    from data_service import fetch_rule_diff, fetch_rule_versions
+
+    st.markdown("---")
+    st.markdown("### Version History & Diff")
+
+    # Fetch versions
+    versions = fetch_rule_versions(rule_id)
+
+    if versions is None:
+        st.warning("Could not load version history.")
+        return
+
+    if len(versions) == 0:
+        st.info("No version history available for this rule.")
+        return
+
+    st.caption(f"{len(versions)} version(s) recorded")
+
+    if len(versions) == 1:
+        st.info(
+            "Only one version exists. "
+            "Make changes to the rule to create additional versions for comparison."
+        )
+        return
+
+    # Version selectors
+    col1, col2 = st.columns(2)
+
+    # Build version options (newest first for display)
+    version_options = list(reversed(versions))
+
+    def format_version(v: dict) -> str:
+        """Format version for dropdown display."""
+        vid = v.get("version_id", "")[:25]
+        ts = v.get("timestamp", "")[:10]
+        creator = v.get("created_by", "unknown")
+        return f"{vid}... ({ts}, by {creator})"
+
+    with col1:
+        version_a_idx = st.selectbox(
+            "Version A (newer)",
+            options=range(len(version_options)),
+            format_func=lambda i: format_version(version_options[i]),
+            index=0,
+            key=f"diff_version_a_{rule_id}",
+        )
+
+    with col2:
+        # Default to second option (predecessor)
+        default_b_idx = 1 if len(version_options) > 1 else 0
+        version_b_idx = st.selectbox(
+            "Version B (older)",
+            options=range(len(version_options)),
+            format_func=lambda i: format_version(version_options[i]),
+            index=default_b_idx,
+            key=f"diff_version_b_{rule_id}",
+        )
+
+    version_a_id = version_options[version_a_idx]["version_id"]
+    version_b_id = version_options[version_b_idx]["version_id"]
+
+    # Compare button
+    if st.button("Compare Versions", key=f"compare_{rule_id}", type="secondary"):
+        if version_a_id == version_b_id:
+            st.error("Cannot compare a version to itself. Select different versions.")
+            return
+
+        with st.spinner("Computing diff..."):
+            diff_result = fetch_rule_diff(rule_id, version_a_id, version_b_id)
+
+        if diff_result is None:
+            st.error("Failed to compute diff.")
+            return
+
+        # Breaking change warning
+        if diff_result.get("is_breaking"):
+            st.warning(
+                "**Breaking Change Detected**: This diff includes changes to "
+                "field, operator, or action that affect rule matching behavior."
+            )
+
+        # Diff table
+        import pandas as pd
+
+        rows = []
+        for change in diff_result.get("changes", []):
+            field_name = change.get("field_name", "")
+            change_type = change.get("change_type", "")
+            old_val = change.get("old_value")
+            new_val = change.get("new_value")
+
+            if change_type == "unchanged":
+                status = "Unchanged"
+            else:
+                status = "Modified"
+
+            rows.append({
+                "Field": field_name,
+                "Older (B)": str(old_val) if old_val is not None else "",
+                "Newer (A)": str(new_val) if new_val is not None else "",
+                "Status": status,
+            })
+
+        if rows:
+            df = pd.DataFrame(rows)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+
+        # Metadata
+        with st.expander("Version Metadata", expanded=False):
+            st.markdown(f"**Version A (newer):** `{diff_result.get('version_a_id')}`")
+            st.markdown(
+                f"  - Created by: {diff_result.get('version_a_created_by', 'N/A')}"
+            )
+            st.markdown(
+                f"  - Timestamp: {diff_result.get('version_a_timestamp', 'N/A')}"
+            )
+            st.markdown(f"**Version B (older):** `{diff_result.get('version_b_id')}`")
+            st.markdown(
+                f"  - Created by: {diff_result.get('version_b_created_by', 'N/A')}"
+            )
+            st.markdown(
+                f"  - Timestamp: {diff_result.get('version_b_timestamp', 'N/A')}"
+            )
+
 
 def _render_sandbox_tab() -> None:
     """Render the Sandbox testing tab."""
