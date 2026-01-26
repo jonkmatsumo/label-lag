@@ -276,6 +276,27 @@ class TrainResponse(BaseModel):
     error: str | None = Field(None, description="Error message if training failed")
 
 
+class DeployModelRequest(BaseModel):
+    """Request schema for deploying a model to production."""
+
+    run_id: str | None = Field(
+        None, description="Optional run ID. If not provided, deploys current Production model"
+    )
+    actor: str = Field(..., description="Who is deploying this model")
+    reason: str | None = Field(None, description="Optional reason for deployment")
+
+
+class DeployModelResponse(BaseModel):
+    """Response schema for deploying a model."""
+
+    success: bool = Field(..., description="Whether deployment completed successfully")
+    model_version: str = Field(..., description="Deployed model version")
+    deployed_at: str = Field(..., description="Deployment timestamp (ISO format)")
+    previous_version: str | None = Field(
+        None, description="Previous model version if replaced"
+    )
+
+
 class GenerateDataRequest(BaseModel):
     """Request schema for data generation endpoint."""
 
@@ -771,6 +792,21 @@ class ApproveRuleResponse(BaseModel):
 
     rule: DraftRuleResponse = Field(..., description="Approved rule")
     approved_at: str = Field(..., description="Approval timestamp (ISO format)")
+
+
+class PublishRuleRequest(BaseModel):
+    """Request schema for publishing an approved rule."""
+
+    actor: str = Field(..., description="Who is publishing this rule")
+    reason: str | None = Field(None, description="Optional reason for publishing")
+
+
+class PublishRuleResponse(BaseModel):
+    """Response schema for publishing a rule."""
+
+    rule: DraftRuleResponse = Field(..., description="Published rule")
+    published_at: str = Field(..., description="Publish timestamp (ISO format)")
+    version_id: str = Field(..., description="Version ID of the published rule")
 
 
 class RejectRuleRequest(BaseModel):

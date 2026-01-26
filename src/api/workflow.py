@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 # Define allowed transitions
 ALLOWED_TRANSITIONS: dict[str, list[str]] = {
     "draft": ["pending_review"],
-    "pending_review": ["active", "draft"],
+    "pending_review": ["approved", "draft"],
+    "approved": ["active", "draft"],
     "active": ["shadow", "disabled"],
     "shadow": ["active", "disabled"],
     "disabled": ["active", "archived"],
@@ -152,8 +153,8 @@ class RuleStateMachine:
         Returns:
             True if approval is required.
         """
-        # pending_review -> active requires approval
-        if from_status == "pending_review" and to_status == "active":
+        # pending_review -> approved requires approval
+        if from_status == "pending_review" and to_status == "approved":
             return True
 
         # disabled -> active requires approval

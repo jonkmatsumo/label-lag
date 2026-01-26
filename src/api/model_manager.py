@@ -116,6 +116,21 @@ class ModelManager:
             return None
         return self._ruleset.version
 
+    def update_production_ruleset(self, ruleset: RuleSet) -> None:
+        """Update the in-memory production ruleset.
+
+        Called by /rules/{id}/publish endpoint to sync approved rules
+        to the production ruleset used for inference.
+
+        Args:
+            ruleset: RuleSet to use for production inference.
+        """
+        self._ruleset = ruleset
+        logger.info(
+            f"Production ruleset updated to version {ruleset.version} "
+            f"with {len(ruleset.rules)} rules"
+        )
+
     def load_production_model(self) -> bool:
         """Load the production model from MLflow registry.
 

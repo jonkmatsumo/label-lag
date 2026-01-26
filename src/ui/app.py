@@ -50,6 +50,7 @@ from ui.mlflow_utils import (
     get_split_manifest,
     get_tuning_trials,
     get_version_details,
+    deploy_model,
     promote_to_production,
     promote_to_staging,
 )
@@ -2420,7 +2421,7 @@ def render_model_lab() -> None:
                             st.error(result["message"])
 
             with col2:
-                # Promote to Production (requires Staging)
+                # Approve for Production (requires Staging)
                 if selected_stage == "Staging":
                     # Check thresholds
                     if production_thresholds:
@@ -2430,13 +2431,13 @@ def render_model_lab() -> None:
                         if not passed:
                             st.warning(f"Threshold check failed: {', '.join(failures)}")
                             st.button(
-                                "Promote to Production",
+                                "Approve for Production",
                                 disabled=True,
                                 help="Fix threshold failures first",
                             )
                         else:
-                            if st.button("Promote to Production", type="primary"):
-                                with st.spinner("Promoting to Production..."):
+                            if st.button("Approve for Production", type="secondary"):
+                                with st.spinner("Approving for Production..."):
                                     result = promote_to_production(
                                         selected_run, thresholds=production_thresholds
                                     )
@@ -2446,8 +2447,8 @@ def render_model_lab() -> None:
                                 else:
                                     st.error(result["message"])
                     else:
-                        if st.button("Promote to Production", type="primary"):
-                            with st.spinner("Promoting to Production..."):
+                        if st.button("Approve for Production", type="secondary"):
+                            with st.spinner("Approving for Production..."):
                                 result = promote_to_production(selected_run)
                             if result["success"]:
                                 st.success(result["message"])
@@ -2455,7 +2456,64 @@ def render_model_lab() -> None:
                             else:
                                 st.error(result["message"])
                 elif selected_stage == "Production":
-                    st.info("Already in Production")
+                    # Check if model is already deployed (compare with live model)
+                    api_health = check_api_health()
+                    live_model = None
+                    if api_health and api_health.get("model_loaded"):
+                        live_model = api_health.get("version", "unknown")
+
+                    # Get model version for selected run
+                    selected_version = None
+                    for v in versions:
+                        if v["run_id"] == selected_run:
+                            selected_version = f"v{v['version']}"
+                            break
+
+                    if live_model == selected_version:
+                        st.success("✅ Model is live in production")
+                    else:
+                        st.info("⏳ Model approved but not yet deployed")
+                        st.markdown("---")
+                        if st.button("Deploy to Production", type="primary"):
+                            # Show confirmation modal
+                            with st.form(key="deploy_model_form"):
+                                st.warning(
+                                    f"**Deploy Model to Production**\n\n"
+                                    f"This will route live traffic to model version "
+                                    f"{selected_version}.\n\n"
+                                    f"Current live model: {live_model or 'none'}"
+                                )
+                                actor = st.text_input(
+                                    "Your name/email",
+                                    key="deploy_actor",
+                                    help="Required for audit trail",
+                                )
+                                deploy_reason = st.text_area(
+                                    "Reason (optional)",
+                                    key="deploy_reason",
+                                    help="Optional reason for deployment",
+                                )
+                                col_a, col_b = st.columns(2)
+                                with col_a:
+                                    deploy_confirm = st.form_submit_button(
+                                        "Deploy", type="primary"
+                                    )
+                                with col_b:
+                                    cancel = st.form_submit_button("Cancel")
+
+                                if deploy_confirm and actor:
+                                    with st.spinner("Deploying model..."):
+                                        result = deploy_model(
+                                            actor=actor,
+                                            reason=deploy_reason if deploy_reason else None,
+                                        )
+                                    if result["success"]:
+                                        st.success(result["message"])
+                                        st.rerun()
+                                    else:
+                                        st.error(result["message"])
+                                elif deploy_confirm and not actor:
+                                    st.error("Please provide your name/email.")
                 else:
                     st.info("Promote to Staging first")
     else:
@@ -2482,8 +2540,9 @@ def render_rule_inspector() -> None:
     )
 
     # Create tabs
-    tab1, tab2, tab3, tab4 = st.tabs(
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(
         [
+            "Rule Management",
             "Sandbox (Testing)",
             "Shadow Metrics (Read-Only)",
             "Backtest Results (Read-Only)",
@@ -2491,21 +2550,162 @@ def render_rule_inspector() -> None:
         ]
     )
 
-    # --- Tab 1: Sandbox ---
+    # --- Tab 1: Rule Management ---
     with tab1:
+        _render_rule_management_tab()
+
+    # --- Tab 2: Sandbox ---
+    with tab2:
         _render_sandbox_tab()
 
-    # --- Tab 2: Shadow Metrics ---
-    with tab2:
+    # --- Tab 3: Shadow Metrics ---
+    with tab3:
         _render_shadow_metrics_tab()
 
-    # --- Tab 3: Backtest Results ---
-    with tab3:
+    # --- Tab 4: Backtest Results ---
+    with tab4:
         _render_backtest_tab()
 
-    # --- Tab 4: Suggestions ---
-    with tab4:
+    # --- Tab 5: Suggestions ---
+    with tab5:
         _render_suggestions_tab()
+
+
+def _render_rule_management_tab() -> None:
+    """Render the Rule Management tab for draft rules."""
+    from data_service import fetch_draft_rules, publish_rule
+
+    st.subheader("Rule Management")
+    st.markdown(
+        "Manage draft rules: view status, approve, and publish to production."
+    )
+
+    # Status filter
+    status_filter = st.selectbox(
+        "Filter by Status",
+        options=["All", "draft", "pending_review", "approved", "active"],
+        index=0,
+    )
+
+    # Fetch draft rules
+    status_param = None if status_filter == "All" else status_filter
+    with st.spinner("Loading rules..."):
+        rules_data = fetch_draft_rules(status=status_param)
+
+    if rules_data is None:
+        st.error("Failed to load rules. Is the API server running?")
+        return
+
+    rules = rules_data.get("rules", [])
+    total = rules_data.get("total", 0)
+
+    # Show pending publish count
+    approved_rules = [r for r in rules if r.get("status") == "approved"]
+    if approved_rules:
+        st.info(f"**{len(approved_rules)} approved rule(s) pending publish**")
+
+    if not rules:
+        st.info("No rules found.")
+        return
+
+    # Display rules in a table
+    st.markdown(f"**{total} rule(s) found**")
+
+    for rule in rules:
+        rule_id = rule.get("rule_id", "")
+        status = rule.get("status", "")
+        field = rule.get("field", "")
+        op = rule.get("op", "")
+        value = rule.get("value", "")
+        action = rule.get("action", "")
+        score = rule.get("score", "")
+        severity = rule.get("severity", "")
+        reason = rule.get("reason", "")
+
+        with st.expander(
+            f"{rule_id} - {field} {op} {value} [{status}]", expanded=False
+        ):
+            col1, col2 = st.columns([2, 1])
+
+            with col1:
+                st.markdown(f"**Rule ID:** `{rule_id}`")
+                st.markdown(f"**Status:** {status}")
+                st.markdown(f"**Field:** {field}")
+                st.markdown(f"**Operator:** {op}")
+                st.markdown(f"**Value:** {value}")
+                st.markdown(f"**Action:** {action}")
+                if score:
+                    st.markdown(f"**Score:** {score}")
+                st.markdown(f"**Severity:** {severity}")
+                if reason:
+                    st.markdown(f"**Reason:** {reason}")
+
+            with col2:
+                # Status badge
+                if status == "draft":
+                    st.info("📝 Draft")
+                elif status == "pending_review":
+                    st.warning("⏳ Pending Review")
+                elif status == "approved":
+                    st.info("✅ Approved")
+                elif status == "active":
+                    st.success("🟢 Active")
+                elif status == "shadow":
+                    st.info("👻 Shadow")
+                elif status == "disabled":
+                    st.error("🚫 Disabled")
+                else:
+                    st.caption(f"Status: {status}")
+
+                # Publish button for approved rules
+                if status == "approved":
+                    st.markdown("---")
+                    if st.button(
+                        "Publish to Production",
+                        key=f"publish_{rule_id}",
+                        type="primary",
+                    ):
+                        # Show confirmation modal
+                        with st.form(key=f"publish_form_{rule_id}"):
+                            st.warning(
+                                f"**Publish Rule to Production**\n\n"
+                                f"This will make rule `{rule_id}` effective for "
+                                f"all live transactions."
+                            )
+                            actor = st.text_input(
+                                "Your name/email",
+                                key=f"actor_{rule_id}",
+                                help="Required for audit trail",
+                            )
+                            publish_reason = st.text_area(
+                                "Reason (optional)",
+                                key=f"reason_{rule_id}",
+                                help="Optional reason for publishing",
+                            )
+                            col_a, col_b = st.columns(2)
+                            with col_a:
+                                publish_confirm = st.form_submit_button(
+                                    "Publish", type="primary"
+                                )
+                            with col_b:
+                                cancel = st.form_submit_button("Cancel")
+
+                            if publish_confirm and actor:
+                                with st.spinner("Publishing rule..."):
+                                    result = publish_rule(
+                                        rule_id=rule_id,
+                                        actor=actor,
+                                        reason=publish_reason if publish_reason else None,
+                                    )
+                                if result:
+                                    st.success(
+                                        f"Rule `{rule_id}` published successfully!"
+                                    )
+                                    st.rerun()
+                                else:
+                                    st.error("Failed to publish rule.")
+                            elif publish_confirm and not actor:
+                                st.error("Please provide your name/email.")
 
 
 def _render_sandbox_tab() -> None:

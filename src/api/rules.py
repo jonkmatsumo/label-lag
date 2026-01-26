@@ -19,6 +19,7 @@ class RuleStatus(str, Enum):
 
     DRAFT = "draft"
     PENDING_REVIEW = "pending_review"
+    APPROVED = "approved"
     ACTIVE = "active"
     SHADOW = "shadow"
     DISABLED = "disabled"
@@ -39,7 +40,7 @@ class Rule:
     reason: str = ""
     status: str = field(
         default="active"
-    )  # draft, pending_review, active, disabled, archived
+    )  # draft, pending_review, approved, active, shadow, disabled, archived
 
     def __post_init__(self):
         """Validate rule configuration."""
