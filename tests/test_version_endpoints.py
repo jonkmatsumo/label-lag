@@ -367,3 +367,220 @@ class TestRollbackRuleVersion:
         # Verify draft store updated
         get_response = client.get("/rules/draft/rollback_test_007")
         assert get_response.json()["value"] == target_value
+
+
+class TestRuleDiffEndpoint:
+    """Tests for GET /rules/{rule_id}/diff endpoint."""
+
+    def test_diff_200_both_versions_specified(self, client):
+        """Test diff with both versions explicitly specified."""
+        _create_rule_with_versions(client, "diff_test_001")
+
+        # Get versions
+        list_response = client.get("/rules/diff_test_001/versions")
+        versions = list_response.json()["versions"]
+        assert len(versions) >= 2
+
+        version_a = versions[-1]["version_id"]  # Latest
+        version_b = versions[0]["version_id"]  # Oldest
+
+        response = client.get(
+            f"/rules/diff_test_001/diff?version_a={version_a}&version_b={version_b}"
+        )
+        assert response.status_code == 200
+
+    def test_diff_200_no_params_latest_vs_previous(self, client):
+        """Test diff with no params defaults to latest vs previous."""
+        _create_rule_with_versions(client, "diff_test_002")
+
+        # Get versions for verification
+        list_response = client.get("/rules/diff_test_002/versions")
+        versions = list_response.json()["versions"]
+        assert len(versions) >= 2
+
+        latest = versions[-1]["version_id"]
+        previous = versions[-2]["version_id"]
+
+        response = client.get("/rules/diff_test_002/diff")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["version_a_id"] == latest
+        assert data["version_b_id"] == previous
+
+    def test_diff_200_only_version_a_uses_predecessor(self, client):
+        """Test diff with only version_a uses predecessor."""
+        _create_rule_with_versions(client, "diff_test_003")
+
+        list_response = client.get("/rules/diff_test_003/versions")
+        versions = list_response.json()["versions"]
+        assert len(versions) >= 2
+
+        # Use second version (has a predecessor)
+        version_a = versions[1]["version_id"]
+        expected_b = versions[0]["version_id"]
+
+        response = client.get(f"/rules/diff_test_003/diff?version_a={version_a}")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["version_a_id"] == version_a
+        assert data["version_b_id"] == expected_b
+
+    def test_diff_200_only_version_b_compares_to_latest(self, client):
+        """Test diff with only version_b compares latest to version_b."""
+        _create_rule_with_versions(client, "diff_test_004")
+
+        list_response = client.get("/rules/diff_test_004/versions")
+        versions = list_response.json()["versions"]
+        assert len(versions) >= 2
+
+        version_b = versions[0]["version_id"]  # Oldest
+        expected_a = versions[-1]["version_id"]  # Latest
+
+        response = client.get(f"/rules/diff_test_004/diff?version_b={version_b}")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["version_a_id"] == expected_a
+        assert data["version_b_id"] == version_b
+
+    def test_diff_400_same_version(self, client):
+        """Test diff with same version returns 400."""
+        _create_rule_with_versions(client, "diff_test_005")
+
+        list_response = client.get("/rules/diff_test_005/versions")
+        versions = list_response.json()["versions"]
+        version_id = versions[0]["version_id"]
+
+        response = client.get(
+            f"/rules/diff_test_005/diff?version_a={version_id}&version_b={version_id}"
+        )
+        assert response.status_code == 400
+        assert "Cannot compare a version to itself" in response.json()["detail"]
+
+    def test_diff_400_insufficient_versions(self, client):
+        """Test diff when only one version exists returns 400."""
+        # Create rule with only one version (no update/submit)
+        client.post(
+            "/rules/draft",
+            json={
+                "id": "diff_test_006",
+                "field": "velocity_24h",
+                "op": ">",
+                "value": 5,
+                "action": "clamp_min",
+                "score": 70,
+                "severity": "medium",
+                "reason": "Single version",
+                "actor": "user1",
+            },
+        )
+
+        # Try to get diff without params (needs predecessor)
+        response = client.get("/rules/diff_test_006/diff")
+        assert response.status_code == 400
+        assert "no predecessor" in response.json()["detail"]
+
+    def test_diff_404_rule_not_found(self, client):
+        """Test diff for nonexistent rule returns 404."""
+        response = client.get("/rules/nonexistent_rule/diff")
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()
+
+    def test_diff_404_version_a_not_found(self, client):
+        """Test diff with nonexistent version_a returns 404."""
+        _create_rule_with_versions(client, "diff_test_007")
+
+        response = client.get(
+            "/rules/diff_test_007/diff?version_a=nonexistent_version"
+        )
+        assert response.status_code == 404
+        assert "Version not found" in response.json()["detail"]
+
+    def test_diff_404_version_b_not_found(self, client):
+        """Test diff with nonexistent version_b returns 404."""
+        _create_rule_with_versions(client, "diff_test_008")
+
+        list_response = client.get("/rules/diff_test_008/versions")
+        version_a = list_response.json()["versions"][-1]["version_id"]
+
+        response = client.get(
+            f"/rules/diff_test_008/diff?version_a={version_a}"
+            "&version_b=nonexistent_version"
+        )
+        assert response.status_code == 404
+        assert "Version not found" in response.json()["detail"]
+
+    def test_diff_response_structure(self, client):
+        """Test diff response has all required fields."""
+        _create_rule_with_versions(client, "diff_test_009")
+
+        response = client.get("/rules/diff_test_009/diff")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "version_a_id" in data
+        assert "version_b_id" in data
+        assert "rule_id" in data
+        assert "changes" in data
+        assert "is_breaking" in data
+        assert "version_a_timestamp" in data
+        assert "version_b_timestamp" in data
+        assert "version_a_created_by" in data
+        assert "version_b_created_by" in data
+
+        # Verify changes structure
+        assert isinstance(data["changes"], list)
+        if len(data["changes"]) > 0:
+            change = data["changes"][0]
+            assert "field_name" in change
+            assert "change_type" in change
+            assert "old_value" in change
+            assert "new_value" in change
+
+    def test_diff_breaking_flag_correct(self, client):
+        """Test breaking flag is set correctly for field/op/action changes."""
+        # Create rule and update with value change only (not breaking)
+        _create_rule_with_versions(client, "diff_test_010")
+
+        response = client.get("/rules/diff_test_010/diff")
+        data = response.json()
+
+        # Value change is NOT breaking (only field/op/action are breaking)
+        # Check that is_breaking reflects the actual changes
+        value_change = next(
+            (c for c in data["changes"] if c["field_name"] == "value"), None
+        )
+        if value_change and value_change["change_type"] == "modified":
+            # If only value changed, is_breaking should be False
+            field_change = next(
+                (c for c in data["changes"] if c["field_name"] == "field"), None
+            )
+            op_change = next(
+                (c for c in data["changes"] if c["field_name"] == "op"), None
+            )
+            action_change = next(
+                (c for c in data["changes"] if c["field_name"] == "action"), None
+            )
+
+            breaking_fields_changed = any(
+                c and c["change_type"] == "modified"
+                for c in [field_change, op_change, action_change]
+            )
+
+            assert data["is_breaking"] == breaking_fields_changed
+
+    def test_diff_all_fields_included(self, client):
+        """Test that diff includes all rule fields."""
+        _create_rule_with_versions(client, "diff_test_011")
+
+        response = client.get("/rules/diff_test_011/diff")
+        data = response.json()
+
+        expected_fields = {
+            "field", "op", "value", "action", "score",
+            "severity", "reason", "status"
+        }
+        actual_fields = {c["field_name"] for c in data["changes"]}
+        assert expected_fields == actual_fields
