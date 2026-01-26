@@ -73,7 +73,7 @@ class TestFetchDriftStatus:
 class TestRenderDriftPanel:
     """Tests for render_drift_panel function."""
 
-    @patch("ui.app.fetch_drift_status")
+    @patch("ui.data_service._cached_fetch_drift_status")
     @patch("ui.app.st")
     def test_renders_success_status(self, mock_st, mock_fetch):
         """OK status should render success message."""
@@ -105,7 +105,7 @@ class TestRenderDriftPanel:
         ]
         assert len(success_calls) > 0
 
-    @patch("ui.app.fetch_drift_status")
+    @patch("ui.data_service._cached_fetch_drift_status")
     @patch("ui.app.st")
     def test_renders_warning_status(self, mock_st, mock_fetch):
         """Warn status should render warning message."""
@@ -137,7 +137,7 @@ class TestRenderDriftPanel:
         ]
         assert len(warning_calls) > 0
 
-    @patch("ui.app.fetch_drift_status")
+    @patch("ui.data_service._cached_fetch_drift_status")
     @patch("ui.app.st")
     def test_renders_error_status(self, mock_st, mock_fetch):
         """Fail status should render error message."""
@@ -169,7 +169,7 @@ class TestRenderDriftPanel:
         ]
         assert len(error_calls) > 0
 
-    @patch("ui.app.fetch_drift_status")
+    @patch("ui.data_service._cached_fetch_drift_status")
     @patch("ui.app.st")
     def test_handles_api_unavailable(self, mock_st, mock_fetch):
         """API unavailable should show info message."""
@@ -185,7 +185,7 @@ class TestRenderDriftPanel:
         ]
         assert len(info_calls) > 0
 
-    @patch("ui.app.fetch_drift_status")
+    @patch("ui.data_service._cached_fetch_drift_status")
     @patch("ui.app.st")
     def test_handles_error_in_response(self, mock_st, mock_fetch):
         """Error in response should show warning."""
@@ -204,7 +204,7 @@ class TestRenderDriftPanel:
         ]
         assert len(warning_calls) > 0
 
-    @patch("ui.app.fetch_drift_status")
+    @patch("ui.data_service._cached_fetch_drift_status")
     @patch("ui.app.st")
     @patch("ui.app.pd.DataFrame")
     def test_displays_top_features_table(self, mock_df, mock_st, mock_fetch):

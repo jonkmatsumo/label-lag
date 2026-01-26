@@ -24,7 +24,6 @@ from ui.data_service import (
     check_api_health,
     fetch_backtest_results,
     fetch_daily_stats,
-    fetch_drift_status,
     fetch_feature_sample,
     fetch_fraud_summary,
     fetch_heuristic_suggestions,
@@ -1833,10 +1832,12 @@ def render_synthetic_dataset() -> None:
 
 def render_drift_panel() -> None:
     """Render the dataset drift monitoring panel."""
+    from ui.data_service import _cached_fetch_drift_status
+
     st.subheader("Dataset Drift Monitoring")
 
     # Fetch status with caching
-    drift_status = fetch_drift_status()
+    drift_status = _cached_fetch_drift_status()
 
     if drift_status is None:
         st.info("Drift monitoring unavailable. API may be offline.")

@@ -1196,3 +1196,16 @@ def fetch_drift_status(hours: int = 24) -> dict[str, Any] | None:
     except requests.RequestException as e:
         print(f"Error fetching drift status: {e}")
         return None
+
+
+@st.cache_data(ttl=60)
+def _cached_fetch_drift_status(hours: int = 24) -> dict[str, Any] | None:
+    """Cached wrapper for fetch_drift_status to avoid redundant API calls.
+
+    Args:
+        hours: Hours of live data to analyze.
+
+    Returns:
+        Drift status dict or None if unavailable.
+    """
+    return fetch_drift_status(hours)
