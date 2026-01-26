@@ -117,11 +117,26 @@ class SignalEvaluator:
         # Record metrics for rule matches
         try:
             from api.metrics import get_metrics_collector
+            import time
+
+            # Calculate individual rule impacts (approximated)
+            # Future improvement: exact attribution logic in Phase 3
+            # For now, we attribute the full delta to each matched rule that modified the score
+            
+            impacts = {}
+            if score != final_score:
+                total_delta = abs(final_score - score)
+                # Split delta among active rules (simplified)
+                if rule_result.matched_rules:
+                    per_rule_delta = total_delta / len(rule_result.matched_rules)
+                    for rid in rule_result.matched_rules:
+                        impacts[rid] = per_rule_delta
 
             metrics_collector = get_metrics_collector()
             metrics_collector.record_request_matches(
                 production_matched=rule_result.matched_rules,
                 shadow_matched=rule_result.shadow_matched_rules,
+                match_impacts=impacts
             )
         except Exception as e:
             # Don't fail inference if metrics collection fails
