@@ -2688,6 +2688,46 @@ def _render_rule_management_tab() -> None:
                     else:
                         st.caption("No analytics data available.")
 
+                    # --- Impact Visualization (Phase 3.3) ---
+                    st.markdown("#### 🎯 Impact Analysis")
+                    from data_service import get_rule_attribution
+                    attribution = get_rule_attribution(rule_id, days=7)
+                    
+                    if attribution:
+                        c1, c2, c3, c4 = st.columns(4)
+                        with c1:
+                            st.metric("Mean Impact", f"{attribution.get('mean_impact', 0):.1f}")
+                        with c2:
+                            st.metric("Net Shift", f"{attribution.get('net_impact', 0):.1f}")
+                        with c3:
+                            st.metric("Avg Before", f"{attribution.get('mean_model_score', 0):.0f}")
+                        with c4:
+                            st.metric("Avg After", f"{attribution.get('mean_final_score', 0):.0f}")
+                            
+                        # Simple waterfall chart using plotly
+                        import plotly.graph_objects as go
+                        
+                        start = attribution.get('mean_model_score', 0)
+                        delta = attribution.get('net_impact', 0)
+                        
+                        fig = go.Figure(go.Waterfall(
+                            orientation = "v",
+                            measure = ["absolute", "relative", "absolute"],
+                            x = ["Model Score", "Rule Impact", "Final Score"],
+                            textposition = "outside",
+                            text = [f"{start:.1f}", f"{delta:+.1f}", f"{start+delta:.1f}"],
+                            y = [start, delta, 0],
+                            connector = {"line":{"color":"rgb(63, 63, 63)"}},
+                        ))
+                        fig.update_layout(
+                            title="Average Score Path",
+                            height=300,
+                            margin=dict(l=20, r=20, t=40, b=20)
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                         st.caption("No attribution data collected yet.")
+
                 # Show approval signals for pending_review rules
                 if status == "pending_review":
                     from data_service import fetch_approval_signals

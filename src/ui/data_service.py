@@ -1460,3 +1460,27 @@ def get_readiness_report(rule_id: str) -> dict[str, Any] | None:
     except requests.RequestException as e:
         print(f"Error fetching readiness report for {rule_id}: {e}")
         return None
+
+
+def get_rule_attribution(rule_id: str, days: int = 7) -> dict[str, Any] | None:
+    """Fetch attribution metrics for a rule.
+    
+    Args:
+        rule_id: Rule ID.
+        days: Days lookback.
+        
+    Returns:
+        Attribution dict or None.
+    """
+    url = f"{API_BASE_URL}/analytics/attribution"
+    params = {"rule_id": rule_id, "days": days}
+    
+    try:
+        response = requests.get(url, params=params, timeout=API_TIMEOUT)
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error fetching attribution for {rule_id}: {e}")
+        return None
