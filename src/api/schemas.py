@@ -1150,3 +1150,22 @@ class RuleAnalyticsResponse(BaseModel):
     health: RuleHealthResponse
     statistics: dict[str, Any]
     history_summary: list[dict[str, Any]]
+
+
+class CheckResultResponse(BaseModel):
+    """Result of a readiness check."""
+    
+    policy_type: str
+    name: str
+    status: str
+    message: str
+    details: dict[str, Any]
+
+
+class ReadinessReportResponse(BaseModel):
+    """Readiness report response."""
+    
+    rule_id: str
+    timestamp: str
+    overall_status: str
+    checks: list[CheckResultResponse]

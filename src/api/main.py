@@ -81,9 +81,12 @@ from api.schemas import (
     ValidationResult,
     RuleAnalyticsResponse,
     RuleHealthResponse,
+    ReadinessReportResponse,
 )
 from api.services import get_evaluator
 from api.analytics import RuleHealthEvaluator, RuleHealth
+from api.readiness import ReadinessEvaluator
+from api.audit import get_audit_logger
 from api.backtest import (
     BacktestRunner, 
     BacktestStore, 
@@ -4043,6 +4046,79 @@ async def get_rule_analytics(
             "total_matches": metrics.production_matches + metrics.shadow_matches,
         },
         history_summary=[] # TODO: Daily breakdown
+    )
+
+
+
+@app.get(
+    "/rules/{rule_id}/readiness",
+    response_model=ReadinessReportResponse,
+    tags=["Rules"],
+    summary="Check promotion readiness",
+    description="Evaluate if a rule is ready for production promotion.",
+)
+async def check_rule_readiness(
+    rule_id: str,
+) -> ReadinessReportResponse:
+    """Check rule readiness."""
+    from api.metrics import get_metrics_collector
+    from api.model_manager import get_model_manager
+    from datetime import timedelta
+    
+    # Get active draft/shadow/prod rule
+    # Ideally checking DRAFT rules for promotion, but could be SHADOW
+    manager = get_model_manager()
+    rule = None
+    
+    # 1. Check active ruleset (prod/shadow)
+    if manager.ruleset:
+        for r in manager.ruleset.rules:
+            if r.id == rule_id:
+                rule = r
+                break
+                
+    # 2. If not in active, check drafts (where most promotions start)
+    if not rule:
+        from api.services import get_db
+        # ... fetch from DB ...
+        # For MVP, let's assume we proceed only if found in loaded rules
+        # Or we can support draft fetching if we had a draft service exposed here easily.
+        # Given limitations, let's try to fetch from draft store if available or fail.
+        # Assuming rule exists in memory or we query basic stats.
+        pass
+
+    if not rule:
+        raise HTTPException(status_code=404, detail=f"Rule {rule_id} not found")
+
+    # Get metrics (past 7 days standard for readiness)
+    end_date = datetime.now(timezone.utc)
+    start_date = end_date - timedelta(days=7)
+    
+    collector = get_metrics_collector()
+    metrics = collector.get_rule_metrics(rule_id, start_date, end_date)
+    
+    # Get total requests (placeholder logic, same as analytics)
+    total_requests = 1000 # TODO: Real total
+    
+    audit_logger = get_audit_logger()
+    evaluator = ReadinessEvaluator(audit_logger=audit_logger)
+    
+    report = evaluator.evaluate(rule, metrics, total_requests)
+    
+    return ReadinessReportResponse(
+        rule_id=report.rule_id,
+        timestamp=report.timestamp.isoformat(),
+        overall_status=report.overall_status.value,
+        checks=[
+            {
+                "policy_type": c.policy_type.value,
+                "name": c.name,
+                "status": c.status.value,
+                "message": c.message,
+                "details": c.details
+            }
+            for c in report.checks
+        ]
     )
 
 
