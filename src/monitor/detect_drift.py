@@ -9,11 +9,13 @@ Usage:
 """
 
 import argparse
+import json
 import logging
 import os
 import sys
 import tempfile
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 import mlflow
@@ -46,9 +48,53 @@ MONITORED_FEATURES = [
     "balance_volatility_z_score",
 ]
 
-# PSI thresholds
-PSI_THRESHOLD_WARNING = 0.1  # Slight drift
-PSI_THRESHOLD_CRITICAL = 0.2  # Significant drift requiring action
+
+def _load_drift_thresholds() -> dict[str, float]:
+    """Load drift thresholds from config file.
+
+    Returns:
+        Dict with psi_warning, psi_critical, and cache_ttl_seconds.
+    """
+    config_path = (
+        Path(__file__).parent.parent.parent / "config" / "model_thresholds.json"
+    )
+    default_thresholds = {
+        "psi_warning": 0.1,
+        "psi_critical": 0.2,
+        "cache_ttl_seconds": 300,
+    }
+
+    try:
+        if config_path.exists():
+            with open(config_path) as f:
+                config = json.load(f)
+                drift_config = config.get("drift_thresholds", {})
+                return {
+                    "psi_warning": drift_config.get(
+                        "psi_warning", default_thresholds["psi_warning"]
+                    ),
+                    "psi_critical": drift_config.get(
+                        "psi_critical", default_thresholds["psi_critical"]
+                    ),
+                    "cache_ttl_seconds": drift_config.get(
+                        "cache_ttl_seconds",
+                        default_thresholds["cache_ttl_seconds"],
+                    ),
+                }
+    except Exception as e:
+        logger.warning(
+            f"Failed to load drift thresholds from config: {e}. Using defaults."
+        )
+        return default_thresholds
+
+    return default_thresholds
+
+
+# Load thresholds from config
+_DRIFT_THRESHOLDS = _load_drift_thresholds()
+PSI_THRESHOLD_WARNING = _DRIFT_THRESHOLDS["psi_warning"]
+PSI_THRESHOLD_CRITICAL = _DRIFT_THRESHOLDS["psi_critical"]
+CACHE_TTL_SECONDS = _DRIFT_THRESHOLDS["cache_ttl_seconds"]
 
 
 def calculate_psi(

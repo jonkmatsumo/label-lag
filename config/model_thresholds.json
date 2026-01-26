@@ -3,5 +3,10 @@
         "pr_auc": 0.5,
         "recall": 0.3
     },
-    "staging_thresholds": {}
+    "staging_thresholds": {},
+    "drift_thresholds": {
+        "psi_warning": 0.1,
+        "psi_critical": 0.2,
+        "cache_ttl_seconds": 300
+    }
 }
