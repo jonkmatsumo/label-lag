@@ -35,6 +35,8 @@ from ui.data_service import (
     fetch_transaction_details,
     predict_risk,
     sandbox_evaluate,
+    run_backtest,
+    compare_backtests,
 )
 from ui.mlflow_utils import (
     check_mlflow_connection,
@@ -3498,6 +3500,141 @@ def _render_suggestions_tab() -> None:
                 )
 
 
+
+def render_what_if_simulation() -> None:
+    """Render the What-If Simulation page."""
+    st.header("What-If Simulation")
+    st.markdown(
+        "Compare rule versions or rulesets on historical data to assess impact "
+        "before deployment."
+    )
+
+    # Date Selection
+    col1, col2 = st.columns(2)
+    with col1:
+        start_date = st.date_input(
+            "Start Date",
+            value=datetime.now() - timedelta(days=7),
+            max_value=datetime.now(),
+        )
+    with col2:
+        end_date = st.date_input(
+            "End Date",
+            value=datetime.now(),
+            max_value=datetime.now(),
+        )
+
+    # Tabs for mode
+    tab1, tab2 = st.tabs(["Single Rule Comparison", "Full Ruleset Comparison"])
+
+    with tab1:
+        st.subheader("Compare Rule Versions")
+        rule_id = st.text_input("Rule ID", help="ID of the rule to compare")
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            base_ver = st.text_input("Baseline Version", value="production", key="rule_base")
+        with c2:
+            cand_ver = st.text_input("Candidate Version", placeholder="v2 or ISO timestamp", key="rule_cand")
+
+        if st.button("Run Rule Comparison", type="primary", disabled=not rule_id or not cand_ver):
+            with st.spinner("Running backtests... this may take a minute"):
+                # Convert dates to ISO strings
+                start_iso = datetime.combine(start_date, datetime.min.time()).isoformat()
+                end_iso = datetime.combine(end_date, datetime.max.time()).isoformat()
+                
+                result = compare_backtests(
+                    base_version=base_ver if base_ver.lower() != "production" else None,
+                    candidate_version=cand_ver,
+                    start_date=start_iso,
+                    end_date=end_iso,
+                    rule_id=rule_id
+                )
+                
+                if result:
+                    st.success("Comparison Complete")
+                    
+                    delta = result.get("delta", {})
+                    base = result.get("base_result", {}).get("metrics", {})
+                    cand = result.get("candidate_result", {}).get("metrics", {})
+                    
+                    # Metrics Display
+                    m1, m2, m3, m4 = st.columns(4)
+                    with m1:
+                        st.metric(
+                            "Match Rate", 
+                            f"{cand.get('match_rate', 0):.2%}",
+                            f"{delta.get('match_rate_delta', 0):.2%} pts"
+                        )
+                    with m2:
+                        st.metric(
+                            "Rejection Rate",
+                            f"{cand.get('rejected_rate', 0):.2%}",
+                            f"{delta.get('rejected_rate_delta', 0):.2%} pts",
+                            delta_color="inverse"
+                        )
+                    with m3:
+                        st.metric(
+                            "Matched Count",
+                            f"{cand.get('matched_count', 0):,}",
+                            f"{delta.get('matched_count_delta', 0):+d}"
+                        )
+                    with m4:
+                         st.metric(
+                            "Rejected Count",
+                            f"{cand.get('rejected_count', 0):,}",
+                            f"{delta.get('rejected_count_delta', 0):+d}",
+                            delta_color="inverse"
+                        )
+                    
+                    st.markdown("---")
+                    st.json(result) # Show full details for analysis
+
+    with tab2:
+        st.subheader("Compare Full Rulesets")
+        st.info("Compare performance of the entire production ruleset against a candidate version (e.g. historical point in time).")
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            base_ver_set = st.text_input("Baseline Version", value="production", key="set_base")
+        with c2:
+            cand_ver_set = st.text_input("Candidate Version", placeholder="ISO timestamp", key="set_cand")
+            
+        if st.button("Run Ruleset Comparison", type="primary", disabled=not cand_ver_set):
+            with st.spinner("Running full backtest... this may take longer"):
+                start_iso = datetime.combine(start_date, datetime.min.time()).isoformat()
+                end_iso = datetime.combine(end_date, datetime.max.time()).isoformat()
+                
+                result = compare_backtests(
+                    base_version=base_ver_set if base_ver_set.lower() != "production" else None,
+                    candidate_version=cand_ver_set,
+                    start_date=start_iso,
+                    end_date=end_iso
+                )
+                
+                if result:
+                    st.success("Comparison Complete")
+                    # Reuse display logic or create component
+                    delta = result.get("delta", {})
+                    cand = result.get("candidate_result", {}).get("metrics", {})
+                    
+                    m1, m2 = st.columns(2)
+                    with m1:
+                        st.metric(
+                            "Global Match Rate", 
+                            f"{cand.get('match_rate', 0):.2%}",
+                            f"{delta.get('match_rate_delta', 0):.2%} pts"
+                        )
+                    with m2:
+                        st.metric(
+                            "Global Rejection Rate",
+                            f"{cand.get('rejected_rate', 0):.2%}",
+                            f"{delta.get('rejected_rate_delta', 0):.2%} pts",
+                            delta_color="inverse"
+                        )
+                    st.json(result)
+
+
 def main() -> None:
     """Main application entry point."""
     # Sidebar navigation
@@ -3512,6 +3649,7 @@ def main() -> None:
             "Synthetic Dataset",
             "Model Lab",
             "Rule Inspector",
+            "What-If Simulation",
         ],
         index=0,
     )
@@ -3531,8 +3669,10 @@ def main() -> None:
         render_synthetic_dataset()
     elif page == "Model Lab":
         render_model_lab()
-    else:
+    elif page == "Rule Inspector":
         render_rule_inspector()
+    elif page == "What-If Simulation":
+        render_what_if_simulation()
 
 
 if __name__ == "__main__":

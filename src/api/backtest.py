@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -12,9 +13,14 @@ import numpy as np
 from sqlalchemy import text
 
 from api.rules import RuleSet, evaluate_rules
+
 from synthetic_pipeline.db.session import DatabaseSession
+from api.schemas import BacktestDelta
 
 logger = logging.getLogger(__name__)
+
+
+
 
 
 @dataclass
@@ -423,4 +429,46 @@ class BacktestStore:
         # Sort by completed_at (newest first)
         results.sort(key=lambda r: r.completed_at, reverse=True)
 
-        return results
+
+class BacktestComparator:
+    """Compare backtest results and compute deltas."""
+
+    def compute_delta(
+        self, base: BacktestMetrics, candidate: BacktestMetrics
+    ) -> BacktestDelta:
+        """Compute delta between two backtest metrics.
+
+        Deltas are calculated as (candidate - base).
+
+        Args:
+            base: Baseline metrics.
+            candidate: Candidate metrics.
+
+        Returns:
+            BacktestDelta with computed differences.
+        """
+        return BacktestDelta(
+            match_rate_delta=candidate.match_rate - base.match_rate,
+            rejected_rate_delta=candidate.rejected_rate - base.rejected_rate,
+            score_mean_delta=candidate.score_mean - base.score_mean,
+            score_std_delta=candidate.score_std - base.score_std,
+            matched_count_delta=candidate.matched_count - base.matched_count,
+            rejected_count_delta=candidate.rejected_count - base.rejected_count,
+        )
+
+
+# Global backtest store instance
+_global_backtest_store: BacktestStore | None = None
+
+
+def get_backtest_store() -> BacktestStore:
+    """Get the global backtest store instance.
+
+    Returns:
+        Global BacktestStore instance.
+    """
+    global _global_backtest_store
+    if _global_backtest_store is None:
+        storage_path = os.getenv("BACKTEST_STORAGE_PATH")
+        _global_backtest_store = BacktestStore(storage_path=storage_path)
+    return _global_backtest_store

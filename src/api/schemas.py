@@ -526,6 +526,7 @@ class BacktestResultResponse(BaseModel):
     error: str | None = Field(None, description="Error message if backtest failed")
 
 
+
 class BacktestResultsListResponse(BaseModel):
     """Response schema for backtest results list."""
 
@@ -534,6 +535,68 @@ class BacktestResultsListResponse(BaseModel):
         description="List of backtest results",
     )
     total: int = Field(default=0, description="Total number of results")
+
+
+class BacktestRunRequest(BaseModel):
+    """Request schema for running a backtest."""
+
+    ruleset_version: str | None = Field(
+        None, description="RuleSet version to test. If null, uses current production."
+    )
+    start_date: str = Field(..., description="Start date (ISO format)")
+    end_date: str = Field(..., description="End date (ISO format)")
+    rule_id: str | None = Field(
+        None, description="Optional rule ID to test single rule"
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "ruleset_version": "v1_20240101",
+                "start_date": "2024-01-01T00:00:00Z",
+                "end_date": "2024-01-31T23:59:59Z",
+            }
+        }
+    }
+
+
+class BacktestDelta(BaseModel):
+    """Difference between two backtest metrics."""
+
+    match_rate_delta: float = Field(..., description="Absolute change in match rate")
+    rejected_rate_delta: float = Field(
+        ..., description="Absolute change in rejection rate"
+    )
+    score_mean_delta: float = Field(..., description="Change in mean score")
+    score_std_delta: float = Field(
+        ..., description="Change in standard deviation of score"
+    )
+    matched_count_delta: int = Field(..., description="Change in matched count")
+    rejected_count_delta: int = Field(..., description="Change in rejected count")
+
+
+class BacktestComparisonResult(BaseModel):
+    """Result of comparing two backtest runs."""
+
+    base_result: BacktestResultResponse = Field(..., description="Baseline result")
+    candidate_result: BacktestResultResponse = Field(
+        ..., description="Candidate (proposed) result"
+    )
+    delta: BacktestDelta = Field(..., description="Computed deltas")
+
+
+class CompareRulesetsRequest(BaseModel):
+    """Request schema for comparing two rulesets."""
+
+    base_version: str | None = Field(
+        None, description="Baseline version (default: current production)"
+    )
+    candidate_version: str = Field(..., description="Candidate version to compare")
+    start_date: str = Field(..., description="Start date (ISO format)")
+    end_date: str = Field(..., description="End date (ISO format)")
+    rule_id: str | None = Field(
+        None, description="Optional: compare single rule only"
+    )
 
 
 class SuggestionEvidence(BaseModel):

@@ -25,10 +25,14 @@ from api.schemas import (
     ApproveRuleResponse,
     AuditLogQueryResponse,
     AuditRecordResponse,
+    BacktestComparisonResult,
+    BacktestDelta,
     BacktestMetricsResponse,
     BacktestResultResponse,
     BacktestResultsListResponse,
+    BacktestRunRequest,
     ClearDataResponse,
+    CompareRulesetsRequest,
     ConflictResponse,
     DeployModelRequest,
     DeployModelResponse,
@@ -77,6 +81,12 @@ from api.schemas import (
     ValidationResult,
 )
 from api.services import get_evaluator
+from api.backtest import (
+    BacktestRunner, 
+    BacktestStore, 
+    BacktestComparator, 
+    get_backtest_store
+)
 
 if TYPE_CHECKING:
     from synthetic_pipeline.db.models import EvaluationMetadataDB, GeneratedRecordDB
@@ -3614,6 +3624,334 @@ async def export_audit_logs(
             media_type="text/csv",
             headers={"Content-Disposition": "attachment; filename=audit_logs.csv"},
         )
+
+
+
+# =============================================================================
+# Backtest Endpoints (Phase 2)
+# =============================================================================
+
+
+def _resolve_ruleset_for_backtest(
+    version_id: str | None, rule_id: str | None = None
+):
+    """Resolve ruleset from version identifier.
+
+    Args:
+        version_id: Version string (None/"production", timestamp, or version ID).
+        rule_id: Optional rule identifier if strictly testing one rule.
+
+    Returns:
+        RuleSet object.
+    
+    Raises:
+        HTTPException: If resolution fails.
+    """
+    from api.model_manager import get_model_manager
+    from api.versioning import get_version_store
+    from api.rules import RuleSet, Rule
+
+    # Case 1: Production (current)
+    if not version_id or version_id.lower() == "production":
+        manager = get_model_manager()
+        if not manager.ruleset:
+             raise HTTPException(status_code=404, detail="No production ruleset found")
+        
+        # If specific rule requested, filter it
+        if rule_id:
+            filtered_rules = [r for r in manager.ruleset.rules if r.id == rule_id]
+            if not filtered_rules:
+                raise HTTPException(status_code=404, detail=f"Rule {rule_id} not found in production")
+            return RuleSet(version=manager.ruleset.version, rules=filtered_rules)
+            
+        return manager.ruleset
+
+    version_store = get_version_store()
+
+    # Case 2: Specific Rule Version (if rule_id provided)
+    if rule_id:
+        # Try to fetch specific version of the rule
+        version = version_store.get_version(rule_id, version_id)
+        if version:
+            return RuleSet(version=version_id, rules=[version.rule])
+        
+        # If not found as version ID, fall through to timestamp check?
+        # For now, assume version_id MUST be a valid RuleVersion ID if rule_id is present.
+        # But wait, what if version_id is a timestamp?
+        # Let's try timestamp parsing if get_version failed.
+
+    # Case 3: Reconstruct at Timestamp
+    try:
+        # Try to parse as ISO timestamp
+        ts = datetime.fromisoformat(version_id.replace("Z", "+00:00"))
+        # Reconstruct ruleset at this time
+        return version_store.get_ruleset_at(ts, rule_ids=[rule_id] if rule_id else None)
+    except ValueError:
+        pass
+
+    # Verification failed
+    raise HTTPException(
+        status_code=404, 
+        detail=f"Could not resolve ruleset version: {version_id}"
+    )
+
+
+@app.post(
+    "/backtest/run",
+    response_model=BacktestResultResponse,
+    tags=["Backtest"],
+    summary="Run a backtest",
+    description="Run a backtest on historical data.",
+)
+async def run_backtest_endpoint(request: BacktestRunRequest) -> BacktestResultResponse:
+    """Run a backtest.
+
+    Args:
+        request: Backtest parameters.
+
+    Returns:
+        BacktestResult with metrics.
+    """
+    try:
+        start_dt = datetime.fromisoformat(request.start_date.replace("Z", "+00:00"))
+        end_dt = datetime.fromisoformat(request.end_date.replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format")
+
+    # Resolve ruleset
+    ruleset = _resolve_ruleset_for_backtest(request.ruleset_version, request.rule_id)
+
+    # Run backtest
+    runner = BacktestRunner()
+    result = runner.run_backtest(
+        ruleset=ruleset,
+        start_date=start_dt,
+        end_date=end_dt,
+        rule_id=request.rule_id,
+    )
+
+    # Save result
+    store = get_backtest_store()
+    store.save(result)
+
+    # Convert to response
+    return BacktestResultResponse(
+        job_id=result.job_id,
+        rule_id=result.rule_id,
+        ruleset_version=result.ruleset_version,
+        start_date=result.start_date.isoformat(),
+        end_date=result.end_date.isoformat(),
+        metrics=BacktestMetricsResponse(
+            total_records=result.metrics.total_records,
+            matched_count=result.metrics.matched_count,
+            match_rate=result.metrics.match_rate,
+            score_distribution=result.metrics.score_distribution,
+            score_mean=result.metrics.score_mean,
+            score_std=result.metrics.score_std,
+            score_min=result.metrics.score_min,
+            score_max=result.metrics.score_max,
+            rejected_count=result.metrics.rejected_count,
+            rejected_rate=result.metrics.rejected_rate,
+        ),
+        completed_at=result.completed_at.isoformat(),
+        error=result.error,
+    )
+
+
+@app.get(
+    "/backtest/results",
+    response_model=BacktestResultsListResponse,
+    tags=["Backtest"],
+    summary="List backtest results",
+    description="List historical backtest results with filters.",
+)
+async def list_backtest_results(
+    rule_id: str | None = Query(None, description="Filter by rule ID"),
+    start_date: str | None = Query(None, description="Filter results after date"),
+    end_date: str | None = Query(None, description="Filter results before date"),
+    limit: int = Query(50, le=100),
+) -> BacktestResultsListResponse:
+    """List backtest results.
+
+    Args:
+        rule_id: Optional rule filter.
+        start_date: Optional start date filter.
+        end_date: Optional end date filter.
+        limit: Max results.
+
+    Returns:
+        List of backtest results.
+    """
+    store = get_backtest_store()
+    
+    # Parse dates if provided
+    start_dt = None
+    if start_date:
+        try:
+            start_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+        except ValueError:
+             raise HTTPException(status_code=400, detail="Invalid start_date format")
+             
+    end_dt = None
+    if end_date:
+        try:
+            end_dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+        except ValueError:
+             raise HTTPException(status_code=400, detail="Invalid end_date format")
+
+    results = store.list_results(
+        rule_id=rule_id,
+        start_date=start_dt,
+        end_date=end_dt
+    )
+
+    # Apply limit
+    results = results[:limit]
+
+    # Convert to response
+    response_list = []
+    for r in results:
+        response_list.append(
+            BacktestResultResponse(
+                job_id=r.job_id,
+                rule_id=r.rule_id,
+                ruleset_version=r.ruleset_version,
+                start_date=r.start_date.isoformat(),
+                end_date=r.end_date.isoformat(),
+                metrics=BacktestMetricsResponse(
+                    total_records=r.metrics.total_records,
+                    matched_count=r.metrics.matched_count,
+                    match_rate=r.metrics.match_rate,
+                    score_distribution=r.metrics.score_distribution,
+                    score_mean=r.metrics.score_mean,
+                    score_std=r.metrics.score_std,
+                    score_min=r.metrics.score_min,
+                    score_max=r.metrics.score_max,
+                    rejected_count=r.metrics.rejected_count,
+                    rejected_rate=r.metrics.rejected_rate,
+                ),
+                completed_at=r.completed_at.isoformat(),
+                error=r.error,
+            )
+        )
+
+    return BacktestResultsListResponse(results=response_list, total=len(response_list))
+
+
+@app.post(
+    "/backtest/compare",
+    response_model=BacktestComparisonResult,
+    tags=["Backtest"],
+    summary="Compare two backtests",
+    description="Run and compare two backtests (what-if simulation).",
+)
+async def compare_backtests_endpoint(
+    request: CompareRulesetsRequest
+) -> BacktestComparisonResult:
+    """Compare two backtests.
+
+    Args:
+        request: Comparison request with base and candidate versions.
+
+    Returns:
+        Comparison result with deltas.
+    """
+    try:
+        start_dt = datetime.fromisoformat(request.start_date.replace("Z", "+00:00"))
+        end_dt = datetime.fromisoformat(request.end_date.replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format")
+
+    # Helper to run a backtest for a version
+    def _run_for_version(version_id: str | None) -> BacktestResultResponse:
+        ruleset = _resolve_ruleset_for_backtest(version_id, request.rule_id)
+        
+        runner = BacktestRunner()
+        result = runner.run_backtest(
+            ruleset=ruleset,
+            start_date=start_dt,
+            end_date=end_dt,
+            rule_id=request.rule_id,
+        )
+        
+        # Save? Maybe not strictly necessary for comparison, but good for history
+        get_backtest_store().save(result)
+        
+        return result
+
+    # Run both
+    base_result_obj = _run_for_version(request.base_version).to_dict() # Wait, internal result is object
+    # Re-running logic
+    
+    # 1. Resolve and run Base
+    base_ruleset = _resolve_ruleset_for_backtest(request.base_version, request.rule_id)
+    base_runner = BacktestRunner()
+    base_res = base_runner.run_backtest(
+        ruleset=base_ruleset,
+        start_date=start_dt,
+        end_date=end_dt,
+        rule_id=request.rule_id
+    )
+    get_backtest_store().save(base_res)
+    
+    # 2. Resolve and run Candidate
+    cand_ruleset = _resolve_ruleset_for_backtest(request.candidate_version, request.rule_id)
+    cand_runner = BacktestRunner()
+    cand_res = cand_runner.run_backtest(
+        ruleset=cand_ruleset,
+        start_date=start_dt,
+        end_date=end_dt,
+        rule_id=request.rule_id
+    )
+    get_backtest_store().save(cand_res)
+
+    # 3. Compare
+    comparator = BacktestComparator()
+    delta = comparator.compute_delta(base_res.metrics, cand_res.metrics)
+    
+    # 4. Construct Response
+    # Convert internal metrics to response metrics
+    def _to_response_metrics(m):
+        return BacktestMetricsResponse(
+            total_records=m.total_records,
+            matched_count=m.matched_count,
+            match_rate=m.match_rate,
+            score_distribution=m.score_distribution,
+            score_mean=m.score_mean,
+            score_std=m.score_std,
+            score_min=m.score_min,
+            score_max=m.score_max,
+            rejected_count=m.rejected_count,
+            rejected_rate=m.rejected_rate,
+        )
+
+    base_response = BacktestResultResponse(
+        job_id=base_res.job_id,
+        rule_id=base_res.rule_id,
+        ruleset_version=base_res.ruleset_version,
+        start_date=base_res.start_date.isoformat(),
+        end_date=base_res.end_date.isoformat(),
+        metrics=_to_response_metrics(base_res.metrics),
+        completed_at=base_res.completed_at.isoformat(),
+        error=base_res.error,
+    )
+    
+    cand_response = BacktestResultResponse(
+        job_id=cand_res.job_id,
+        rule_id=cand_res.rule_id,
+        ruleset_version=cand_res.ruleset_version,
+        start_date=cand_res.start_date.isoformat(),
+        end_date=cand_res.end_date.isoformat(),
+        metrics=_to_response_metrics(cand_res.metrics),
+        completed_at=cand_res.completed_at.isoformat(),
+        error=cand_res.error,
+    )
+    
+    return BacktestComparisonResult(
+        base_result=base_response,
+        candidate_result=cand_response,
+        delta=delta # BacktestDelta is compatible if fields match
+    )
 
 
 @app.exception_handler(Exception)
