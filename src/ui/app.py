@@ -2650,6 +2650,80 @@ def _render_rule_management_tab() -> None:
                 if reason:
                     st.markdown(f"**Reason:** {reason}")
 
+                # Show approval signals for pending_review rules
+                if status == "pending_review":
+                    from data_service import fetch_approval_signals
+
+                    with st.spinner("Loading approval signals..."):
+                        signals_data = fetch_approval_signals(rule_id)
+
+                    if signals_data:
+                        st.markdown("---")
+                        st.markdown("### 📊 Approval Signals")
+
+                        summary = signals_data.get("summary", {})
+                        signals = signals_data.get("signals", [])
+                        partial = signals_data.get("partial", False)
+                        unavailable = signals_data.get("unavailable_signals", [])
+
+                        # Group signals by severity
+                        risk_signals = [s for s in signals if s.get("severity") == "risk"]
+                        warning_signals = [
+                            s for s in signals if s.get("severity") == "warning"
+                        ]
+                        info_signals = [s for s in signals if s.get("severity") == "info"]
+
+                        # Risk signals (always visible)
+                        if risk_signals:
+                            st.error(f"🔴 **{len(risk_signals)} Risk Signal(s)**")
+                            for signal in risk_signals:
+                                st.markdown(
+                                    f"- **{signal.get('label', 'Unknown')}**: "
+                                    f"{signal.get('description', '')}"
+                                )
+
+                        # Warning signals (always visible)
+                        if warning_signals:
+                            st.warning(f"⚠️ **{len(warning_signals)} Warning(s)**")
+                            for signal in warning_signals:
+                                st.markdown(
+                                    f"- **{signal.get('label', 'Unknown')}**: "
+                                    f"{signal.get('description', '')}"
+                                )
+
+                        # Info signals (collapsed by default)
+                        if info_signals:
+                            with st.expander(
+                                f"ℹ️ {len(info_signals)} Info Signal(s)", expanded=False
+                            ):
+                                for signal in info_signals:
+                                    value = signal.get("value")
+                                    if value is not None:
+                                        st.markdown(
+                                            f"- **{signal.get('label', 'Unknown')}**: "
+                                            f"{value} - {signal.get('description', '')}"
+                                        )
+                                    else:
+                                        st.markdown(
+                                            f"- **{signal.get('label', 'Unknown')}**: "
+                                            f"{signal.get('description', '')}"
+                                        )
+
+                        # Partial/unavailable notice
+                        if partial:
+                            st.caption(
+                                f"⚠️ Some signals unavailable: {', '.join(unavailable)}"
+                            )
+
+                        # No issues case
+                        if (
+                            summary.get("risk_count", 0) == 0
+                            and summary.get("warning_count", 0) == 0
+                        ):
+                            st.success("✅ No issues detected")
+                    elif signals_data is None:
+                        st.caption("⚠️ Could not load approval signals")
+
             with col2:
                 # Status badge
                 if status == "draft":

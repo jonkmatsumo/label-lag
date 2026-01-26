@@ -3,6 +3,7 @@
 import logging
 import os
 from dataclasses import asdict
+from typing import Any
 
 from api.audit import get_audit_logger
 from api.rules import Rule
@@ -63,6 +64,7 @@ class RuleStateMachine:
         reason: str = "",
         approver: str | None = None,
         previous_actor: str | None = None,
+        approval_signals: dict[str, Any] | None = None,
     ) -> Rule:
         """Transition a rule to a new status.
 
@@ -123,6 +125,8 @@ class RuleStateMachine:
         after_state = {"status": new_status}
         if approver:
             after_state["approver"] = approver
+        if approval_signals:
+            after_state["approval_signals"] = approval_signals
 
         self._audit_logger.log(
             rule_id=rule.id,

@@ -25,10 +25,11 @@ class RuleVersion:
     timestamp: datetime
     created_by: str
     reason: str = ""
+    approval_signals: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
-        return {
+        result = {
             "rule_id": self.rule_id,
             "version_id": self.version_id,
             "rule": asdict(self.rule),
@@ -36,6 +37,9 @@ class RuleVersion:
             "created_by": self.created_by,
             "reason": self.reason,
         }
+        if self.approval_signals is not None:
+            result["approval_signals"] = self.approval_signals
+        return result
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "RuleVersion":
@@ -54,6 +58,7 @@ class RuleVersion:
             timestamp=timestamp,
             created_by=data["created_by"],
             reason=data.get("reason", ""),
+            approval_signals=data.get("approval_signals"),
         )
 
 

@@ -20,6 +20,7 @@ from api.schemas import (
     AcceptSuggestionResponse,
     ActivateRuleRequest,
     ActivateRuleResponse,
+    ApprovalSignalsResponse,
     ApproveRuleRequest,
     ApproveRuleResponse,
     AuditLogQueryResponse,
@@ -2120,6 +2121,31 @@ async def submit_draft_rule(
         store._rules[rule_id] = updated_rule
         store._save_rules()
 
+    # Compute approval signals at submission (for logging/caching)
+    try:
+        from api.signals import compute_approval_signals
+
+        # Build draft ruleset excluding this rule
+        draft_rules = store.list_rules(include_archived=False)
+        draft_ruleset = RuleSet(
+            version="draft",
+            rules=[r for r in draft_rules if r.id != rule_id],
+        )
+
+        signals_response = compute_approval_signals(
+            rule_id=rule_id,
+            production_ruleset=production_ruleset,
+            draft_ruleset=draft_ruleset,
+        )
+
+        logger.info(
+            f"Computed approval signals for rule {rule_id} at submission: "
+            f"{signals_response.summary.risk_count} risks, "
+            f"{signals_response.summary.warning_count} warnings"
+        )
+    except Exception as e:
+        logger.warning(f"Failed to compute approval signals at submission: {e}")
+
     # Create version snapshot
     version_store.save(
         rule=updated_rule,
@@ -2148,6 +2174,67 @@ async def submit_draft_rule(
         submitted_at=datetime.now(timezone.utc).isoformat(),
         audit_id=None,  # Audit ID not available from AuditRecord
     )
+
+
+@app.get(
+    "/rules/draft/{rule_id}/signals",
+    response_model=ApprovalSignalsResponse,
+    tags=["Draft Rules"],
+    summary="Get approval quality signals for a rule",
+    description="""
+Get structured approval quality signals to help reviewers assess rule safety.
+
+Signals are grouped by category (structural, coverage, governance) and
+severity (info, warning, risk). All signals are advisory - they do not
+block approvals.
+
+Signals are computed on-demand but may be cached from submission time.
+""",
+)
+async def get_approval_signals(rule_id: str) -> ApprovalSignalsResponse:
+    """Get approval quality signals for a draft rule.
+
+    Args:
+        rule_id: Rule identifier.
+
+    Returns:
+        ApprovalSignalsResponse with computed signals.
+
+    Raises:
+        HTTPException: If rule not found.
+    """
+    from api.draft_store import get_draft_store
+    from api.rules import RuleSet
+    from api.signals import compute_approval_signals
+
+    store = get_draft_store()
+    rule = store.get(rule_id)
+
+    if rule is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Draft rule not found: {rule_id}",
+        )
+
+    # Get production ruleset
+    manager = get_model_manager()
+    production_ruleset = manager.ruleset
+
+    # Build draft ruleset excluding this rule
+    draft_rules = store.list_rules(include_archived=False)
+    draft_ruleset = RuleSet(
+        version="draft",
+        rules=[r for r in draft_rules if r.id != rule_id],
+    )
+
+    # Compute signals
+    signals_response = compute_approval_signals(
+        rule_id=rule_id,
+        production_ruleset=production_ruleset,
+        draft_ruleset=draft_ruleset,
+    )
+
+    return signals_response
 
 
 @app.post(
@@ -2230,6 +2317,43 @@ async def approve_draft_rule(
             "approve their own submission.",
         )
 
+    # Fetch approval signals before approval
+    approval_signals_data = None
+    try:
+        from api.rules import RuleSet
+        from api.signals import compute_approval_signals
+
+        # Get production ruleset
+        manager = get_model_manager()
+        production_ruleset = manager.ruleset
+
+        # Build draft ruleset excluding this rule
+        draft_rules = store.list_rules(include_archived=False)
+        draft_ruleset = RuleSet(
+            version="draft",
+            rules=[r for r in draft_rules if r.id != rule_id],
+        )
+
+        signals_response = compute_approval_signals(
+            rule_id=rule_id,
+            production_ruleset=production_ruleset,
+            draft_ruleset=draft_ruleset,
+        )
+
+        # Prepare signals metadata for audit
+        approval_signals_data = {
+            "computed_at": signals_response.computed_at,
+            "summary": {
+                "risk_count": signals_response.summary.risk_count,
+                "warning_count": signals_response.summary.warning_count,
+            },
+            "signals": [
+                s.signal_id for s in signals_response.signals if s.severity == "risk"
+            ],
+        }
+    except Exception as e:
+        logger.warning(f"Failed to compute approval signals at approval: {e}")
+
     # Transition to approved (not active - requires publish step)
     try:
         updated_rule = state_machine.transition(
@@ -2239,6 +2363,7 @@ async def approve_draft_rule(
             reason=request.reason or "Approved for production",
             approver=request.approver,
             previous_actor=submitter,
+            approval_signals=approval_signals_data,
         )
     except TransitionError as e:
         raise HTTPException(status_code=400, detail=str(e))

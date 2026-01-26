@@ -656,6 +656,45 @@ class ValidationResult(BaseModel):
     is_valid: bool = Field(..., description="Whether rule is valid (no conflicts)")
 
 
+class ApprovalSignalItem(BaseModel):
+    """Single approval quality signal."""
+
+    signal_id: str = Field(..., description="Stable signal identifier")
+    category: str = Field(..., description="Signal category: structural, coverage, governance")
+    severity: str = Field(..., description="Signal severity: info, warning, risk")
+    value: Any = Field(..., description="Signal value (bool, int, float, str, or None)")
+    label: str = Field(..., description="Human-readable label")
+    description: str = Field(..., description="What this signal means")
+
+
+class ApprovalSignalsSummary(BaseModel):
+    """Summary counts by severity."""
+
+    risk_count: int = Field(default=0, description="Number of risk signals")
+    warning_count: int = Field(default=0, description="Number of warning signals")
+    info_count: int = Field(default=0, description="Number of info signals")
+    has_blockers: bool = Field(
+        default=False, description="True if any risk signals present (advisory only)"
+    )
+
+
+class ApprovalSignalsResponse(BaseModel):
+    """Approval quality signals for a rule."""
+
+    rule_id: str = Field(..., description="Rule identifier")
+    computed_at: str = Field(..., description="When signals were computed (ISO timestamp)")
+    signals: list[ApprovalSignalItem] = Field(
+        default_factory=list, description="List of approval signals"
+    )
+    summary: ApprovalSignalsSummary = Field(..., description="Signal summary")
+    partial: bool = Field(
+        default=False, description="True if some signals unavailable"
+    )
+    unavailable_signals: list[str] = Field(
+        default_factory=list, description="IDs of signals that failed to compute"
+    )
+
+
 class DraftRuleResponse(BaseModel):
     """Response schema for a draft rule."""
 

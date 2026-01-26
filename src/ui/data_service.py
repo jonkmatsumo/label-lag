@@ -1198,6 +1198,26 @@ def publish_rule(
         return None
 
 
+def fetch_approval_signals(rule_id: str) -> dict[str, Any] | None:
+    """Fetch approval quality signals for a rule.
+
+    Args:
+        rule_id: Rule identifier.
+
+    Returns:
+        Dict with signals data or None if unavailable.
+    """
+    url = f"{API_BASE_URL}/rules/draft/{rule_id}/signals"
+
+    try:
+        response = requests.get(url, timeout=API_TIMEOUT)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error fetching approval signals for {rule_id}: {e}")
+        return None
+
+
 def fetch_heuristic_suggestions(
     field: str | None = None,
     min_confidence: float = 0.7,
