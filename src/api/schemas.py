@@ -279,9 +279,6 @@ class TrainResponse(BaseModel):
 class DeployModelRequest(BaseModel):
     """Request schema for deploying a model to production."""
 
-    run_id: str | None = Field(
-        None, description="Optional run ID. If not provided, deploys current Production model"
-    )
     actor: str = Field(..., description="Who is deploying this model")
     reason: str | None = Field(None, description="Optional reason for deployment")
 

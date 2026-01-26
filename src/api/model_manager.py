@@ -122,6 +122,10 @@ class ModelManager:
         Called by /rules/{id}/publish endpoint to sync approved rules
         to the production ruleset used for inference.
 
+        Note: This updates the in-memory ruleset only. On API restart,
+        the ruleset is reloaded from MLflow artifacts or default_rules.json.
+        Published rules in DraftRuleStore are not automatically rehydrated.
+
         Args:
             ruleset: RuleSet to use for production inference.
         """

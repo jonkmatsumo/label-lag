@@ -39,6 +39,7 @@ from ui.data_service import (
 from ui.mlflow_utils import (
     check_mlflow_connection,
     check_promotion_thresholds,
+    deploy_model,
     fetch_artifact_path,
     get_cv_fold_metrics,
     get_experiment_runs,
@@ -50,7 +51,6 @@ from ui.mlflow_utils import (
     get_split_manifest,
     get_tuning_trials,
     get_version_details,
-    deploy_model,
     promote_to_production,
     promote_to_staging,
 )
@@ -2499,13 +2499,15 @@ def render_model_lab() -> None:
                                         "Deploy", type="primary"
                                     )
                                 with col_b:
-                                    cancel = st.form_submit_button("Cancel")
+                                    st.form_submit_button("Cancel")
 
                                 if deploy_confirm and actor:
                                     with st.spinner("Deploying model..."):
+                                        deploy_reason_val = (
+                                            deploy_reason if deploy_reason else None
+                                        )
                                         result = deploy_model(
-                                            actor=actor,
-                                            reason=deploy_reason if deploy_reason else None,
+                                            actor=actor, reason=deploy_reason_val
                                         )
                                     if result["success"]:
                                         st.success(result["message"])
@@ -2587,22 +2589,30 @@ def _render_rule_management_tab() -> None:
         index=0,
     )
 
-    # Fetch draft rules
-    status_param = None if status_filter == "All" else status_filter
+    # Fetch all rules first to calculate pending publish count (unfiltered)
     with st.spinner("Loading rules..."):
+        all_rules_data = fetch_draft_rules(status=None)
+        if all_rules_data is None:
+            st.error("Failed to load rules. Is the API server running?")
+            return
+
+        all_rules = all_rules_data.get("rules", [])
+        approved_rules = [r for r in all_rules if r.get("status") == "approved"]
+
+        # Show pending publish count (from all rules, not filtered)
+        if approved_rules:
+            st.info(f"**{len(approved_rules)} approved rule(s) pending publish**")
+
+        # Fetch filtered rules for display
+        status_param = None if status_filter == "All" else status_filter
         rules_data = fetch_draft_rules(status=status_param)
 
     if rules_data is None:
-        st.error("Failed to load rules. Is the API server running?")
+        st.error("Failed to load filtered rules. Is the API server running?")
         return
 
     rules = rules_data.get("rules", [])
     total = rules_data.get("total", 0)
-
-    # Show pending publish count
-    approved_rules = [r for r in rules if r.get("status") == "approved"]
-    if approved_rules:
-        st.info(f"**{len(approved_rules)} approved rule(s) pending publish**")
 
     if not rules:
         st.info("No rules found.")
@@ -2688,14 +2698,17 @@ def _render_rule_management_tab() -> None:
                                     "Publish", type="primary"
                                 )
                             with col_b:
-                                cancel = st.form_submit_button("Cancel")
+                                st.form_submit_button("Cancel")
 
                             if publish_confirm and actor:
                                 with st.spinner("Publishing rule..."):
+                                    publish_reason_val = (
+                                        publish_reason if publish_reason else None
+                                    )
                                     result = publish_rule(
                                         rule_id=rule_id,
                                         actor=actor,
-                                        reason=publish_reason if publish_reason else None,
+                                        reason=publish_reason_val,
                                     )
                                 if result:
                                     st.success(

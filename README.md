@@ -239,6 +239,9 @@ flowchart TB
 3. API transitions rule to `active` and syncs to ModelManager.ruleset
 4. Rule is now effective for inference
 
+**Note on Ruleset Persistence:**
+Published rules are applied to the in-memory `ModelManager.ruleset` immediately. On API restart, the ruleset is reloaded from MLflow `rules.json` artifact (if present in the Production model) or falls back to `config/default_rules.json`. Active rules stored in `DraftRuleStore` are not automatically rehydrated on restart unless they are published again or persisted via MLflow artifacts.
+
 **Model Deployment Flow:**
 1. Model promoted to Production stage in MLflow
 2. User clicks "Deploy" in UI → `POST /models/deploy`

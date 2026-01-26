@@ -100,8 +100,8 @@ class TestApproveDraftRule:
         assert rule["rule_id"] == "approve_test_002"
         assert rule["status"] == "approved"
 
-    def test_approve_changes_status_to_active(self, client):
-        """Test that approval changes status to active."""
+    def test_approve_changes_status_to_approved(self, client):
+        """Test that approval changes status to approved (not active)."""
         _create_and_submit_rule(client, "approve_test_003", actor="submitter_user")
 
         # Verify it's pending_review
@@ -137,9 +137,9 @@ class TestApproveDraftRule:
         versions = version_store.list_versions("approve_test_004")
         assert len(versions) >= 2  # At least create + approve
 
-        # Check latest version has active status
+        # Check latest version has approved status (not active - requires publish)
         latest = versions[-1]
-        assert latest.rule.status == "active"
+        assert latest.rule.status == "approved"
 
     def test_approve_creates_audit_record(self, client):
         """Test that approval creates an audit record."""
@@ -156,11 +156,12 @@ class TestApproveDraftRule:
         audit_logger = get_audit_logger()
         records = audit_logger.get_rule_history("approve_test_005")
 
-        # Find approval state_change record
+        # Find approval state_change record (should be approved, not active)
         approval_records = [
             r
             for r in records
-            if r.action == "state_change" and r.after_state.get("status") == "active"
+            if r.action == "state_change"
+            and r.after_state.get("status") == "approved"
         ]
         assert len(approval_records) > 0
 

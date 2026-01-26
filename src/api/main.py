@@ -23,8 +23,6 @@ from api.schemas import (
     ApproveRuleRequest,
     ApproveRuleResponse,
     AuditLogQueryResponse,
-    PublishRuleRequest,
-    PublishRuleResponse,
     AuditRecordResponse,
     BacktestMetricsResponse,
     BacktestResultResponse,
@@ -50,6 +48,8 @@ from api.schemas import (
     GenerateDataRequest,
     GenerateDataResponse,
     HealthResponse,
+    PublishRuleRequest,
+    PublishRuleResponse,
     RedundancyResponse,
     RejectRuleRequest,
     RejectRuleResponse,
@@ -429,8 +429,10 @@ Requires:
 async def deploy_model(request: DeployModelRequest) -> DeployModelResponse:
     """Deploy a model to production.
 
+    Deploys the current Production stage model from MLflow to live traffic.
+
     Args:
-        request: Deploy request with actor, optional run_id and reason.
+        request: Deploy request with actor and optional reason.
 
     Returns:
         DeployModelResponse with deployment details.
@@ -468,7 +470,7 @@ async def deploy_model(request: DeployModelRequest) -> DeployModelResponse:
         mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000"))
         client = mlflow.MlflowClient()
         versions = client.search_model_versions(
-            f"name='ach-fraud-detection' AND current_stage='Production'"
+            "name='ach-fraud-detection' AND current_stage='Production'"
         )
         for v in versions:
             if v.version == deployed_version.lstrip("v"):
@@ -2154,7 +2156,9 @@ async def submit_draft_rule(
     tags=["Draft Rules"],
     summary="Approve a pending rule",
     description="""
-Approve a rule that is pending review, transitioning it to active status.
+Approve a rule that is pending review, transitioning it to approved status.
+
+The approved rule requires an explicit publish step to become active in production.
 
 Requires:
 - Rule must be in pending_review status
@@ -2165,7 +2169,10 @@ Requires:
 async def approve_draft_rule(
     rule_id: str, request: ApproveRuleRequest
 ) -> ApproveRuleResponse:
-    """Approve a draft rule for activation.
+    """Approve a draft rule for production.
+
+    Transitions the rule to approved status. The rule must be explicitly
+    published to become active in production.
 
     Args:
         rule_id: Rule identifier.
