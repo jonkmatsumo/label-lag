@@ -1170,7 +1170,9 @@ def fetch_draft_rules(
         return None
 
 
-def publish_rule(rule_id: str, actor: str, reason: str | None = None) -> dict[str, Any] | None:
+def publish_rule(
+    rule_id: str, actor: str, reason: str | None = None
+) -> dict[str, Any] | None:
     """Publish an approved rule to production.
 
     Args:

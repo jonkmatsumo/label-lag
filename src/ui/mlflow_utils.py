@@ -401,7 +401,8 @@ def deploy_model(actor: str, reason: str | None = None) -> dict[str, Any]:
         return {
             "success": result.get("success", False),
             "message": (
-                f"Model {result.get('model_version', 'unknown')} deployed successfully. "
+                f"Model {result.get('model_version', 'unknown')} "
+                f"deployed successfully. "
                 f"Previous version: {result.get('previous_version', 'none')}"
             ),
             "model_version": result.get("model_version"),
