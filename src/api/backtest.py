@@ -425,6 +425,8 @@ class BacktestStore:
         # Sort by completed_at (newest first)
         results.sort(key=lambda r: r.completed_at, reverse=True)
 
+        return results
+
 
 class BacktestComparator:
     """Compare backtest results and compute deltas."""
