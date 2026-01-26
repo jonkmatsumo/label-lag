@@ -2793,25 +2793,56 @@ def _render_rule_management_tab() -> None:
                     ):
                         # Show confirmation modal
                         with st.form(key=f"publish_form_{rule_id}"):
-                            st.warning(
-                                f"**Publish Rule to Production**\n\n"
-                                f"This will make rule `{rule_id}` effective for "
                                 f"all live transactions."
                             )
+
+                            # --- Readiness Check (Phase 2.3) ---
+                            from data_service import get_readiness_report
+                            report = get_readiness_report(rule_id)
+                            
+                            ready_to_publish = True
+                            if report:
+                                st.markdown("### 🚦 Promotion Readiness")
+                                overall = report.get("overall_status")
+                                if overall == "pass":
+                                    st.success("✅ Readiness Checks Passed")
+                                elif overall == "warn":
+                                    st.warning("⚠️ Readiness Checks Passed with Warnings")
+                                else:
+                                    st.error("❌ Readiness Checks Failed")
+                                    ready_to_publish = False # Block publish if failed
+                                
+                                with st.expander("View Check Details", expanded=overall != "pass"):
+                                    for check in report.get("checks", []):
+                                        c_status = check.get("status")
+                                        c_icon = "✅" if c_status == "pass" else "⚠️" if c_status == "warn" else "❌"
+                                        st.markdown(f"{c_icon} **{check.get('name')}:** {check.get('message')}")
+
+                                if not ready_to_publish:
+                                    st.error("Cannot publish: Rule failed critical readiness checks.")
+                            else:
+                                st.warning("Could not verify readiness (Service unavailable). Proceed with caution.")
+                            
+                            # -----------------------------------
+
                             actor = st.text_input(
                                 "Your name/email",
                                 key=f"actor_{rule_id}",
                                 help="Required for audit trail",
+                                disabled=not ready_to_publish
                             )
                             publish_reason = st.text_area(
                                 "Reason (optional)",
                                 key=f"reason_{rule_id}",
                                 help="Optional reason for publishing",
+                                disabled=not ready_to_publish
                             )
                             col_a, col_b = st.columns(2)
                             with col_a:
                                 publish_confirm = st.form_submit_button(
-                                    "Publish", type="primary"
+                                    "Publish", 
+                                    type="primary",
+                                    disabled=not ready_to_publish
                                 )
                             with col_b:
                                 st.form_submit_button("Cancel")

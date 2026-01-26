@@ -1440,3 +1440,23 @@ def get_rule_analytics(rule_id: str, days: int = 7) -> dict[str, Any] | None:
     except requests.RequestException as e:
         print(f"Error fetching analytics for rule {rule_id}: {e}")
         return None
+
+
+def get_readiness_report(rule_id: str) -> dict[str, Any] | None:
+    """Fetch readiness report for a rule.
+    
+    Args:
+        rule_id: Rule ID.
+        
+    Returns:
+        Readiness report dict or None if failed.
+    """
+    url = f"{API_BASE_URL}/rules/{rule_id}/readiness"
+    
+    try:
+        response = requests.get(url, timeout=API_TIMEOUT)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error fetching readiness report for {rule_id}: {e}")
+        return None
