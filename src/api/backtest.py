@@ -19,9 +19,6 @@ from synthetic_pipeline.db.session import DatabaseSession
 logger = logging.getLogger(__name__)
 
 
-
-
-
 @dataclass
 class BacktestMetrics:
     """Metrics computed from a backtest run."""

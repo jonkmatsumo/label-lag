@@ -45,14 +45,14 @@ def candidate_result():
         metrics=BacktestMetrics(
             total_records=1000,
             matched_count=150,  # +50 matches
-            match_rate=0.15,    # +0.05 rate
+            match_rate=0.15,  # +0.05 rate
             score_distribution={},
-            score_mean=55.0,    # +5.0 mean
-            score_std=12.0,     # +2.0 std
+            score_mean=55.0,  # +5.0 mean
+            score_std=12.0,  # +2.0 std
             score_min=10,
             score_max=95,
             rejected_count=20,  # +10 rejections
-            rejected_rate=0.02, # +0.01 rate
+            rejected_rate=0.02,  # +0.01 rate
         ),
         completed_at=datetime.now(timezone.utc),
     )
@@ -96,8 +96,8 @@ def test_backtest_comparison_result_schema():
             "score_mean": 50.0,
             "score_std": 10.0,
             "score_min": 10,
-            "score_max": 90
-        }
+            "score_max": 90,
+        },
     )
 
     candidate_response = BacktestResultResponse(
@@ -112,12 +112,12 @@ def test_backtest_comparison_result_schema():
             "match_rate": 0.2,
             "rejected_count": 2,
             "rejected_rate": 0.02,
-             "score_distribution": {},
+            "score_distribution": {},
             "score_mean": 50.0,
             "score_std": 10.0,
             "score_min": 10,
-            "score_max": 90
-        }
+            "score_max": 90,
+        },
     )
 
     delta = BacktestDelta(
@@ -126,13 +126,11 @@ def test_backtest_comparison_result_schema():
         score_mean_delta=0.0,
         score_std_delta=0.0,
         matched_count_delta=10,
-        rejected_count_delta=1
+        rejected_count_delta=1,
     )
 
     comparison = BacktestComparisonResult(
-        base_result=base_response,
-        candidate_result=candidate_response,
-        delta=delta
+        base_result=base_response, candidate_result=candidate_response, delta=delta
     )
 
     assert comparison.delta.match_rate_delta == 0.1

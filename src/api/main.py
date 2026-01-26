@@ -3631,15 +3631,12 @@ async def export_audit_logs(
         )
 
 
-
 # =============================================================================
 # Backtest Endpoints (Phase 2)
 # =============================================================================
 
 
-def _resolve_ruleset_for_backtest(
-    version_id: str | None, rule_id: str | None = None
-):
+def _resolve_ruleset_for_backtest(version_id: str | None, rule_id: str | None = None):
     """Resolve ruleset from version identifier.
 
     Args:
@@ -3660,15 +3657,14 @@ def _resolve_ruleset_for_backtest(
     if not version_id or version_id.lower() == "production":
         manager = get_model_manager()
         if not manager.ruleset:
-             raise HTTPException(status_code=404, detail="No production ruleset found")
+            raise HTTPException(status_code=404, detail="No production ruleset found")
 
         # If specific rule requested, filter it
         if rule_id:
             filtered_rules = [r for r in manager.ruleset.rules if r.id == rule_id]
             if not filtered_rules:
                 raise HTTPException(
-                    status_code=404,
-                    detail=f"Rule {rule_id} not found in production"
+                    status_code=404, detail=f"Rule {rule_id} not found in production"
                 )
             return RuleSet(version=manager.ruleset.version, rules=filtered_rules)
 
@@ -3700,8 +3696,7 @@ def _resolve_ruleset_for_backtest(
 
     # Verification failed
     raise HTTPException(
-        status_code=404,
-        detail=f"Could not resolve ruleset version: {version_id}"
+        status_code=404, detail=f"Could not resolve ruleset version: {version_id}"
     )
 
 
@@ -3775,7 +3770,7 @@ async def run_backtest_endpoint(request: BacktestRunRequest) -> BacktestResultRe
     description="Run and compare two backtests (what-if simulation).",
 )
 async def compare_backtests_endpoint(
-    request: CompareRulesetsRequest
+    request: CompareRulesetsRequest,
 ) -> BacktestComparisonResult:
     """Compare two backtests.
 
@@ -3809,7 +3804,7 @@ async def compare_backtests_endpoint(
         return result
 
     # Run both
-    _run_for_version(request.base_version).to_dict() # Wait, internal result is object
+    _run_for_version(request.base_version).to_dict()  # Wait, internal result is object
     # Re-running logic
 
     # 1. Resolve and run Base
@@ -3819,7 +3814,7 @@ async def compare_backtests_endpoint(
         ruleset=base_ruleset,
         start_date=start_dt,
         end_date=end_dt,
-        rule_id=request.rule_id
+        rule_id=request.rule_id,
     )
     get_backtest_store().save(base_res)
 
@@ -3832,7 +3827,7 @@ async def compare_backtests_endpoint(
         ruleset=cand_ruleset,
         start_date=start_dt,
         end_date=end_dt,
-        rule_id=request.rule_id
+        rule_id=request.rule_id,
     )
     get_backtest_store().save(cand_res)
 
@@ -3881,9 +3876,8 @@ async def compare_backtests_endpoint(
     return BacktestComparisonResult(
         base_result=base_response,
         candidate_result=cand_response,
-        delta=delta # BacktestDelta is compatible if fields match
+        delta=delta,  # BacktestDelta is compatible if fields match
     )
-
 
 
 # =============================================================================
@@ -3928,8 +3922,7 @@ async def get_rule_analytics(
         # Check shadow/draft? For now return 404 if not in active set
         # Or construct a dummy rule object if we just want stats
         raise HTTPException(
-            status_code=404,
-            detail=f"Rule {rule_id} not found in active ruleset"
+            status_code=404, detail=f"Rule {rule_id} not found in active ruleset"
         )
 
     # Evaluate health
@@ -3947,7 +3940,7 @@ async def get_rule_analytics(
     # Wait, MetricsCollector doesn't track total requests globally yet.
     # Let's fallback to "unknown" total requests for now.
 
-    total_requests = 1000 # Placeholder - TODO: Track global request count
+    total_requests = 1000  # Placeholder - TODO: Track global request count
 
     evaluator = RuleHealthEvaluator()
     health_report = evaluator.evaluate(rule, metrics, total_requests)
@@ -3963,24 +3956,23 @@ async def get_rule_analytics(
             status=health_report.status.value,
             reason=health_report.reason,
             metrics={
-                 "period_start": metrics.period_start.isoformat(),
-                 "period_end": metrics.period_end.isoformat(),
-                 "production_matches": metrics.production_matches,
-                 "shadow_matches": metrics.shadow_matches,
-                 "production_only_count": metrics.production_only_count,
-                 "shadow_only_count": metrics.shadow_only_count,
-                 "mean_score_delta": metrics.mean_score_delta,
-                 "mean_execution_time_ms": metrics.mean_execution_time_ms,
-            }
+                "period_start": metrics.period_start.isoformat(),
+                "period_end": metrics.period_end.isoformat(),
+                "production_matches": metrics.production_matches,
+                "shadow_matches": metrics.shadow_matches,
+                "production_only_count": metrics.production_only_count,
+                "shadow_only_count": metrics.shadow_only_count,
+                "mean_score_delta": metrics.mean_score_delta,
+                "mean_execution_time_ms": metrics.mean_execution_time_ms,
+            },
         ),
         statistics={
             "mean_score_delta": metrics.mean_score_delta,
             "mean_latency_ms": metrics.mean_execution_time_ms,
             "total_matches": metrics.production_matches + metrics.shadow_matches,
         },
-        history_summary=[] # TODO: Daily breakdown
+        history_summary=[],  # TODO: Daily breakdown
     )
-
 
 
 @app.get(
@@ -4032,7 +4024,7 @@ async def check_rule_readiness(
     metrics = collector.get_rule_metrics(rule_id, start_date, end_date)
 
     # Get total requests (placeholder logic, same as analytics)
-    total_requests = 1000 # TODO: Real total
+    total_requests = 1000  # TODO: Real total
 
     audit_logger = get_audit_logger()
     evaluator = ReadinessEvaluator(audit_logger=audit_logger)
@@ -4049,12 +4041,11 @@ async def check_rule_readiness(
                 "name": c.name,
                 "status": c.status.value,
                 "message": c.message,
-                "details": c.details
+                "details": c.details,
             }
             for c in report.checks
-        ]
+        ],
     )
-
 
 
 @app.get(
@@ -4079,8 +4070,7 @@ async def get_rule_attribution(
 
     if not attribution:
         raise HTTPException(
-            status_code=404,
-            detail=f"No attribution data found for rule {rule_id}"
+            status_code=404, detail=f"No attribution data found for rule {rule_id}"
         )
 
     return RuleAttributionResponse(
@@ -4089,7 +4079,7 @@ async def get_rule_attribution(
         mean_model_score=attribution.mean_model_score,
         mean_final_score=attribution.mean_final_score,
         mean_impact=attribution.mean_impact,
-        net_impact=attribution.net_impact
+        net_impact=attribution.net_impact,
     )
 
 

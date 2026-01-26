@@ -526,7 +526,6 @@ class BacktestResultResponse(BaseModel):
     error: str | None = Field(None, description="Error message if backtest failed")
 
 
-
 class BacktestResultsListResponse(BaseModel):
     """Response schema for backtest results list."""
 
@@ -594,9 +593,7 @@ class CompareRulesetsRequest(BaseModel):
     candidate_version: str = Field(..., description="Candidate version to compare")
     start_date: str = Field(..., description="Start date (ISO format)")
     end_date: str = Field(..., description="End date (ISO format)")
-    rule_id: str | None = Field(
-        None, description="Optional: compare single rule only"
-    )
+    rule_id: str | None = Field(None, description="Optional: compare single rule only")
 
 
 class SuggestionEvidence(BaseModel):

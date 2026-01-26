@@ -68,10 +68,7 @@ class InferenceLogger:
             logger.error(f"Failed to log inference event: {e}")
 
     def query_events(
-        self,
-        start_time: datetime,
-        end_time: datetime,
-        rule_id: str | None = None
+        self, start_time: datetime, end_time: datetime, rule_id: str | None = None
     ) -> list[InferenceEvent]:
         """Query events from log (Scan-based, inefficient for large datasets)."""
         events = []
@@ -101,4 +98,4 @@ class InferenceLogger:
         except Exception as e:
             logger.error(f"Failed to query events: {e}")
 
-        return events # Returning dicts for now to simplify
+        return events  # Returning dicts for now to simplify

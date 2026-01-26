@@ -18,7 +18,7 @@ class RuleAttribution:
     total_matches: int
     mean_model_score: float  # Avg score BEFORE rule
     mean_final_score: float  # Avg score AFTER rule
-    mean_impact: float       # Avg absolute delta
+    mean_impact: float  # Avg absolute delta
 
     @property
     def net_impact(self) -> float:
@@ -33,7 +33,7 @@ class RuleAttribution:
             "mean_model_score": self.mean_model_score,
             "mean_final_score": self.mean_final_score,
             "mean_impact": self.mean_impact,
-            "net_impact": self.net_impact
+            "net_impact": self.net_impact,
         }
 
 
@@ -45,10 +45,7 @@ class AttributionService:
         self.logger = logger or InferenceLogger()
 
     def get_rule_attribution(
-        self,
-        rule_id: str,
-        start_time: datetime,
-        end_time: datetime
+        self, rule_id: str, start_time: datetime, end_time: datetime
     ) -> RuleAttribution | None:
         """Compute attribution metrics for a specific rule."""
 
@@ -93,7 +90,7 @@ class AttributionService:
             # associated_result_score = event.model_score + delta (Theoretical effect)
 
             # Use theoretical effect for cleaner attribution of single rule
-            total_final_score += (event["model_score"] + delta)
+            total_final_score += event["model_score"] + delta
             total_impact += abs(delta)
 
         if total_matches == 0:
@@ -104,5 +101,5 @@ class AttributionService:
             total_matches=total_matches,
             mean_model_score=total_model_score / total_matches,
             mean_final_score=total_final_score / total_matches,
-            mean_impact=total_impact / total_matches
+            mean_impact=total_impact / total_matches,
         )

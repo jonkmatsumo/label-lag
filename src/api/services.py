@@ -116,7 +116,6 @@ class SignalEvaluator:
 
         # Record metrics for rule matches
         try:
-
             from api.metrics import get_metrics_collector
 
             # Calculate individual rule impacts (approximated)
@@ -133,24 +132,27 @@ class SignalEvaluator:
 
             # Create impact objects for logger
             from api.inference_log import RuleImpact
+
             for rid in rule_result.matched_rules:
-                 impact_objects.append(RuleImpact(
-                     rule_id=rid,
-                     is_shadow=False,
-                     score_delta=impacts.get(rid, 0.0)
-                 ))
+                impact_objects.append(
+                    RuleImpact(
+                        rule_id=rid, is_shadow=False, score_delta=impacts.get(rid, 0.0)
+                    )
+                )
             for rid in rule_result.shadow_matched_rules:
-                 impact_objects.append(RuleImpact(
-                     rule_id=rid,
-                     is_shadow=True,
-                     score_delta=0.0 # Shadow rules don't change score
-                 ))
+                impact_objects.append(
+                    RuleImpact(
+                        rule_id=rid,
+                        is_shadow=True,
+                        score_delta=0.0,  # Shadow rules don't change score
+                    )
+                )
 
             metrics_collector = get_metrics_collector()
             metrics_collector.record_request_matches(
                 production_matched=rule_result.matched_rules,
                 shadow_matched=rule_result.shadow_matched_rules,
-                match_impacts=impacts
+                match_impacts=impacts,
             )
 
             # Phase 3.1: Log structured inference event
@@ -166,7 +168,7 @@ class SignalEvaluator:
                 rules_version=manager.rules_version or "unknown",
                 model_score=score,
                 final_score=final_score,
-                rule_impacts=impact_objects
+                rule_impacts=impact_objects,
             )
             event_logger.log_event(event)
 
@@ -174,6 +176,7 @@ class SignalEvaluator:
             # Don't fail inference if metrics/logging fails
             logger.warning(f"Failed to record metrics/logs: {e}")
             import traceback
+
             logger.debug(traceback.format_exc())
 
         # Identify risk components based on feature values

@@ -1366,7 +1366,7 @@ def run_backtest(
         "ruleset_version": ruleset_version,
         "start_date": start_date,
         "end_date": end_date,
-        "rule_id": rule_id
+        "rule_id": rule_id,
     }
 
     try:
@@ -1405,7 +1405,7 @@ def compare_backtests(
         "candidate_version": candidate_version,
         "start_date": start_date,
         "end_date": end_date,
-        "rule_id": rule_id
+        "rule_id": rule_id,
     }
 
     try:

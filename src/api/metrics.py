@@ -11,7 +11,6 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-
 @dataclass
 class RuleMetrics:
     """Metrics for a single rule over a time period."""
@@ -125,7 +124,11 @@ class MetricsCollector:
                     if len(value) == 3:
                         prod, shadow, overlap = value
                         self._counters[(rule_id, date_str)] = [
-                            prod, shadow, overlap, 0.0, 0.0
+                            prod,
+                            shadow,
+                            overlap,
+                            0.0,
+                            0.0,
                         ]
                     else:
                         self._counters[(rule_id, date_str)] = value
@@ -225,11 +228,7 @@ class MetricsCollector:
             # For execution time, we don't have per-rule granularity yet
             # so we assume 0 or handle it later with more instrumentation
             self.record_match(
-                rule_id,
-                is_prod,
-                is_shadow,
-                timestamp=timestamp,
-                score_delta=delta
+                rule_id, is_prod, is_shadow, timestamp=timestamp, score_delta=delta
             )
 
     def get_rule_metrics(
@@ -284,7 +283,7 @@ class MetricsCollector:
             shadow_matches=int(shadow_total),
             overlap_count=int(overlap_total),
             total_score_delta=delta_total,
-            total_execution_time_ms=time_total
+            total_execution_time_ms=time_total,
         )
 
     def generate_comparison_report(
