@@ -1,221 +1,14 @@
 # Label Lag
 
-End-to-end ML system for fraud detection with realistic label delay simulation. Combines XGBoost models and rule-based decision engine for hybrid fraud scoring. Generates synthetic transaction data, trains models with MLflow tracking, serves predictions via API, and provides a dashboard for analysis, model management, and rule authoring.
+## Overview
 
-## Quick Start
+Label Lag is an end-to-end fraud detection system that pairs realistic label-delay simulation with hybrid model-and-rules scoring. It generates synthetic transaction data, trains and registers models, serves live inference through an API, and provides a dashboard for analysis and rule authoring.
 
-```bash
-# Copy .env (see Environment Variables)
-cp .env.example .env
+## Diagrams
 
-# Start all services (convenience wrapper includes infra + app)
-docker compose up -d
+### System Design Diagram
 
-# Open the dashboard
-open http://localhost:8501
-
-# Generate data via dashboard: Model Lab > Generate Data
-# Or via CLI:
-docker compose exec generator uv run python src/main.py seed --users 1000 --fraud-rate 0.05
-```
-
-### Split infra vs app (recommended for development)
-
-Start infrastructure once, then run app separately so you can rebuild app without touching infra:
-
-```bash
-# 1. Start infra (db, minio, mlflow). Keep running.
-docker compose -f docker-compose.infra.yml up -d
-
-# 2. Start app (api, dashboard, generator). Rebuild frequently.
-docker compose -f docker-compose.infra.yml -f docker-compose.app.yml up -d
-
-# Rebuild only API after source change:
-docker compose -f docker-compose.infra.yml -f docker-compose.app.yml build api
-docker compose -f docker-compose.infra.yml -f docker-compose.app.yml up -d api
-```
-
-## Services
-
-| Service | URL | Description |
-|---------|-----|-------------|
-| Dashboard | http://localhost:8501 | Streamlit UI for scoring, analytics, model training, and rule authoring |
-| API | http://localhost:8000 | FastAPI fraud scoring and training endpoints |
-| API Docs | http://localhost:8000/docs | Swagger UI |
-| MLflow | http://localhost:5005 | Experiment tracking and model registry |
-| MinIO | http://localhost:9001 | Object storage console (minioadmin/minioadmin) |
-| PostgreSQL | localhost:5432 | Database |
-
-All ports are configurable via `.env` file.
-
-## Dashboard
-
-The Streamlit dashboard provides five main views:
-
-### Live Scoring
-- Submit transactions for real-time fraud risk evaluation
-- Displays current model status (ML model or rule-based fallback)
-- Shows risk score (1-99), risk level, and contributing factors
-- API latency monitoring
-
-### Historical Analytics
-- Model version selector with PRODUCTION/LIVE indicators
-- Global metrics: transaction volume, fraud rate, false positive rate
-- Time series visualization of daily transaction volume and fraud trends
-- Transaction amount distribution by fraud status
-- Recent high-risk alerts table
-
-### Synthetic Dataset
-- **Data Generation**: Generate synthetic transaction data with configurable user count and fraud rate
-- **Dataset Overview**: Total records, fraud statistics, timestamp ranges, schema summary
-- **Feature Analysis**: Histograms, box plots, correlation matrices (Pearson, Spearman, Cramér's V)
-- **Data Sampling**: Stratified sampling with fraud status preservation
-
-### Model Lab
-- **Train Models**: Configure feature columns, hyperparameters, and training window
-- **Model Registry**: View experiment runs sorted by PR-AUC, promote models to production
-- **Training Progress**: Real-time training metrics and completion status
-
-### Rule Inspector
-- **Sandbox**: Deterministic rule testing with custom features and rulesets (no side effects, no DB writes)
-- **Shadow Metrics**: Compare production rules vs shadow rules with match counts and overlap statistics
-- **Backtest Results**: View historical rule performance metrics and score distributions
-- **Suggestions**: Browse heuristic rule recommendations based on feature distributions
-- **Draft Rules**: Author, validate, and submit rules through the lifecycle workflow
-
-## API
-
-The API provides endpoints for:
-
-- **Evaluation**: Real-time fraud scoring with hybrid ML + rules (`POST /evaluate/signal`)
-- **Training**: Model training with MLflow tracking (`POST /train`)
-- **Data**: Synthetic data generation and management (`POST /data/generate`, `DELETE /data/clear`)
-- **Rules**: Sandbox testing, draft rule management, heuristic suggestions, shadow metrics, and backtest results
-- **Rule Lifecycle**: Draft creation, submission, approval, and **publish** (`POST /rules/{id}/publish`)
-- **Model Deployment**: Explicit model deployment (`POST /models/deploy`)
-
-### Publish/Deploy Endpoints
-
-**Rule Publishing:**
-- `POST /rules/{rule_id}/publish` - Publish an approved rule to production
-  - Transitions rule from `approved` to `active` status
-  - Syncs rule to production ruleset used for inference
-  - Creates version snapshot and audit event
-
-**Model Deployment:**
-- `POST /models/deploy` - Deploy a production-approved model to live traffic
-  - Reloads production model from MLflow
-  - Makes model effective for inference
-  - Tracks deployment timestamp and actor
-
-### Rule Version Diff
-
-Compare two versions of a rule to see field-by-field changes:
-
-- `GET /rules/{rule_id}/diff` - Compare rule versions
-  - Query params: `version_a` (newer), `version_b` (older)
-  - Defaults: If no params, compares latest vs previous
-  - Returns: Field-by-field changes with `is_breaking` flag
-  - Breaking changes: `field`, `op`, or `action` modifications
-  - Non-breaking (tuning): `value`, `score`, `severity`, `reason`, `status`
-
-**UI Access:** Rule Inspector → Rule Management tab → expand any rule → "Version History & Diff" section
-
-Full API documentation with request/response schemas available at http://localhost:8000/docs (Swagger UI).
-
-## CLI Commands
-
-```bash
-# Generate synthetic data
-docker compose exec generator uv run python src/main.py seed --users 1000 --fraud-rate 0.05
-
-# View database statistics
-docker compose exec generator uv run python src/main.py stats
-
-# Train a model directly
-docker compose exec generator uv run python src/model/train.py 30
-
-# Run drift detection
-docker compose exec generator uv run python src/monitor/detect_drift.py --hours 24
-```
-
-## Development
-
-```bash
-# Install dependencies locally
-make install
-
-# Run tests (Python 3.12)
-make test
-
-# Linting
-make lint         # Check only
-make lint-fix     # Auto-fix issues
-```
-
-### Docker workflow (split compose)
-
-| When | Command |
-|------|---------|
-| **Once per machine** | `cp .env.example .env` |
-| **Start infra** (long-lived) | `docker compose -f docker-compose.infra.yml up -d` |
-| **Start app** (daily) | `docker compose -f docker-compose.infra.yml -f docker-compose.app.yml up -d` |
-| **After source change** | `docker compose -f ... -f ... build api` then `up -d api` (or restart) |
-| **After dependency change** | `docker compose -f docker-compose.infra.yml -f docker-compose.app.yml build --no-cache` then `up -d` |
-| **App down only** | `docker compose -f docker-compose.app.yml down` |
-| **Infra down only** | `docker compose -f docker-compose.infra.yml down` |
-
-**Always start infra before app.** The app compose file references the shared network; use both `-f docker-compose.infra.yml -f docker-compose.app.yml` when running app.
-
-### Reset commands
-
-| Scope | Command |
-|-------|---------|
-| **Wipe app only** | `docker compose -f docker-compose.app.yml down` |
-| **Wipe infra only** | `docker compose -f docker-compose.infra.yml down` |
-| **Full reset (all data)** | `docker compose -f docker-compose.infra.yml down -v` then `docker compose -f docker-compose.app.yml down` |
-| **Reset DB only** | `docker compose -f docker-compose.infra.yml stop db` → `docker compose -f docker-compose.infra.yml rm -f db` → `docker volume rm labellag_postgres_data` → `docker compose -f docker-compose.infra.yml up -d db` |
-| **Reset MinIO only** | `docker compose -f docker-compose.infra.yml stop minio` → `docker compose -f docker-compose.infra.yml rm -f minio create-buckets` → `docker volume rm labellag_minio_data` → `docker compose -f docker-compose.infra.yml up -d minio create-buckets` |
-
-**Volume migration:** If you previously used the legacy setup, volumes `postgres_data` and `minio_data` are orphaned. Remove them after confirming the new setup works: `docker volume rm postgres_data minio_data`.
-
-## Architecture
-
-```
-src/
-├── api/              # FastAPI app, rule engine, evaluation services
-├── model/            # XGBoost training, evaluation, tuning
-├── monitor/          # Drift detection (PSI)
-├── pipeline/         # Feature materialization (SQL window functions)
-├── generator/        # Stateful fraud profile simulation
-├── synthetic_pipeline/  # Core data generation, DB models
-└── ui/               # Streamlit dashboard
-```
-
-### Package Responsibilities
-
-- **`api/`**: FastAPI application with hybrid ML + rule evaluation, rule lifecycle management (draft → active → shadow), validation, audit logging, versioning, backtesting, and heuristic suggestions
-- **`model/`**: XGBoost training pipeline with MLflow integration, hyperparameter tuning (Optuna), temporal train/test splitting, and score calibration
-- **`monitor/`**: Population Stability Index (PSI) drift detection comparing production model reference data with live feature distributions
-- **`pipeline/`**: Point-in-time correct feature engineering using SQL window functions to prevent data leakage
-- **`generator/`**: Stateful user simulation with fraud profiles (BustOut, Sleeper ATO) and label delay modeling
-- **`synthetic_pipeline/`**: Core synthetic data generation with graph network relationships, database persistence, and Pydantic domain models
-- **`ui/`**: Streamlit dashboard with five pages: Live Scoring, Historical Analytics, Synthetic Dataset, Model Lab, and Rule Inspector
-
-### Key Components
-
-- **SignalEvaluator**: Hybrid scoring combining ML model predictions with rule-based adjustments, queries features from `feature_snapshots` table
-- **ModelManager**: Loads production models from MLflow registry with hot-reload support on deployment
-- **RuleEvaluator**: Matches transaction features against rule conditions, applies actions (override_score, clamp, reject) with precedence
-- **DraftRuleStore**: Manages draft rule authoring workflow with validation, conflict detection, and state transitions
-- **RuleStateMachine**: Enforces valid state transitions (draft → pending_review → approved → active)
-- **FeatureMaterializer**: SQL window functions compute point-in-time correct features without future data leakage
-- **DataLoader**: Temporal train/test split respecting label maturity (fraud confirmation dates)
-- **DriftDetector**: PSI calculation comparing reference data (from model artifacts) with live feature distributions
-
-### Publish/Deploy System Architecture
-
-The publish/deploy system separates approval from deployment for both rules and models:
+This diagram shows the publish/deploy path across UI, API, and storage, emphasizing how approval and deployment are separated for both rules and models.
 
 ```mermaid
 flowchart TB
@@ -246,137 +39,9 @@ flowchart TB
     API2 --> API3
 ```
 
-**Rule Publishing Flow:**
-1. Rule approved → status = `approved` (stored in DraftRuleStore)
-2. User clicks "Publish" in UI → `POST /rules/{id}/publish`
-3. API transitions rule to `active` and syncs to ModelManager.ruleset
-4. Rule is now effective for inference
+### ML / Data Pipeline Diagram
 
-**Note on Ruleset Persistence:**
-Published rules are applied to the in-memory `ModelManager.ruleset` immediately. On API restart, the ruleset is reloaded from MLflow `rules.json` artifact (if present in the Production model) or falls back to `config/default_rules.json`. Active rules stored in `DraftRuleStore` are not automatically rehydrated on restart unless they are published again or persisted via MLflow artifacts.
-
-**Model Deployment Flow:**
-1. Model promoted to Production stage in MLflow
-2. User clicks "Deploy" in UI → `POST /models/deploy`
-3. API reloads model from MLflow Production stage
-4. Model is now serving live traffic
-
-## Rule Engine
-
-The system includes a comprehensive rule-based decision engine that works alongside ML models for hybrid fraud scoring.
-
-### Rule Structure
-
-Rules consist of:
-- **Field**: Feature to evaluate (e.g., `velocity_24h`, `amount_to_avg_ratio_30d`)
-- **Operator**: Comparison operator (`>`, `>=`, `<`, `<=`, `==`, `in`, `not_in`)
-- **Value**: Threshold or comparison value
-- **Action**: What to do when matched (`override_score`, `clamp_min`, `clamp_max`, `reject`)
-- **Severity**: Risk level (`low`, `medium`, `high`)
-- **Status**: Lifecycle state (see below)
-
-### Rule Lifecycle
-
-Rules progress through states with controlled transitions. The lifecycle separates **approval** (decision to use) from **deployment** (making it effective):
-
-```mermaid
-stateDiagram-v2
-    [*] --> draft: create
-    draft --> pending_review: submit
-    pending_review --> approved: approve
-    pending_review --> draft: reject
-    approved --> active: publish
-    approved --> draft: revoke
-    active --> shadow: shadow
-    active --> disabled: disable
-    shadow --> active: activate
-    shadow --> disabled: disable
-    disabled --> active: activate
-    disabled --> archived: archive
-    archived --> [*]
-```
-
-**States:**
-- **draft**: Initial creation, can be edited and validated
-- **pending_review**: Submitted for approval, cannot be edited
-- **approved**: Approved for production but **not yet deployed** (requires explicit publish step)
-- **active**: Production-active, affects scoring (deployed and live)
-- **shadow**: Evaluated but not applied (for A/B testing)
-- **disabled**: Temporarily inactive
-- **archived**: Terminal state, historical record only
-
-**Key Workflow:**
-1. **Create** → Draft rule
-2. **Submit** → Moves to pending_review
-3. **Approve** → Moves to approved (not yet live)
-4. **Publish** → Moves to active (now effective for inference)
-5. **Shadow/Disable** → Can move active rules to shadow or disabled
-
-The explicit **publish step** ensures deployment intent is clear and auditable. Approved rules do not affect inference until explicitly published.
-
-### Shadow Mode
-
-Shadow rules are evaluated alongside production rules but don't affect the final score. This enables:
-- Safe testing of new rules without production impact
-- Comparison metrics between production and shadow rule performance
-- Gradual rollout of rule changes
-
-### Sandbox Testing
-
-The sandbox provides deterministic rule evaluation with no side effects:
-- Test rules against arbitrary feature inputs
-- Use custom rulesets (ephemeral, not saved)
-- Inspect matched rules and explanations
-- No database writes or production impact
-
-## Fraud Patterns
-
-| Pattern | Description | Key Indicators |
-|---------|-------------|----------------|
-| Liquidity Crunch | Overdraft attempt | balance z-score < -2.5, returned=True |
-| Link Burst | Rapid bank linking | 5-15 connections in 24h |
-| ATO (Account Takeover) | Compromised account | amount_ratio > 5.0, off-hours, recent identity change |
-| Bust-Out | Build trust then fraud | 20-50 legit transactions, then >500% spike |
-| Sleeper ATO | Dormant then active | 30+ days dormancy, link burst, high-value withdrawal |
-
-## Environment Variables
-
-Copy `.env.example` to `.env` and adjust as needed:
-
-```bash
-# Database
-POSTGRES_USER=synthetic
-POSTGRES_PASSWORD=synthetic_dev_password
-POSTGRES_DB=synthetic_data
-DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}
-
-# Service ports
-DB_PORT=5432
-API_PORT=8000
-DASHBOARD_PORT=8501
-MLFLOW_PORT=5005
-MINIO_API_PORT=9000
-MINIO_CONSOLE_PORT=9001
-
-# MLflow (set automatically in Docker)
-MLFLOW_TRACKING_URI=http://localhost:5005
-MLFLOW_S3_ENDPOINT_URL=http://localhost:9000
-AWS_ACCESS_KEY_ID=minioadmin
-AWS_SECRET_ACCESS_KEY=minioadmin
-```
-
-## Model Workflow
-
-1. **Generate Data**: Dashboard > Model Lab > Generate Data (or CLI)
-2. **Train Model**: Dashboard > Model Lab > Start Training
-3. **Review Metrics**: View experiment runs sorted by PR-AUC
-4. **Approve for Production**: Select best run and click "Approve for Production" (moves to Production stage)
-5. **Deploy**: Click "Deploy to Production" to make the model effective for live inference
-6. **Verify**: Check Live Scoring page shows new model version
-
-### Model Deployment Flow
-
-The model deployment process separates **approval** from **deployment**:
+This diagram summarizes the end-to-end training and deployment path, from model training and registration to live inference.
 
 ```mermaid
 flowchart LR
@@ -396,30 +61,140 @@ flowchart LR
     end
 ```
 
-**Stages:**
-- **None**: Initial registration after training
-- **Staging**: Approved for staging environment testing
-- **Production (approved)**: Approved for production but **not yet deployed**
-- **Production (live)**: Deployed and serving live traffic
+### State Machine Diagram
 
-The explicit **deploy step** ensures deployment intent is clear and auditable. Models in Production stage do not serve traffic until explicitly deployed.
+This diagram captures the rule lifecycle, highlighting approval versus deployment and the transitions that keep rule changes auditable.
 
-## Drift Detection
-
-Monitor feature distributions for drift using Population Stability Index (PSI):
-
-```bash
-# Check last 24 hours
-docker compose exec generator uv run python src/monitor/detect_drift.py
-
-# Custom window and threshold
-docker compose exec generator uv run python src/monitor/detect_drift.py --hours 48 --threshold 0.25
-
-# JSON output for automation
-docker compose exec generator uv run python src/monitor/detect_drift.py --json
+```mermaid
+stateDiagram-v2
+    [*] --> draft: create
+    draft --> pending_review: submit
+    pending_review --> approved: approve
+    pending_review --> draft: reject
+    approved --> active: publish
+    approved --> draft: revoke
+    active --> shadow: shadow
+    active --> disabled: disable
+    shadow --> active: activate
+    shadow --> disabled: disable
+    disabled --> active: activate
+    disabled --> archived: archive
+    archived --> [*]
 ```
 
-PSI thresholds:
-- < 0.1: No significant drift
-- 0.1 - 0.2: Warning, monitor closely
-- >= 0.2: Critical, action required
+## Quick Start
+
+1) Copy `.env.example` to `.env` and adjust ports or credentials as needed.  
+2) Start the stack with `docker compose up -d`.  
+3) Open the dashboard at `http://localhost:8501` and verify Live Scoring renders.
+
+## Detailed Architecture Breakdown
+
+Label Lag separates infrastructure, application runtime, and lifecycle workflows so that training and deployment are explicit and observable. The publish/deploy diagram above illustrates how UI actions flow through the API into storage and registry services, while the pipeline diagram shows how models move from training to production inference. The rule state machine anchors governance, ensuring changes pass review before affecting live scoring.
+
+Core flows:
+- **Data generation and feature materialization** feed training and historical analytics while preserving point-in-time correctness.
+- **Training and registry** capture metrics and artifacts in MLflow, enabling explicit promotion and deployment.
+- **Inference and rule evaluation** combine model predictions with a rule engine that supports shadow testing and auditing.
+- **Dashboard-driven workflows** expose model and rule lifecycle actions without bypassing API controls.
+
+## Ports & Services Table
+
+All ports are configurable via `.env`.
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| Dashboard | 8501 | Streamlit UI for scoring, analytics, model training, and rule authoring |
+| API | 8000 | FastAPI fraud scoring and training endpoints |
+| API Docs | 8000 | Swagger UI served by the API |
+| MLflow | 5005 | Experiment tracking and model registry |
+| MinIO API | 9000 | Object storage API for artifacts |
+| MinIO Console | 9001 | Object storage console (minioadmin/minioadmin) |
+| PostgreSQL | 5432 | Transaction and feature storage |
+
+## Repository / File Structure
+
+The repo is organized around data flow and runtime boundaries so services can evolve independently while sharing a common domain model.
+
+```
+src/
+├── api/                 # FastAPI app, rule engine, evaluation services
+├── model/               # XGBoost training, evaluation, tuning
+├── monitor/             # Feature distribution monitoring and drift reporting
+├── pipeline/            # Point-in-time feature materialization (SQL window functions)
+├── generator/           # Stateful fraud profile simulation
+├── synthetic_pipeline/  # Core data generation, DB models
+└── ui/                  # Streamlit dashboard
+```
+
+Key folders:
+- **`api/`**: Orchestrates scoring, rule lifecycle, validation, audit logging, and deployment actions.
+- **`model/`**: Training workflows, evaluation metrics, and registry interactions.
+- **`pipeline/`**: Feature materialization and data correctness safeguards.
+- **`generator/`** and **`synthetic_pipeline/`**: Synthetic data creation, fraud patterns, and persistence.
+- **`ui/`**: Operator-facing workflows for training, evaluation, and rule management.
+
+## Service-Level Breakdown
+
+### API Service
+
+Responsible for live scoring, training triggers, rule lifecycle actions, and model deployment. It exposes evaluation and lifecycle endpoints (`/evaluate/signal`, `/train`, `/rules/{id}/publish`, `/models/deploy`) and serves Swagger docs at `/docs`.
+
+### Dashboard (Streamlit)
+
+The UI consolidates operational workflows: live scoring, historical analytics, dataset exploration, model training and registry promotion, and rule authoring. It is the primary entry point for rule publishing, model deployment, and sandbox evaluation.
+
+### Model Training & Registry (MLflow)
+
+Training runs are tracked with metrics and artifacts, then promoted through stages before deployment. The deploy action reloads the production model into the API, keeping approval and activation separate.
+
+### Rule Engine
+
+Rules evaluate transaction features using operators (`>`, `>=`, `<`, `<=`, `==`, `in`, `not_in`) and actions (`override_score`, `clamp_min`, `clamp_max`, `reject`). The lifecycle enforces draft → review → approval → publish transitions, and supports shadow evaluation and sandbox testing for safe iteration.
+
+### Synthetic Data Generator
+
+Generates labeled transaction streams with controlled fraud patterns and label delay to support realistic training and backtesting. It can create data via the dashboard or CLI entrypoints.
+
+Fraud patterns used by the generator:
+
+| Pattern | Description | Key Indicators |
+|---------|-------------|----------------|
+| Liquidity Crunch | Overdraft attempt | balance z-score < -2.5, returned=True |
+| Link Burst | Rapid bank linking | 5-15 connections in 24h |
+| ATO (Account Takeover) | Compromised account | amount_ratio > 5.0, off-hours, recent identity change |
+| Bust-Out | Build trust then fraud | 20-50 legit transactions, then >500% spike |
+| Sleeper ATO | Dormant then active | 30+ days dormancy, link burst, high-value withdrawal |
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and adjust as needed.
+
+### Database
+
+```
+POSTGRES_USER=synthetic
+POSTGRES_PASSWORD=synthetic_dev_password
+POSTGRES_DB=synthetic_data
+DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}
+```
+
+### Service Ports
+
+```
+DB_PORT=5432
+API_PORT=8000
+DASHBOARD_PORT=8501
+MLFLOW_PORT=5005
+MINIO_API_PORT=9000
+MINIO_CONSOLE_PORT=9001
+```
+
+### MLflow / MinIO
+
+```
+MLFLOW_TRACKING_URI=http://localhost:5005
+MLFLOW_S3_ENDPOINT_URL=http://localhost:9000
+AWS_ACCESS_KEY_ID=minioadmin
+AWS_SECRET_ACCESS_KEY=minioadmin
+```
