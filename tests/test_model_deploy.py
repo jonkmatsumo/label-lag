@@ -28,8 +28,7 @@ class TestModelDeploy:
         return logger
 
     @patch("api.main.get_model_manager")
-    @patch("api.main.mlflow")
-    def test_deploy_triggers_reload(self, mock_mlflow, mock_get_manager, model_manager):
+    def test_deploy_triggers_reload(self, mock_get_manager, model_manager):
         """Test that deploy triggers model reload."""
         mock_get_manager.return_value = model_manager
         model_manager.load_production_model = MagicMock(return_value=True)
@@ -47,7 +46,7 @@ class TestModelDeploy:
         """Test that deploy creates MODEL_DEPLOYED audit event."""
         mock_get_manager.return_value = model_manager
         model_manager.load_production_model = MagicMock(return_value=True)
-        model_manager.model_version = "v2"
+        model_manager._model_version = "v2"
 
         # Simulate deploy audit logging
         audit_logger.log(

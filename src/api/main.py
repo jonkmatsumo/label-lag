@@ -2682,6 +2682,7 @@ async def activate_rule(
     """
     from dataclasses import asdict
 
+    from api.audit import get_audit_logger
     from api.draft_store import get_draft_store
     from api.model_manager import get_model_manager
     from api.rules import Rule, RuleStatus
@@ -2690,6 +2691,7 @@ async def activate_rule(
 
     store = get_draft_store()
     version_store = get_version_store()
+    audit_logger = get_audit_logger()
     state_machine = create_state_machine()
 
     # Try to get from draft store first
@@ -2720,7 +2722,55 @@ async def activate_rule(
             detail=f"Cannot activate rule {rule_id} from status {rule.status}",
         )
 
-    # Transition to active
+    # Handle pending_review -> active as two-step: approve then activate
+    if rule.status == RuleStatus.PENDING_REVIEW.value:
+        if not request.approver:
+            raise HTTPException(
+                status_code=400,
+                detail="Activating from pending_review requires approver",
+            )
+
+        # Find submitter to prevent self-approval
+        rule_history = audit_logger.get_rule_history(rule_id)
+        submitter = None
+        for record in reversed(rule_history):
+            if (
+                record.action == "state_change"
+                and record.after_state
+                and record.after_state.get("status") == RuleStatus.PENDING_REVIEW.value
+            ):
+                submitter = record.actor
+                break
+
+        if submitter and submitter == request.approver:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Self-approval not allowed. Actor '{request.approver}' cannot "
+                "approve their own submission.",
+            )
+
+        # First transition to approved
+        try:
+            rule = state_machine.transition(
+                rule=rule,
+                new_status=RuleStatus.APPROVED.value,
+                actor=request.actor,
+                reason=request.reason or "Approved for activation",
+                approver=request.approver,
+                previous_actor=submitter,
+            )
+        except TransitionError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+
+        # Update in store
+        if rule_id in store._rules:
+            rule_dict = asdict(rule)
+            rule_dict["status"] = RuleStatus.APPROVED.value
+            approved_rule = Rule(**rule_dict)
+            store._rules[rule_id] = approved_rule
+            store._save_rules()
+
+    # Transition to active (from approved, shadow, or disabled)
     try:
         updated_rule = state_machine.transition(
             rule=rule,
@@ -2730,7 +2780,7 @@ async def activate_rule(
             approver=request.approver,
         )
     except TransitionError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     # Update in store if it exists there
     if rule_id in store._rules:

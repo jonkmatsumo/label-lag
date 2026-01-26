@@ -422,6 +422,15 @@ class TestActivateRule:
             },
         )
 
+        # Publish to make rule active
+        client.post(
+            "/rules/activate_test_002/publish",
+            json={
+                "actor": "admin_user",
+                "reason": "Publishing approved rule",
+            },
+        )
+
         # Move to shadow
         client.post(
             "/rules/activate_test_002/shadow",
@@ -453,6 +462,15 @@ class TestActivateRule:
             json={
                 "approver": "approver_user",  # Different from submitter_user
                 "reason": "Approved",
+            },
+        )
+
+        # Publish to make rule active
+        client.post(
+            "/rules/activate_test_003/publish",
+            json={
+                "actor": "admin_user",
+                "reason": "Publishing approved rule",
             },
         )
 
@@ -611,6 +629,15 @@ class TestDisableRule:
             },
         )
 
+        # Publish to make rule active
+        client.post(
+            "/rules/disable_test_001/publish",
+            json={
+                "actor": "admin_user",
+                "reason": "Publishing approved rule",
+            },
+        )
+
         response = client.post(
             "/rules/disable_test_001/disable",
             json={
@@ -630,6 +657,15 @@ class TestDisableRule:
             json={
                 "approver": "approver_user",  # Different from submitter_user
                 "reason": "Approved",
+            },
+        )
+
+        # Publish to make rule active
+        client.post(
+            "/rules/disable_test_002/publish",
+            json={
+                "actor": "admin_user",
+                "reason": "Publishing approved rule",
             },
         )
 
@@ -665,6 +701,15 @@ class TestDisableRule:
             },
         )
 
+        # Publish to make rule active
+        client.post(
+            "/rules/disable_test_003/publish",
+            json={
+                "actor": "admin_user",
+                "reason": "Publishing approved rule",
+            },
+        )
+
         # Verify it's active
         get_response = client.get("/rules/draft/disable_test_003")
         assert get_response.json()["status"] == "active"
@@ -693,6 +738,15 @@ class TestDisableRule:
             },
         )
 
+        # Publish to make rule active
+        client.post(
+            "/rules/disable_test_004/publish",
+            json={
+                "actor": "admin_user",
+                "reason": "Publishing approved rule",
+            },
+        )
+
         client.post(
             "/rules/disable_test_004/disable",
             json={
@@ -717,6 +771,15 @@ class TestDisableRule:
             json={
                 "approver": "approver_user",  # Different from submitter_user
                 "reason": "Approved",
+            },
+        )
+
+        # Publish to make rule active
+        client.post(
+            "/rules/disable_test_005/publish",
+            json={
+                "actor": "admin_user",
+                "reason": "Publishing approved rule",
             },
         )
 
@@ -786,6 +849,15 @@ class TestShadowRule:
             },
         )
 
+        # Publish to make rule active
+        client.post(
+            "/rules/shadow_test_001/publish",
+            json={
+                "actor": "admin_user",
+                "reason": "Publishing approved rule",
+            },
+        )
+
         response = client.post(
             "/rules/shadow_test_001/shadow",
             json={
@@ -805,6 +877,15 @@ class TestShadowRule:
             json={
                 "approver": "approver_user",  # Different from submitter_user
                 "reason": "Approved",
+            },
+        )
+
+        # Publish to make rule active
+        client.post(
+            "/rules/shadow_test_002/publish",
+            json={
+                "actor": "admin_user",
+                "reason": "Publishing approved rule",
             },
         )
 
@@ -836,6 +917,15 @@ class TestShadowRule:
             },
         )
 
+        # Publish to make rule active
+        client.post(
+            "/rules/shadow_test_003/publish",
+            json={
+                "actor": "admin_user",
+                "reason": "Publishing approved rule",
+            },
+        )
+
         client.post(
             "/rules/shadow_test_003/shadow",
             json={
@@ -860,6 +950,15 @@ class TestShadowRule:
             json={
                 "approver": "approver_user",  # Different from submitter_user
                 "reason": "Approved",
+            },
+        )
+
+        # Publish to make rule active
+        client.post(
+            "/rules/shadow_test_004/publish",
+            json={
+                "actor": "admin_user",
+                "reason": "Publishing approved rule",
             },
         )
 
