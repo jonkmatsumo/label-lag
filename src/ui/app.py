@@ -1830,6 +1830,73 @@ def render_synthetic_dataset() -> None:
                     st.error(f"Error compiling top relationships: {e}")
 
 
+def render_drift_panel() -> None:
+    """Render the dataset drift monitoring panel."""
+    from ui.data_service import _cached_fetch_drift_status
+
+    st.subheader("Dataset Drift Monitoring")
+
+    # Fetch status with caching
+    drift_status = _cached_fetch_drift_status()
+
+    if drift_status is None:
+        st.info("Drift monitoring unavailable. API may be offline.")
+        return
+
+    if drift_status.get("error"):
+        st.warning(f"Drift check incomplete: {drift_status['error']}")
+        return
+
+    # Status badge
+    status = drift_status.get("status", "unknown")
+    if status == "ok":
+        st.success("✅ No Drift Detected")
+    elif status == "warn":
+        st.warning("⚠️ Slight Drift Detected - Monitor closely")
+    elif status == "fail":
+        st.error("🚨 Significant Drift Detected - Action required")
+    else:
+        st.info("Drift status unknown")
+
+    # Metadata
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Reference Size", drift_status.get("reference_size", 0))
+    with col2:
+        st.metric("Live Size", drift_status.get("live_size", 0))
+    with col3:
+        computed = drift_status.get("computed_at", "Unknown")
+        if computed != "Unknown":
+            # Format timestamp for display
+            try:
+                from datetime import datetime
+
+                dt = datetime.fromisoformat(computed.replace("Z", "+00:00"))
+                formatted = dt.strftime("%Y-%m-%d %H:%M:%S")
+                st.caption(f"Last check: {formatted}")
+            except Exception:
+                st.caption(f"Last check: {computed[:19]}")
+        else:
+            st.caption("Last check: Unknown")
+
+    # Top features table
+    top_features = drift_status.get("top_features", [])
+    if top_features:
+        st.markdown("**Top Features by PSI**")
+        df = pd.DataFrame(top_features)
+        st.dataframe(df, use_container_width=True, hide_index=True)
+
+    # Guidance
+    with st.expander("About PSI Thresholds"):
+        st.markdown(
+            """
+        - **PSI < 0.1**: No significant change
+        - **0.1 ≤ PSI < 0.2**: Slight drift, monitor
+        - **PSI ≥ 0.2**: Significant drift, investigate
+        """
+        )
+
+
 def render_model_lab() -> None:
     """Render the Model Lab page.
 
@@ -1851,6 +1918,11 @@ def render_model_lab() -> None:
         return
 
     st.success("Connected to MLflow tracking server")
+
+    # --- Drift Monitoring Panel ---
+    render_drift_panel()
+
+    st.markdown("---")
 
     # --- Section A: Train New Model ---
     st.subheader("Train New Model")

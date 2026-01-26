@@ -1175,3 +1175,37 @@ def fetch_heuristic_suggestions(
     except requests.RequestException as e:
         print(f"Error fetching suggestions: {e}")
         return None
+
+
+def fetch_drift_status(hours: int = 24) -> dict[str, Any] | None:
+    """Fetch drift status from the API.
+
+    Args:
+        hours: Hours of live data to analyze.
+
+    Returns:
+        Drift status dict or None if unavailable.
+    """
+    url = f"{API_BASE_URL}/monitoring/drift"
+    params = {"hours": hours}
+
+    try:
+        response = requests.get(url, params=params, timeout=API_TIMEOUT * 3)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error fetching drift status: {e}")
+        return None
+
+
+@st.cache_data(ttl=60)
+def _cached_fetch_drift_status(hours: int = 24) -> dict[str, Any] | None:
+    """Cached wrapper for fetch_drift_status to avoid redundant API calls.
+
+    Args:
+        hours: Hours of live data to analyze.
+
+    Returns:
+        Drift status dict or None if unavailable.
+    """
+    return fetch_drift_status(hours)

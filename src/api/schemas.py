@@ -898,3 +898,46 @@ class RuleVersionListResponse(BaseModel):
         description="Version list",
     )
     total: int = Field(default=0, description="Total count")
+
+
+# =============================================================================
+# Drift Monitoring Schemas
+# =============================================================================
+
+
+class FeatureDriftDetail(BaseModel):
+    """Per-feature drift information."""
+
+    feature: str = Field(..., description="Feature name")
+    psi: float = Field(..., ge=0.0, description="PSI value")
+    status: str = Field(..., description="OK | WARNING | CRITICAL")
+
+
+class DriftStatusResponse(BaseModel):
+    """Response schema for drift status endpoint."""
+
+    status: str = Field(
+        ...,
+        description="Overall status: ok | warn | fail | unknown",
+    )
+    computed_at: str = Field(..., description="ISO timestamp of computation")
+    cached: bool = Field(..., description="Whether result was from cache")
+    reference_window: str = Field(
+        ...,
+        description="Reference data description (e.g., 'Production model v3')",
+    )
+    current_window: str = Field(
+        ...,
+        description="Current window (e.g., 'Last 24 hours')",
+    )
+    reference_size: int = Field(..., description="Reference sample count")
+    live_size: int = Field(..., description="Live sample count")
+    top_features: list[FeatureDriftDetail] = Field(
+        default_factory=list,
+        description="Features sorted by PSI descending",
+    )
+    thresholds: dict[str, float] = Field(
+        default_factory=dict,
+        description="Threshold values (warn, fail)",
+    )
+    error: str | None = Field(None, description="Error message if status=unknown")

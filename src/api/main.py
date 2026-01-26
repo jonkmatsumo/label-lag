@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 
+from api.drift_cache import get_drift_cache
 from api.model_manager import get_model_manager
 from api.schemas import (
     AcceptSuggestionRequest,
@@ -39,6 +40,8 @@ from api.schemas import (
     DraftRuleUpdateResponse,
     DraftRuleValidateRequest,
     DraftRuleValidateResponse,
+    DriftStatusResponse,
+    FeatureDriftDetail,
     GenerateDataRequest,
     GenerateDataResponse,
     HealthResponse,
@@ -170,6 +173,201 @@ async def health_check() -> HealthResponse:
         status="healthy",
         model_loaded=manager.model_loaded,
         version=version,
+    )
+
+
+@app.get(
+    "/monitoring/drift",
+    response_model=DriftStatusResponse,
+    tags=["Monitoring"],
+    summary="Check dataset drift status",
+)
+async def get_drift_status(
+    hours: int = Query(
+        default=24, ge=1, le=168, description="Hours of live data to analyze"
+    ),
+    force_refresh: bool = Query(
+        default=False, description="Bypass cache and recompute"
+    ),
+) -> DriftStatusResponse:
+    """Check feature distribution drift between reference and live data.
+
+    Compares reference data from the production model with recent live data
+    using Population Stability Index (PSI) to detect distribution shifts.
+
+    Args:
+        hours: Number of hours of live data to analyze (1-168).
+        force_refresh: If True, bypass cache and recompute drift.
+
+    Returns:
+        DriftStatusResponse with drift status, top features, and metadata.
+    """
+    import time
+
+    from monitor.detect_drift import (
+        PSI_THRESHOLD_CRITICAL,
+        PSI_THRESHOLD_WARNING,
+        detect_drift,
+    )
+
+    start_time = time.time()
+    cache = get_drift_cache()
+    threshold = PSI_THRESHOLD_CRITICAL
+
+    # Check cache unless force_refresh is True
+    cached_result = None
+    if not force_refresh:
+        cached_result = cache.get(hours, threshold)
+
+    if cached_result is not None:
+        # Return cached result
+        duration_ms = int((time.time() - start_time) * 1000)
+        logger.info(
+            "Drift check completed (cached)",
+            extra={
+                "hours": hours,
+                "cached": True,
+                "duration_ms": duration_ms,
+            },
+        )
+        return _build_drift_response(cached_result, cached=True)
+
+    # Compute fresh result
+    try:
+        result = detect_drift(hours=hours, threshold=threshold)
+        cache.set(hours, threshold, result)
+
+        duration_ms = int((time.time() - start_time) * 1000)
+        features_evaluated = len(result.get("features", {}))
+
+        # Determine overall status
+        overall_status = "unknown"
+        if "error" in result:
+            overall_status = "unknown"
+        elif result.get("drift_detected", False):
+            overall_status = "fail"
+        else:
+            # Check if any feature has WARNING status
+            has_warning = any(
+                details.get("status") == "WARNING"
+                for details in result.get("features", {}).values()
+            )
+            if has_warning:
+                overall_status = "warn"
+            else:
+                overall_status = "ok"
+
+        logger.info(
+            "Drift check completed",
+            extra={
+                "hours": hours,
+                "cached": False,
+                "status": overall_status,
+                "duration_ms": duration_ms,
+                "features_evaluated": features_evaluated,
+            },
+        )
+
+        return _build_drift_response(
+            result, cached=False, overall_status=overall_status
+        )
+
+    except Exception as e:
+        logger.exception("Drift detection failed", extra={"hours": hours})
+        return DriftStatusResponse(
+            status="unknown",
+            computed_at=datetime.now(timezone.utc).isoformat(),
+            cached=False,
+            reference_window="Unknown",
+            current_window=f"Last {hours} hours",
+            reference_size=0,
+            live_size=0,
+            top_features=[],
+            thresholds={
+                "warn": PSI_THRESHOLD_WARNING,
+                "fail": PSI_THRESHOLD_CRITICAL,
+            },
+            error=str(e),
+        )
+
+
+def _build_drift_response(
+    result: dict,
+    cached: bool,
+    overall_status: str | None = None,
+) -> DriftStatusResponse:
+    """Build DriftStatusResponse from detect_drift result.
+
+    Args:
+        result: Result dict from detect_drift().
+        cached: Whether result was from cache.
+        overall_status: Overall status (ok/warn/fail/unknown). If None, computed.
+
+    Returns:
+        DriftStatusResponse instance.
+    """
+    from monitor.detect_drift import (
+        PSI_THRESHOLD_CRITICAL,
+        PSI_THRESHOLD_WARNING,
+    )
+
+    # Determine overall status if not provided
+    if overall_status is None:
+        if "error" in result:
+            overall_status = "unknown"
+        elif result.get("drift_detected", False):
+            overall_status = "fail"
+        else:
+            # Check if any feature has WARNING status
+            has_warning = any(
+                details.get("status") == "WARNING"
+                for details in result.get("features", {}).values()
+            )
+            if has_warning:
+                overall_status = "warn"
+            else:
+                overall_status = "ok"
+
+    # Build top features list (sorted by PSI descending)
+    top_features = []
+    for feature_name, details in result.get("features", {}).items():
+        top_features.append(
+            FeatureDriftDetail(
+                feature=feature_name,
+                psi=details.get("psi", 0.0),
+                status=details.get("status", "OK"),
+            )
+        )
+    # Sort by PSI descending
+    top_features.sort(key=lambda x: x.psi, reverse=True)
+
+    # Build reference window description
+    reference_window = "Production model reference data"
+    if result.get("reference_size", 0) > 0:
+        reference_window = (
+            f"Production model reference data ({result['reference_size']} samples)"
+        )
+
+    # Build current window description
+    hours_analyzed = result.get("hours_analyzed", 24)
+    current_window = f"Last {hours_analyzed} hours"
+    if result.get("live_size", 0) > 0:
+        current_window = f"Last {hours_analyzed} hours ({result['live_size']} samples)"
+
+    return DriftStatusResponse(
+        status=overall_status,
+        computed_at=result.get("timestamp", datetime.now(timezone.utc).isoformat()),
+        cached=cached,
+        reference_window=reference_window,
+        current_window=current_window,
+        reference_size=result.get("reference_size", 0),
+        live_size=result.get("live_size", 0),
+        top_features=top_features,
+        thresholds={
+            "warn": PSI_THRESHOLD_WARNING,
+            "fail": PSI_THRESHOLD_CRITICAL,
+        },
+        error=result.get("error"),
     )
 
 
