@@ -118,14 +118,66 @@ class SignalEvaluator:
         try:
             from api.metrics import get_metrics_collector
 
+            # Calculate individual rule impacts (approximated)
+            impacts = {}
+            impact_objects = []
+
+            if score != final_score:
+                total_delta = abs(final_score - score)
+                # Split delta among active rules (simplified)
+                if rule_result.matched_rules:
+                    per_rule_delta = total_delta / len(rule_result.matched_rules)
+                    for rid in rule_result.matched_rules:
+                        impacts[rid] = per_rule_delta
+
+            # Create impact objects for logger
+            from api.inference_log import RuleImpact
+
+            for rid in rule_result.matched_rules:
+                impact_objects.append(
+                    RuleImpact(
+                        rule_id=rid, is_shadow=False, score_delta=impacts.get(rid, 0.0)
+                    )
+                )
+            for rid in rule_result.shadow_matched_rules:
+                impact_objects.append(
+                    RuleImpact(
+                        rule_id=rid,
+                        is_shadow=True,
+                        score_delta=0.0,  # Shadow rules don't change score
+                    )
+                )
+
             metrics_collector = get_metrics_collector()
             metrics_collector.record_request_matches(
                 production_matched=rule_result.matched_rules,
                 shadow_matched=rule_result.shadow_matched_rules,
+                match_impacts=impacts,
             )
+
+            # Phase 3.1: Log structured inference event
+            from datetime import datetime, timezone
+
+            from api.inference_log import InferenceEvent, InferenceLogger
+
+            event_logger = InferenceLogger()
+            event = InferenceEvent(
+                request_id=request_id,
+                timestamp=datetime.now(timezone.utc),
+                model_version=model_version,
+                rules_version=manager.rules_version or "unknown",
+                model_score=score,
+                final_score=final_score,
+                rule_impacts=impact_objects,
+            )
+            event_logger.log_event(event)
+
         except Exception as e:
-            # Don't fail inference if metrics collection fails
-            logger.warning(f"Failed to record metrics: {e}")
+            # Don't fail inference if metrics/logging fails
+            logger.warning(f"Failed to record metrics/logs: {e}")
+            import traceback
+
+            logger.debug(traceback.format_exc())
 
         # Identify risk components based on feature values
         risk_components = self._identify_risk_components(features)

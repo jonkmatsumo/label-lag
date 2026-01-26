@@ -1341,3 +1341,146 @@ def fetch_rule_diff(
     except requests.RequestException as e:
         print(f"Error fetching diff for rule {rule_id}: {e}")
         return None
+
+
+def run_backtest(
+    ruleset_version: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    rule_id: str | None = None,
+) -> dict[str, Any] | None:
+    """Run a backtest via API.
+
+    Args:
+        ruleset_version: Ruleset version to test.
+        start_date: Start date (ISO format).
+        end_date: End date (ISO format).
+        rule_id: Optional rule identifier (test single rule).
+
+    Returns:
+        Backtest result dict or None if request failed.
+    """
+    url = f"{API_BASE_URL}/backtest/run"
+
+    payload = {
+        "ruleset_version": ruleset_version,
+        "start_date": start_date,
+        "end_date": end_date,
+        "rule_id": rule_id,
+    }
+
+    try:
+        # Long timeout for backtests
+        response = requests.post(url, json=payload, timeout=30.0)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error running backtest: {e}")
+        return None
+
+
+def compare_backtests(
+    base_version: str | None,
+    candidate_version: str,
+    start_date: str,
+    end_date: str,
+    rule_id: str | None = None,
+) -> dict[str, Any] | None:
+    """Compare two backtests (what-if simulation).
+
+    Args:
+        base_version: Baseline version (None = production).
+        candidate_version: Candidate version to compare.
+        start_date: Start date (ISO format).
+        end_date: End date (ISO format).
+        rule_id: Optional rule identifier.
+
+    Returns:
+        Comparison result dict with deltas or None if request failed.
+    """
+    url = f"{API_BASE_URL}/backtest/compare"
+
+    payload = {
+        "base_version": base_version,
+        "candidate_version": candidate_version,
+        "start_date": start_date,
+        "end_date": end_date,
+        "rule_id": rule_id,
+    }
+
+    try:
+        # Long timeout for running two backtests
+        response = requests.post(url, json=payload, timeout=60.0)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error comparing backtests: {e}")
+        return None
+
+
+def get_rule_analytics(rule_id: str, days: int = 7) -> dict[str, Any] | None:
+    """Fetch analytics for a single rule.
+
+    Args:
+        rule_id: Rule ID.
+        days: Number of days to look back.
+
+    Returns:
+        Dict with rule analytics or None if failed.
+    """
+    url = f"{API_BASE_URL}/analytics/rules/{rule_id}"
+    params = {"days": days}
+
+    try:
+        response = requests.get(url, params=params, timeout=API_TIMEOUT)
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error fetching analytics for rule {rule_id}: {e}")
+        return None
+
+
+def get_readiness_report(rule_id: str) -> dict[str, Any] | None:
+    """Fetch readiness report for a rule.
+
+    Args:
+        rule_id: Rule ID.
+
+    Returns:
+        Readiness report dict or None if failed.
+    """
+    url = f"{API_BASE_URL}/rules/{rule_id}/readiness"
+
+    try:
+        response = requests.get(url, timeout=API_TIMEOUT)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error fetching readiness report for {rule_id}: {e}")
+        return None
+
+
+def get_rule_attribution(rule_id: str, days: int = 7) -> dict[str, Any] | None:
+    """Fetch attribution metrics for a rule.
+
+    Args:
+        rule_id: Rule ID.
+        days: Days lookback.
+
+    Returns:
+        Attribution dict or None.
+    """
+    url = f"{API_BASE_URL}/analytics/attribution"
+    params = {"rule_id": rule_id, "days": days}
+
+    try:
+        response = requests.get(url, params=params, timeout=API_TIMEOUT)
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error fetching attribution for {rule_id}: {e}")
+        return None

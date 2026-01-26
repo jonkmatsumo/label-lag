@@ -536,6 +536,66 @@ class BacktestResultsListResponse(BaseModel):
     total: int = Field(default=0, description="Total number of results")
 
 
+class BacktestRunRequest(BaseModel):
+    """Request schema for running a backtest."""
+
+    ruleset_version: str | None = Field(
+        None, description="RuleSet version to test. If null, uses current production."
+    )
+    start_date: str = Field(..., description="Start date (ISO format)")
+    end_date: str = Field(..., description="End date (ISO format)")
+    rule_id: str | None = Field(
+        None, description="Optional rule ID to test single rule"
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "ruleset_version": "v1_20240101",
+                "start_date": "2024-01-01T00:00:00Z",
+                "end_date": "2024-01-31T23:59:59Z",
+            }
+        }
+    }
+
+
+class BacktestDelta(BaseModel):
+    """Difference between two backtest metrics."""
+
+    match_rate_delta: float = Field(..., description="Absolute change in match rate")
+    rejected_rate_delta: float = Field(
+        ..., description="Absolute change in rejection rate"
+    )
+    score_mean_delta: float = Field(..., description="Change in mean score")
+    score_std_delta: float = Field(
+        ..., description="Change in standard deviation of score"
+    )
+    matched_count_delta: int = Field(..., description="Change in matched count")
+    rejected_count_delta: int = Field(..., description="Change in rejected count")
+
+
+class BacktestComparisonResult(BaseModel):
+    """Result of comparing two backtest runs."""
+
+    base_result: BacktestResultResponse = Field(..., description="Baseline result")
+    candidate_result: BacktestResultResponse = Field(
+        ..., description="Candidate (proposed) result"
+    )
+    delta: BacktestDelta = Field(..., description="Computed deltas")
+
+
+class CompareRulesetsRequest(BaseModel):
+    """Request schema for comparing two rulesets."""
+
+    base_version: str | None = Field(
+        None, description="Baseline version (default: current production)"
+    )
+    candidate_version: str = Field(..., description="Candidate version to compare")
+    start_date: str = Field(..., description="Start date (ISO format)")
+    end_date: str = Field(..., description="End date (ISO format)")
+    rule_id: str | None = Field(None, description="Optional: compare single rule only")
+
+
 class SuggestionEvidence(BaseModel):
     """Evidence supporting a rule suggestion."""
 
@@ -1051,3 +1111,69 @@ class DriftStatusResponse(BaseModel):
         description="Threshold values (warn, fail)",
     )
     error: str | None = Field(None, description="Error message if status=unknown")
+
+
+# =============================================================================
+# Analytics Schemas
+# =============================================================================
+
+
+class RuleHealthStats(BaseModel):
+    """Metrics snapshot for health report."""
+
+    period_start: str | None = None
+    period_end: str | None = None
+    production_matches: int = 0
+    shadow_matches: int = 0
+    production_only_count: int = 0
+    shadow_only_count: int = 0
+    mean_score_delta: float = 0.0
+    mean_execution_time_ms: float = 0.0
+
+
+class RuleHealthResponse(BaseModel):
+    """Rule health status response."""
+
+    rule_id: str
+    status: str
+    reason: str
+    metrics: RuleHealthStats | None = None
+
+
+class RuleAnalyticsResponse(BaseModel):
+    """Detailed analytics for a rule."""
+
+    rule_id: str
+    health: RuleHealthResponse
+    statistics: dict[str, Any]
+    history_summary: list[dict[str, Any]]
+
+
+class CheckResultResponse(BaseModel):
+    """Result of a readiness check."""
+
+    policy_type: str
+    name: str
+    status: str
+    message: str
+    details: dict[str, Any]
+
+
+class ReadinessReportResponse(BaseModel):
+    """Readiness report response."""
+
+    rule_id: str
+    timestamp: str
+    overall_status: str
+    checks: list[CheckResultResponse]
+
+
+class RuleAttributionResponse(BaseModel):
+    """Rule attribution metrics response."""
+
+    rule_id: str
+    total_matches: int
+    mean_model_score: float
+    mean_final_score: float
+    mean_impact: float
+    net_impact: float

@@ -21,6 +21,8 @@ class RuleMetrics:
     production_matches: int = 0
     shadow_matches: int = 0
     overlap_count: int = 0  # Records where both production and shadow matched
+    total_score_delta: float = 0.0  # Sum of score changes (prod + shadow)
+    total_execution_time_ms: float = 0.0  # Sum of execution time
 
     @property
     def production_only_count(self) -> int:
@@ -31,6 +33,22 @@ class RuleMetrics:
     def shadow_only_count(self) -> int:
         """Count of shadow-only matches."""
         return self.shadow_matches - self.overlap_count
+
+    @property
+    def mean_score_delta(self) -> float:
+        """Mean score delta per match."""
+        total_matches = self.production_matches + self.shadow_matches
+        if total_matches == 0:
+            return 0.0
+        return self.total_score_delta / total_matches
+
+    @property
+    def mean_execution_time_ms(self) -> float:
+        """Mean execution time per match."""
+        total_matches = self.production_matches + self.shadow_matches
+        if total_matches == 0:
+            return 0.0
+        return self.total_execution_time_ms / total_matches
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -77,9 +95,11 @@ class MetricsCollector:
             storage_path: Path for persistent storage. If None, in-memory only.
         """
         self.storage_path = Path(storage_path) if storage_path else None
-        # In-memory: (rule_id, date) -> (prod_count, shadow_count, overlap_count)
-        self._counters: dict[tuple[str, str], tuple[int, int, int]] = defaultdict(
-            lambda: (0, 0, 0)
+
+        # In-memory: (rule_id, date) -> (prod, shadow, overlap, score_delta, exec_ms)
+        # We store 5 values now instead of 3
+        self._counters: dict[tuple[str, str], list[float]] = defaultdict(
+            lambda: [0, 0, 0, 0.0, 0.0]
         )
         # Track request-level matches for overlap calculation
         self._request_matches: list[dict[str, Any]] = []
@@ -100,8 +120,18 @@ class MetricsCollector:
                 for key, value in data.get("counters", {}).items():
                     # Key format: "rule_id|date_str"
                     rule_id, date_str = key.split("|", 1)
-                    prod, shadow, overlap = value
-                    self._counters[(rule_id, date_str)] = (prod, shadow, overlap)
+                    # Backward compatibility for old format [prod, shadow, overlap]
+                    if len(value) == 3:
+                        prod, shadow, overlap = value
+                        self._counters[(rule_id, date_str)] = [
+                            prod,
+                            shadow,
+                            overlap,
+                            0.0,
+                            0.0,
+                        ]
+                    else:
+                        self._counters[(rule_id, date_str)] = value
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             logger.warning(f"Failed to load metrics from {self.storage_path}: {e}")
 
@@ -115,9 +145,9 @@ class MetricsCollector:
 
             # Convert counters to serializable format
             counters_data = {}
-            for (rule_id, date), (prod, shadow, overlap) in self._counters.items():
+            for (rule_id, date), values in self._counters.items():
                 key = f"{rule_id}|{date}"
-                counters_data[key] = [prod, shadow, overlap]
+                counters_data[key] = values
 
             data = {"counters": counters_data}
 
@@ -132,6 +162,8 @@ class MetricsCollector:
         is_production: bool,
         is_shadow: bool,
         timestamp: datetime | None = None,
+        score_delta: float = 0.0,
+        execution_time_ms: float = 0.0,
     ) -> None:
         """Record a rule match.
 
@@ -140,6 +172,8 @@ class MetricsCollector:
             is_production: Whether this is a production rule match.
             is_shadow: Whether this is a shadow rule match.
             timestamp: Timestamp of the match. If None, uses current time.
+            score_delta: Absolute score change caused by rule.
+            execution_time_ms: Time taken to evaluate.
         """
         if timestamp is None:
             timestamp = datetime.now(timezone.utc)
@@ -147,16 +181,20 @@ class MetricsCollector:
         date_str = timestamp.date().isoformat()
         key = (rule_id, date_str)
 
-        current_prod, current_shadow, current_overlap = self._counters[key]
+        values = self._counters[key]
+        # values = [prod, shadow, overlap, delta, time]
 
         if is_production:
-            current_prod += 1
+            values[0] += 1
         if is_shadow:
-            current_shadow += 1
+            values[1] += 1
         if is_production and is_shadow:
-            current_overlap += 1
+            values[2] += 1
 
-        self._counters[key] = (current_prod, current_shadow, current_overlap)
+        values[3] += score_delta
+        values[4] += execution_time_ms
+
+        self._counters[key] = values
         self._save_metrics()
 
     def record_request_matches(
@@ -164,6 +202,8 @@ class MetricsCollector:
         production_matched: list[str],
         shadow_matched: list[str],
         timestamp: datetime | None = None,
+        # Impact metrics can be passed as dict {rule_id: score_delta}
+        match_impacts: dict[str, float] | None = None,
     ) -> None:
         """Record matches for a single request (for overlap calculation).
 
@@ -171,17 +211,25 @@ class MetricsCollector:
             production_matched: List of production rule IDs that matched.
             shadow_matched: List of shadow rule IDs that matched.
             timestamp: Timestamp of the request. If None, uses current time.
+            match_impacts: Optional dict mapping rule_id to score delta.
         """
         if timestamp is None:
             timestamp = datetime.now(timezone.utc)
 
         all_rules = set(production_matched) | set(shadow_matched)
+        impacts = match_impacts or {}
 
         # Record each rule once, with correct flags
         for rule_id in all_rules:
             is_prod = rule_id in production_matched
             is_shadow = rule_id in shadow_matched
-            self.record_match(rule_id, is_prod, is_shadow, timestamp=timestamp)
+            delta = impacts.get(rule_id, 0.0)
+
+            # For execution time, we don't have per-rule granularity yet
+            # so we assume 0 or handle it later with more instrumentation
+            self.record_match(
+                rule_id, is_prod, is_shadow, timestamp=timestamp, score_delta=delta
+            )
 
     def get_rule_metrics(
         self, rule_id: str, start_date: datetime, end_date: datetime
@@ -199,6 +247,8 @@ class MetricsCollector:
         production_total = 0
         shadow_total = 0
         overlap_total = 0
+        delta_total = 0.0
+        time_total = 0.0
 
         current_date = start_date.date()
         end_date_only = end_date.date()
@@ -207,10 +257,18 @@ class MetricsCollector:
             date_str = current_date.isoformat()
             key = (rule_id, date_str)
 
-            prod, shadow, overlap = self._counters.get(key, (0, 0, 0))
-            production_total += prod
-            shadow_total += shadow
-            overlap_total += overlap
+            # Default is list of 5 zeros
+            values = self._counters.get(key, [0, 0, 0, 0.0, 0.0])
+
+            # Handle backward compatibility on read if needed (though _load handles it)
+            if len(values) == 3:
+                values = list(values) + [0.0, 0.0]
+
+            production_total += values[0]
+            shadow_total += values[1]
+            overlap_total += values[2]
+            delta_total += values[3]
+            time_total += values[4]
 
             # Move to next day
             from datetime import timedelta
@@ -221,9 +279,11 @@ class MetricsCollector:
             rule_id=rule_id,
             period_start=start_date,
             period_end=end_date,
-            production_matches=production_total,
-            shadow_matches=shadow_total,
-            overlap_count=overlap_total,
+            production_matches=int(production_total),
+            shadow_matches=int(shadow_total),
+            overlap_count=int(overlap_total),
+            total_score_delta=delta_total,
+            total_execution_time_ms=time_total,
         )
 
     def generate_comparison_report(

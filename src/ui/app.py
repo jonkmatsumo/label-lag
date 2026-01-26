@@ -22,6 +22,7 @@ from plotly.subplots import make_subplots
 
 from ui.data_service import (
     check_api_health,
+    compare_backtests,
     fetch_backtest_results,
     fetch_daily_stats,
     fetch_feature_sample,
@@ -2648,6 +2649,109 @@ def _render_rule_management_tab() -> None:
                 if reason:
                     st.markdown(f"**Reason:** {reason}")
 
+                # --- Analytics & Health (Phase 1.4) ---
+                if status in ["active", "shadow"]:
+                    st.markdown("---")
+                    st.markdown("### 📈 Operational Analytics")
+
+                    from data_service import get_rule_analytics
+
+                    analytics = get_rule_analytics(rule_id, days=7)
+
+                    if analytics:
+                        health = analytics.get("health", {})
+                        stats = analytics.get("statistics", {})
+
+                        # Health Badge
+                        h_status = health.get("status", "unknown")
+                        h_reason = health.get("reason", "")
+
+                        if h_status == "healthy":
+                            st.success("**Health:** 🟢 Healthy")
+                        elif h_status == "stale":
+                            st.warning(f"**Health:** 🟡 Stale ({h_reason})")
+                        elif h_status == "noisy":
+                            st.error(f"**Health:** 🔴 Noisy ({h_reason})")
+                        elif h_status == "ineffective":
+                            st.warning(f"**Health:** 🟡 Ineffective ({h_reason})")
+                        else:
+                            st.info(f"**Health:** ⚪ {h_status}")
+
+                        # Stats Grid
+                        a1, a2, a3 = st.columns(3)
+                        with a1:
+                            st.metric("7d Matches", stats.get("total_matches", 0))
+                        with a2:
+                            st.metric(
+                                "Avg Score Impact",
+                                f"{stats.get('mean_score_delta', 0):.1f}",
+                            )
+                        with a3:
+                            st.metric(
+                                "Avg Latency",
+                                f"{stats.get('mean_latency_ms', 0):.2f}ms",
+                            )
+                    else:
+                        st.caption("No analytics data available.")
+
+                    # --- Impact Visualization (Phase 3.3) ---
+                    st.markdown("#### 🎯 Impact Analysis")
+                    from data_service import get_rule_attribution
+
+                    attribution = get_rule_attribution(rule_id, days=7)
+
+                    if attribution:
+                        c1, c2, c3, c4 = st.columns(4)
+                        with c1:
+                            st.metric(
+                                "Mean Impact",
+                                f"{attribution.get('mean_impact', 0):.1f}",
+                            )
+                        with c2:
+                            st.metric(
+                                "Net Shift", f"{attribution.get('net_impact', 0):.1f}"
+                            )
+                        with c3:
+                            st.metric(
+                                "Avg Before",
+                                f"{attribution.get('mean_model_score', 0):.0f}",
+                            )
+                        with c4:
+                            st.metric(
+                                "Avg After",
+                                f"{attribution.get('mean_final_score', 0):.0f}",
+                            )
+
+                        # Simple waterfall chart using plotly
+                        import plotly.graph_objects as go
+
+                        start = attribution.get("mean_model_score", 0)
+                        delta = attribution.get("net_impact", 0)
+
+                        fig = go.Figure(
+                            go.Waterfall(
+                                orientation="v",
+                                measure=["absolute", "relative", "absolute"],
+                                x=["Model Score", "Rule Impact", "Final Score"],
+                                textposition="outside",
+                                text=[
+                                    f"{start:.1f}",
+                                    f"{delta:+.1f}",
+                                    f"{start + delta:.1f}",
+                                ],
+                                y=[start, delta, 0],
+                                connector={"line": {"color": "rgb(63, 63, 63)"}},
+                            )
+                        )
+                        fig.update_layout(
+                            title="Average Score Path",
+                            height=300,
+                            margin=dict(l=20, r=20, t=40, b=20),
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.caption("No attribution data collected yet.")
+
                 # Show approval signals for pending_review rules
                 if status == "pending_review":
                     from data_service import fetch_approval_signals
@@ -2758,20 +2862,74 @@ def _render_rule_management_tab() -> None:
                                 f"This will make rule `{rule_id}` effective for "
                                 f"all live transactions."
                             )
+
+                            # --- Readiness Check (Phase 2.3) ---
+                            from data_service import get_readiness_report
+
+                            report = get_readiness_report(rule_id)
+
+                            ready_to_publish = True
+                            if report:
+                                st.markdown("### 🚦 Promotion Readiness")
+                                overall = report.get("overall_status")
+                                if overall == "pass":
+                                    st.success("✅ Readiness Checks Passed")
+                                elif overall == "warn":
+                                    st.warning(
+                                        "⚠️ Readiness Checks Passed with Warnings"
+                                    )
+                                else:
+                                    st.error("❌ Readiness Checks Failed")
+                                    ready_to_publish = False  # Block publish if failed
+
+                                with st.expander(
+                                    "View Check Details", expanded=overall != "pass"
+                                ):
+                                    for check in report.get("checks", []):
+                                        c_status = check.get("status")
+                                        c_icon = (
+                                            "✅"
+                                            if c_status == "pass"
+                                            else "⚠️"
+                                            if c_status == "warn"
+                                            else "❌"
+                                        )
+                                        st.markdown(
+                                            f"{c_icon} **{check.get('name')}:** "
+                                            f"{check.get('message')}"
+                                        )
+
+                                if not ready_to_publish:
+                                    st.error(
+                                        "Cannot publish: Rule failed critical "
+                                        "readiness checks."
+                                    )
+                            else:
+                                st.warning(
+                                    "Could not verify readiness (Service unavailable). "
+                                    "Proceed with caution."
+                                )
+
+                            # -----------------------------------
+
                             actor = st.text_input(
                                 "Your name/email",
                                 key=f"actor_{rule_id}",
                                 help="Required for audit trail",
+                                disabled=not ready_to_publish,
                             )
                             publish_reason = st.text_area(
                                 "Reason (optional)",
                                 key=f"reason_{rule_id}",
                                 help="Optional reason for publishing",
+                                disabled=not ready_to_publish,
                             )
                             col_a, col_b = st.columns(2)
                             with col_a:
                                 publish_confirm = st.form_submit_button(
-                                    "Publish", type="primary"
+                                    "Publish",
+                                    type="primary",
+                                    disabled=not ready_to_publish,
                                 )
                             with col_b:
                                 st.form_submit_button("Cancel")
@@ -3498,6 +3656,163 @@ def _render_suggestions_tab() -> None:
                 )
 
 
+def render_what_if_simulation() -> None:
+    """Render the What-If Simulation page."""
+    from datetime import datetime, timedelta
+
+    st.header("What-If Simulation")
+    st.markdown(
+        "Compare rule versions or rulesets on historical data to assess impact "
+        "before deployment."
+    )
+
+    # Date Selection
+    col1, col2 = st.columns(2)
+    with col1:
+        start_date = st.date_input(
+            "Start Date",
+            value=datetime.now() - timedelta(days=7),
+            max_value=datetime.now(),
+        )
+    with col2:
+        end_date = st.date_input(
+            "End Date",
+            value=datetime.now(),
+            max_value=datetime.now(),
+        )
+
+    # Tabs for mode
+    tab1, tab2 = st.tabs(["Single Rule Comparison", "Full Ruleset Comparison"])
+
+    with tab1:
+        st.subheader("Compare Rule Versions")
+        rule_id = st.text_input("Rule ID", help="ID of the rule to compare")
+
+        c1, c2 = st.columns(2)
+        with c1:
+            base_ver = st.text_input(
+                "Baseline Version", value="production", key="rule_base"
+            )
+        with c2:
+            cand_ver = st.text_input(
+                "Candidate Version", placeholder="v2 or ISO timestamp", key="rule_cand"
+            )
+
+        if st.button(
+            "Run Rule Comparison", type="primary", disabled=not rule_id or not cand_ver
+        ):
+            with st.spinner("Running backtests... this may take a minute"):
+                # Convert dates to ISO strings
+                start_iso = datetime.combine(
+                    start_date, datetime.min.time()
+                ).isoformat()
+                end_iso = datetime.combine(end_date, datetime.max.time()).isoformat()
+
+                result = compare_backtests(
+                    base_version=base_ver if base_ver.lower() != "production" else None,
+                    candidate_version=cand_ver,
+                    start_date=start_iso,
+                    end_date=end_iso,
+                    rule_id=rule_id,
+                )
+
+                if result:
+                    st.success("Comparison Complete")
+
+                    delta = result.get("delta", {})
+                    result.get("base_result", {}).get("metrics", {})
+                    cand = result.get("candidate_result", {}).get("metrics", {})
+
+                    # Metrics Display
+                    m1, m2, m3, m4 = st.columns(4)
+                    with m1:
+                        st.metric(
+                            "Match Rate",
+                            f"{cand.get('match_rate', 0):.2%}",
+                            f"{delta.get('match_rate_delta', 0):.2%} pts",
+                        )
+                    with m2:
+                        st.metric(
+                            "Rejection Rate",
+                            f"{cand.get('rejected_rate', 0):.2%}",
+                            f"{delta.get('rejected_rate_delta', 0):.2%} pts",
+                            delta_color="inverse",
+                        )
+                    with m3:
+                        st.metric(
+                            "Matched Count",
+                            f"{cand.get('matched_count', 0):,}",
+                            f"{delta.get('matched_count_delta', 0):+d}",
+                        )
+                    with m4:
+                        st.metric(
+                            "Rejected Count",
+                            f"{cand.get('rejected_count', 0):,}",
+                            f"{delta.get('rejected_count_delta', 0):+d}",
+                            delta_color="inverse",
+                        )
+
+                    st.markdown("---")
+                    st.json(result)  # Show full details for analysis
+
+    with tab2:
+        st.subheader("Compare Full Rulesets")
+        st.info(
+            "Compare performance of the entire production ruleset against a "
+            "candidate version (e.g. historical point in time)."
+        )
+
+        c1, c2 = st.columns(2)
+        with c1:
+            base_ver_set = st.text_input(
+                "Baseline Version", value="production", key="set_base"
+            )
+        with c2:
+            cand_ver_set = st.text_input(
+                "Candidate Version", placeholder="ISO timestamp", key="set_cand"
+            )
+
+        if st.button(
+            "Run Ruleset Comparison", type="primary", disabled=not cand_ver_set
+        ):
+            with st.spinner("Running full backtest... this may take longer"):
+                start_iso = datetime.combine(
+                    start_date, datetime.min.time()
+                ).isoformat()
+                end_iso = datetime.combine(end_date, datetime.max.time()).isoformat()
+
+                result = compare_backtests(
+                    base_version=base_ver_set
+                    if base_ver_set.lower() != "production"
+                    else None,
+                    candidate_version=cand_ver_set,
+                    start_date=start_iso,
+                    end_date=end_iso,
+                )
+
+                if result:
+                    st.success("Comparison Complete")
+                    # Reuse display logic or create component
+                    delta = result.get("delta", {})
+                    cand = result.get("candidate_result", {}).get("metrics", {})
+
+                    m1, m2 = st.columns(2)
+                    with m1:
+                        st.metric(
+                            "Global Match Rate",
+                            f"{cand.get('match_rate', 0):.2%}",
+                            f"{delta.get('match_rate_delta', 0):.2%} pts",
+                        )
+                    with m2:
+                        st.metric(
+                            "Global Rejection Rate",
+                            f"{cand.get('rejected_rate', 0):.2%}",
+                            f"{delta.get('rejected_rate_delta', 0):.2%} pts",
+                            delta_color="inverse",
+                        )
+                    st.json(result)
+
+
 def main() -> None:
     """Main application entry point."""
     # Sidebar navigation
@@ -3512,6 +3827,7 @@ def main() -> None:
             "Synthetic Dataset",
             "Model Lab",
             "Rule Inspector",
+            "What-If Simulation",
         ],
         index=0,
     )
@@ -3531,8 +3847,10 @@ def main() -> None:
         render_synthetic_dataset()
     elif page == "Model Lab":
         render_model_lab()
-    else:
+    elif page == "Rule Inspector":
         render_rule_inspector()
+    elif page == "What-If Simulation":
+        render_what_if_simulation()
 
 
 if __name__ == "__main__":
