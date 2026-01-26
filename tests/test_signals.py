@@ -170,7 +170,7 @@ class TestCoverageSignals:
         mock_draft_store.return_value = mock_store
 
         # Mock audit logger
-        with patch("api.signals.get_audit_logger") as mock_audit:
+        with patch("api.audit.get_audit_logger") as mock_audit:
             mock_audit_logger = MagicMock()
             mock_audit_logger.query.return_value = []
             mock_audit.return_value = mock_audit_logger
@@ -263,7 +263,7 @@ class TestGovernanceSignals:
         assert version_count_signal is not None
         assert version_count_signal.value == 3
 
-    @patch("api.signals.get_audit_logger")
+    @patch("api.audit.get_audit_logger")
     def test_submitter_and_days_in_review(self, mock_audit_logger):
         """Test submitter and days in review signals."""
         mock_logger = MagicMock()
@@ -320,21 +320,44 @@ class TestComputeApprovalSignals:
         mock_draft_store.return_value = mock_store
 
         # Mock signal computations
+        from api.schemas import ApprovalSignalItem
+
         mock_structural.return_value = (
             [
-                MagicMock(signal_id="has_conflicts", severity="info", value=False),
+                ApprovalSignalItem(
+                    signal_id="has_conflicts",
+                    category="structural",
+                    severity="info",
+                    value=False,
+                    label="Has Conflicts",
+                    description="No conflicts detected",
+                ),
             ],
             [],
         )
         mock_coverage.return_value = (
             [
-                MagicMock(signal_id="has_backtest", severity="info", value=True),
+                ApprovalSignalItem(
+                    signal_id="has_backtest",
+                    category="coverage",
+                    severity="info",
+                    value=True,
+                    label="Has Backtest",
+                    description="Backtest results available",
+                ),
             ],
             [],
         )
         mock_governance.return_value = (
             [
-                MagicMock(signal_id="version_count", severity="info", value=1),
+                ApprovalSignalItem(
+                    signal_id="version_count",
+                    category="governance",
+                    severity="info",
+                    value=1,
+                    label="Version Count",
+                    description="Number of prior versions: 1",
+                ),
             ],
             [],
         )
