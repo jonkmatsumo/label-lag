@@ -2650,6 +2650,44 @@ def _render_rule_management_tab() -> None:
                 if reason:
                     st.markdown(f"**Reason:** {reason}")
 
+                # --- Analytics & Health (Phase 1.4) ---
+                if status in ["active", "shadow"]:
+                    st.markdown("---")
+                    st.markdown("### 📈 Operational Analytics")
+                    
+                    from data_service import get_rule_analytics
+                    analytics = get_rule_analytics(rule_id, days=7)
+                    
+                    if analytics:
+                        health = analytics.get("health", {})
+                        stats = analytics.get("statistics", {})
+                        
+                        # Health Badge
+                        h_status = health.get("status", "unknown")
+                        h_reason = health.get("reason", "")
+                        
+                        if h_status == "healthy":
+                            st.success(f"**Health:** 🟢 Healthy")
+                        elif h_status == "stale":
+                            st.warning(f"**Health:** 🟡 Stale ({h_reason})")
+                        elif h_status == "noisy":
+                            st.error(f"**Health:** 🔴 Noisy ({h_reason})")
+                        elif h_status == "ineffective":
+                            st.warning(f"**Health:** 🟡 Ineffective ({h_reason})")
+                        else:
+                            st.info(f"**Health:** ⚪ {h_status}")
+
+                        # Stats Grid
+                        a1, a2, a3 = st.columns(3)
+                        with a1:
+                            st.metric("7d Matches", stats.get("total_matches", 0))
+                        with a2:
+                            st.metric("Avg Score Impact", f"{stats.get('mean_score_delta', 0):.1f}")
+                        with a3:
+                            st.metric("Avg Latency", f"{stats.get('mean_latency_ms', 0):.2f}ms")
+                    else:
+                        st.caption("No analytics data available.")
+
                 # Show approval signals for pending_review rules
                 if status == "pending_review":
                     from data_service import fetch_approval_signals

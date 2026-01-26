@@ -1416,3 +1416,27 @@ def compare_backtests(
     except requests.RequestException as e:
         print(f"Error comparing backtests: {e}")
         return None
+
+
+def get_rule_analytics(rule_id: str, days: int = 7) -> dict[str, Any] | None:
+    """Fetch analytics for a single rule.
+
+    Args:
+        rule_id: Rule ID.
+        days: Number of days to look back.
+
+    Returns:
+        Dict with rule analytics or None if failed.
+    """
+    url = f"{API_BASE_URL}/analytics/rules/{rule_id}"
+    params = {"days": days}
+    
+    try:
+        response = requests.get(url, params=params, timeout=API_TIMEOUT)
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error fetching analytics for rule {rule_id}: {e}")
+        return None
