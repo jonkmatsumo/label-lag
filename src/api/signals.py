@@ -2,7 +2,6 @@
 
 import logging
 from datetime import datetime, timezone
-from typing import Any
 
 from api.backtest import BacktestStore
 from api.draft_store import get_draft_store
