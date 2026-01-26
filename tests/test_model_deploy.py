@@ -1,7 +1,8 @@
 """Tests for model deployment functionality."""
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from api.audit import AuditLogger, set_audit_logger
 from api.model_manager import ModelManager
@@ -66,7 +67,9 @@ class TestModelDeploy:
         assert records[0].rule_id == "model:v2"
 
     @patch("api.main.get_model_manager")
-    def test_deploy_fails_without_production_model(self, mock_get_manager, model_manager):
+    def test_deploy_fails_without_production_model(
+        self, mock_get_manager, model_manager
+    ):
         """Test that deploy fails if production model cannot be loaded."""
         mock_get_manager.return_value = model_manager
         model_manager.load_production_model = MagicMock(return_value=False)

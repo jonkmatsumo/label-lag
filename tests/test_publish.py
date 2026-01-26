@@ -1,7 +1,6 @@
 """Tests for rule publish functionality."""
 
 import pytest
-from datetime import datetime, timezone
 
 from api.audit import AuditLogger, set_audit_logger
 from api.draft_store import DraftRuleStore, set_draft_store
