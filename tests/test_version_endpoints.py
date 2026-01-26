@@ -492,9 +492,7 @@ class TestRuleDiffEndpoint:
         """Test diff with nonexistent version_a returns 404."""
         _create_rule_with_versions(client, "diff_test_007")
 
-        response = client.get(
-            "/rules/diff_test_007/diff?version_a=nonexistent_version"
-        )
+        response = client.get("/rules/diff_test_007/diff?version_a=nonexistent_version")
         assert response.status_code == 404
         assert "Version not found" in response.json()["detail"]
 
@@ -579,8 +577,14 @@ class TestRuleDiffEndpoint:
         data = response.json()
 
         expected_fields = {
-            "field", "op", "value", "action", "score",
-            "severity", "reason", "status"
+            "field",
+            "op",
+            "value",
+            "action",
+            "score",
+            "severity",
+            "reason",
+            "status",
         }
         actual_fields = {c["field_name"] for c in data["changes"]}
         assert expected_fields == actual_fields

@@ -51,7 +51,14 @@ BREAKING_CHANGE_FIELDS = {"field", "op", "action"}
 
 # All rule fields to compare (in display order)
 DIFF_FIELDS = [
-    "field", "op", "value", "action", "score", "severity", "reason", "status"
+    "field",
+    "op",
+    "value",
+    "action",
+    "score",
+    "severity",
+    "reason",
+    "status",
 ]
 
 

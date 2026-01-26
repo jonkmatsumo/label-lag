@@ -2902,12 +2902,14 @@ def _render_version_diff_section(rule_id: str) -> None:
             else:
                 status = "Modified"
 
-            rows.append({
-                "Field": field_name,
-                "Older (B)": str(old_val) if old_val is not None else "",
-                "Newer (A)": str(new_val) if new_val is not None else "",
-                "Status": status,
-            })
+            rows.append(
+                {
+                    "Field": field_name,
+                    "Older (B)": str(old_val) if old_val is not None else "",
+                    "Newer (A)": str(new_val) if new_val is not None else "",
+                    "Status": status,
+                }
+            )
 
         if rows:
             df = pd.DataFrame(rows)
