@@ -1123,7 +1123,7 @@ class DriftStatusResponse(BaseModel):
 
 class RuleHealthStats(BaseModel):
     """Metrics snapshot for health report."""
-    
+
     period_start: str | None = None
     period_end: str | None = None
     production_matches: int = 0
@@ -1136,7 +1136,7 @@ class RuleHealthStats(BaseModel):
 
 class RuleHealthResponse(BaseModel):
     """Rule health status response."""
-    
+
     rule_id: str
     status: str
     reason: str
@@ -1145,7 +1145,7 @@ class RuleHealthResponse(BaseModel):
 
 class RuleAnalyticsResponse(BaseModel):
     """Detailed analytics for a rule."""
-    
+
     rule_id: str
     health: RuleHealthResponse
     statistics: dict[str, Any]
@@ -1154,7 +1154,7 @@ class RuleAnalyticsResponse(BaseModel):
 
 class CheckResultResponse(BaseModel):
     """Result of a readiness check."""
-    
+
     policy_type: str
     name: str
     status: str
@@ -1164,7 +1164,7 @@ class CheckResultResponse(BaseModel):
 
 class ReadinessReportResponse(BaseModel):
     """Readiness report response."""
-    
+
     rule_id: str
     timestamp: str
     overall_status: str
@@ -1173,7 +1173,7 @@ class ReadinessReportResponse(BaseModel):
 
 class RuleAttributionResponse(BaseModel):
     """Rule attribution metrics response."""
-    
+
     rule_id: str
     total_matches: int
     mean_model_score: float

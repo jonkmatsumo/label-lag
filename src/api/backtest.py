@@ -13,9 +13,8 @@ import numpy as np
 from sqlalchemy import text
 
 from api.rules import RuleSet, evaluate_rules
-
-from synthetic_pipeline.db.session import DatabaseSession
 from api.schemas import BacktestDelta
+from synthetic_pipeline.db.session import DatabaseSession
 
 logger = logging.getLogger(__name__)
 
