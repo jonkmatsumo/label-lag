@@ -2,9 +2,11 @@
 
 import json
 import logging
+import os
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Lock
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -49,6 +51,7 @@ class AuditLogger:
         """
         self.storage_path = Path(storage_path) if storage_path else None
         self._records: list[AuditRecord] = []
+        self._lock = Lock()  # Thread safety
 
         # Load existing records if file exists
         if self.storage_path and self.storage_path.exists():
@@ -70,7 +73,7 @@ class AuditLogger:
             self._records = []
 
     def _save_records(self) -> None:
-        """Save records to storage file."""
+        """Save records to storage file with atomic write."""
         if not self.storage_path:
             return
 
@@ -78,9 +81,11 @@ class AuditLogger:
             # Ensure directory exists
             self.storage_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Write all records
-            with open(self.storage_path, "w") as f:
+            # Atomic write: write to temp file, then rename
+            temp_path = self.storage_path.with_suffix(".tmp")
+            with open(temp_path, "w") as f:
                 json.dump([r.to_dict() for r in self._records], f, indent=2)
+            temp_path.replace(self.storage_path)
         except OSError as e:
             logger.error(f"Failed to save audit records to {self.storage_path}: {e}")
 
@@ -106,24 +111,26 @@ class AuditLogger:
         Returns:
             Created audit record.
         """
-        record = AuditRecord(
-            rule_id=rule_id,
-            action=action,
-            actor=actor,
-            timestamp=datetime.now(timezone.utc),
-            before_state=before_state,
-            after_state=after_state,
-            reason=reason,
-        )
+        with self._lock:
+            record = AuditRecord(
+                rule_id=rule_id,
+                action=action,
+                actor=actor,
+                timestamp=datetime.now(timezone.utc),
+                before_state=before_state,
+                after_state=after_state,
+                reason=reason,
+            )
 
-        self._records.append(record)
-        self._save_records()
+            self._records.append(record)
+            self._save_records()
 
-        logger.info(
-            f"Audit log: {action} on rule {rule_id} by {actor} at {record.timestamp}"
-        )
+            logger.info(
+                f"Audit log: {action} on rule {rule_id} by {actor} "
+                f"at {record.timestamp}"
+            )
 
-        return record
+            return record
 
     def query(
         self,
@@ -145,28 +152,29 @@ class AuditLogger:
         Returns:
             List of matching audit records, ordered by timestamp (oldest first).
         """
-        results = self._records.copy()
+        with self._lock:
+            results = self._records.copy()
 
-        # Apply filters
-        if rule_id is not None:
-            results = [r for r in results if r.rule_id == rule_id]
+            # Apply filters
+            if rule_id is not None:
+                results = [r for r in results if r.rule_id == rule_id]
 
-        if actor is not None:
-            results = [r for r in results if r.actor == actor]
+            if actor is not None:
+                results = [r for r in results if r.actor == actor]
 
-        if action is not None:
-            results = [r for r in results if r.action == action]
+            if action is not None:
+                results = [r for r in results if r.action == action]
 
-        if start_date is not None:
-            results = [r for r in results if r.timestamp >= start_date]
+            if start_date is not None:
+                results = [r for r in results if r.timestamp >= start_date]
 
-        if end_date is not None:
-            results = [r for r in results if r.timestamp <= end_date]
+            if end_date is not None:
+                results = [r for r in results if r.timestamp <= end_date]
 
-        # Sort by timestamp (oldest first)
-        results.sort(key=lambda r: r.timestamp)
+            # Sort by timestamp (oldest first)
+            results.sort(key=lambda r: r.timestamp)
 
-        return results
+            return results
 
     def get_rule_history(self, rule_id: str) -> list[AuditRecord]:
         """Get complete history for a rule.
@@ -185,7 +193,8 @@ class AuditLogger:
         Returns:
             List of all records, ordered by timestamp.
         """
-        return sorted(self._records, key=lambda r: r.timestamp)
+        with self._lock:
+            return sorted(self._records, key=lambda r: r.timestamp)
 
 
 # Global audit logger instance (can be replaced for testing)
@@ -200,7 +209,8 @@ def get_audit_logger() -> AuditLogger:
     """
     global _global_audit_logger
     if _global_audit_logger is None:
-        _global_audit_logger = AuditLogger()
+        storage_path = os.getenv("AUDIT_STORAGE_PATH")
+        _global_audit_logger = AuditLogger(storage_path=storage_path)
     return _global_audit_logger
 
 

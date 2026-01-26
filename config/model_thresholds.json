@@ -1,0 +1,7 @@
+{
+    "production_thresholds": {
+        "pr_auc": 0.5,
+        "recall": 0.3
+    },
+    "staging_thresholds": {}
+}

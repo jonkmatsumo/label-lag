@@ -213,6 +213,14 @@ class TuningConfig(BaseModel):
         default="maximize",
         description="Optimization direction",
     )
+    selected_trial_number: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Optional trial number to use instead of best trial. "
+            "If None, uses best trial automatically."
+        ),
+    )
 
 
 class TrainRequest(BaseModel):
@@ -749,3 +757,144 @@ class AcceptSuggestionResponse(BaseModel):
             "Source suggestion metadata (confidence, evidence, field, threshold)"
         ),
     )
+
+
+class ApproveRuleRequest(BaseModel):
+    """Request schema for approving a pending rule."""
+
+    approver: str = Field(..., description="Who is approving this rule")
+    reason: str | None = Field(None, description="Optional reason for approval")
+
+
+class ApproveRuleResponse(BaseModel):
+    """Response schema for approving a rule."""
+
+    rule: DraftRuleResponse = Field(..., description="Approved rule")
+    approved_at: str = Field(..., description="Approval timestamp (ISO format)")
+
+
+class RejectRuleRequest(BaseModel):
+    """Request schema for rejecting a pending rule."""
+
+    actor: str = Field(..., description="Who is rejecting this rule")
+    reason: str = Field(
+        ...,
+        min_length=10,
+        description="Reason for rejection (min 10 characters)",
+    )
+
+
+class RejectRuleResponse(BaseModel):
+    """Response schema for rejecting a rule."""
+
+    rule: DraftRuleResponse = Field(..., description="Rejected rule")
+    rejected_at: str = Field(..., description="Rejection timestamp (ISO format)")
+
+
+class ActivateRuleRequest(BaseModel):
+    """Request schema for activating a rule."""
+
+    actor: str = Field(..., description="Who is requesting activation")
+    reason: str = Field(
+        ...,
+        min_length=10,
+        description="Reason for activation (min 10 characters)",
+    )
+    approver: str | None = Field(
+        None,
+        description="Approver if transition requires approval",
+    )
+
+
+class ActivateRuleResponse(BaseModel):
+    """Response schema for activating a rule."""
+
+    rule: DraftRuleResponse = Field(..., description="Activated rule")
+    activated_at: str = Field(..., description="Activation timestamp (ISO format)")
+
+
+class DisableRuleRequest(BaseModel):
+    """Request schema for disabling a rule."""
+
+    actor: str = Field(..., description="Who is disabling this rule")
+    reason: str | None = Field(None, description="Optional reason for disabling")
+
+
+class DisableRuleResponse(BaseModel):
+    """Response schema for disabling a rule."""
+
+    rule: DraftRuleResponse = Field(..., description="Disabled rule")
+    disabled_at: str = Field(..., description="Disable timestamp (ISO format)")
+
+
+class ShadowRuleRequest(BaseModel):
+    """Request schema for moving a rule to shadow."""
+
+    actor: str = Field(..., description="Who is moving this rule to shadow")
+    reason: str | None = Field(None, description="Optional reason for shadow move")
+
+
+class ShadowRuleResponse(BaseModel):
+    """Response schema for moving a rule to shadow."""
+
+    rule: DraftRuleResponse = Field(..., description="Rule in shadow")
+    shadowed_at: str = Field(..., description="Shadow move timestamp (ISO format)")
+
+
+class RollbackRuleRequest(BaseModel):
+    """Request schema for rolling back a rule version."""
+
+    actor: str = Field(..., description="Who is performing the rollback")
+    reason: str | None = Field(None, description="Optional reason for rollback")
+
+
+class RollbackRuleResponse(BaseModel):
+    """Response schema for rolling back a rule."""
+
+    rule: DraftRuleResponse = Field(..., description="Rolled back rule")
+    version_id: str = Field(..., description="Version ID")
+    rolled_back_to: str = Field(..., description="Version rolled back to")
+    rolled_back_at: str = Field(..., description="Rollback timestamp (ISO format)")
+
+
+class AuditRecordResponse(BaseModel):
+    """Response schema for a single audit record."""
+
+    rule_id: str = Field(..., description="Rule identifier")
+    action: str = Field(..., description="Action type")
+    actor: str = Field(..., description="Actor")
+    timestamp: str = Field(..., description="Timestamp (ISO format)")
+    before_state: dict[str, Any] | None = Field(None, description="State before action")
+    after_state: dict[str, Any] | None = Field(None, description="State after action")
+    reason: str = Field(default="", description="Reason")
+
+
+class AuditLogQueryResponse(BaseModel):
+    """Response schema for audit log query."""
+
+    records: list[AuditRecordResponse] = Field(
+        default_factory=list,
+        description="Audit records",
+    )
+    total: int = Field(default=0, description="Total count")
+
+
+class RuleVersionResponse(BaseModel):
+    """Response schema for a single rule version."""
+
+    rule_id: str = Field(..., description="Rule identifier")
+    version_id: str = Field(..., description="Version identifier")
+    rule: DraftRuleResponse = Field(..., description="Rule snapshot")
+    timestamp: str = Field(..., description="Timestamp (ISO format)")
+    created_by: str = Field(..., description="Creator")
+    reason: str = Field(default="", description="Reason")
+
+
+class RuleVersionListResponse(BaseModel):
+    """Response schema for listing rule versions."""
+
+    versions: list[RuleVersionResponse] = Field(
+        default_factory=list,
+        description="Version list",
+    )
+    total: int = Field(default=0, description="Total count")

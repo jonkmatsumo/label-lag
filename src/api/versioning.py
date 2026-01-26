@@ -2,9 +2,11 @@
 
 import json
 import logging
+import os
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Lock
 from typing import Any
 
 from api.audit import get_audit_logger
@@ -67,6 +69,7 @@ class RuleVersionStore:
         self.storage_path = Path(storage_path) if storage_path else None
         self._versions: dict[str, list[RuleVersion]] = {}  # rule_id -> list of versions
         self._audit_logger = get_audit_logger()
+        self._lock = Lock()  # Thread safety
 
         # Load existing versions if file exists
         if self.storage_path and self.storage_path.exists():
@@ -92,7 +95,7 @@ class RuleVersionStore:
             self._versions = {}
 
     def _save_versions(self) -> None:
-        """Save versions to storage file."""
+        """Save versions to storage file with atomic write."""
         if not self.storage_path:
             return
 
@@ -105,8 +108,11 @@ class RuleVersionStore:
             for rule_id, versions in self._versions.items():
                 data[rule_id] = [v.to_dict() for v in versions]
 
-            with open(self.storage_path, "w") as f:
+            # Atomic write: write to temp file, then rename
+            temp_path = self.storage_path.with_suffix(".tmp")
+            with open(temp_path, "w") as f:
                 json.dump(data, f, indent=2)
+            temp_path.replace(self.storage_path)
         except OSError as e:
             logger.error(f"Failed to save rule versions to {self.storage_path}: {e}")
 
@@ -133,29 +139,30 @@ class RuleVersionStore:
         Returns:
             Created RuleVersion.
         """
-        version_id = self._generate_version_id(rule.id)
-        version = RuleVersion(
-            rule_id=rule.id,
-            version_id=version_id,
-            rule=rule,
-            timestamp=datetime.now(timezone.utc),
-            created_by=created_by,
-            reason=reason,
-        )
+        with self._lock:
+            version_id = self._generate_version_id(rule.id)
+            version = RuleVersion(
+                rule_id=rule.id,
+                version_id=version_id,
+                rule=rule,
+                timestamp=datetime.now(timezone.utc),
+                created_by=created_by,
+                reason=reason,
+            )
 
-        # Add to versions list
-        if rule.id not in self._versions:
-            self._versions[rule.id] = []
-        self._versions[rule.id].append(version)
+            # Add to versions list
+            if rule.id not in self._versions:
+                self._versions[rule.id] = []
+            self._versions[rule.id].append(version)
 
-        # Sort by timestamp (oldest first)
-        self._versions[rule.id].sort(key=lambda v: v.timestamp)
+            # Sort by timestamp (oldest first)
+            self._versions[rule.id].sort(key=lambda v: v.timestamp)
 
-        self._save_versions()
+            self._save_versions()
 
-        logger.info(f"Saved version {version_id} of rule {rule.id}")
+            logger.info(f"Saved version {version_id} of rule {rule.id}")
 
-        return version
+            return version
 
     def get_version(self, rule_id: str, version_id: str) -> RuleVersion | None:
         """Get a specific version of a rule.
@@ -167,14 +174,15 @@ class RuleVersionStore:
         Returns:
             RuleVersion if found, None otherwise.
         """
-        if rule_id not in self._versions:
+        with self._lock:
+            if rule_id not in self._versions:
+                return None
+
+            for version in self._versions[rule_id]:
+                if version.version_id == version_id:
+                    return version
+
             return None
-
-        for version in self._versions[rule_id]:
-            if version.version_id == version_id:
-                return version
-
-        return None
 
     def list_versions(self, rule_id: str) -> list[RuleVersion]:
         """List all versions of a rule.
@@ -196,10 +204,11 @@ class RuleVersionStore:
         Returns:
             Latest RuleVersion if found, None otherwise.
         """
-        versions = self.list_versions(rule_id)
-        if not versions:
-            return None
-        return versions[-1]  # Last one is latest (sorted by timestamp)
+        with self._lock:
+            versions = self._versions.get(rule_id, [])
+            if not versions:
+                return None
+            return versions[-1]  # Last one is latest (sorted by timestamp)
 
     def rollback(
         self, rule_id: str, version_id: str, rolled_back_by: str, reason: str = ""
@@ -220,29 +229,53 @@ class RuleVersionStore:
         Raises:
             ValueError: If version not found.
         """
-        # Get the version to rollback to
-        target_version = self.get_version(rule_id, version_id)
-        if target_version is None:
-            raise ValueError(f"Version {version_id} not found for rule {rule_id}")
+        with self._lock:
+            # Get the version to rollback to (inline to avoid nested lock)
+            if rule_id not in self._versions:
+                raise ValueError(f"Version {version_id} not found for rule {rule_id}")
 
-        # Create new version from the target version's rule
-        rollback_reason = reason or f"Rollback to version {version_id}"
-        new_version = self.save(
-            rule=target_version.rule,
-            created_by=rolled_back_by,
-            reason=rollback_reason,
-        )
+            target_version = None
+            for version in self._versions[rule_id]:
+                if version.version_id == version_id:
+                    target_version = version
+                    break
 
-        # Log rollback in audit trail
+            if target_version is None:
+                raise ValueError(f"Version {version_id} not found for rule {rule_id}")
+
+            # Get latest version before rollback (inline)
+            latest_before = None
+            if rule_id in self._versions and self._versions[rule_id]:
+                latest_before = self._versions[rule_id][-1]
+
+            # Create new version from the target version's rule
+            rollback_reason = reason or f"Rollback to version {version_id}"
+            version_id_new = self._generate_version_id(rule_id)
+            new_version = RuleVersion(
+                rule_id=rule_id,
+                version_id=version_id_new,
+                rule=target_version.rule,
+                timestamp=datetime.now(timezone.utc),
+                created_by=rolled_back_by,
+                reason=rollback_reason,
+            )
+
+            # Add to versions list
+            if rule_id not in self._versions:
+                self._versions[rule_id] = []
+            self._versions[rule_id].append(new_version)
+            self._versions[rule_id].sort(key=lambda v: v.timestamp)
+
+            self._save_versions()
+
+            # Log rollback in audit trail (outside lock to avoid deadlock)
+            before_version_id = latest_before.version_id if latest_before else None
+
         self._audit_logger.log(
             rule_id=rule_id,
             action="rollback",
             actor=rolled_back_by,
-            before_state={
-                "version_id": self.get_latest_version(rule_id).version_id
-                if self.get_latest_version(rule_id)
-                else None
-            },
+            before_state={"version_id": before_version_id},
             after_state={
                 "version_id": new_version.version_id,
                 "rolled_back_to": version_id,
@@ -308,7 +341,8 @@ def get_version_store() -> RuleVersionStore:
     """
     global _global_version_store
     if _global_version_store is None:
-        _global_version_store = RuleVersionStore()
+        storage_path = os.getenv("VERSION_STORAGE_PATH")
+        _global_version_store = RuleVersionStore(storage_path=storage_path)
     return _global_version_store
 
 

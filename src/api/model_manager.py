@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import pickle
+import time
 from pathlib import Path
 from threading import Lock
 from typing import Any
@@ -160,6 +161,10 @@ class ModelManager:
             logger.info(
                 f"Successfully loaded model version {self._model_version} from MLflow"
             )
+
+            # Benchmark inference latency after load
+            self._benchmark_inference()
+
             return True
 
         except Exception as e:
@@ -249,6 +254,60 @@ class ModelManager:
             logger.debug(f"Could not load default rules file: {e}")
             self._ruleset = RuleSet.empty()
             logger.debug("Using empty ruleset")
+
+    def _benchmark_inference(self, n_samples: int = 100) -> None:
+        """Benchmark inference latency and log to MLflow.
+
+        Args:
+            n_samples: Number of samples to use for benchmarking.
+        """
+        if self._model is None:
+            return
+
+        try:
+            # Create sample data matching required features
+            required = self.required_features
+            sample_data = pd.DataFrame(
+                {feat: np.random.rand(n_samples) for feat in required}
+            )
+
+            # Measure latencies
+            latencies_ms = []
+            for _ in range(n_samples):
+                start = time.perf_counter()
+                self._model.predict(sample_data.iloc[[0]])
+                elapsed_ms = (time.perf_counter() - start) * 1000
+                latencies_ms.append(elapsed_ms)
+
+            # Calculate percentiles
+            latencies_sorted = sorted(latencies_ms)
+            p50 = latencies_sorted[int(len(latencies_sorted) * 0.50)]
+            p95 = latencies_sorted[int(len(latencies_sorted) * 0.95)]
+            p99 = latencies_sorted[int(len(latencies_sorted) * 0.99)]
+
+            # Log to MLflow (find the run_id from the model version)
+            try:
+                client = mlflow.MlflowClient()
+                versions = client.search_model_versions(f"name='{MODEL_NAME}'")
+                for v in versions:
+                    if (
+                        v.current_stage == "Production"
+                        and v.version == self._model_version
+                    ):
+                        run_id = v.run_id
+                        client.log_metric(run_id, "inference_latency_p50_ms", p50)
+                        client.log_metric(run_id, "inference_latency_p95_ms", p95)
+                        client.log_metric(run_id, "inference_latency_p99_ms", p99)
+                        logger.info(
+                            f"Logged inference latency: p50={p50:.2f}ms, "
+                            f"p95={p95:.2f}ms, p99={p99:.2f}ms"
+                        )
+                        break
+            except Exception as e:
+                logger.debug(f"Could not log inference latency to MLflow: {e}")
+
+        except Exception as e:
+            logger.debug(f"Inference benchmarking failed: {e}")
 
     def _load_fallback_model(self) -> bool:
         """Attempt to load fallback model from local file.

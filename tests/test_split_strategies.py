@@ -156,3 +156,278 @@ class TestGetStrategy:
         for s in SplitStrategy:
             impl = get_strategy(s)
             assert impl is not None
+
+
+class TestEnhancedManifest:
+    """Enhanced split manifest with time ranges, user counts, and hash."""
+
+    def test_manifest_has_time_ranges(self):
+        """Manifest includes train_time_range and test_time_range."""
+        from datetime import datetime
+        from unittest.mock import MagicMock
+
+        from model.loader import DataLoader
+
+        loader = DataLoader(database_url="postgresql://test:test@localhost/test")
+        session = MagicMock()
+
+        # Create mock data with timestamps
+        train_data = [
+            (
+                "rec1",
+                "u1",
+                1,
+                1.0,
+                0.0,
+                None,
+                True,
+                None,
+                False,
+                datetime(2024, 1, 1),
+                0,
+            ),
+            (
+                "rec2",
+                "u2",
+                2,
+                2.0,
+                0.1,
+                None,
+                True,
+                None,
+                False,
+                datetime(2024, 3, 31),
+                0,
+            ),
+        ]
+        test_data = [
+            (
+                "rec3",
+                "u3",
+                3,
+                3.0,
+                0.2,
+                None,
+                True,
+                None,
+                False,
+                datetime(2024, 4, 1),
+                0,
+            ),
+        ]
+
+        mock_result_train = MagicMock()
+        mock_result_train.fetchall.return_value = train_data
+        mock_result_train.keys.return_value = [
+            "record_id",
+            "user_id",
+            "velocity_24h",
+            "amount_to_avg_ratio_30d",
+            "balance_volatility_z_score",
+            "experimental_signals",
+            "is_train_eligible",
+            "fraud_confirmed_at",
+            "is_fraudulent",
+            "transaction_timestamp",
+            "label",
+        ]
+
+        mock_result_test = MagicMock()
+        mock_result_test.fetchall.return_value = test_data
+        mock_result_test.keys.return_value = [
+            "record_id",
+            "user_id",
+            "velocity_24h",
+            "amount_to_avg_ratio_30d",
+            "balance_volatility_z_score",
+            "experimental_signals",
+            "is_train_eligible",
+            "fraud_confirmed_at",
+            "is_fraudulent",
+            "transaction_timestamp",
+            "label",
+        ]
+
+        def execute_side_effect(query, params):
+            if "transaction_timestamp <" in str(query):
+                return mock_result_train
+            return mock_result_test
+
+        session.execute.side_effect = execute_side_effect
+
+        config = SplitConfig(seed=42)
+        split = loader.load_train_test_split(
+            datetime(2024, 4, 1),
+            session=session,
+            feature_columns=["velocity_24h", "amount_to_avg_ratio_30d"],
+            split_config=config,
+        )
+
+        assert split.split_manifest is not None
+        assert "train_time_range" in split.split_manifest
+        assert "test_time_range" in split.split_manifest
+        assert split.split_manifest["train_time_range"] is not None
+        assert split.split_manifest["test_time_range"] is not None
+        assert "min" in split.split_manifest["train_time_range"]
+        assert "max" in split.split_manifest["train_time_range"]
+
+    def test_manifest_has_unique_user_counts(self):
+        """Manifest includes train_unique_users and test_unique_users."""
+        from datetime import datetime
+        from unittest.mock import MagicMock
+
+        from model.loader import DataLoader
+
+        loader = DataLoader(database_url="postgresql://test:test@localhost/test")
+        session = MagicMock()
+
+        # Create mock data with different users
+        train_data = [
+            (
+                "rec1",
+                "u1",
+                1,
+                1.0,
+                0.0,
+                None,
+                True,
+                None,
+                False,
+                datetime(2024, 3, 1),
+                0,
+            ),
+            (
+                "rec2",
+                "u2",
+                2,
+                2.0,
+                0.1,
+                None,
+                True,
+                None,
+                False,
+                datetime(2024, 3, 2),
+                0,
+            ),
+        ]
+        test_data = [
+            (
+                "rec3",
+                "u3",
+                3,
+                3.0,
+                0.2,
+                None,
+                True,
+                None,
+                False,
+                datetime(2024, 4, 1),
+                0,
+            ),
+        ]
+
+        mock_result_train = MagicMock()
+        mock_result_train.fetchall.return_value = train_data
+        mock_result_train.keys.return_value = [
+            "record_id",
+            "user_id",
+            "velocity_24h",
+            "amount_to_avg_ratio_30d",
+            "balance_volatility_z_score",
+            "experimental_signals",
+            "is_train_eligible",
+            "fraud_confirmed_at",
+            "is_fraudulent",
+            "transaction_timestamp",
+            "label",
+        ]
+
+        mock_result_test = MagicMock()
+        mock_result_test.fetchall.return_value = test_data
+        mock_result_test.keys.return_value = [
+            "record_id",
+            "user_id",
+            "velocity_24h",
+            "amount_to_avg_ratio_30d",
+            "balance_volatility_z_score",
+            "experimental_signals",
+            "is_train_eligible",
+            "fraud_confirmed_at",
+            "is_fraudulent",
+            "transaction_timestamp",
+            "label",
+        ]
+
+        def execute_side_effect(query, params):
+            if "transaction_timestamp <" in str(query):
+                return mock_result_train
+            return mock_result_test
+
+        session.execute.side_effect = execute_side_effect
+
+        config = SplitConfig(seed=42)
+        split = loader.load_train_test_split(
+            datetime(2024, 4, 1),
+            session=session,
+            feature_columns=["velocity_24h", "amount_to_avg_ratio_30d"],
+            split_config=config,
+        )
+
+        assert split.split_manifest is not None
+        assert "train_unique_users" in split.split_manifest
+        assert "test_unique_users" in split.split_manifest
+        assert split.split_manifest["train_unique_users"] == 2
+        assert split.split_manifest["test_unique_users"] == 1
+
+    def test_manifest_has_hash(self):
+        """Manifest includes manifest_hash."""
+        from datetime import datetime
+        from unittest.mock import MagicMock
+
+        from model.loader import DataLoader
+
+        loader = DataLoader(database_url="postgresql://test:test@localhost/test")
+        session = MagicMock()
+
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = [
+            (
+                "rec1",
+                "u1",
+                1,
+                1.0,
+                0.0,
+                None,
+                True,
+                None,
+                False,
+                datetime(2024, 3, 1),
+                0,
+            ),
+        ]
+        mock_result.keys.return_value = [
+            "record_id",
+            "user_id",
+            "velocity_24h",
+            "amount_to_avg_ratio_30d",
+            "balance_volatility_z_score",
+            "experimental_signals",
+            "is_train_eligible",
+            "fraud_confirmed_at",
+            "is_fraudulent",
+            "transaction_timestamp",
+            "label",
+        ]
+        session.execute.return_value = mock_result
+
+        config = SplitConfig(seed=42)
+        split = loader.load_train_test_split(
+            datetime(2024, 4, 1),
+            session=session,
+            feature_columns=["velocity_24h", "amount_to_avg_ratio_30d"],
+            split_config=config,
+        )
+
+        assert split.split_manifest is not None
+        assert "manifest_hash" in split.split_manifest
+        assert split.split_manifest["manifest_hash"].startswith("sha256:")

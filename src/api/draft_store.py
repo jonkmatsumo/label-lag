@@ -6,8 +6,10 @@ persistent storage and status enforcement.
 
 import json
 import logging
+import os
 from dataclasses import asdict
 from pathlib import Path
+from threading import Lock
 
 from api.rules import Rule, RuleStatus
 
@@ -25,6 +27,7 @@ class DraftRuleStore:
         """
         self.storage_path = Path(storage_path) if storage_path else None
         self._rules: dict[str, Rule] = {}  # rule_id -> Rule
+        self._lock = Lock()  # Thread safety
 
         # Load existing rules if file exists
         if self.storage_path and self.storage_path.exists():
@@ -57,7 +60,7 @@ class DraftRuleStore:
             self._rules = {}
 
     def _save_rules(self) -> None:
-        """Save rules to storage file."""
+        """Save rules to storage file with atomic write."""
         if not self.storage_path:
             return
 
@@ -66,8 +69,11 @@ class DraftRuleStore:
 
             data = {rule_id: asdict(rule) for rule_id, rule in self._rules.items()}
 
-            with open(self.storage_path, "w") as f:
+            # Atomic write: write to temp file, then rename
+            temp_path = self.storage_path.with_suffix(".tmp")
+            with open(temp_path, "w") as f:
                 json.dump(data, f, indent=2)
+            temp_path.replace(self.storage_path)
         except OSError as e:
             logger.error(f"Failed to save draft rules to {self.storage_path}: {e}")
 
@@ -81,29 +87,33 @@ class DraftRuleStore:
         Raises:
             ValueError: If rule status is invalid for this operation.
         """
-        # Allow saving draft rules
-        if rule.status == RuleStatus.DRAFT.value:
-            self._rules[rule.id] = rule
-            self._save_rules()
-            logger.debug(f"Saved draft rule {rule.id}")
-        # Allow updating existing draft to pending_review
-        elif rule.status == RuleStatus.PENDING_REVIEW.value and rule.id in self._rules:
-            existing = self._rules[rule.id]
-            if existing.status == RuleStatus.DRAFT.value:
+        with self._lock:
+            # Allow saving draft rules
+            if rule.status == RuleStatus.DRAFT.value:
                 self._rules[rule.id] = rule
                 self._save_rules()
-                logger.debug(f"Updated rule {rule.id} to pending_review")
+                logger.debug(f"Saved draft rule {rule.id}")
+            # Allow updating existing draft to pending_review
+            elif (
+                rule.status == RuleStatus.PENDING_REVIEW.value
+                and rule.id in self._rules
+            ):
+                existing = self._rules[rule.id]
+                if existing.status == RuleStatus.DRAFT.value:
+                    self._rules[rule.id] = rule
+                    self._save_rules()
+                    logger.debug(f"Updated rule {rule.id} to pending_review")
+                else:
+                    raise ValueError(
+                        f"Cannot update rule {rule.id} from {existing.status} "
+                        "to pending_review"
+                    )
             else:
                 raise ValueError(
-                    f"Cannot update rule {rule.id} from {existing.status} "
-                    "to pending_review"
+                    f"Cannot save rule {rule.id} with status {rule.status}. "
+                    "Only draft rules can be created, or existing drafts can be "
+                    "updated to pending_review."
                 )
-        else:
-            raise ValueError(
-                f"Cannot save rule {rule.id} with status {rule.status}. "
-                "Only draft rules can be created, or existing drafts can be "
-                "updated to pending_review."
-            )
 
     def get(self, rule_id: str) -> Rule | None:
         """Get a draft rule by ID.
@@ -114,7 +124,8 @@ class DraftRuleStore:
         Returns:
             Rule if found, None otherwise.
         """
-        return self._rules.get(rule_id)
+        with self._lock:
+            return self._rules.get(rule_id)
 
     def list_rules(
         self,
@@ -130,19 +141,20 @@ class DraftRuleStore:
         Returns:
             List of matching Rules, ordered by rule ID.
         """
-        rules = list(self._rules.values())
+        with self._lock:
+            rules = list(self._rules.values())
 
-        # Filter by status
-        if status is not None:
-            rules = [r for r in rules if r.status == status]
-        elif not include_archived:
-            # Exclude archived by default
-            rules = [r for r in rules if r.status != RuleStatus.ARCHIVED.value]
+            # Filter by status
+            if status is not None:
+                rules = [r for r in rules if r.status == status]
+            elif not include_archived:
+                # Exclude archived by default
+                rules = [r for r in rules if r.status != RuleStatus.ARCHIVED.value]
 
-        # Sort by rule ID
-        rules.sort(key=lambda r: r.id)
+            # Sort by rule ID
+            rules.sort(key=lambda r: r.id)
 
-        return rules
+            return rules
 
     def delete(self, rule_id: str) -> bool:
         """Delete a draft rule (archive it).
@@ -153,27 +165,28 @@ class DraftRuleStore:
         Returns:
             True if rule was found and archived, False otherwise.
         """
-        rule = self._rules.get(rule_id)
-        if rule is None:
-            return False
+        with self._lock:
+            rule = self._rules.get(rule_id)
+            if rule is None:
+                return False
 
-        if rule.status != RuleStatus.DRAFT.value:
-            logger.warning(
-                f"Cannot delete rule {rule_id} with status {rule.status}. "
-                "Only draft rules can be deleted."
-            )
-            return False
+            if rule.status != RuleStatus.DRAFT.value:
+                logger.warning(
+                    f"Cannot delete rule {rule_id} with status {rule.status}. "
+                    "Only draft rules can be deleted."
+                )
+                return False
 
-        # Archive the rule
-        rule_dict = asdict(rule)
-        rule_dict["status"] = RuleStatus.ARCHIVED.value
-        archived_rule = Rule(**rule_dict)
+            # Archive the rule
+            rule_dict = asdict(rule)
+            rule_dict["status"] = RuleStatus.ARCHIVED.value
+            archived_rule = Rule(**rule_dict)
 
-        self._rules[rule_id] = archived_rule
-        self._save_rules()
-        logger.debug(f"Archived draft rule {rule_id}")
+            self._rules[rule_id] = archived_rule
+            self._save_rules()
+            logger.debug(f"Archived draft rule {rule_id}")
 
-        return True
+            return True
 
     def exists(self, rule_id: str) -> bool:
         """Check if a rule exists.
@@ -184,7 +197,8 @@ class DraftRuleStore:
         Returns:
             True if rule exists, False otherwise.
         """
-        return rule_id in self._rules
+        with self._lock:
+            return rule_id in self._rules
 
 
 # Global draft rule store instance
@@ -199,7 +213,8 @@ def get_draft_store() -> DraftRuleStore:
     """
     global _global_draft_store
     if _global_draft_store is None:
-        _global_draft_store = DraftRuleStore()
+        storage_path = os.getenv("DRAFT_STORAGE_PATH")
+        _global_draft_store = DraftRuleStore(storage_path=storage_path)
     return _global_draft_store
 
 
