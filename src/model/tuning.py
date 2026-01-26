@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import optuna
 import pandas as pd
+from optuna.integration import XGBoostPruningCallback
+from optuna.pruners import MedianPruner
 from sklearn.metrics import (
     average_precision_score,
     f1_score,
@@ -73,21 +75,57 @@ def _create_objective(
                 "reg_lambda", *DEFAULT_SEARCH_SPACE["reg_lambda"]
             ),
         }
+        pruning_callback = XGBoostPruningCallback(trial, "validation_0-logloss")
         clf = XGBClassifier(
             scale_pos_weight=scale_pos_weight,
             random_state=seed,
             use_label_encoder=False,
             eval_metric="logloss",
             verbosity=0,
+            callbacks=[pruning_callback],
             **params,
         )
-        clf.fit(x_train, y_train, eval_set=[(x_val, y_val)], verbose=False)
+        clf.fit(
+            x_train,
+            y_train,
+            eval_set=[(x_val, y_val)],
+            verbose=False,
+        )
         y_prob = clf.predict_proba(x_val)[:, 1]
         y_pred = clf.predict(x_val)
         fn = _METRIC_FNS.get(metric, _METRIC_FNS["pr_auc"])
         return float(fn(y_val, y_pred, y_prob))
 
     return objective
+
+
+def get_trial_params(trials_df: pd.DataFrame, trial_number: int) -> dict:
+    """Extract hyperparameters for a specific trial from trials DataFrame.
+
+    Args:
+        trials_df: DataFrame with trial history (from run_tuning_study).
+        trial_number: Trial number to extract.
+
+    Returns:
+        Dictionary of hyperparameters for the specified trial.
+        Empty dict if trial not found.
+
+    Raises:
+        ValueError: If trial_number is negative.
+    """
+    if trial_number < 0:
+        raise ValueError(f"trial_number must be non-negative, got {trial_number}")
+
+    trial_row = trials_df[trials_df["trial"] == trial_number]
+    if trial_row.empty:
+        return {}
+
+    params = {}
+    for col in trial_row.columns:
+        if col.startswith("params_"):
+            param_name = col[7:]  # Remove "params_" prefix
+            params[param_name] = trial_row[col].iloc[0]
+    return params
 
 
 def run_tuning_study(
@@ -122,7 +160,8 @@ def run_tuning_study(
         x_train, y_train, x_val, y_val, metric, scale_pos_weight, seed
     )
     sampler = optuna.samplers.TPESampler(seed=seed, n_startup_trials=5)
-    study = optuna.create_study(direction="maximize", sampler=sampler)
+    pruner = MedianPruner(n_startup_trials=5, n_warmup_steps=10)
+    study = optuna.create_study(direction="maximize", sampler=sampler, pruner=pruner)
     study.optimize(
         objective,
         n_trials=n_trials,
@@ -131,11 +170,28 @@ def run_tuning_study(
     )
     best = study.best_params if study.best_trial else {}
     rows = []
+    pruned_count = 0
+    completed_count = 0
     for t in study.trials:
-        row = {"trial": t.number, "value": t.value, "state": str(t.state)}
+        row = {
+            "trial": t.number,
+            "value": t.value if t.value is not None else None,
+            "state": str(t.state),
+        }
+        # Capture pruning step if available
+        if hasattr(t, "system_attrs") and "pruned_at_step" in t.system_attrs:
+            row["pruned_at_step"] = t.system_attrs["pruned_at_step"]
+        else:
+            row["pruned_at_step"] = None
         if t.params:
             for k, v in t.params.items():
                 row[f"params_{k}"] = v
         rows.append(row)
+        if str(t.state) == "TrialState.PRUNED":
+            pruned_count += 1
+        elif str(t.state) == "TrialState.COMPLETE":
+            completed_count += 1
     trials_df = pd.DataFrame(rows)
+    # Store pruning stats for logging
+    trials_df.attrs = {"pruned_count": pruned_count, "completed_count": completed_count}
     return best, trials_df

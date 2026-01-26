@@ -163,14 +163,58 @@ def get_production_model_version(model_name: str = EXPERIMENT_NAME) -> str | Non
     return None
 
 
-def promote_to_production(
+def get_staging_model_version(
+    model_name: str = EXPERIMENT_NAME,
+) -> str | None:
+    """Get the version number of the current staging model.
+
+    Args:
+        model_name: Name of the registered model.
+
+    Returns:
+        Version string if a staging model exists, None otherwise.
+    """
+    versions = get_model_versions(model_name)
+    for v in versions:
+        if v["stage"] == "Staging":
+            return v["version"]
+    return None
+
+
+def check_promotion_thresholds(
+    run_id: str, thresholds: dict[str, float]
+) -> tuple[bool, list[str]]:
+    """Check if run metrics meet promotion thresholds.
+
+    Args:
+        run_id: MLflow run ID.
+        thresholds: Dictionary mapping metric names to minimum values.
+
+    Returns:
+        (passed, failures) tuple where failures is list of failed metric names.
+    """
+    if not thresholds:
+        return True, []
+
+    details = get_run_details(run_id)
+    metrics = details.get("metrics", {})
+    failures = []
+
+    for metric_name, min_value in thresholds.items():
+        metric_value = metrics.get(metric_name)
+        if metric_value is None:
+            failures.append(f"{metric_name} (not found)")
+        elif metric_value < min_value:
+            failures.append(f"{metric_name} ({metric_value:.4f} < {min_value:.4f})")
+
+    return len(failures) == 0, failures
+
+
+def promote_to_staging(
     run_id: str,
     model_name: str = EXPERIMENT_NAME,
 ) -> dict[str, Any]:
-    """Promote a model run to production stage.
-
-    This finds the model version associated with the run_id and transitions
-    it to the Production stage. Any existing production model is archived.
+    """Promote a model run to staging stage.
 
     Args:
         run_id: The MLflow run ID to promote.
@@ -196,6 +240,89 @@ def promote_to_production(
                 "success": False,
                 "message": f"No model version found for run {run_id}",
             }
+
+        # Archive current staging model if exists
+        for v in versions:
+            if v.current_stage == "Staging":
+                client.transition_model_version_stage(
+                    name=model_name,
+                    version=v.version,
+                    stage="Archived",
+                )
+
+        # Promote the target version to staging
+        client.transition_model_version_stage(
+            name=model_name,
+            version=target_version,
+            stage="Staging",
+        )
+
+        return {
+            "success": True,
+            "message": f"Model version {target_version} promoted to Staging.",
+            "version": target_version,
+        }
+
+    except MlflowException as e:
+        return {
+            "success": False,
+            "message": f"MLflow error: {e}",
+        }
+
+
+def promote_to_production(
+    run_id: str,
+    model_name: str = EXPERIMENT_NAME,
+    thresholds: dict[str, float] | None = None,
+) -> dict[str, Any]:
+    """Promote a model run to production stage.
+
+    Requires model to be in Staging first. Checks optional metric thresholds.
+
+    Args:
+        run_id: The MLflow run ID to promote.
+        model_name: Name of the registered model.
+        thresholds: Optional metric thresholds to validate.
+
+    Returns:
+        Dictionary with success status and message.
+    """
+    client = get_client()
+
+    try:
+        # Find the version associated with this run
+        versions = client.search_model_versions(f"name='{model_name}'")
+        target_version = None
+
+        for v in versions:
+            if v.run_id == run_id:
+                target_version = v.version
+                # Check if already in Staging
+                if v.current_stage != "Staging":
+                    return {
+                        "success": False,
+                        "message": (
+                            f"Model version {target_version} must be in Staging "
+                            "before promotion to Production."
+                        ),
+                    }
+                break
+
+        if target_version is None:
+            return {
+                "success": False,
+                "message": f"No model version found for run {run_id}",
+            }
+
+        # Check thresholds if provided
+        if thresholds:
+            passed, failures = check_promotion_thresholds(run_id, thresholds)
+            if not passed:
+                return {
+                    "success": False,
+                    "message": f"Threshold check failed: {', '.join(failures)}",
+                    "failures": failures,
+                }
 
         # Archive current production model if exists
         for v in versions:
@@ -269,6 +396,57 @@ def get_run_details(run_id: str) -> dict[str, Any]:
         return {"params": {}, "metrics": {}, "tags": {}}
 
 
+def get_cv_fold_metrics(run_id: str) -> dict[str, list[float]]:
+    """Extract per-fold CV metrics from a run.
+
+    Filters metrics matching pattern cv_{metric}_fold_{n} and groups by metric name.
+
+    Args:
+        run_id: MLflow run ID.
+
+    Returns:
+        Dictionary mapping metric names to lists of per-fold values.
+        Example: {"precision": [0.85, 0.87, 0.86], "recall": [0.72, 0.74, 0.73]}
+        Empty dict if no CV metrics found or run doesn't exist.
+    """
+    try:
+        details = get_run_details(run_id)
+        metrics = details.get("metrics", {})
+        if not metrics:
+            return {}
+
+        # Extract CV fold metrics
+        cv_metrics: dict[str, list[float]] = {}
+        for metric_key, value in metrics.items():
+            if metric_key.startswith("cv_") and "_fold_" in metric_key:
+                # Parse: cv_{metric}_fold_{n}
+                parts = metric_key.split("_fold_")
+                if len(parts) == 2:
+                    metric_name = parts[0][3:]  # Remove "cv_" prefix
+                    try:
+                        fold_num = int(parts[1])
+                        if metric_name not in cv_metrics:
+                            cv_metrics[metric_name] = []
+                        # Ensure list is large enough
+                        while len(cv_metrics[metric_name]) <= fold_num:
+                            cv_metrics[metric_name].append(None)
+                        cv_metrics[metric_name][fold_num] = float(value)
+                    except (ValueError, TypeError):
+                        continue
+
+        # Remove None values and ensure lists are complete
+        result = {}
+        for metric_name, fold_values in cv_metrics.items():
+            # Filter out None values and ensure all folds present
+            complete_values = [v for v in fold_values if v is not None]
+            if complete_values:
+                result[metric_name] = complete_values
+
+        return result
+    except Exception:
+        return {}
+
+
 def get_run_artifacts(run_id: str) -> list[dict[str, Any]]:
     """List artifacts for a run.
 
@@ -294,6 +472,78 @@ def fetch_artifact_path(run_id: str, artifact_path: str) -> str | None:
         return client.download_artifacts(run_id, artifact_path)
     except MlflowException:
         return None
+
+
+def get_split_manifest(run_id: str) -> dict[str, Any] | None:
+    """Download and parse split_manifest.json artifact.
+
+    Args:
+        run_id: MLflow run ID.
+
+    Returns:
+        Parsed manifest dictionary, or None if artifact not found.
+    """
+    try:
+        import json
+
+        artifact_path = fetch_artifact_path(run_id, "split_manifest.json")
+        if artifact_path is None:
+            return None
+        with open(artifact_path, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def get_tuning_trials(run_id: str) -> pd.DataFrame | None:
+    """Download and parse tuning_trials.csv artifact.
+
+    Args:
+        run_id: MLflow run ID.
+
+    Returns:
+        DataFrame with trial history, or None if artifact not found.
+        Columns: trial, value, state, params_* (one per hyperparameter).
+    """
+    try:
+        artifact_path = fetch_artifact_path(run_id, "tuning_trials.csv")
+        if artifact_path is None:
+            return None
+        df = pd.read_csv(artifact_path)
+        return df
+    except Exception:
+        return None
+
+
+def get_running_experiments(
+    experiment_name: str = EXPERIMENT_NAME,
+) -> list[str]:
+    """Get list of run IDs for experiments currently running.
+
+    Args:
+        experiment_name: Name of the MLflow experiment.
+
+    Returns:
+        List of run IDs with status=RUNNING. Empty list if none found.
+    """
+    try:
+        experiment = mlflow.get_experiment_by_name(experiment_name)
+        if experiment is None:
+            return []
+
+        # Search for running experiments
+        runs = mlflow.search_runs(
+            experiment_ids=[experiment.experiment_id],
+            filter_string="status = 'RUNNING'",
+            max_results=100,
+        )
+
+        if runs.empty:
+            return []
+
+        return runs["run_id"].tolist()
+    except Exception:
+        return []
 
 
 def check_mlflow_connection() -> bool:

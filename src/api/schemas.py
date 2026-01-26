@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 from enum import Enum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -212,6 +212,14 @@ class TuningConfig(BaseModel):
     direction: Literal["maximize", "minimize"] = Field(
         default="maximize",
         description="Optimization direction",
+    )
+    selected_trial_number: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Optional trial number to use instead of best trial. "
+            "If None, uses best trial automatically."
+        ),
     )
 
 
@@ -541,3 +549,352 @@ class SuggestionsListResponse(BaseModel):
         description="List of rule suggestions",
     )
     total: int = Field(default=0, description="Total number of suggestions")
+
+
+# =============================================================================
+# Draft Rule Schemas
+# =============================================================================
+
+
+class DraftRuleCreateRequest(BaseModel):
+    """Request schema for creating a draft rule."""
+
+    id: str = Field(..., description="Rule identifier")
+    field: str = Field(..., description="Feature field to check")
+    op: str = Field(
+        ...,
+        description="Comparison operator (>, >=, <, <=, ==, in, not_in)",
+    )
+    value: int | float | list = Field(..., description="Value to compare against")
+    action: str = Field(
+        ...,
+        description="Action to take (override_score, clamp_min, clamp_max, reject)",
+    )
+    score: int | None = Field(
+        None,
+        description="Score for score-modifying actions",
+    )
+    severity: str = Field(
+        default="medium",
+        description="Rule severity (low/medium/high)",
+    )
+    reason: str = Field(default="", description="Human-readable reason")
+    actor: str = Field(..., description="Who is creating this rule")
+
+
+class DraftRuleUpdateRequest(BaseModel):
+    """Request schema for updating a draft rule."""
+
+    field: str | None = Field(None, description="Feature field to check")
+    op: str | None = Field(
+        None,
+        description="Comparison operator (>, >=, <, <=, ==, in, not_in)",
+    )
+    value: int | float | list | None = Field(
+        None, description="Value to compare against"
+    )
+    action: str | None = Field(
+        None,
+        description="Action to take (override_score, clamp_min, clamp_max, reject)",
+    )
+    score: int | None = Field(
+        None,
+        description="Score for score-modifying actions",
+    )
+    severity: str | None = Field(None, description="Rule severity (low/medium/high)")
+    reason: str | None = Field(None, description="Human-readable reason")
+    actor: str = Field(..., description="Who is updating this rule")
+
+
+class ConflictResponse(BaseModel):
+    """Response schema for a rule conflict."""
+
+    rule1_id: str = Field(..., description="First rule ID")
+    rule2_id: str = Field(..., description="Second rule ID")
+    conflict_type: str = Field(..., description="Type of conflict")
+    description: str = Field(..., description="Human-readable description")
+
+
+class RedundancyResponse(BaseModel):
+    """Response schema for a rule redundancy."""
+
+    rule_id: str = Field(..., description="Redundant rule ID")
+    redundant_with: str = Field(..., description="Rule it's redundant with")
+    redundancy_type: str = Field(..., description="Type of redundancy")
+    description: str = Field(..., description="Human-readable description")
+
+
+class ValidationResult(BaseModel):
+    """Validation result for a draft rule."""
+
+    conflicts: list[ConflictResponse] = Field(
+        default_factory=list,
+        description="List of conflicts",
+    )
+    redundancies: list[RedundancyResponse] = Field(
+        default_factory=list,
+        description="List of redundancies",
+    )
+    is_valid: bool = Field(..., description="Whether rule is valid (no conflicts)")
+
+
+class DraftRuleResponse(BaseModel):
+    """Response schema for a draft rule."""
+
+    rule_id: str = Field(..., description="Rule identifier")
+    field: str = Field(..., description="Feature field")
+    op: str = Field(..., description="Comparison operator")
+    value: int | float | list = Field(..., description="Comparison value")
+    action: str = Field(..., description="Action to take")
+    score: int | None = Field(None, description="Score value")
+    severity: str = Field(..., description="Rule severity")
+    reason: str = Field(..., description="Human-readable reason")
+    status: str = Field(..., description="Rule status")
+    created_at: str | None = Field(None, description="Creation timestamp (ISO format)")
+
+
+class DraftRuleCreateResponse(BaseModel):
+    """Response schema for creating a draft rule."""
+
+    rule_id: str = Field(..., description="Rule identifier")
+    rule: DraftRuleResponse = Field(..., description="Created rule")
+    validation: ValidationResult = Field(..., description="Validation results")
+    created_at: str = Field(..., description="Creation timestamp (ISO format)")
+
+
+class DraftRuleListResponse(BaseModel):
+    """Response schema for listing draft rules."""
+
+    rules: list[DraftRuleResponse] = Field(
+        default_factory=list,
+        description="List of draft rules",
+    )
+    total: int = Field(default=0, description="Total number of rules")
+
+
+class DraftRuleUpdateResponse(BaseModel):
+    """Response schema for updating a draft rule."""
+
+    rule: DraftRuleResponse = Field(..., description="Updated rule")
+    version_id: str = Field(..., description="Version ID of the update")
+    validation: ValidationResult = Field(..., description="Validation results")
+
+
+class DraftRuleValidateRequest(BaseModel):
+    """Request schema for validating a draft rule."""
+
+    include_existing_rules: bool = Field(
+        default=True,
+        description="Validate against production ruleset",
+    )
+
+
+class DraftRuleValidateResponse(BaseModel):
+    """Response schema for draft rule validation."""
+
+    schema_errors: list[str] = Field(
+        default_factory=list,
+        description="Schema validation errors",
+    )
+    conflicts: list[ConflictResponse] = Field(
+        default_factory=list,
+        description="List of conflicts",
+    )
+    redundancies: list[RedundancyResponse] = Field(
+        default_factory=list,
+        description="List of redundancies",
+    )
+    is_valid: bool = Field(
+        ..., description="Whether rule is valid (no errors or conflicts)"
+    )
+
+
+class DraftRuleSubmitRequest(BaseModel):
+    """Request schema for submitting a draft rule for review."""
+
+    actor: str = Field(..., description="Who is submitting this rule")
+    justification: str = Field(
+        ...,
+        min_length=10,
+        description="Justification for submission (min 10 characters)",
+    )
+
+
+class DraftRuleSubmitResponse(BaseModel):
+    """Response schema for submitting a draft rule."""
+
+    rule: DraftRuleResponse = Field(..., description="Rule with pending_review status")
+    submitted_at: str = Field(..., description="Submission timestamp (ISO format)")
+    audit_id: str | None = Field(None, description="Audit record ID if available")
+
+
+class AcceptSuggestionRequest(BaseModel):
+    """Request schema for accepting a suggestion as a draft rule."""
+
+    actor: str = Field(..., description="Who is accepting this suggestion")
+    suggestion: RuleSuggestionResponse = Field(
+        ...,
+        description="The suggestion to accept (from suggestions list)",
+    )
+    custom_id: str | None = Field(
+        None,
+        description="Custom rule ID (overrides auto-generated)",
+    )
+    edits: dict[str, Any] | None = Field(
+        None,
+        description="Optional field overrides (field, op, value, action, score, etc.)",
+    )
+
+
+class AcceptSuggestionResponse(BaseModel):
+    """Response schema for accepting a suggestion."""
+
+    rule: DraftRuleResponse = Field(..., description="Created draft rule")
+    rule_id: str = Field(..., description="Rule identifier")
+    source_suggestion: dict[str, Any] = Field(
+        ...,
+        description=(
+            "Source suggestion metadata (confidence, evidence, field, threshold)"
+        ),
+    )
+
+
+class ApproveRuleRequest(BaseModel):
+    """Request schema for approving a pending rule."""
+
+    approver: str = Field(..., description="Who is approving this rule")
+    reason: str | None = Field(None, description="Optional reason for approval")
+
+
+class ApproveRuleResponse(BaseModel):
+    """Response schema for approving a rule."""
+
+    rule: DraftRuleResponse = Field(..., description="Approved rule")
+    approved_at: str = Field(..., description="Approval timestamp (ISO format)")
+
+
+class RejectRuleRequest(BaseModel):
+    """Request schema for rejecting a pending rule."""
+
+    actor: str = Field(..., description="Who is rejecting this rule")
+    reason: str = Field(
+        ...,
+        min_length=10,
+        description="Reason for rejection (min 10 characters)",
+    )
+
+
+class RejectRuleResponse(BaseModel):
+    """Response schema for rejecting a rule."""
+
+    rule: DraftRuleResponse = Field(..., description="Rejected rule")
+    rejected_at: str = Field(..., description="Rejection timestamp (ISO format)")
+
+
+class ActivateRuleRequest(BaseModel):
+    """Request schema for activating a rule."""
+
+    actor: str = Field(..., description="Who is requesting activation")
+    reason: str = Field(
+        ...,
+        min_length=10,
+        description="Reason for activation (min 10 characters)",
+    )
+    approver: str | None = Field(
+        None,
+        description="Approver if transition requires approval",
+    )
+
+
+class ActivateRuleResponse(BaseModel):
+    """Response schema for activating a rule."""
+
+    rule: DraftRuleResponse = Field(..., description="Activated rule")
+    activated_at: str = Field(..., description="Activation timestamp (ISO format)")
+
+
+class DisableRuleRequest(BaseModel):
+    """Request schema for disabling a rule."""
+
+    actor: str = Field(..., description="Who is disabling this rule")
+    reason: str | None = Field(None, description="Optional reason for disabling")
+
+
+class DisableRuleResponse(BaseModel):
+    """Response schema for disabling a rule."""
+
+    rule: DraftRuleResponse = Field(..., description="Disabled rule")
+    disabled_at: str = Field(..., description="Disable timestamp (ISO format)")
+
+
+class ShadowRuleRequest(BaseModel):
+    """Request schema for moving a rule to shadow."""
+
+    actor: str = Field(..., description="Who is moving this rule to shadow")
+    reason: str | None = Field(None, description="Optional reason for shadow move")
+
+
+class ShadowRuleResponse(BaseModel):
+    """Response schema for moving a rule to shadow."""
+
+    rule: DraftRuleResponse = Field(..., description="Rule in shadow")
+    shadowed_at: str = Field(..., description="Shadow move timestamp (ISO format)")
+
+
+class RollbackRuleRequest(BaseModel):
+    """Request schema for rolling back a rule version."""
+
+    actor: str = Field(..., description="Who is performing the rollback")
+    reason: str | None = Field(None, description="Optional reason for rollback")
+
+
+class RollbackRuleResponse(BaseModel):
+    """Response schema for rolling back a rule."""
+
+    rule: DraftRuleResponse = Field(..., description="Rolled back rule")
+    version_id: str = Field(..., description="Version ID")
+    rolled_back_to: str = Field(..., description="Version rolled back to")
+    rolled_back_at: str = Field(..., description="Rollback timestamp (ISO format)")
+
+
+class AuditRecordResponse(BaseModel):
+    """Response schema for a single audit record."""
+
+    rule_id: str = Field(..., description="Rule identifier")
+    action: str = Field(..., description="Action type")
+    actor: str = Field(..., description="Actor")
+    timestamp: str = Field(..., description="Timestamp (ISO format)")
+    before_state: dict[str, Any] | None = Field(None, description="State before action")
+    after_state: dict[str, Any] | None = Field(None, description="State after action")
+    reason: str = Field(default="", description="Reason")
+
+
+class AuditLogQueryResponse(BaseModel):
+    """Response schema for audit log query."""
+
+    records: list[AuditRecordResponse] = Field(
+        default_factory=list,
+        description="Audit records",
+    )
+    total: int = Field(default=0, description="Total count")
+
+
+class RuleVersionResponse(BaseModel):
+    """Response schema for a single rule version."""
+
+    rule_id: str = Field(..., description="Rule identifier")
+    version_id: str = Field(..., description="Version identifier")
+    rule: DraftRuleResponse = Field(..., description="Rule snapshot")
+    timestamp: str = Field(..., description="Timestamp (ISO format)")
+    created_by: str = Field(..., description="Creator")
+    reason: str = Field(default="", description="Reason")
+
+
+class RuleVersionListResponse(BaseModel):
+    """Response schema for listing rule versions."""
+
+    versions: list[RuleVersionResponse] = Field(
+        default_factory=list,
+        description="Version list",
+    )
+    total: int = Field(default=0, description="Total count")

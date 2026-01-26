@@ -14,40 +14,49 @@ from fastapi.responses import JSONResponse
 
 from api.model_manager import get_model_manager
 from api.schemas import (
-<<<<<<< HEAD
     AcceptSuggestionRequest,
     AcceptSuggestionResponse,
-=======
->>>>>>> 66fa437 (feat: add draft rule store and basic CRUD API endpoints)
+    ActivateRuleRequest,
+    ActivateRuleResponse,
+    ApproveRuleRequest,
+    ApproveRuleResponse,
+    AuditLogQueryResponse,
+    AuditRecordResponse,
     BacktestMetricsResponse,
     BacktestResultResponse,
     BacktestResultsListResponse,
     ClearDataResponse,
     ConflictResponse,
+    DisableRuleRequest,
+    DisableRuleResponse,
     DraftRuleCreateRequest,
     DraftRuleCreateResponse,
     DraftRuleListResponse,
     DraftRuleResponse,
-<<<<<<< HEAD
     DraftRuleSubmitRequest,
     DraftRuleSubmitResponse,
     DraftRuleUpdateRequest,
     DraftRuleUpdateResponse,
     DraftRuleValidateRequest,
     DraftRuleValidateResponse,
-=======
-    DraftRuleUpdateRequest,
->>>>>>> 66fa437 (feat: add draft rule store and basic CRUD API endpoints)
     GenerateDataRequest,
     GenerateDataResponse,
     HealthResponse,
     RedundancyResponse,
+    RejectRuleRequest,
+    RejectRuleResponse,
+    RollbackRuleRequest,
+    RollbackRuleResponse,
     RuleMetricsItem,
     RuleSuggestionResponse,
+    RuleVersionListResponse,
+    RuleVersionResponse,
     SandboxEvaluateRequest,
     SandboxEvaluateResponse,
     SandboxMatchedRule,
     ShadowComparisonResponse,
+    ShadowRuleRequest,
+    ShadowRuleResponse,
     SignalRequest,
     SignalResponse,
     SuggestionEvidence,
@@ -886,6 +895,161 @@ async def get_heuristic_suggestions(
         return SuggestionsListResponse(suggestions=[], total=0)
 
 
+@app.post(
+    "/suggestions/accept",
+    response_model=AcceptSuggestionResponse,
+    tags=["Rule Inspector"],
+    summary="Accept a suggestion as a draft rule",
+    description="""
+Convert a heuristic/model-assisted suggestion into a draft rule.
+
+Preserves suggestion metadata (confidence, evidence) in audit trail
+for traceability. All accepted rules start in draft status.
+""",
+)
+async def accept_suggestion(
+    request: AcceptSuggestionRequest,
+) -> AcceptSuggestionResponse:
+    """Accept a suggestion and create a draft rule.
+
+    The UI should pass the full suggestion data from the suggestions list.
+    Optional edits can override any field before creating the draft rule.
+
+    Args:
+        request: Accept request with suggestion data, actor, optional custom_id
+            and edits.
+
+    Returns:
+        AcceptSuggestionResponse with created draft rule and source metadata.
+
+    Raises:
+        HTTPException: If rule creation fails or rule ID already exists.
+    """
+    from api.audit import get_audit_logger
+    from api.draft_store import get_draft_store
+    from api.suggestions import RuleSuggestion
+    from api.versioning import get_version_store
+
+    store = get_draft_store()
+    version_store = get_version_store()
+    audit_logger = get_audit_logger()
+
+    # Reconstruct RuleSuggestion from response data
+    suggestion_data = request.suggestion
+    # Convert Pydantic model to dict
+    if hasattr(suggestion_data.evidence, "model_dump"):
+        evidence_dict = suggestion_data.evidence.model_dump()
+    elif hasattr(suggestion_data.evidence, "dict"):
+        evidence_dict = suggestion_data.evidence.dict()
+    else:
+        evidence_dict = dict(suggestion_data.evidence)
+
+    suggestion = RuleSuggestion(
+        field=suggestion_data.field,
+        operator=suggestion_data.operator,
+        threshold=suggestion_data.threshold,
+        action=suggestion_data.action,
+        suggested_score=suggestion_data.suggested_score,
+        confidence=suggestion_data.confidence,
+        evidence=evidence_dict,
+        reason=suggestion_data.reason,
+    )
+
+    # Apply edits if provided
+    if request.edits:
+        if "field" in request.edits:
+            suggestion.field = request.edits["field"]
+        if "operator" in request.edits:
+            suggestion.operator = request.edits["operator"]
+        if "threshold" in request.edits:
+            suggestion.threshold = request.edits["threshold"]
+        if "action" in request.edits:
+            suggestion.action = request.edits["action"]
+        if "suggested_score" in request.edits:
+            suggestion.suggested_score = request.edits["suggested_score"]
+        if "reason" in request.edits:
+            suggestion.reason = request.edits["reason"]
+
+    # Convert to rule
+    rule_id = request.custom_id
+    rule = suggestion.to_rule(rule_id=rule_id)
+
+    # Check if rule ID already exists
+    if store.exists(rule.id):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Rule with ID '{rule.id}' already exists",
+        )
+
+    # Save to draft store
+    try:
+        store.save(rule)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    # Create version snapshot
+    version_store.save(
+        rule=rule,
+        created_by=request.actor,
+        reason=f"Accepted suggestion with confidence {suggestion.confidence:.2f}",
+    )
+
+    # Create audit record with suggestion metadata
+    after_state = {
+        "id": rule.id,
+        "field": rule.field,
+        "op": rule.op,
+        "value": rule.value,
+        "action": rule.action,
+        "score": rule.score,
+        "severity": rule.severity,
+        "reason": rule.reason,
+        "status": rule.status,
+    }
+
+    audit_reason = (
+        f"Accepted suggestion: {suggestion.field} {suggestion.operator} "
+        f"{suggestion.threshold} (confidence: {suggestion.confidence:.2f}, "
+        f"evidence: {evidence_dict.get('statistic', 'N/A')})"
+    )
+
+    audit_logger.log(
+        rule_id=rule.id,
+        action="create",
+        actor=request.actor,
+        before_state=None,
+        after_state=after_state,
+        reason=audit_reason,
+    )
+
+    # Convert to response
+    rule_response = DraftRuleResponse(
+        rule_id=rule.id,
+        field=rule.field,
+        op=rule.op,
+        value=rule.value,
+        action=rule.action,
+        score=rule.score,
+        severity=rule.severity,
+        reason=rule.reason,
+        status=rule.status,
+        created_at=None,
+    )
+
+    source_suggestion = {
+        "confidence": suggestion.confidence,
+        "evidence": evidence_dict,
+        "field": suggestion.field,
+        "threshold": suggestion.threshold,
+    }
+
+    return AcceptSuggestionResponse(
+        rule=rule_response,
+        rule_id=rule.id,
+        source_suggestion=source_suggestion,
+    )
+
+
 # =============================================================================
 # Draft Rule Endpoints
 # =============================================================================
@@ -950,6 +1114,41 @@ async def create_draft_rule(request: DraftRuleCreateRequest) -> DraftRuleCreateR
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
+    # Create version snapshot
+    from api.versioning import get_version_store
+
+    version_store = get_version_store()
+    version_store.save(
+        rule=rule,
+        created_by=request.actor,
+        reason=f"Created by {request.actor}",
+    )
+
+    # Create audit record
+    from api.audit import get_audit_logger
+
+    audit_logger = get_audit_logger()
+    after_state = {
+        "id": rule.id,
+        "field": rule.field,
+        "op": rule.op,
+        "value": rule.value,
+        "action": rule.action,
+        "score": rule.score,
+        "severity": rule.severity,
+        "reason": rule.reason,
+        "status": rule.status,
+    }
+
+    audit_logger.log(
+        rule_id=rule.id,
+        action="create",
+        actor=request.actor,
+        before_state=None,
+        after_state=after_state,
+        reason=f"Rule created by {request.actor}",
+    )
+
     # Run validation against all draft rules and production ruleset
     from api.rules import RuleSet
 
@@ -961,9 +1160,7 @@ async def create_draft_rule(request: DraftRuleCreateRequest) -> DraftRuleCreateR
     all_rules = draft_rules.copy()
     if production_ruleset:
         # Only include active rules from production
-        all_rules.extend(
-            [r for r in production_ruleset.rules if r.status == "active"]
-        )
+        all_rules.extend([r for r in production_ruleset.rules if r.status == "active"])
 
     test_ruleset = RuleSet(version="validation", rules=all_rules)
     conflicts, redundancies = validate_ruleset(test_ruleset, strict=False)
@@ -1115,7 +1312,6 @@ async def get_draft_rule(rule_id: str) -> DraftRuleResponse:
     )
 
 
-<<<<<<< HEAD
 @app.put(
     "/rules/draft/{rule_id}",
     response_model=DraftRuleUpdateResponse,
@@ -1634,7 +1830,8 @@ async def submit_draft_rule(
     )
 
 
-@app.exception_handler(Exception)
+@app.post(
+    "/rules/draft/{rule_id}/approve",
     response_model=ApproveRuleResponse,
     tags=["Draft Rules"],
     summary="Approve a pending rule",
@@ -1713,10 +1910,10 @@ async def approve_draft_rule(
         updated_rule = state_machine.transition(
             rule=rule,
             new_status=RuleStatus.ACTIVE.value,
-            actor=request.approver,  # Approver is the actor for this transition
+            actor=request.approver,
             reason=request.reason or "Approved for activation",
             approver=request.approver,
-            previous_actor=submitter,  # Pass submitter for self-approval check
+            previous_actor=submitter,
         )
     except TransitionError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -2637,8 +2834,6 @@ async def export_audit_logs(
         )
 
 
-=======
->>>>>>> 66fa437 (feat: add draft rule store and basic CRUD API endpoints)
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc: Exception) -> JSONResponse:
     """Handle unexpected exceptions."""

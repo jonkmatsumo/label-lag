@@ -1,5 +1,6 @@
 """Data loader for XGBoost training with temporal splitting."""
 
+import hashlib
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -179,13 +180,43 @@ class DataLoader:
                 test_df["record_id"].astype(str).tolist() if len(test_df) > 0 else []
             )
             s = split_config.strategy
+
+            # Compute time ranges
+            train_time_range = None
+            test_time_range = None
+            if len(train_df) > 0 and "transaction_timestamp" in train_df.columns:
+                train_timestamps = pd.to_datetime(train_df["transaction_timestamp"])
+                train_time_range = {
+                    "min": train_timestamps.min().isoformat(),
+                    "max": train_timestamps.max().isoformat(),
+                }
+            if len(test_df) > 0 and "transaction_timestamp" in test_df.columns:
+                test_timestamps = pd.to_datetime(test_df["transaction_timestamp"])
+                test_time_range = {
+                    "min": test_timestamps.min().isoformat(),
+                    "max": test_timestamps.max().isoformat(),
+                }
+
+            # Compute unique user counts
+            train_unique_users = 0
+            test_unique_users = 0
+            if len(train_df) > 0 and "user_id" in train_df.columns:
+                train_unique_users = int(train_df["user_id"].nunique())
+            if len(test_df) > 0 and "user_id" in test_df.columns:
+                test_unique_users = int(test_df["user_id"].nunique())
+
+            # Compute manifest hash (SHA-256 of sorted record IDs)
+            all_ids = sorted(train_ids + test_ids)
+            id_string = ",".join(all_ids)
+            manifest_hash = hashlib.sha256(id_string.encode()).hexdigest()
+
             manifest = {
                 "strategy": s.value if hasattr(s, "value") else str(s),
                 "seed": split_config.seed,
                 "training_cutoff_date": cutoff.isoformat(),
                 "train_record_ids": train_ids,
                 "test_record_ids": test_ids,
-                "fold_assignments": None,
+                "fold_assignments": None,  # Will be populated in train.py if k-fold
                 "train_size": len(features_train),
                 "test_size": len(features_test),
                 "train_fraud_rate": (
@@ -194,6 +225,11 @@ class DataLoader:
                 "test_fraud_rate": (
                     float(labels_test.mean()) if len(labels_test) > 0 else 0.0
                 ),
+                "train_time_range": train_time_range,
+                "test_time_range": test_time_range,
+                "train_unique_users": train_unique_users,
+                "test_unique_users": test_unique_users,
+                "manifest_hash": f"sha256:{manifest_hash}",
             }
 
         return TrainTestSplit(

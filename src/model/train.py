@@ -266,6 +266,10 @@ def train_model(
     if scale_pos_weight is None:
         scale_pos_weight = n_negative / n_positive
 
+    import time
+
+    training_start_time = time.time()
+
     with mlflow.start_run() as run:
         # Log run metadata as tags
         mlflow.set_tags(
@@ -276,6 +280,22 @@ def train_model(
                 "xgboost_version": xgb_pkg.__version__,
             }
         )
+
+        # Log split summary as tags
+        if split.split_manifest is not None:
+            mlflow.set_tags(
+                {
+                    "split.strategy": split.split_manifest.get("strategy", "unknown"),
+                    "split.train_size": str(split.split_manifest.get("train_size", 0)),
+                    "split.test_size": str(split.split_manifest.get("test_size", 0)),
+                    "split.train_fraud_rate": str(
+                        split.split_manifest.get("train_fraud_rate", 0.0)
+                    ),
+                    "split.test_fraud_rate": str(
+                        split.split_manifest.get("test_fraud_rate", 0.0)
+                    ),
+                }
+            )
 
         trials_df: pd.DataFrame | None = None
         if (
@@ -307,18 +327,64 @@ def train_model(
                     seed=seed,
                     scale_pos_weight=scale_pos_weight,
                 )
-                if best:
-                    max_depth = best.get("max_depth", max_depth)
-                    n_estimators = best.get("n_estimators", n_estimators)
-                    learning_rate = best.get("learning_rate", learning_rate)
-                    min_child_weight = best.get("min_child_weight", min_child_weight)
-                    subsample = best.get("subsample", subsample)
-                    colsample_bytree = best.get("colsample_bytree", colsample_bytree)
-                    gamma = best.get("gamma", gamma)
-                    reg_alpha = best.get("reg_alpha", reg_alpha)
-                    reg_lambda = best.get("reg_lambda", reg_lambda)
-                    for k, v in best.items():
+
+                # Check if manual trial selection is requested
+                selected_params = best
+                selection_type = "auto"
+                selected_trial_num = None
+                if tuning_config.selected_trial_number is not None:
+                    from model.tuning import get_trial_params
+
+                    selected_trial_num = tuning_config.selected_trial_number
+                    manual_params = get_trial_params(trials_df, selected_trial_num)
+                    if manual_params:
+                        selected_params = manual_params
+                        selection_type = "manual"
+                    else:
+                        # Fallback to best if trial not found
+                        selected_trial_num = None
+
+                if selected_params:
+                    max_depth = selected_params.get("max_depth", max_depth)
+                    n_estimators = selected_params.get("n_estimators", n_estimators)
+                    learning_rate = selected_params.get("learning_rate", learning_rate)
+                    min_child_weight = selected_params.get(
+                        "min_child_weight", min_child_weight
+                    )
+                    subsample = selected_params.get("subsample", subsample)
+                    colsample_bytree = selected_params.get(
+                        "colsample_bytree", colsample_bytree
+                    )
+                    gamma = selected_params.get("gamma", gamma)
+                    reg_alpha = selected_params.get("reg_alpha", reg_alpha)
+                    reg_lambda = selected_params.get("reg_lambda", reg_lambda)
+                    for k, v in selected_params.items():
                         mlflow.log_param(f"tuning_best_{k}", v)
+
+                # Log tuning metadata
+                pruning_stats = getattr(trials_df, "attrs", {})
+                mlflow.set_tags(
+                    {
+                        "tuning.selected_trial": (
+                            str(selected_trial_num)
+                            if selected_trial_num is not None
+                            else "best"
+                        ),
+                        "tuning.selection_type": selection_type,
+                        "tuning.n_trials": str(tuning_config.n_trials),
+                        "tuning.pruner": "MedianPruner",
+                    }
+                )
+                # Log pruning metrics
+                if pruning_stats:
+                    mlflow.log_metric(
+                        "tuning.pruned_trials_count",
+                        pruning_stats.get("pruned_count", 0),
+                    )
+                    mlflow.log_metric(
+                        "tuning.completed_trials_count",
+                        pruning_stats.get("completed_count", 0),
+                    )
 
         params_log: dict = {
             "scale_pos_weight": scale_pos_weight,
@@ -368,6 +434,7 @@ def train_model(
             split_config is not None
             and split_config.strategy == SplitStrategy.KFOLD_TEMPORAL
         )
+        fold_assignments_dict: dict[str, dict[str, list[int]]] | None = None
         if do_cv and split.train_size >= split_config.n_folds:
             k = split_config.n_folds
             n = split.train_size
@@ -375,6 +442,7 @@ def train_model(
             x_tr = split.X_train
             y_tr = split.y_train
             fold_size = n // k
+            fold_assignments_dict = {}
             for fold_i in range(k):
                 val_start = fold_i * fold_size
                 val_end = n if fold_i == k - 1 else (fold_i + 1) * fold_size
@@ -384,6 +452,11 @@ def train_model(
                 )
                 if len(train_idx) == 0 or len(val_idx) == 0:
                     continue
+                # Store fold assignments
+                fold_assignments_dict[f"fold_{fold_i}"] = {
+                    "train": train_idx.tolist(),
+                    "val": val_idx.tolist(),
+                }
                 x_fold_train = x_tr.iloc[train_idx]
                 y_fold_train = y_tr.iloc[train_idx]
                 x_fold_val = x_tr.iloc[val_idx]
@@ -421,7 +494,16 @@ def train_model(
                     vals = [m[key] for m in fold_metrics]
                     agg[f"{key}_mean"] = float(np.mean(vals))
                     agg[f"{key}_std"] = float(np.std(vals))
+                    agg[f"{key}_min"] = float(np.min(vals))
+                    agg[f"{key}_max"] = float(np.max(vals))
                 mlflow.log_metrics(agg)
+                # Log CV metadata as tags
+                mlflow.set_tags(
+                    {
+                        "cv.enabled": "true",
+                        "cv.n_folds": str(k),
+                    }
+                )
 
         fit_kw: dict = {}
         x_fit = split.X_train
@@ -507,6 +589,9 @@ def train_model(
             mlflow.log_artifact(card_path)
 
             if split.split_manifest is not None:
+                # Update manifest with fold_assignments if available
+                if fold_assignments_dict is not None:
+                    split.split_manifest["fold_assignments"] = fold_assignments_dict
                 manifest_path = os.path.join(tmpdir, "split_manifest.json")
                 with open(manifest_path, "w") as f:
                     json.dump(split.split_manifest, f, indent=2)
@@ -515,6 +600,20 @@ def train_model(
                 tuning_path = os.path.join(tmpdir, "tuning_trials.csv")
                 trials_df.to_csv(tuning_path, index=False)
                 mlflow.log_artifact(tuning_path)
+
+        # Log training time
+        training_time_seconds = time.time() - training_start_time
+        mlflow.log_metric("training_time_seconds", training_time_seconds)
+
+        # Log model size
+        model_path = os.path.join(tmpdir, "model")
+        if os.path.exists(model_path):
+            model_size_bytes = sum(
+                os.path.getsize(os.path.join(dirpath, filename))
+                for dirpath, _, filenames in os.walk(model_path)
+                for filename in filenames
+            )
+            mlflow.log_metric("model_size_bytes", model_size_bytes)
 
         # Register the model
         model_uri = f"runs:/{run.info.run_id}/model"

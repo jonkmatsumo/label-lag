@@ -160,8 +160,7 @@ class TestApproveDraftRule:
         approval_records = [
             r
             for r in records
-            if r.action == "state_change"
-            and r.after_state.get("status") == "active"
+            if r.action == "state_change" and r.after_state.get("status") == "active"
         ]
         assert len(approval_records) > 0
 
@@ -546,8 +545,7 @@ class TestActivateRule:
         activate_records = [
             r
             for r in records
-            if r.action == "state_change"
-            and r.after_state.get("status") == "active"
+            if r.action == "state_change" and r.after_state.get("status") == "active"
         ]
         assert len(activate_records) > 0
 
@@ -737,8 +735,7 @@ class TestDisableRule:
         disable_records = [
             r
             for r in records
-            if r.action == "state_change"
-            and r.after_state.get("status") == "disabled"
+            if r.action == "state_change" and r.after_state.get("status") == "disabled"
         ]
         assert len(disable_records) > 0
 
@@ -881,8 +878,7 @@ class TestShadowRule:
         shadow_records = [
             r
             for r in records
-            if r.action == "state_change"
-            and r.after_state.get("status") == "shadow"
+            if r.action == "state_change" and r.after_state.get("status") == "shadow"
         ]
         assert len(shadow_records) > 0
 

@@ -179,9 +179,7 @@ class TestGetRuleVersion:
         """Test that getting non-existent version returns 404."""
         _create_rule_with_versions(client, "version_test_007")
 
-        response = client.get(
-            "/rules/version_test_007/versions/nonexistent_version_id"
-        )
+        response = client.get("/rules/version_test_007/versions/nonexistent_version_id")
         assert response.status_code == 404
 
     def test_get_version_includes_rule_snapshot(self, client):
@@ -327,9 +325,7 @@ class TestRollbackRuleVersion:
         records = audit_logger.get_rule_history("rollback_test_005")
 
         # Find rollback record
-        rollback_records = [
-            r for r in records if r.action == "rollback"
-        ]
+        rollback_records = [r for r in records if r.action == "rollback"]
         assert len(rollback_records) > 0
 
         rollback_record = rollback_records[-1]

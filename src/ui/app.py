@@ -38,14 +38,20 @@ from ui.data_service import (
 )
 from ui.mlflow_utils import (
     check_mlflow_connection,
+    check_promotion_thresholds,
     fetch_artifact_path,
+    get_cv_fold_metrics,
     get_experiment_runs,
     get_model_versions,
     get_production_model_version,
     get_run_artifacts,
     get_run_details,
+    get_running_experiments,
+    get_split_manifest,
+    get_tuning_trials,
     get_version_details,
     promote_to_production,
+    promote_to_staging,
 )
 
 # Configuration from environment
@@ -257,6 +263,283 @@ def _render_model_selector() -> None:
                         st.caption(" · ".join(parts))
                     if selected["stage"] == "Production":
                         st.success("Production model")
+
+
+def _render_cv_fold_metrics(run_id: str) -> None:
+    """Render CV fold metrics visualization for a run.
+
+    Args:
+        run_id: MLflow run ID.
+    """
+    cv_metrics = get_cv_fold_metrics(run_id)
+    if not cv_metrics:
+        return
+
+    with st.expander("**CV Fold Metrics**", expanded=False):
+        st.markdown(
+            "Cross-validation metrics across folds. Boxplots show distribution, "
+            "mean ± std shown as summary."
+        )
+
+        # Key metrics to display prominently
+        key_metrics = ["precision", "recall", "pr_auc", "f1", "roc_auc"]
+        other_metrics = [m for m in cv_metrics.keys() if m not in key_metrics]
+
+        # Display key metrics with boxplots
+        for metric_name in key_metrics:
+            if metric_name not in cv_metrics:
+                continue
+
+            fold_values = cv_metrics[metric_name]
+            if not fold_values:
+                continue
+
+            # Calculate summary stats
+            mean_val = np.mean(fold_values)
+            std_val = np.std(fold_values)
+            min_val = np.min(fold_values)
+            max_val = np.max(fold_values)
+
+            st.markdown(f"**{metric_name.replace('_', ' ').title()}**")
+            col1, col2 = st.columns([2, 1])
+
+            with col1:
+                # Boxplot
+                fig = go.Figure()
+                fig.add_trace(
+                    go.Box(
+                        y=fold_values,
+                        name=metric_name,
+                        boxmean="sd",  # Show mean and std
+                    )
+                )
+                fig.update_layout(
+                    title=f"{metric_name} across folds",
+                    yaxis_title="Value",
+                    height=200,
+                    showlegend=False,
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+            with col2:
+                st.metric("Mean", f"{mean_val:.4f}")
+                st.metric("Std", f"{std_val:.4f}")
+                st.metric("Min", f"{min_val:.4f}")
+                st.metric("Max", f"{max_val:.4f}")
+
+        # Display other metrics in a compact table
+        if other_metrics:
+            st.markdown("**Other Metrics**")
+            summary_data = []
+            for metric_name in sorted(other_metrics):
+                fold_values = cv_metrics[metric_name]
+                if fold_values:
+                    summary_data.append(
+                        {
+                            "Metric": metric_name.replace("_", " ").title(),
+                            "Mean": f"{np.mean(fold_values):.4f}",
+                            "Std": f"{np.std(fold_values):.4f}",
+                            "Min": f"{np.min(fold_values):.4f}",
+                            "Max": f"{np.max(fold_values):.4f}",
+                        }
+                    )
+            if summary_data:
+                st.dataframe(
+                    pd.DataFrame(summary_data),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+
+def _render_split_summary(run_id: str) -> None:
+    """Render split manifest summary for a run.
+
+    Args:
+        run_id: MLflow run ID.
+    """
+    manifest = get_split_manifest(run_id)
+    if not manifest:
+        return
+
+    with st.expander("**Split Summary**", expanded=False):
+        st.markdown("Train/test split configuration and statistics.")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("**Training Set**")
+            st.metric("Size", f"{manifest.get('train_size', 0):,}")
+            st.metric(
+                "Fraud Rate",
+                f"{manifest.get('train_fraud_rate', 0.0):.2%}",
+            )
+            if manifest.get("train_unique_users"):
+                st.metric(
+                    "Unique Users",
+                    f"{manifest.get('train_unique_users', 0):,}",
+                )
+            if manifest.get("train_time_range"):
+                tr = manifest["train_time_range"]
+                st.caption(f"Time Range: {tr.get('min', '')} to {tr.get('max', '')}")
+
+        with col2:
+            st.markdown("**Test Set**")
+            st.metric("Size", f"{manifest.get('test_size', 0):,}")
+            st.metric(
+                "Fraud Rate",
+                f"{manifest.get('test_fraud_rate', 0.0):.2%}",
+            )
+            if manifest.get("test_unique_users"):
+                st.metric(
+                    "Unique Users",
+                    f"{manifest.get('test_unique_users', 0):,}",
+                )
+            if manifest.get("test_time_range"):
+                tr = manifest["test_time_range"]
+                st.caption(f"Time Range: {tr.get('min', '')} to {tr.get('max', '')}")
+
+        # Strategy and reproducibility info
+        st.markdown("**Configuration**")
+        strategy = manifest.get("strategy", "unknown")
+        seed = manifest.get("seed", "unknown")
+        cutoff = manifest.get("training_cutoff_date", "unknown")
+        st.caption(f"Strategy: {strategy} | Seed: {seed} | Cutoff: {cutoff}")
+
+        if manifest.get("manifest_hash"):
+            hash_val = manifest["manifest_hash"]
+            st.caption(f"Manifest Hash: `{hash_val[:16]}...`")
+
+        # Fold assignments if available
+        fold_assignments = manifest.get("fold_assignments")
+        if fold_assignments:
+            st.markdown("**Fold Assignments**")
+            st.caption(f"{len(fold_assignments)} folds configured")
+
+
+def _render_tuning_trials(run_id: str) -> None:
+    """Render tuning trials visualization for a run.
+
+    Args:
+        run_id: MLflow run ID.
+    """
+    trials_df = get_tuning_trials(run_id)
+    if trials_df is None or len(trials_df) == 0:
+        return
+
+    details = get_run_details(run_id)
+    tags = details.get("tags", {})
+    selected_trial = tags.get("tuning.selected_trial", "best")
+    selection_type = tags.get("tuning.selection_type", "auto")
+
+    with st.expander("**Tuning Trials**", expanded=False):
+        st.markdown(
+            f"Hyperparameter tuning results. "
+            f"Selected trial: **{selected_trial}** ({selection_type})"
+        )
+
+        # Find best trial (highest value)
+        if "value" in trials_df.columns:
+            best_trial_num = trials_df.loc[trials_df["value"].idxmax(), "trial"]
+        else:
+            best_trial_num = None
+
+        # Display sortable table
+        display_df = trials_df.copy()
+        # Highlight selected/best trial
+        if best_trial_num is not None:
+            display_df["is_best"] = display_df["trial"] == best_trial_num
+        if selected_trial != "best" and selected_trial.isdigit():
+            display_df["is_selected"] = display_df["trial"] == int(selected_trial)
+
+        # Show pruning summary
+        if "state" in trials_df.columns:
+            pruned = trials_df["state"].str.contains("PRUNED", na=False)
+            completed = trials_df["state"].str.contains("COMPLETE", na=False)
+            pruned_count = int(pruned.sum())
+            completed_count = int(completed.sum())
+            if pruned_count > 0:
+                st.info(
+                    f"**{pruned_count}/{len(trials_df)} trials pruned early** "
+                    f"({completed_count} completed)"
+                )
+
+        # Select key columns for display
+        key_cols = ["trial", "value", "state"]
+        param_cols = [c for c in display_df.columns if c.startswith("params_")]
+        # Show top 3 most variable params
+        if param_cols:
+            # Calculate variance for each param
+            param_vars = {}
+            for col in param_cols:
+                if col in display_df.columns:
+                    param_vars[col] = display_df[col].std()
+            top_params = sorted(param_vars.items(), key=lambda x: x[1], reverse=True)[
+                :3
+            ]
+            display_cols = key_cols + [p[0] for p in top_params]
+        else:
+            display_cols = key_cols
+
+        available_cols = [c for c in display_cols if c in display_df.columns]
+        st.dataframe(
+            display_df[available_cols].sort_values(
+                by="value" if "value" in display_df.columns else "trial",
+                ascending=False,
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        # Scatter plot: trial number vs metric value
+        if "value" in trials_df.columns and "trial" in trials_df.columns:
+            fig = go.Figure()
+            fig.add_trace(
+                go.Scatter(
+                    x=trials_df["trial"],
+                    y=trials_df["value"],
+                    mode="markers",
+                    name="Trial",
+                    marker=dict(size=8),
+                )
+            )
+            # Highlight best trial
+            if best_trial_num is not None:
+                best_value = trials_df.loc[
+                    trials_df["trial"] == best_trial_num, "value"
+                ].iloc[0]
+                fig.add_trace(
+                    go.Scatter(
+                        x=[best_trial_num],
+                        y=[best_value],
+                        mode="markers",
+                        name="Best",
+                        marker=dict(size=12, color="red", symbol="star"),
+                    )
+                )
+            # Highlight selected trial if different from best
+            if selected_trial != "best" and selected_trial.isdigit():
+                sel_num = int(selected_trial)
+                if sel_num in trials_df["trial"].values:
+                    sel_value = trials_df.loc[
+                        trials_df["trial"] == sel_num, "value"
+                    ].iloc[0]
+                    fig.add_trace(
+                        go.Scatter(
+                            x=[sel_num],
+                            y=[sel_value],
+                            mode="markers",
+                            name="Selected",
+                            marker=dict(size=12, color="green", symbol="diamond"),
+                        )
+                    )
+
+            fig.update_layout(
+                title="Trial Performance",
+                xaxis_title="Trial Number",
+                yaxis_title="Metric Value",
+                height=300,
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
 
 def render_analytics() -> None:
@@ -1857,6 +2140,22 @@ def render_model_lab() -> None:
     else:
         st.warning("No production model deployed yet.")
 
+    # Auto-refresh toggle
+    auto_refresh = st.checkbox(
+        "Auto-refresh (5s)",
+        value=st.session_state.get("auto_refresh", False),
+        help="Automatically refresh when training runs are in progress",
+    )
+    st.session_state["auto_refresh"] = auto_refresh
+
+    # Check for running experiments and auto-refresh if enabled
+    if auto_refresh:
+        running = get_running_experiments()
+        if running:
+            st.info(f"🔄 {len(running)} training run(s) in progress...")
+            time.sleep(5)
+            st.rerun()
+
     # Fetch and display experiment runs
     runs_df = get_experiment_runs()
 
@@ -1885,6 +2184,12 @@ def render_model_lab() -> None:
                     if details["metrics"]:
                         st.markdown("**Metrics**")
                         st.json(details["metrics"])
+                # CV Fold Metrics section
+                _render_cv_fold_metrics(run_id)
+                # Split Summary section
+                _render_split_summary(run_id)
+                # Tuning Trials section
+                _render_tuning_trials(run_id)
                 arts = get_run_artifacts(run_id)
                 for a in arts:
                     if a["is_dir"]:
@@ -1998,25 +2303,89 @@ def render_model_lab() -> None:
 
         st.markdown("---")
 
-        # Promote to production
-        st.markdown("**Promote to Production**")
+        # Model promotion workflow
+        st.markdown("**Model Promotion**")
         selected_run = st.selectbox(
-            "Select Run ID to promote",
+            "Select Run ID",
             options=run_ids,
             index=0,
-            help="Choose a model run to promote to production",
+            help="Choose a model run to promote",
         )
 
-        promote_clicked = st.button("Promote to Production", type="secondary")
+        if selected_run:
+            # Get current stage of selected run
+            versions = get_model_versions()
+            selected_stage = None
+            for v in versions:
+                if v["run_id"] == selected_run:
+                    selected_stage = v["stage"]
+                    break
 
-        if promote_clicked and selected_run:
-            with st.spinner("Promoting model..."):
-                result = promote_to_production(selected_run)
+            # Load thresholds config
+            import json
+            from pathlib import Path
 
-            if result["success"]:
-                st.success(result["message"])
-            else:
-                st.error(result["message"])
+            thresholds_config = {}
+            thresholds_path = Path("config/model_thresholds.json")
+            if thresholds_path.exists():
+                with open(thresholds_path) as f:
+                    thresholds_config = json.load(f)
+
+            production_thresholds = thresholds_config.get("production_thresholds", {})
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                # Promote to Staging
+                if selected_stage != "Staging" and selected_stage != "Production":
+                    if st.button("Promote to Staging", type="secondary"):
+                        with st.spinner("Promoting to Staging..."):
+                            result = promote_to_staging(selected_run)
+                        if result["success"]:
+                            st.success(result["message"])
+                            st.rerun()
+                        else:
+                            st.error(result["message"])
+
+            with col2:
+                # Promote to Production (requires Staging)
+                if selected_stage == "Staging":
+                    # Check thresholds
+                    if production_thresholds:
+                        passed, failures = check_promotion_thresholds(
+                            selected_run, production_thresholds
+                        )
+                        if not passed:
+                            st.warning(f"Threshold check failed: {', '.join(failures)}")
+                            st.button(
+                                "Promote to Production",
+                                disabled=True,
+                                help="Fix threshold failures first",
+                            )
+                        else:
+                            if st.button("Promote to Production", type="primary"):
+                                with st.spinner("Promoting to Production..."):
+                                    result = promote_to_production(
+                                        selected_run, thresholds=production_thresholds
+                                    )
+                                if result["success"]:
+                                    st.success(result["message"])
+                                    st.rerun()
+                                else:
+                                    st.error(result["message"])
+                    else:
+                        if st.button("Promote to Production", type="primary"):
+                            with st.spinner("Promoting to Production..."):
+                                result = promote_to_production(selected_run)
+                            if result["success"]:
+                                st.success(result["message"])
+                                st.rerun()
+                            else:
+                                st.error(result["message"])
+                elif selected_stage == "Production":
+                    st.info("Already in Production")
+                else:
+                    st.info("Promote to Staging first")
     else:
         st.info("No experiment runs found. Train a model to see results here.")
 
@@ -2486,10 +2855,7 @@ def _render_backtest_tab() -> None:
                     if score_dist:
                         st.markdown("#### Score Distribution")
                         dist_df = pd.DataFrame(
-                            [
-                                {"Range": k, "Count": v}
-                                for k, v in score_dist.items()
-                            ]
+                            [{"Range": k, "Count": v} for k, v in score_dist.items()]
                         )
                         fig = px.bar(
                             dist_df,
