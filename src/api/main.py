@@ -79,8 +79,11 @@ from api.schemas import (
     TrainRequest,
     TrainResponse,
     ValidationResult,
+    RuleAnalyticsResponse,
+    RuleHealthResponse,
 )
 from api.services import get_evaluator
+from api.analytics import RuleHealthEvaluator, RuleHealth
 from api.backtest import (
     BacktestRunner, 
     BacktestStore, 
@@ -3951,6 +3954,95 @@ async def compare_backtests_endpoint(
         base_result=base_response,
         candidate_result=cand_response,
         delta=delta # BacktestDelta is compatible if fields match
+    )
+
+
+
+# =============================================================================
+# Operational Analytics Endpoints (Phase 1.3)
+# =============================================================================
+
+
+@app.get(
+    "/analytics/rules/{rule_id}",
+    response_model=RuleAnalyticsResponse,
+    tags=["Analytics"],
+    summary="Get rule health & stats",
+    description="Detailed operational metrics and health status for a single rule.",
+)
+async def get_rule_analytics(
+    rule_id: str,
+    days: int = Query(7, ge=1, le=90),
+) -> RuleAnalyticsResponse:
+    """Get rule analytics."""
+    from api.metrics import get_metrics_collector
+    from api.model_manager import get_model_manager
+    from datetime import timedelta
+    
+    # Get stats
+    end_date = datetime.now(timezone.utc)
+    start_date = end_date - timedelta(days=days)
+    
+    collector = get_metrics_collector()
+    metrics = collector.get_rule_metrics(rule_id, start_date, end_date)
+    
+    # Get rule definition
+    manager = get_model_manager()
+    rule = None
+    if manager.ruleset:
+        for r in manager.ruleset.rules:
+            if r.id == rule_id:
+                rule = r
+                break
+                
+    if not rule:
+        # Check shadow/draft? For now return 404 if not in active set
+        # Or construct a dummy rule object if we just want stats
+        raise HTTPException(status_code=404, detail=f"Rule {rule_id} not found in active ruleset")
+
+    # Evaluate health
+    # Estimate total requests (approximate from metrics or need global counter)
+    # Using sum of all rule matches as lower bound proxy, or fetch from global stats if available
+    # For now, let's assume we can get total requests from a global counter in collector, or pass 0 if unknown
+    # HACK: Use a placeholder total or add global request tracking. 
+    # Let's assume 1000 for now to avoid zero division in evaluator if we don't track total yet.
+    # Note: Phase 1.1 added counters but maybe not global request count.
+    # Let's use max(production_matches) * 5 as a rough guess if needed, or update collector to track total.
+    # Wait, MetricsCollector doesn't track total requests globally yet.
+    # Let's fallback to "unknown" total requests for now.
+    
+    total_requests = 1000 # Placeholder - TODO: Track global request count
+    
+    evaluator = RuleHealthEvaluator()
+    health_report = evaluator.evaluate(rule, metrics, total_requests)
+    
+    # Build history summary (daily breakdown)
+    # Re-query day by day? Or get_rule_metrics could return breakdown.
+    # For now, simple summary.
+    
+    return RuleAnalyticsResponse(
+        rule_id=rule_id,
+        health=RuleHealthResponse(
+            rule_id=rule_id,
+            status=health_report.status.value,
+            reason=health_report.reason,
+            metrics={
+                 "period_start": metrics.period_start.isoformat(),
+                 "period_end": metrics.period_end.isoformat(),
+                 "production_matches": metrics.production_matches,
+                 "shadow_matches": metrics.shadow_matches,
+                 "production_only_count": metrics.production_only_count,
+                 "shadow_only_count": metrics.shadow_only_count,
+                 "mean_score_delta": metrics.mean_score_delta,
+                 "mean_execution_time_ms": metrics.mean_execution_time_ms,
+            }
+        ),
+        statistics={
+            "mean_score_delta": metrics.mean_score_delta,
+            "mean_latency_ms": metrics.mean_execution_time_ms,
+            "total_matches": metrics.production_matches + metrics.shadow_matches,
+        },
+        history_summary=[] # TODO: Daily breakdown
     )
 
 

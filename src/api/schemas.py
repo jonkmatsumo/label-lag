@@ -1114,3 +1114,39 @@ class DriftStatusResponse(BaseModel):
         description="Threshold values (warn, fail)",
     )
     error: str | None = Field(None, description="Error message if status=unknown")
+
+
+# =============================================================================
+# Analytics Schemas
+# =============================================================================
+
+
+class RuleHealthStats(BaseModel):
+    """Metrics snapshot for health report."""
+    
+    period_start: str | None = None
+    period_end: str | None = None
+    production_matches: int = 0
+    shadow_matches: int = 0
+    production_only_count: int = 0
+    shadow_only_count: int = 0
+    mean_score_delta: float = 0.0
+    mean_execution_time_ms: float = 0.0
+
+
+class RuleHealthResponse(BaseModel):
+    """Rule health status response."""
+    
+    rule_id: str
+    status: str
+    reason: str
+    metrics: RuleHealthStats | None = None
+
+
+class RuleAnalyticsResponse(BaseModel):
+    """Detailed analytics for a rule."""
+    
+    rule_id: str
+    health: RuleHealthResponse
+    statistics: dict[str, Any]
+    history_summary: list[dict[str, Any]]
