@@ -340,14 +340,14 @@ def promote_to_production(
             stage="Production",
         )
 
-        # Trigger model reload in the API
-        reload_message = _trigger_api_model_reload()
+        # Note: Model is now in Production stage but not yet deployed
+        # Use POST /models/deploy to actually deploy it
 
         return {
             "success": True,
             "message": (
-                f"Model version {target_version} promoted to Production. "
-                f"{reload_message}"
+                f"Model version {target_version} approved for Production. "
+                "Use the Deploy button to deploy it to live traffic."
             ),
             "version": target_version,
         }
@@ -376,6 +376,43 @@ def _trigger_api_model_reload() -> str:
             return "API model reload failed."
     except Exception as e:
         return f"Could not trigger API reload: {e}"
+
+
+def deploy_model(actor: str, reason: str | None = None) -> dict[str, Any]:
+    """Deploy the production model to live traffic.
+
+    Args:
+        actor: Who is deploying the model.
+        reason: Optional reason for deployment.
+
+    Returns:
+        Dictionary with success status and message.
+    """
+    url = f"{API_BASE_URL}/models/deploy"
+
+    payload = {"actor": actor}
+    if reason:
+        payload["reason"] = reason
+
+    try:
+        response = requests.post(url, json=payload, timeout=30)
+        response.raise_for_status()
+        result = response.json()
+        return {
+            "success": result.get("success", False),
+            "message": (
+                f"Model {result.get('model_version', 'unknown')} "
+                f"deployed successfully. "
+                f"Previous version: {result.get('previous_version', 'none')}"
+            ),
+            "model_version": result.get("model_version"),
+            "previous_version": result.get("previous_version"),
+        }
+    except requests.RequestException as e:
+        return {
+            "success": False,
+            "message": f"Deployment failed: {e}",
+        }
 
 
 def get_run_details(run_id: str) -> dict[str, Any]:

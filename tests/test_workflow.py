@@ -35,9 +35,21 @@ class TestStateMachineTransitions:
         """Test that draft can transition to pending_review."""
         assert state_machine.can_transition("draft", "pending_review") is True
 
-    def test_can_transition_pending_review_to_active(self, state_machine):
-        """Test that pending_review can transition to active."""
-        assert state_machine.can_transition("pending_review", "active") is True
+    def test_can_transition_pending_review_to_approved(self, state_machine):
+        """Test that pending_review can transition to approved."""
+        assert state_machine.can_transition("pending_review", "approved") is True
+
+    def test_can_transition_approved_to_active(self, state_machine):
+        """Test that approved can transition to active."""
+        assert state_machine.can_transition("approved", "active") is True
+
+    def test_can_transition_approved_to_draft(self, state_machine):
+        """Test that approved can transition back to draft."""
+        assert state_machine.can_transition("approved", "draft") is True
+
+    def test_cannot_transition_pending_review_to_active(self, state_machine):
+        """Test that pending_review cannot directly transition to active."""
+        assert state_machine.can_transition("pending_review", "active") is False
 
     def test_can_transition_pending_review_to_draft(self, state_machine):
         """Test that pending_review can transition back to draft."""
@@ -116,8 +128,8 @@ class TestStateMachineTransitionExecution:
         assert updated.status == "pending_review"
         assert updated.id == draft_rule.id  # Other fields unchanged
 
-    def test_transition_pending_review_to_active(self, state_machine):
-        """Test transitioning pending_review to active."""
+    def test_transition_pending_review_to_approved(self, state_machine):
+        """Test transitioning pending_review to approved."""
         rule = Rule(
             id="test_rule",
             field="velocity_24h",
@@ -129,10 +141,10 @@ class TestStateMachineTransitionExecution:
         )
 
         updated = state_machine.transition(
-            rule, "active", actor="approver1", reason="Approved"
+            rule, "approved", actor="approver1", reason="Approved"
         )
 
-        assert updated.status == "active"
+        assert updated.status == "approved"
 
     def test_transition_logs_audit_record(self, draft_rule):
         """Test that transitions are logged to audit trail."""
@@ -176,8 +188,8 @@ class TestStateMachineTransitionExecution:
 class TestStateMachineApproval:
     """Tests for approval requirements."""
 
-    def test_requires_approval_pending_to_active(self):
-        """Test that pending_review -> active requires approval."""
+    def test_requires_approval_pending_to_approved(self):
+        """Test that pending_review -> approved requires approval."""
         state_machine = RuleStateMachine(require_approval=True)
         rule = Rule(
             id="test_rule",
@@ -191,13 +203,13 @@ class TestStateMachineApproval:
 
         # Should raise without approver
         with pytest.raises(TransitionError, match="requires approval"):
-            state_machine.transition(rule, "active", actor="user123")
+            state_machine.transition(rule, "approved", actor="user123")
 
         # Should succeed with approver
         updated = state_machine.transition(
-            rule, "active", actor="user123", approver="approver1"
+            rule, "approved", actor="user123", approver="approver1"
         )
-        assert updated.status == "active"
+        assert updated.status == "approved"
 
     def test_requires_approval_disabled_to_active(self):
         """Test that disabled -> active requires approval."""
@@ -234,8 +246,8 @@ class TestStateMachineApproval:
         )
 
         # Should work without approver when require_approval=False
-        updated = state_machine.transition(rule, "active", actor="user123")
-        assert updated.status == "active"
+        updated = state_machine.transition(rule, "approved", actor="user123")
+        assert updated.status == "approved"
 
 
 class TestCreateStateMachine:

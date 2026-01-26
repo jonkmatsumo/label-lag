@@ -3,6 +3,7 @@
 import logging
 import os
 from dataclasses import asdict
+from typing import Any
 
 from api.audit import get_audit_logger
 from api.rules import Rule
@@ -13,7 +14,8 @@ logger = logging.getLogger(__name__)
 # Define allowed transitions
 ALLOWED_TRANSITIONS: dict[str, list[str]] = {
     "draft": ["pending_review"],
-    "pending_review": ["active", "draft"],
+    "pending_review": ["approved", "draft"],
+    "approved": ["active", "draft"],
     "active": ["shadow", "disabled"],
     "shadow": ["active", "disabled"],
     "disabled": ["active", "archived"],
@@ -62,6 +64,7 @@ class RuleStateMachine:
         reason: str = "",
         approver: str | None = None,
         previous_actor: str | None = None,
+        approval_signals: dict[str, Any] | None = None,
     ) -> Rule:
         """Transition a rule to a new status.
 
@@ -122,6 +125,8 @@ class RuleStateMachine:
         after_state = {"status": new_status}
         if approver:
             after_state["approver"] = approver
+        if approval_signals:
+            after_state["approval_signals"] = approval_signals
 
         self._audit_logger.log(
             rule_id=rule.id,
@@ -152,8 +157,8 @@ class RuleStateMachine:
         Returns:
             True if approval is required.
         """
-        # pending_review -> active requires approval
-        if from_status == "pending_review" and to_status == "active":
+        # pending_review -> approved requires approval
+        if from_status == "pending_review" and to_status == "approved":
             return True
 
         # disabled -> active requires approval

@@ -5,6 +5,7 @@ It does not modify transaction state - it only provides an evaluation.
 """
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
@@ -19,6 +20,7 @@ from api.schemas import (
     AcceptSuggestionResponse,
     ActivateRuleRequest,
     ActivateRuleResponse,
+    ApprovalSignalsResponse,
     ApproveRuleRequest,
     ApproveRuleResponse,
     AuditLogQueryResponse,
@@ -28,6 +30,8 @@ from api.schemas import (
     BacktestResultsListResponse,
     ClearDataResponse,
     ConflictResponse,
+    DeployModelRequest,
+    DeployModelResponse,
     DisableRuleRequest,
     DisableRuleResponse,
     DraftRuleCreateRequest,
@@ -45,6 +49,8 @@ from api.schemas import (
     GenerateDataRequest,
     GenerateDataResponse,
     HealthResponse,
+    PublishRuleRequest,
+    PublishRuleResponse,
     RedundancyResponse,
     RejectRuleRequest,
     RejectRuleResponse,
@@ -400,6 +406,125 @@ async def reload_model() -> dict:
             "version": None,
             "source": "none",
         }
+
+
+@app.post(
+    "/models/deploy",
+    response_model=DeployModelResponse,
+    tags=["System"],
+    summary="Deploy a model to production",
+    description="""
+Deploy a model that has been approved for production (in Production stage).
+
+This endpoint:
+- Reloads the production model from MLflow
+- Makes the model effective for live inference
+- Logs a MODEL_DEPLOYED audit event
+- Tracks deployment timestamp in MLflow tags
+
+Requires:
+- Model must be in Production stage in MLflow
+- Actor must be provided
+""",
+)
+async def deploy_model(request: DeployModelRequest) -> DeployModelResponse:
+    """Deploy a model to production.
+
+    Deploys the current Production stage model from MLflow to live traffic.
+
+    Args:
+        request: Deploy request with actor and optional reason.
+
+    Returns:
+        DeployModelResponse with deployment details.
+
+    Raises:
+        HTTPException: If model not found or deployment fails.
+    """
+    from datetime import datetime, timezone
+
+    import mlflow
+
+    from api.audit import get_audit_logger
+    from api.model_manager import get_model_manager
+
+    manager = get_model_manager()
+    audit_logger = get_audit_logger()
+
+    # Get current model version before deployment
+    previous_version = manager.model_version if manager.model_loaded else None
+
+    # Reload the production model
+    success = manager.load_production_model()
+
+    if not success:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to load production model from MLflow",
+        )
+
+    deployed_version = manager.model_version
+    deployed_at = datetime.now(timezone.utc).isoformat()
+
+    # Log deployment to MLflow tags
+    try:
+        mlflow.set_tracking_uri(
+            os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
+        )
+        client = mlflow.MlflowClient()
+        versions = client.search_model_versions(
+            "name='ach-fraud-detection' AND current_stage='Production'"
+        )
+        for v in versions:
+            if v.version == deployed_version.lstrip("v"):
+                # Add deployment tags
+                client.set_model_version_tag(
+                    "ach-fraud-detection",
+                    v.version,
+                    "deployed_at",
+                    deployed_at,
+                )
+                client.set_model_version_tag(
+                    "ach-fraud-detection",
+                    v.version,
+                    "deployed_by",
+                    request.actor,
+                )
+                if request.reason:
+                    client.set_model_version_tag(
+                        "ach-fraud-detection",
+                        v.version,
+                        "deployment_reason",
+                        request.reason,
+                    )
+                break
+    except Exception as e:
+        logger.warning(f"Failed to set MLflow deployment tags: {e}")
+
+    # Log audit event (using special rule_id format for models)
+    audit_logger.log(
+        rule_id=f"model:{deployed_version}",
+        action="MODEL_DEPLOYED",
+        actor=request.actor,
+        before_state={"model_version": previous_version} if previous_version else None,
+        after_state={
+            "model_version": deployed_version,
+            "deployed_at": deployed_at,
+        },
+        reason=request.reason or "Model deployed to production",
+    )
+
+    logger.info(
+        f"Model {deployed_version} deployed by {request.actor}. "
+        f"Previous: {previous_version}"
+    )
+
+    return DeployModelResponse(
+        success=True,
+        model_version=deployed_version,
+        deployed_at=deployed_at,
+        previous_version=previous_version,
+    )
 
 
 @app.post(
@@ -1998,6 +2123,31 @@ async def submit_draft_rule(
         store._rules[rule_id] = updated_rule
         store._save_rules()
 
+    # Compute approval signals at submission (for logging/caching)
+    try:
+        from api.signals import compute_approval_signals
+
+        # Build draft ruleset excluding this rule
+        draft_rules = store.list_rules(include_archived=False)
+        draft_ruleset = RuleSet(
+            version="draft",
+            rules=[r for r in draft_rules if r.id != rule_id],
+        )
+
+        signals_response = compute_approval_signals(
+            rule_id=rule_id,
+            production_ruleset=production_ruleset,
+            draft_ruleset=draft_ruleset,
+        )
+
+        logger.info(
+            f"Computed approval signals for rule {rule_id} at submission: "
+            f"{signals_response.summary.risk_count} risks, "
+            f"{signals_response.summary.warning_count} warnings"
+        )
+    except Exception as e:
+        logger.warning(f"Failed to compute approval signals at submission: {e}")
+
     # Create version snapshot
     version_store.save(
         rule=updated_rule,
@@ -2028,13 +2178,76 @@ async def submit_draft_rule(
     )
 
 
+@app.get(
+    "/rules/draft/{rule_id}/signals",
+    response_model=ApprovalSignalsResponse,
+    tags=["Draft Rules"],
+    summary="Get approval quality signals for a rule",
+    description="""
+Get structured approval quality signals to help reviewers assess rule safety.
+
+Signals are grouped by category (structural, coverage, governance) and
+severity (info, warning, risk). All signals are advisory - they do not
+block approvals.
+
+Signals are computed on-demand but may be cached from submission time.
+""",
+)
+async def get_approval_signals(rule_id: str) -> ApprovalSignalsResponse:
+    """Get approval quality signals for a draft rule.
+
+    Args:
+        rule_id: Rule identifier.
+
+    Returns:
+        ApprovalSignalsResponse with computed signals.
+
+    Raises:
+        HTTPException: If rule not found.
+    """
+    from api.draft_store import get_draft_store
+    from api.rules import RuleSet
+    from api.signals import compute_approval_signals
+
+    store = get_draft_store()
+    rule = store.get(rule_id)
+
+    if rule is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Draft rule not found: {rule_id}",
+        )
+
+    # Get production ruleset
+    manager = get_model_manager()
+    production_ruleset = manager.ruleset
+
+    # Build draft ruleset excluding this rule
+    draft_rules = store.list_rules(include_archived=False)
+    draft_ruleset = RuleSet(
+        version="draft",
+        rules=[r for r in draft_rules if r.id != rule_id],
+    )
+
+    # Compute signals
+    signals_response = compute_approval_signals(
+        rule_id=rule_id,
+        production_ruleset=production_ruleset,
+        draft_ruleset=draft_ruleset,
+    )
+
+    return signals_response
+
+
 @app.post(
     "/rules/draft/{rule_id}/approve",
     response_model=ApproveRuleResponse,
     tags=["Draft Rules"],
     summary="Approve a pending rule",
     description="""
-Approve a rule that is pending review, transitioning it to active status.
+Approve a rule that is pending review, transitioning it to approved status.
+
+The approved rule requires an explicit publish step to become active in production.
 
 Requires:
 - Rule must be in pending_review status
@@ -2045,7 +2258,10 @@ Requires:
 async def approve_draft_rule(
     rule_id: str, request: ApproveRuleRequest
 ) -> ApproveRuleResponse:
-    """Approve a draft rule for activation.
+    """Approve a draft rule for production.
+
+    Transitions the rule to approved status. The rule must be explicitly
+    published to become active in production.
 
     Args:
         rule_id: Rule identifier.
@@ -2103,33 +2319,218 @@ async def approve_draft_rule(
             "approve their own submission.",
         )
 
+    # Fetch approval signals before approval
+    approval_signals_data = None
+    try:
+        from api.rules import RuleSet
+        from api.signals import compute_approval_signals
+
+        # Get production ruleset
+        manager = get_model_manager()
+        production_ruleset = manager.ruleset
+
+        # Build draft ruleset excluding this rule
+        draft_rules = store.list_rules(include_archived=False)
+        draft_ruleset = RuleSet(
+            version="draft",
+            rules=[r for r in draft_rules if r.id != rule_id],
+        )
+
+        signals_response = compute_approval_signals(
+            rule_id=rule_id,
+            production_ruleset=production_ruleset,
+            draft_ruleset=draft_ruleset,
+        )
+
+        # Prepare signals metadata for audit
+        approval_signals_data = {
+            "computed_at": signals_response.computed_at,
+            "summary": {
+                "risk_count": signals_response.summary.risk_count,
+                "warning_count": signals_response.summary.warning_count,
+            },
+            "signals": [
+                s.signal_id for s in signals_response.signals if s.severity == "risk"
+            ],
+        }
+    except Exception as e:
+        logger.warning(f"Failed to compute approval signals at approval: {e}")
+
+    # Transition to approved (not active - requires publish step)
+    try:
+        updated_rule = state_machine.transition(
+            rule=rule,
+            new_status=RuleStatus.APPROVED.value,
+            actor=request.approver,
+            reason=request.reason or "Approved for production",
+            approver=request.approver,
+            previous_actor=submitter,
+            approval_signals=approval_signals_data,
+        )
+    except TransitionError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Update in store
+    rule_dict = asdict(updated_rule)
+    rule_dict["status"] = RuleStatus.APPROVED.value
+    approved_rule = Rule(**rule_dict)
+    # Store approved rules
+    if rule_id in store._rules:
+        store._rules[rule_id] = approved_rule
+        store._save_rules()
+
+    # Create version snapshot
+    version_store.save(
+        rule=approved_rule,
+        created_by=request.approver,
+        reason=request.reason or "Approved for production",
+    )
+
+    # Convert to response
+    rule_response = DraftRuleResponse(
+        rule_id=approved_rule.id,
+        field=approved_rule.field,
+        op=approved_rule.op,
+        value=approved_rule.value,
+        action=approved_rule.action,
+        score=approved_rule.score,
+        severity=approved_rule.severity,
+        reason=approved_rule.reason,
+        status=approved_rule.status,
+        created_at=None,
+    )
+
+    return ApproveRuleResponse(
+        rule=rule_response,
+        approved_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+@app.post(
+    "/rules/{rule_id}/publish",
+    response_model=PublishRuleResponse,
+    tags=["Draft Rules"],
+    summary="Publish an approved rule to production",
+    description="""
+Publish an approved rule to production, making it effective for live inference.
+
+This endpoint:
+- Transitions the rule from approved to active status
+- Syncs the rule to the production ruleset used for inference
+- Creates a version snapshot
+- Logs a RULE_PUBLISHED audit event
+
+Requires:
+- Rule must be in approved status
+- Actor must be provided
+""",
+)
+async def publish_rule(
+    rule_id: str, request: PublishRuleRequest
+) -> PublishRuleResponse:
+    """Publish an approved rule to production.
+
+    Args:
+        rule_id: Rule identifier.
+        request: Publish request with actor and optional reason.
+
+    Returns:
+        PublishRuleResponse with published rule.
+
+    Raises:
+        HTTPException: If rule not found, not in approved status,
+            or transition fails.
+    """
+    from dataclasses import asdict
+
+    from api.audit import get_audit_logger
+    from api.draft_store import get_draft_store
+    from api.model_manager import get_model_manager
+    from api.rules import Rule, RuleSet, RuleStatus
+    from api.versioning import get_version_store
+    from api.workflow import TransitionError, create_state_machine
+
+    store = get_draft_store()
+    version_store = get_version_store()
+    audit_logger = get_audit_logger()
+    state_machine = create_state_machine()
+    manager = get_model_manager()
+
+    # Get existing rule
+    rule = store.get(rule_id)
+    if rule is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Rule not found: {rule_id}",
+        )
+
+    if rule.status != RuleStatus.APPROVED.value:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Rule {rule_id} is not approved (status: {rule.status}). "
+            "Only approved rules can be published.",
+        )
+
     # Transition to active
     try:
         updated_rule = state_machine.transition(
             rule=rule,
             new_status=RuleStatus.ACTIVE.value,
-            actor=request.approver,
-            reason=request.reason or "Approved for activation",
-            approver=request.approver,
-            previous_actor=submitter,
+            actor=request.actor,
+            reason=request.reason or "Published to production",
         )
     except TransitionError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Update in store (store allows active status for approved rules)
+    # Update in store
     rule_dict = asdict(updated_rule)
     rule_dict["status"] = RuleStatus.ACTIVE.value
     active_rule = Rule(**rule_dict)
-    # Store active rules separately or update existing
     if rule_id in store._rules:
         store._rules[rule_id] = active_rule
         store._save_rules()
 
     # Create version snapshot
-    version_store.save(
+    version = version_store.save(
         rule=active_rule,
-        created_by=request.approver,
-        reason=request.reason or "Approved and activated",
+        created_by=request.actor,
+        reason=request.reason or "Published to production",
+    )
+
+    # Sync to production ruleset
+    # Get all active rules from draft store
+    all_active_rules = store.list_rules(status=RuleStatus.ACTIVE.value)
+    # Also include active rules from current production ruleset (if any)
+    current_ruleset = manager.ruleset
+    if current_ruleset:
+        # Merge: keep existing active rules that aren't in draft store
+        existing_active = {
+            r.id: r
+            for r in current_ruleset.rules
+            if r.status == RuleStatus.ACTIVE.value
+        }
+        # Update with draft store active rules (these take precedence)
+        for draft_rule in all_active_rules:
+            existing_active[draft_rule.id] = draft_rule
+        all_active_rules = list(existing_active.values())
+
+    # Create new ruleset version
+    ruleset_version = f"v{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+    new_ruleset = RuleSet(version=ruleset_version, rules=all_active_rules)
+    manager.update_production_ruleset(new_ruleset)
+
+    # Log publish event
+    audit_logger.log(
+        rule_id=rule_id,
+        action="RULE_PUBLISHED",
+        actor=request.actor,
+        before_state={"status": RuleStatus.APPROVED.value},
+        after_state={
+            "status": RuleStatus.ACTIVE.value,
+            "version_id": version.version_id,
+            "ruleset_version": ruleset_version,
+        },
+        reason=request.reason or "Published to production",
     )
 
     # Convert to response
@@ -2146,9 +2547,10 @@ async def approve_draft_rule(
         created_at=None,
     )
 
-    return ApproveRuleResponse(
+    return PublishRuleResponse(
         rule=rule_response,
-        approved_at=datetime.now(timezone.utc).isoformat(),
+        published_at=datetime.now(timezone.utc).isoformat(),
+        version_id=version.version_id,
     )
 
 
@@ -2280,6 +2682,7 @@ async def activate_rule(
     """
     from dataclasses import asdict
 
+    from api.audit import get_audit_logger
     from api.draft_store import get_draft_store
     from api.model_manager import get_model_manager
     from api.rules import Rule, RuleStatus
@@ -2288,6 +2691,7 @@ async def activate_rule(
 
     store = get_draft_store()
     version_store = get_version_store()
+    audit_logger = get_audit_logger()
     state_machine = create_state_machine()
 
     # Try to get from draft store first
@@ -2318,7 +2722,55 @@ async def activate_rule(
             detail=f"Cannot activate rule {rule_id} from status {rule.status}",
         )
 
-    # Transition to active
+    # Handle pending_review -> active as two-step: approve then activate
+    if rule.status == RuleStatus.PENDING_REVIEW.value:
+        if not request.approver:
+            raise HTTPException(
+                status_code=400,
+                detail="Activating from pending_review requires approver",
+            )
+
+        # Find submitter to prevent self-approval
+        rule_history = audit_logger.get_rule_history(rule_id)
+        submitter = None
+        for record in reversed(rule_history):
+            if (
+                record.action == "state_change"
+                and record.after_state
+                and record.after_state.get("status") == RuleStatus.PENDING_REVIEW.value
+            ):
+                submitter = record.actor
+                break
+
+        if submitter and submitter == request.approver:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Self-approval not allowed. Actor '{request.approver}' cannot "
+                "approve their own submission.",
+            )
+
+        # First transition to approved
+        try:
+            rule = state_machine.transition(
+                rule=rule,
+                new_status=RuleStatus.APPROVED.value,
+                actor=request.actor,
+                reason=request.reason or "Approved for activation",
+                approver=request.approver,
+                previous_actor=submitter,
+            )
+        except TransitionError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+
+        # Update in store
+        if rule_id in store._rules:
+            rule_dict = asdict(rule)
+            rule_dict["status"] = RuleStatus.APPROVED.value
+            approved_rule = Rule(**rule_dict)
+            store._rules[rule_id] = approved_rule
+            store._save_rules()
+
+    # Transition to active (from approved, shadow, or disabled)
     try:
         updated_rule = state_machine.transition(
             rule=rule,
@@ -2328,7 +2780,7 @@ async def activate_rule(
             approver=request.approver,
         )
     except TransitionError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     # Update in store if it exists there
     if rule_id in store._rules:

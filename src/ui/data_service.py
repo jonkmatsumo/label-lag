@@ -1144,6 +1144,80 @@ def fetch_backtest_result(job_id: str) -> dict[str, Any] | None:
         return None
 
 
+def fetch_draft_rules(
+    status: str | None = None,
+) -> dict[str, Any] | None:
+    """Fetch draft rules.
+
+    Args:
+        status: Optional status filter (draft, pending_review, approved, etc.).
+
+    Returns:
+        Dict with rules list or None if unavailable.
+    """
+    url = f"{API_BASE_URL}/rules/draft"
+
+    params = {}
+    if status:
+        params["status"] = status
+
+    try:
+        response = requests.get(url, params=params, timeout=API_TIMEOUT)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error fetching draft rules: {e}")
+        return None
+
+
+def publish_rule(
+    rule_id: str, actor: str, reason: str | None = None
+) -> dict[str, Any] | None:
+    """Publish an approved rule to production.
+
+    Args:
+        rule_id: Rule identifier.
+        actor: Who is publishing the rule.
+        reason: Optional reason for publishing.
+
+    Returns:
+        Publish response dict or None if request failed.
+    """
+    url = f"{API_BASE_URL}/rules/{rule_id}/publish"
+
+    payload = {"actor": actor}
+    if reason:
+        payload["reason"] = reason
+
+    try:
+        response = requests.post(url, json=payload, timeout=API_TIMEOUT)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error publishing rule: {e}")
+        return None
+
+
+def fetch_approval_signals(rule_id: str) -> dict[str, Any] | None:
+    """Fetch approval quality signals for a rule.
+
+    Args:
+        rule_id: Rule identifier.
+
+    Returns:
+        Dict with signals data or None if unavailable.
+    """
+    url = f"{API_BASE_URL}/rules/draft/{rule_id}/signals"
+
+    try:
+        response = requests.get(url, timeout=API_TIMEOUT)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error fetching approval signals for {rule_id}: {e}")
+        return None
+
+
 def fetch_heuristic_suggestions(
     field: str | None = None,
     min_confidence: float = 0.7,

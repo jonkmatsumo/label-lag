@@ -45,14 +45,9 @@ class DraftRuleStore:
                 for rule_id, rule_dict in data.items():
                     try:
                         rule = Rule(**rule_dict)
-                        # Enforce draft-only: only load rules with draft status
-                        if rule.status == RuleStatus.DRAFT.value:
-                            self._rules[rule_id] = rule
-                        else:
-                            logger.warning(
-                                f"Skipping non-draft rule {rule_id} "
-                                f"with status {rule.status}"
-                            )
+                        # Load all rules (draft, pending_review, approved, active)
+                        # Archived rules are excluded by default in list_rules()
+                        self._rules[rule_id] = rule
                     except (TypeError, ValueError) as e:
                         logger.warning(f"Failed to load rule {rule_id}: {e}")
         except (json.JSONDecodeError, KeyError, ValueError) as e:
@@ -82,7 +77,7 @@ class DraftRuleStore:
 
         Args:
             rule: Rule to save. Must have status="draft" for new rules,
-                or can be pending_review if updating existing draft.
+                or can be pending_review/approved/active if updating existing rule.
 
         Raises:
             ValueError: If rule status is invalid for this operation.
@@ -93,26 +88,44 @@ class DraftRuleStore:
                 self._rules[rule.id] = rule
                 self._save_rules()
                 logger.debug(f"Saved draft rule {rule.id}")
-            # Allow updating existing draft to pending_review
-            elif (
-                rule.status == RuleStatus.PENDING_REVIEW.value
-                and rule.id in self._rules
-            ):
+            # Allow updating existing rule to pending_review, approved, or active
+            elif rule.id in self._rules:
                 existing = self._rules[rule.id]
-                if existing.status == RuleStatus.DRAFT.value:
+                # Allow transitions: draft -> pending_review -> approved -> active
+                valid_transitions = {
+                    RuleStatus.DRAFT.value: [RuleStatus.PENDING_REVIEW.value],
+                    RuleStatus.PENDING_REVIEW.value: [
+                        RuleStatus.APPROVED.value,
+                        RuleStatus.DRAFT.value,
+                    ],
+                    RuleStatus.APPROVED.value: [
+                        RuleStatus.ACTIVE.value,
+                        RuleStatus.DRAFT.value,
+                    ],
+                }
+                if existing.status in valid_transitions:
+                    if rule.status in valid_transitions[existing.status]:
+                        self._rules[rule.id] = rule
+                        self._save_rules()
+                        logger.debug(
+                            f"Updated rule {rule.id} from {existing.status} "
+                            f"to {rule.status}"
+                        )
+                    else:
+                        raise ValueError(
+                            f"Cannot update rule {rule.id} from {existing.status} "
+                            f"to {rule.status}"
+                        )
+                else:
+                    # For other statuses, allow direct update
                     self._rules[rule.id] = rule
                     self._save_rules()
-                    logger.debug(f"Updated rule {rule.id} to pending_review")
-                else:
-                    raise ValueError(
-                        f"Cannot update rule {rule.id} from {existing.status} "
-                        "to pending_review"
-                    )
+                    logger.debug(f"Updated rule {rule.id} to {rule.status}")
             else:
                 raise ValueError(
                     f"Cannot save rule {rule.id} with status {rule.status}. "
-                    "Only draft rules can be created, or existing drafts can be "
-                    "updated to pending_review."
+                    "Only draft rules can be created, or existing rules can be "
+                    "updated to valid next statuses."
                 )
 
     def get(self, rule_id: str) -> Rule | None:

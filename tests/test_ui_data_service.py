@@ -459,6 +459,77 @@ class TestNormalizeSchemaDf:
     def test_mixed_case_columns(self):
         from ui.data_service import normalize_schema_df
 
+        df = pd.DataFrame({"FieldName": [1, 2], "AnotherField": [3, 4]})
+        result = normalize_schema_df(df)
+        assert list(result.columns) == ["fieldname", "anotherfield"]
+
+
+class TestFetchApprovalSignals:
+    """Tests for fetch_approval_signals function."""
+
+    @patch("ui.data_service.requests.get")
+    def test_successful_request(self, mock_get):
+        """Test successful fetch of approval signals."""
+        from ui.data_service import fetch_approval_signals
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "rule_id": "test_rule",
+            "computed_at": "2024-01-01T00:00:00Z",
+            "signals": [
+                {
+                    "signal_id": "has_conflicts",
+                    "category": "structural",
+                    "severity": "risk",
+                    "value": False,
+                    "label": "Has Conflicts",
+                    "description": "No conflicts detected",
+                }
+            ],
+            "summary": {
+                "risk_count": 0,
+                "warning_count": 0,
+                "info_count": 1,
+                "has_blockers": False,
+            },
+            "partial": False,
+            "unavailable_signals": [],
+        }
+        mock_response.raise_for_status.return_value = None
+        mock_get.return_value = mock_response
+
+        result = fetch_approval_signals("test_rule")
+
+        assert result is not None
+        assert result["rule_id"] == "test_rule"
+        assert len(result["signals"]) == 1
+        assert result["summary"]["risk_count"] == 0
+
+    @patch("ui.data_service.requests.get")
+    def test_handles_request_exception(self, mock_get):
+        """Test handling of request exceptions."""
+        from ui.data_service import fetch_approval_signals
+
+        mock_get.side_effect = requests.RequestException("Connection error")
+
+        result = fetch_approval_signals("test_rule")
+
+        assert result is None
+
+    @patch("ui.data_service.requests.get")
+    def test_handles_http_error(self, mock_get):
+        """Test handling of HTTP errors."""
+        from ui.data_service import fetch_approval_signals
+
+        mock_response = MagicMock()
+        mock_response.raise_for_status.side_effect = requests.HTTPError("404 Not Found")
+        mock_get.return_value = mock_response
+
+        result = fetch_approval_signals("test_rule")
+
+        assert result is None
+        from ui.data_service import normalize_schema_df
+
         df = pd.DataFrame(
             {
                 "Table_Name": ["test"],

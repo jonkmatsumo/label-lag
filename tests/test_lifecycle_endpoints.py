@@ -98,10 +98,10 @@ class TestApproveDraftRule:
 
         rule = data["rule"]
         assert rule["rule_id"] == "approve_test_002"
-        assert rule["status"] == "active"
+        assert rule["status"] == "approved"
 
-    def test_approve_changes_status_to_active(self, client):
-        """Test that approval changes status to active."""
+    def test_approve_changes_status_to_approved(self, client):
+        """Test that approval changes status to approved (not active)."""
         _create_and_submit_rule(client, "approve_test_003", actor="submitter_user")
 
         # Verify it's pending_review
@@ -117,9 +117,9 @@ class TestApproveDraftRule:
             },
         )
 
-        # Verify status changed
+        # Verify status changed to approved (not active - requires publish)
         get_response = client.get("/rules/draft/approve_test_003")
-        assert get_response.json()["status"] == "active"
+        assert get_response.json()["status"] == "approved"
 
     def test_approve_creates_version(self, client):
         """Test that approval creates a version snapshot."""
@@ -137,9 +137,9 @@ class TestApproveDraftRule:
         versions = version_store.list_versions("approve_test_004")
         assert len(versions) >= 2  # At least create + approve
 
-        # Check latest version has active status
+        # Check latest version has approved status (not active - requires publish)
         latest = versions[-1]
-        assert latest.rule.status == "active"
+        assert latest.rule.status == "approved"
 
     def test_approve_creates_audit_record(self, client):
         """Test that approval creates an audit record."""
@@ -156,11 +156,11 @@ class TestApproveDraftRule:
         audit_logger = get_audit_logger()
         records = audit_logger.get_rule_history("approve_test_005")
 
-        # Find approval state_change record
+        # Find approval state_change record (should be approved, not active)
         approval_records = [
             r
             for r in records
-            if r.action == "state_change" and r.after_state.get("status") == "active"
+            if r.action == "state_change" and r.after_state.get("status") == "approved"
         ]
         assert len(approval_records) > 0
 
@@ -422,6 +422,15 @@ class TestActivateRule:
             },
         )
 
+        # Publish to make rule active
+        client.post(
+            "/rules/activate_test_002/publish",
+            json={
+                "actor": "admin_user",
+                "reason": "Publishing approved rule",
+            },
+        )
+
         # Move to shadow
         client.post(
             "/rules/activate_test_002/shadow",
@@ -453,6 +462,15 @@ class TestActivateRule:
             json={
                 "approver": "approver_user",  # Different from submitter_user
                 "reason": "Approved",
+            },
+        )
+
+        # Publish to make rule active
+        client.post(
+            "/rules/activate_test_003/publish",
+            json={
+                "actor": "admin_user",
+                "reason": "Publishing approved rule",
             },
         )
 
@@ -611,6 +629,15 @@ class TestDisableRule:
             },
         )
 
+        # Publish to make rule active
+        client.post(
+            "/rules/disable_test_001/publish",
+            json={
+                "actor": "admin_user",
+                "reason": "Publishing approved rule",
+            },
+        )
+
         response = client.post(
             "/rules/disable_test_001/disable",
             json={
@@ -630,6 +657,15 @@ class TestDisableRule:
             json={
                 "approver": "approver_user",  # Different from submitter_user
                 "reason": "Approved",
+            },
+        )
+
+        # Publish to make rule active
+        client.post(
+            "/rules/disable_test_002/publish",
+            json={
+                "actor": "admin_user",
+                "reason": "Publishing approved rule",
             },
         )
 
@@ -665,6 +701,15 @@ class TestDisableRule:
             },
         )
 
+        # Publish to make rule active
+        client.post(
+            "/rules/disable_test_003/publish",
+            json={
+                "actor": "admin_user",
+                "reason": "Publishing approved rule",
+            },
+        )
+
         # Verify it's active
         get_response = client.get("/rules/draft/disable_test_003")
         assert get_response.json()["status"] == "active"
@@ -693,6 +738,15 @@ class TestDisableRule:
             },
         )
 
+        # Publish to make rule active
+        client.post(
+            "/rules/disable_test_004/publish",
+            json={
+                "actor": "admin_user",
+                "reason": "Publishing approved rule",
+            },
+        )
+
         client.post(
             "/rules/disable_test_004/disable",
             json={
@@ -717,6 +771,15 @@ class TestDisableRule:
             json={
                 "approver": "approver_user",  # Different from submitter_user
                 "reason": "Approved",
+            },
+        )
+
+        # Publish to make rule active
+        client.post(
+            "/rules/disable_test_005/publish",
+            json={
+                "actor": "admin_user",
+                "reason": "Publishing approved rule",
             },
         )
 
@@ -786,6 +849,15 @@ class TestShadowRule:
             },
         )
 
+        # Publish to make rule active
+        client.post(
+            "/rules/shadow_test_001/publish",
+            json={
+                "actor": "admin_user",
+                "reason": "Publishing approved rule",
+            },
+        )
+
         response = client.post(
             "/rules/shadow_test_001/shadow",
             json={
@@ -805,6 +877,15 @@ class TestShadowRule:
             json={
                 "approver": "approver_user",  # Different from submitter_user
                 "reason": "Approved",
+            },
+        )
+
+        # Publish to make rule active
+        client.post(
+            "/rules/shadow_test_002/publish",
+            json={
+                "actor": "admin_user",
+                "reason": "Publishing approved rule",
             },
         )
 
@@ -836,6 +917,15 @@ class TestShadowRule:
             },
         )
 
+        # Publish to make rule active
+        client.post(
+            "/rules/shadow_test_003/publish",
+            json={
+                "actor": "admin_user",
+                "reason": "Publishing approved rule",
+            },
+        )
+
         client.post(
             "/rules/shadow_test_003/shadow",
             json={
@@ -860,6 +950,15 @@ class TestShadowRule:
             json={
                 "approver": "approver_user",  # Different from submitter_user
                 "reason": "Approved",
+            },
+        )
+
+        # Publish to make rule active
+        client.post(
+            "/rules/shadow_test_004/publish",
+            json={
+                "actor": "admin_user",
+                "reason": "Publishing approved rule",
             },
         )
 
@@ -913,3 +1012,160 @@ class TestShadowRule:
         )
         assert response.status_code == 400
         assert "cannot shadow" in response.json()["detail"].lower()
+
+
+class TestPublishRule:
+    """Tests for POST /rules/{rule_id}/publish endpoint."""
+
+    def test_publish_approved_rule_returns_200(self, client):
+        """Test that publishing an approved rule returns 200."""
+        _create_and_submit_rule(client, "publish_test_001", actor="submitter_user")
+        # Approve it first
+        client.post(
+            "/rules/draft/publish_test_001/approve",
+            json={
+                "approver": "approver_user",
+                "reason": "Approved",
+            },
+        )
+
+        # Publish it
+        response = client.post(
+            "/rules/publish_test_001/publish",
+            json={
+                "actor": "operator_user",
+                "reason": "Ready for production",
+            },
+        )
+        assert response.status_code == 200
+        assert response.json()["rule"]["status"] == "active"
+        assert "published_at" in response.json()
+        assert "version_id" in response.json()
+
+    def test_publish_changes_status_to_active(self, client):
+        """Test that publish changes status from approved to active."""
+        _create_and_submit_rule(client, "publish_test_002")
+        # Approve it
+        client.post(
+            "/rules/draft/publish_test_002/approve",
+            json={
+                "approver": "approver_user",
+                "reason": "Approved",
+            },
+        )
+
+        # Verify it's approved
+        get_response = client.get("/rules/draft/publish_test_002")
+        assert get_response.json()["status"] == "approved"
+
+        # Publish it
+        client.post(
+            "/rules/publish_test_002/publish",
+            json={
+                "actor": "operator_user",
+                "reason": "Publishing to production",
+            },
+        )
+
+        # Verify status changed to active
+        get_response = client.get("/rules/draft/publish_test_002")
+        assert get_response.json()["status"] == "active"
+
+    def test_publish_creates_audit_record(self, client):
+        """Test that publish creates RULE_PUBLISHED audit record."""
+        _create_and_submit_rule(client, "publish_test_003")
+        # Approve it
+        client.post(
+            "/rules/draft/publish_test_003/approve",
+            json={
+                "approver": "approver_user",
+                "reason": "Approved",
+            },
+        )
+
+        # Publish it
+        client.post(
+            "/rules/publish_test_003/publish",
+            json={
+                "actor": "operator_user",
+                "reason": "Publishing to production",
+            },
+        )
+
+        audit_logger = get_audit_logger()
+        records = audit_logger.get_rule_history("publish_test_003")
+
+        # Find RULE_PUBLISHED record
+        publish_records = [r for r in records if r.action == "RULE_PUBLISHED"]
+        assert len(publish_records) > 0
+
+        publish_record = publish_records[-1]
+        assert publish_record.actor == "operator_user"
+        assert publish_record.before_state["status"] == "approved"
+        assert publish_record.after_state["status"] == "active"
+
+    def test_publish_requires_approved_status(self, client):
+        """Test that publish requires rule to be in approved status."""
+        _create_and_submit_rule(client, "publish_test_004")
+        # Don't approve it - stays in pending_review
+
+        # Try to publish (should fail)
+        response = client.post(
+            "/rules/publish_test_004/publish",
+            json={
+                "actor": "operator_user",
+                "reason": "Cannot publish non-approved rule",
+            },
+        )
+        assert response.status_code == 400
+        assert "not approved" in response.json()["detail"].lower()
+
+    def test_publish_not_found_returns_404(self, client):
+        """Test that publishing non-existent rule returns 404."""
+        response = client.post(
+            "/rules/nonexistent/publish",
+            json={
+                "actor": "operator_user",
+                "reason": "Test",
+            },
+        )
+        assert response.status_code == 404
+
+    def test_publish_requires_actor(self, client):
+        """Test that publish requires actor field."""
+        _create_and_submit_rule(client, "publish_test_005")
+        # Approve it
+        client.post(
+            "/rules/draft/publish_test_005/approve",
+            json={
+                "approver": "approver_user",
+                "reason": "Approved",
+            },
+        )
+
+        # Try to publish without actor (should fail validation)
+        response = client.post(
+            "/rules/publish_test_005/publish",
+            json={
+                "reason": "No actor provided",
+            },
+        )
+        assert response.status_code == 422  # Validation error
+
+    def test_approve_does_not_make_rule_active(self, client):
+        """Regression test: approve should NOT make rule active."""
+        _create_and_submit_rule(client, "publish_test_006")
+
+        # Approve it
+        client.post(
+            "/rules/draft/publish_test_006/approve",
+            json={
+                "approver": "approver_user",
+                "reason": "Approved",
+            },
+        )
+
+        # Verify it's approved, NOT active
+        get_response = client.get("/rules/draft/publish_test_006")
+        assert get_response.json()["status"] == "approved"
+        assert get_response.json()["status"] != "active"

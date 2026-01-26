@@ -91,6 +91,22 @@ The API provides endpoints for:
 - **Training**: Model training with MLflow tracking (`POST /train`)
 - **Data**: Synthetic data generation and management (`POST /data/generate`, `DELETE /data/clear`)
 - **Rules**: Sandbox testing, draft rule management, heuristic suggestions, shadow metrics, and backtest results
+- **Rule Lifecycle**: Draft creation, submission, approval, and **publish** (`POST /rules/{id}/publish`)
+- **Model Deployment**: Explicit model deployment (`POST /models/deploy`)
+
+### Publish/Deploy Endpoints
+
+**Rule Publishing:**
+- `POST /rules/{rule_id}/publish` - Publish an approved rule to production
+  - Transitions rule from `approved` to `active` status
+  - Syncs rule to production ruleset used for inference
+  - Creates version snapshot and audit event
+
+**Model Deployment:**
+- `POST /models/deploy` - Deploy a production-approved model to live traffic
+  - Reloads production model from MLflow
+  - Makes model effective for inference
+  - Tracks deployment timestamp and actor
 
 Full API documentation with request/response schemas available at http://localhost:8000/docs (Swagger UI).
 
@@ -176,12 +192,61 @@ src/
 ### Key Components
 
 - **SignalEvaluator**: Hybrid scoring combining ML model predictions with rule-based adjustments, queries features from `feature_snapshots` table
-- **ModelManager**: Loads production models from MLflow registry with hot-reload support on promotion
+- **ModelManager**: Loads production models from MLflow registry with hot-reload support on deployment
 - **RuleEvaluator**: Matches transaction features against rule conditions, applies actions (override_score, clamp, reject) with precedence
 - **DraftRuleStore**: Manages draft rule authoring workflow with validation, conflict detection, and state transitions
+- **RuleStateMachine**: Enforces valid state transitions (draft → pending_review → approved → active)
 - **FeatureMaterializer**: SQL window functions compute point-in-time correct features without future data leakage
 - **DataLoader**: Temporal train/test split respecting label maturity (fraud confirmation dates)
 - **DriftDetector**: PSI calculation comparing reference data (from model artifacts) with live feature distributions
+
+### Publish/Deploy System Architecture
+
+The publish/deploy system separates approval from deployment for both rules and models:
+
+```mermaid
+flowchart TB
+    subgraph UI[Streamlit UI]
+        UI1[Rule Inspector]
+        UI2[Model Lab]
+    end
+    
+    subgraph API[FastAPI]
+        API1[POST /rules/id/publish]
+        API2[POST /models/deploy]
+        API3[Audit Logger]
+    end
+    
+    subgraph Storage
+        S1[DraftRuleStore]
+        S2[ModelManager]
+        S3[MLflow Registry]
+    end
+    
+    UI1 --> API1
+    UI2 --> API2
+    API1 --> S1
+    API1 --> S2
+    API1 --> API3
+    API2 --> S3
+    API2 --> S2
+    API2 --> API3
+```
+
+**Rule Publishing Flow:**
+1. Rule approved → status = `approved` (stored in DraftRuleStore)
+2. User clicks "Publish" in UI → `POST /rules/{id}/publish`
+3. API transitions rule to `active` and syncs to ModelManager.ruleset
+4. Rule is now effective for inference
+
+**Note on Ruleset Persistence:**
+Published rules are applied to the in-memory `ModelManager.ruleset` immediately. On API restart, the ruleset is reloaded from MLflow `rules.json` artifact (if present in the Production model) or falls back to `config/default_rules.json`. Active rules stored in `DraftRuleStore` are not automatically rehydrated on restart unless they are published again or persisted via MLflow artifacts.
+
+**Model Deployment Flow:**
+1. Model promoted to Production stage in MLflow
+2. User clicks "Deploy" in UI → `POST /models/deploy`
+3. API reloads model from MLflow Production stage
+4. Model is now serving live traffic
 
 ## Rule Engine
 
@@ -199,29 +264,42 @@ Rules consist of:
 
 ### Rule Lifecycle
 
-Rules progress through states with controlled transitions:
+Rules progress through states with controlled transitions. The lifecycle separates **approval** (decision to use) from **deployment** (making it effective):
 
 ```mermaid
 stateDiagram-v2
-    [*] --> draft
-    draft --> pending_review
-    pending_review --> active: approved
-    pending_review --> draft: rejected
-    active --> shadow: test mode
-    active --> disabled: deactivate
-    shadow --> active: promote
-    shadow --> disabled: deactivate
-    disabled --> active: reactivate
-    disabled --> archived: permanent removal
+    [*] --> draft: create
+    draft --> pending_review: submit
+    pending_review --> approved: approve
+    pending_review --> draft: reject
+    approved --> active: publish
+    approved --> draft: revoke
+    active --> shadow: shadow
+    active --> disabled: disable
+    shadow --> active: activate
+    shadow --> disabled: disable
+    disabled --> active: activate
+    disabled --> archived: archive
     archived --> [*]
 ```
 
+**States:**
 - **draft**: Initial creation, can be edited and validated
 - **pending_review**: Submitted for approval, cannot be edited
-- **active**: Production-active, affects scoring
+- **approved**: Approved for production but **not yet deployed** (requires explicit publish step)
+- **active**: Production-active, affects scoring (deployed and live)
 - **shadow**: Evaluated but not applied (for A/B testing)
 - **disabled**: Temporarily inactive
 - **archived**: Terminal state, historical record only
+
+**Key Workflow:**
+1. **Create** → Draft rule
+2. **Submit** → Moves to pending_review
+3. **Approve** → Moves to approved (not yet live)
+4. **Publish** → Moves to active (now effective for inference)
+5. **Shadow/Disable** → Can move active rules to shadow or disabled
+
+The explicit **publish step** ensures deployment intent is clear and auditable. Approved rules do not affect inference until explicitly published.
 
 ### Shadow Mode
 
@@ -279,10 +357,39 @@ AWS_SECRET_ACCESS_KEY=minioadmin
 1. **Generate Data**: Dashboard > Model Lab > Generate Data (or CLI)
 2. **Train Model**: Dashboard > Model Lab > Start Training
 3. **Review Metrics**: View experiment runs sorted by PR-AUC
-4. **Promote**: Select best run and click "Promote to Production"
-5. **Verify**: Check Live Scoring page shows new model version
+4. **Approve for Production**: Select best run and click "Approve for Production" (moves to Production stage)
+5. **Deploy**: Click "Deploy to Production" to make the model effective for live inference
+6. **Verify**: Check Live Scoring page shows new model version
 
-The API automatically reloads the production model when promoted via the dashboard.
+### Model Deployment Flow
+
+The model deployment process separates **approval** from **deployment**:
+
+```mermaid
+flowchart LR
+    subgraph Training
+        A[Train Model] --> B[Register in MLflow]
+    end
+    subgraph Promotion
+        B --> C[Promote to Staging]
+        C --> D[Approve for Production]
+    end
+    subgraph Deployment
+        D --> E[Deploy to Production]
+        E --> F[Reload API Model]
+    end
+    subgraph Runtime
+        F --> G[Live Inference]
+    end
+```
+
+**Stages:**
+- **None**: Initial registration after training
+- **Staging**: Approved for staging environment testing
+- **Production (approved)**: Approved for production but **not yet deployed**
+- **Production (live)**: Deployed and serving live traffic
+
+The explicit **deploy step** ensures deployment intent is clear and auditable. Models in Production stage do not serve traffic until explicitly deployed.
 
 ## Drift Detection
 
