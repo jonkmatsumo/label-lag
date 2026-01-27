@@ -25,6 +25,7 @@ const (
 	AnalyticsService_GetOverviewMetrics_FullMethodName    = "/crud.v1.AnalyticsService/GetOverviewMetrics"
 	AnalyticsService_GetDatasetFingerprint_FullMethodName = "/crud.v1.AnalyticsService/GetDatasetFingerprint"
 	AnalyticsService_GetFeatureSample_FullMethodName      = "/crud.v1.AnalyticsService/GetFeatureSample"
+	AnalyticsService_GetSchemaSummary_FullMethodName      = "/crud.v1.AnalyticsService/GetSchemaSummary"
 )
 
 // AnalyticsServiceClient is the client API for AnalyticsService service.
@@ -37,6 +38,7 @@ type AnalyticsServiceClient interface {
 	GetOverviewMetrics(ctx context.Context, in *GetOverviewMetricsRequest, opts ...grpc.CallOption) (*GetOverviewMetricsResponse, error)
 	GetDatasetFingerprint(ctx context.Context, in *GetDatasetFingerprintRequest, opts ...grpc.CallOption) (*GetDatasetFingerprintResponse, error)
 	GetFeatureSample(ctx context.Context, in *GetFeatureSampleRequest, opts ...grpc.CallOption) (*GetFeatureSampleResponse, error)
+	GetSchemaSummary(ctx context.Context, in *GetSchemaSummaryRequest, opts ...grpc.CallOption) (*GetSchemaSummaryResponse, error)
 }
 
 type analyticsServiceClient struct {
@@ -107,6 +109,16 @@ func (c *analyticsServiceClient) GetFeatureSample(ctx context.Context, in *GetFe
 	return out, nil
 }
 
+func (c *analyticsServiceClient) GetSchemaSummary(ctx context.Context, in *GetSchemaSummaryRequest, opts ...grpc.CallOption) (*GetSchemaSummaryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSchemaSummaryResponse)
+	err := c.cc.Invoke(ctx, AnalyticsService_GetSchemaSummary_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AnalyticsServiceServer is the server API for AnalyticsService service.
 // All implementations must embed UnimplementedAnalyticsServiceServer
 // for forward compatibility.
@@ -117,6 +129,7 @@ type AnalyticsServiceServer interface {
 	GetOverviewMetrics(context.Context, *GetOverviewMetricsRequest) (*GetOverviewMetricsResponse, error)
 	GetDatasetFingerprint(context.Context, *GetDatasetFingerprintRequest) (*GetDatasetFingerprintResponse, error)
 	GetFeatureSample(context.Context, *GetFeatureSampleRequest) (*GetFeatureSampleResponse, error)
+	GetSchemaSummary(context.Context, *GetSchemaSummaryRequest) (*GetSchemaSummaryResponse, error)
 	mustEmbedUnimplementedAnalyticsServiceServer()
 }
 
@@ -144,6 +157,9 @@ func (UnimplementedAnalyticsServiceServer) GetDatasetFingerprint(context.Context
 }
 func (UnimplementedAnalyticsServiceServer) GetFeatureSample(context.Context, *GetFeatureSampleRequest) (*GetFeatureSampleResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetFeatureSample not implemented")
+}
+func (UnimplementedAnalyticsServiceServer) GetSchemaSummary(context.Context, *GetSchemaSummaryRequest) (*GetSchemaSummaryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSchemaSummary not implemented")
 }
 func (UnimplementedAnalyticsServiceServer) mustEmbedUnimplementedAnalyticsServiceServer() {}
 func (UnimplementedAnalyticsServiceServer) testEmbeddedByValue()                          {}
@@ -274,6 +290,24 @@ func _AnalyticsService_GetFeatureSample_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AnalyticsService_GetSchemaSummary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSchemaSummaryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AnalyticsServiceServer).GetSchemaSummary(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AnalyticsService_GetSchemaSummary_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AnalyticsServiceServer).GetSchemaSummary(ctx, req.(*GetSchemaSummaryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AnalyticsService_ServiceDesc is the grpc.ServiceDesc for AnalyticsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -304,6 +338,10 @@ var AnalyticsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetFeatureSample",
 			Handler:    _AnalyticsService_GetFeatureSample_Handler,
+		},
+		{
+			MethodName: "GetSchemaSummary",
+			Handler:    _AnalyticsService_GetSchemaSummary_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

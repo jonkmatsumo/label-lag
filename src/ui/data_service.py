@@ -99,7 +99,24 @@ def fetch_fraud_summary() -> dict[str, Any]:
         }
 
 
-# --- Pure Helper Utilities ---
+def fetch_schema_summary() -> pd.DataFrame:
+    """Fetch schema summary for primary tables from API.
+
+    Returns:
+        DataFrame with columns: table_name, column_name, data_type,
+        is_nullable, ordinal_position.
+    """
+    try:
+        response = requests.get(
+            f"{API_BASE_URL}/analytics/schema",
+            timeout=API_TIMEOUT,
+        )
+        response.raise_for_status()
+        data = response.json().get("columns", [])
+        return pd.DataFrame(data)
+    except Exception as e:
+        print(f"API error in fetch_schema_summary: {e}")
+        return pd.DataFrame()
 
 
 

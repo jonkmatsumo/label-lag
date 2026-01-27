@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"log/slog"
 	"net"
 	"os"
@@ -644,9 +645,6 @@ func (s *server) executeQuery(ctx context.Context, query string) ([]*pb.FeatureS
 	return samples, nil
 }
 
-	return samples, nil
-}
-
 // loggingInterceptor logs the details of each gRPC request and response.
 func loggingInterceptor(
 	ctx context.Context,
@@ -655,14 +653,14 @@ func loggingInterceptor(
 	handler grpc.UnaryHandler,
 ) (interface{}, error) {
 	start := time.Now()
-	
+
 	// Create context with logger loaded with method info
 	logger := slog.With("method", info.FullMethod)
-	
+
 	resp, err := handler(ctx, req)
-	
+
 	duration := time.Since(start)
-	
+
 	if err != nil {
 		st, _ := status.FromError(err)
 		logger.Error("request failed",
@@ -676,7 +674,7 @@ func loggingInterceptor(
 			"code", codes.OK.String(),
 		)
 	}
-	
+
 	return resp, err
 }
 
@@ -718,7 +716,7 @@ func initTracer(ctx context.Context) (*sdktrace.TracerProvider, error) {
 		sdktrace.WithResource(res),
 		sdktrace.WithSpanProcessor(bsp),
 	)
-	
+
 	// set global propagator to tracecontext (the default is no-op).
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 	otel.SetTracerProvider(tracerProvider)

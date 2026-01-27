@@ -30,6 +30,16 @@ class AnalyticsCRUDClient:
         request = analytics_pb2.GetDatasetFingerprintRequest()
         return self.stub.GetDatasetFingerprint(request)
 
+    def get_feature_sample(self, sample_size: int = 100, stratify: bool = False):
+        request = analytics_pb2.GetFeatureSampleRequest(sample_size=sample_size, stratify=stratify)
+        return self.stub.GetFeatureSample(request)
+
+    def get_schema_summary(self, table_names: list[str] = None):
+        if table_names is None:
+            table_names = ["generated_records", "feature_snapshots"]
+        request = analytics_pb2.GetSchemaSummaryRequest(table_names=table_names)
+        return self.stub.GetSchemaSummary(request)
+
 _client = None
 
 def get_crud_client():

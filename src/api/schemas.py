@@ -1261,6 +1261,13 @@ class FeatureSample(BaseModel):
 class FeatureSampleResponse(BaseModel):
     samples: list[FeatureSample]
 
-class DatasetFingerprintResponse(BaseModel):
-    generated_records: TableFingerprint
-    feature_snapshots: TableFingerprint
+
+class ColumnInfo(BaseModel):
+    table_name: str
+    column_name: str
+    data_type: str
+    is_nullable: str
+    ordinal_position: int
+
+class SchemaSummaryResponse(BaseModel):
+    columns: list[ColumnInfo]
