@@ -4,10 +4,10 @@ This API provides idempotent risk assessment for transactions.
 It does not modify transaction state - it only provides an evaluation.
 """
 
-from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 import logging
 import os
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI, HTTPException, Query
