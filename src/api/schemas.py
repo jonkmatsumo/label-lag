@@ -1177,3 +1177,90 @@ class RuleAttributionResponse(BaseModel):
     mean_final_score: float
     mean_impact: float
     net_impact: float
+
+# =============================================================================
+# Analytics CRUD Schemas
+# =============================================================================
+
+from datetime import datetime
+
+class DailyStat(BaseModel):
+    date: str
+    total_transactions: int
+    fraud_count: int
+    fraud_rate: float
+    total_amount: float
+    avg_z_score: float
+
+class DailyStatsResponse(BaseModel):
+    stats: list[DailyStat]
+
+class TransactionDetail(BaseModel):
+    record_id: str
+    user_id: str
+    created_at: datetime
+    is_train_eligible: bool
+    is_pre_fraud: bool
+    amount: float
+    is_fraudulent: bool
+    fraud_type: str
+    is_off_hours_txn: bool
+    merchant_risk_score: int
+    velocity_24h: int
+    amount_to_avg_ratio_30d: float
+    balance_volatility_z_score: float
+
+class TransactionDetailsResponse(BaseModel):
+    transactions: list[TransactionDetail]
+
+class Alert(BaseModel):
+    record_id: str
+    user_id: str
+    created_at: datetime
+    amount: float
+    is_fraudulent: bool
+    fraud_type: str
+    merchant_risk_score: int
+    velocity_24h: int
+    amount_to_avg_ratio_30d: float
+    balance_volatility_z_score: float
+    computed_risk_score: int
+
+class RecentAlertsResponse(BaseModel):
+    alerts: list[Alert]
+
+class AnalyticsOverviewResponse(BaseModel):
+    total_records: int
+    fraud_records: int
+    fraud_rate: float
+    unique_users: int
+    min_transaction_timestamp: datetime | None = None
+    max_transaction_timestamp: datetime | None = None
+    min_created_at: datetime | None = None
+    max_created_at: datetime | None = None
+    total_amount: float
+    fraud_amount: float
+
+class TableFingerprint(BaseModel):
+    count: int
+    max_created_at: datetime | None = None
+    max_timestamp: datetime | None = None
+    max_id: int | None = None
+
+class DatasetFingerprintResponse(BaseModel):
+    generated_records: TableFingerprint
+    feature_snapshots: TableFingerprint
+
+class FeatureSample(BaseModel):
+    record_id: str
+    is_fraudulent: bool
+    velocity_24h: float
+    amount_to_avg_ratio_30d: float
+    balance_volatility_z_score: float
+
+class FeatureSampleResponse(BaseModel):
+    samples: list[FeatureSample]
+
+class DatasetFingerprintResponse(BaseModel):
+    generated_records: TableFingerprint
+    feature_snapshots: TableFingerprint

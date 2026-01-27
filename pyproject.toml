@@ -26,6 +26,8 @@ dependencies = [
     "xgboost>=2.0.0",
     "optuna>=4.0.0",
     "optuna-integration[xgboost]",
+    "grpcio>=1.76.0",
+    "grpcio-tools>=1.76.0",
 ]
 
 [project.scripts]

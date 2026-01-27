@@ -15,14 +15,28 @@ services:
       - labellag_net
     ports:
       - "${API_PORT:-8000}:8000"
-    command: ["uv", "run", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    command: [ "uv", "run", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000" ]
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  analytics-crud:
+    build:
+      context: src/services/analytics-crud
+      dockerfile: Dockerfile
+    container_name: analytics-crud
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-synthetic}:${POSTGRES_PASSWORD:-synthetic_dev_password}@db:5432/${POSTGRES_DB:-synthetic_data}?sslmode=disable
+      - PORT=50051
+    networks:
+      - labellag_net
+    depends_on:
+      db:
+        condition: service_healthy
 
   dashboard:
     build:
