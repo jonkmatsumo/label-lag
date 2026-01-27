@@ -414,11 +414,17 @@ func calculateStratifiedCounts(total int64, fraudRate float64, sampleSize int32,
 	if fraudSample < minPerClass && fraudCount >= int64(minPerClass) {
 		fraudSample = minPerClass
 		nonFraudSample = sampleSize - fraudSample
+		if nonFraudSample < 0 {
+			nonFraudSample = 0
+		}
 	}
 
 	if nonFraudSample < minPerClass && nonFraudCount >= int64(minPerClass) {
 		nonFraudSample = minPerClass
 		fraudSample = sampleSize - nonFraudSample
+		if fraudSample < 0 {
+			fraudSample = 0
+		}
 	}
 
 	// Ensure we don't exceed available counts
@@ -434,27 +440,123 @@ func calculateStratifiedCounts(total int64, fraudRate float64, sampleSize int32,
 
 func (s *server) GetFeatureSample(ctx context.Context, req *pb.GetFeatureSampleRequest) (*pb.GetFeatureSampleResponse, error) {
 	sampleSize := req.SampleSize
-	if sampleSize == 0 {
+	if sampleSize <= 0 {
 		sampleSize = 100
 	}
 
-	// Simplified sampling logic for now
-	query := `
-		SELECT
-			gr.record_id,
-			gr.is_fraudulent,
-			fs.velocity_24h,
-			fs.amount_to_avg_ratio_30d,
-			fs.balance_volatility_z_score
-		FROM generated_records gr
-		INNER JOIN feature_snapshots fs ON gr.record_id = fs.record_id
-		ORDER BY RANDOM()
-		LIMIT $1
-	`
-
-	rows, err := s.db.QueryContext(ctx, query, sampleSize)
+	pgVersion, _ := getPostgresVersion(ctx, s.db)
+	stats, err := getTableStats(ctx, s.db, "generated_records")
 	if err != nil {
-		return nil, fmt.Errorf("failed to query feature sample: %v", err)
+		return nil, fmt.Errorf("failed to get table stats: %v", err)
+	}
+
+	if stats.totalCount == 0 {
+		return &pb.GetFeatureSampleResponse{}, nil
+	}
+
+	// Get fraud rate for stratification
+	var fraudRate float64
+	err = s.db.QueryRowContext(ctx, "SELECT CAST(SUM(CASE WHEN is_fraudulent THEN 1 ELSE 0 END) AS FLOAT) / COUNT(*) FROM generated_records").Scan(&fraudRate)
+	if err != nil {
+		fraudRate = 0.0 // Fallback
+	}
+
+	var samples []*pb.FeatureSample
+	if req.Stratify {
+		fraudTarget, nonFraudTarget := calculateStratifiedCounts(stats.totalCount, fraudRate, sampleSize, 10)
+
+		// Sample fraud
+		if fraudTarget > 0 {
+			fSamples, err := s.sampleClass(ctx, true, fraudTarget, pgVersion, stats)
+			if err != nil {
+				return nil, fmt.Errorf("failed to sample fraud class: %v", err)
+			}
+			samples = append(samples, fSamples...)
+		}
+
+		// Sample non-fraud
+		if nonFraudTarget > 0 {
+			nfSamples, err := s.sampleClass(ctx, false, nonFraudTarget, pgVersion, stats)
+			if err != nil {
+				return nil, fmt.Errorf("failed to sample non-fraud class: %v", err)
+			}
+			samples = append(samples, nfSamples...)
+		}
+	} else {
+		samples, err = s.sampleGeneric(ctx, sampleSize, pgVersion, stats)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &pb.GetFeatureSampleResponse{Samples: samples}, nil
+}
+
+func (s *server) sampleClass(ctx context.Context, isFraudulent bool, limit int32, pgVersion int, stats tableStats) ([]*pb.FeatureSample, error) {
+	var query string
+	if pgVersion >= 16 && stats.totalCount > 100000 {
+		fraction := float64(limit) / float64(stats.totalCount)
+		query = fmt.Sprintf(`
+			SELECT gr.record_id, gr.is_fraudulent, fs.velocity_24h, fs.amount_to_avg_ratio_30d, fs.balance_volatility_z_score
+			FROM generated_records gr TABLESAMPLE SYSTEM (%f)
+			INNER JOIN feature_snapshots fs ON gr.record_id = fs.record_id
+			WHERE gr.is_fraudulent = %t
+			LIMIT %d`, fraction*100, isFraudulent, limit)
+	} else if stats.maxID > stats.minID && stats.totalCount > 10000 {
+		query = fmt.Sprintf(`
+			SELECT gr.record_id, gr.is_fraudulent, fs.velocity_24h, fs.amount_to_avg_ratio_30d, fs.balance_volatility_z_score
+			FROM generated_records gr
+			INNER JOIN feature_snapshots fs ON gr.record_id = fs.record_id
+			WHERE gr.id BETWEEN %d AND %d AND gr.is_fraudulent = %t
+			LIMIT %d`, stats.minID, stats.maxID, isFraudulent, limit)
+	} else {
+		query = fmt.Sprintf(`
+			SELECT gr.record_id, gr.is_fraudulent, fs.velocity_24h, fs.amount_to_avg_ratio_30d, fs.balance_volatility_z_score
+			FROM generated_records gr
+			INNER JOIN feature_snapshots fs ON gr.record_id = fs.record_id
+			WHERE gr.is_fraudulent = %t
+			ORDER BY RANDOM()
+			LIMIT %d`, isFraudulent, limit)
+	}
+	return s.executeQuery(ctx, query)
+}
+
+func (s *server) sampleGeneric(ctx context.Context, limit int32, pgVersion int, stats tableStats) ([]*pb.FeatureSample, error) {
+	var query string
+	if pgVersion >= 16 && stats.totalCount > 100000 {
+		fraction := float64(limit) / float64(stats.totalCount)
+		query = fmt.Sprintf(`
+			SELECT gr.record_id, gr.is_fraudulent, fs.velocity_24h, fs.amount_to_avg_ratio_30d, fs.balance_volatility_z_score
+			FROM generated_records gr TABLESAMPLE SYSTEM (%f)
+			INNER JOIN feature_snapshots fs ON gr.record_id = fs.record_id
+			LIMIT %d`, fraction*100, limit)
+	} else if stats.maxID > stats.minID && stats.totalCount > 10000 {
+		// Uniform ID sampling hint
+		step := (stats.maxID - stats.minID) / int64(limit)
+		if step < 1 {
+			step = 1
+		}
+		query = fmt.Sprintf(`
+			SELECT gr.record_id, gr.is_fraudulent, fs.velocity_24h, fs.amount_to_avg_ratio_30d, fs.balance_volatility_z_score
+			FROM generated_records gr
+			INNER JOIN feature_snapshots fs ON gr.record_id = fs.record_id
+			WHERE gr.id IN (SELECT generate_series(%d, %d, %d))
+			LIMIT %d`, stats.minID, stats.maxID, step, limit)
+	} else {
+		query = fmt.Sprintf(`
+			SELECT gr.record_id, gr.is_fraudulent, fs.velocity_24h, fs.amount_to_avg_ratio_30d, fs.balance_volatility_z_score
+			FROM generated_records gr
+			INNER JOIN feature_snapshots fs ON gr.record_id = fs.record_id
+			ORDER BY RANDOM()
+			LIMIT %d`, limit)
+	}
+	return s.executeQuery(ctx, query)
+}
+
+func (s *server) executeQuery(ctx context.Context, query string) ([]*pb.FeatureSample, error) {
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -469,12 +571,11 @@ func (s *server) GetFeatureSample(ctx context.Context, req *pb.GetFeatureSampleR
 			&sample.BalanceVolatilityZScore,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan feature sample: %v", err)
+			return nil, err
 		}
 		samples = append(samples, &sample)
 	}
-
-	return &pb.GetFeatureSampleResponse{Samples: samples}, nil
+	return samples, nil
 }
 
 func main() {
