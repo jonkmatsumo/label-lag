@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"os"
 	"os/signal"
@@ -15,10 +15,19 @@ import (
 
 	pb "github.com/jonkmatsumo/label-lag/src/services/analytics-crud/proto/crud/v1"
 	_ "github.com/lib/pq"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -438,6 +447,63 @@ func calculateStratifiedCounts(total int64, fraudRate float64, sampleSize int32,
 	return fraudSample, nonFraudSample
 }
 
+func (s *server) GetSchemaSummary(ctx context.Context, req *pb.GetSchemaSummaryRequest) (*pb.GetSchemaSummaryResponse, error) {
+	tableNames := req.TableNames
+	if len(tableNames) == 0 {
+		tableNames = []string{"generated_records", "feature_snapshots"}
+	}
+
+	// Prepare query: convert slice to postgres array string, e.g. '{t1,t2}'
+	// Or use ANY operator with pq.Array.
+	// Since we are using standard sql, we will build a param list or use pq.Array if imported.
+	// We imported lib/pq as _, so we can use pq.Array if we change import or just build the IN clause.
+	// Simpler to use ANY($1) with a literal string array format or multiple params.
+	// Let's use ANY($1) and format the array manually to avoid explicit pq dep dependency in main code if possible,
+	// but using lib/pq directly is cleaner. We only did _ import, so let's change that if needed.
+	// Actually, just formatting '{a,b}' works for text arrays in Postgres.
+
+	arrStr := "{" + strings.Join(tableNames, ",") + "}"
+
+	query := `
+		SELECT
+			table_name,
+			column_name,
+			data_type,
+			is_nullable,
+			ordinal_position
+		FROM information_schema.columns
+		WHERE table_schema = 'public'
+		  AND table_name = ANY($1::text[])
+		ORDER BY table_name, ordinal_position
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, arrStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query schema summary: %v", err)
+	}
+	defer rows.Close()
+
+	var columns []*pb.ColumnInfo
+	for rows.Next() {
+		var col pb.ColumnInfo
+		err := rows.Scan(
+			&col.TableName,
+			&col.ColumnName,
+			&col.DataType,
+			&col.IsNullable,
+			&col.OrdinalPosition,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan column info: %v", err)
+		}
+		// Normalize column name to lowercase
+		col.ColumnName = strings.ToLower(col.ColumnName)
+		columns = append(columns, &col)
+	}
+
+	return &pb.GetSchemaSummaryResponse{Columns: columns}, nil
+}
+
 func (s *server) GetFeatureSample(ctx context.Context, req *pb.GetFeatureSampleRequest) (*pb.GetFeatureSampleResponse, error) {
 	sampleSize := req.SampleSize
 	if sampleSize <= 0 {
@@ -578,7 +644,109 @@ func (s *server) executeQuery(ctx context.Context, query string) ([]*pb.FeatureS
 	return samples, nil
 }
 
+	return samples, nil
+}
+
+// loggingInterceptor logs the details of each gRPC request and response.
+func loggingInterceptor(
+	ctx context.Context,
+	req interface{},
+	info *grpc.UnaryServerInfo,
+	handler grpc.UnaryHandler,
+) (interface{}, error) {
+	start := time.Now()
+	
+	// Create context with logger loaded with method info
+	logger := slog.With("method", info.FullMethod)
+	
+	resp, err := handler(ctx, req)
+	
+	duration := time.Since(start)
+	
+	if err != nil {
+		st, _ := status.FromError(err)
+		logger.Error("request failed",
+			"duration", duration,
+			"code", st.Code().String(),
+			"error", err,
+		)
+	} else {
+		logger.Info("request completed",
+			"duration", duration,
+			"code", codes.OK.String(),
+		)
+	}
+	
+	return resp, err
+}
+
+// initTracer initializes an OTLP exporter, and configures the corresponding trace provider.
+func initTracer(ctx context.Context) (*sdktrace.TracerProvider, error) {
+	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	if endpoint == "" {
+		// Use default temporary endpoint or return nil if we don't want to enforce tracing without config
+		// For now, let's default to localhost:4317 if not set, or skip if empty?
+		// Usually in k8s/docker it's set. If not set, maybe disable tracing?
+		// Let's check if OTEL_EXPORTER_OTLP_ENDPOINT is set.
+		return nil, nil
+	}
+
+	res, err := resource.New(ctx,
+		resource.WithAttributes(
+			semconv.ServiceName("analytics-crud"),
+			semconv.ServiceVersion("0.1.0"),
+		),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create resource: %w", err)
+	}
+
+	// Set up trace exporter
+	traceExporter, err := otlptracegrpc.New(ctx,
+		otlptracegrpc.WithInsecure(),
+		otlptracegrpc.WithEndpoint(endpoint),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create trace exporter: %w", err)
+	}
+
+	// Register the trace exporter with a TracerProvider, using a batch
+	// span processor to aggregate spans before export.
+	bsp := sdktrace.NewBatchSpanProcessor(traceExporter)
+	tracerProvider := sdktrace.NewTracerProvider(
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+		sdktrace.WithResource(res),
+		sdktrace.WithSpanProcessor(bsp),
+	)
+	
+	// set global propagator to tracecontext (the default is no-op).
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+	otel.SetTracerProvider(tracerProvider)
+
+	return tracerProvider, nil
+}
+
 func main() {
+	// Configure structured logging
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
+
+	// Build context
+	ctx := context.Background()
+
+	// Initialize OpenTelemetry
+	tp, err := initTracer(ctx)
+	if err != nil {
+		slog.Error("failed to initialize tracer", "error", err)
+	} else if tp != nil {
+		defer func() {
+			if err := tp.Shutdown(ctx); err != nil {
+				slog.Error("failed to shutdown tracer provider", "error", err)
+			}
+		}()
+		slog.Info("opentelemetry tracer initialized")
+	}
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "50051"
@@ -601,15 +769,21 @@ func main() {
 	db.SetConnMaxLifetime(time.Hour)
 
 	if err := db.Ping(); err != nil {
-		log.Printf("warning: failed to ping database: %v", err)
+		slog.Warn("failed to ping database", "error", err)
 	}
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		slog.Error("failed to listen", "error", err)
+		os.Exit(1)
 	}
 
-	s := grpc.NewServer()
+	// Add interceptors: logging and otel tracing
+	opts := []grpc.ServerOption{
+		grpc.UnaryInterceptor(loggingInterceptor),
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+	}
+	s := grpc.NewServer(opts...)
 	pb.RegisterAnalyticsServiceServer(s, &server{db: db})
 
 	// Register health service
@@ -620,7 +794,7 @@ func main() {
 	// Register reflection service on gRPC server.
 	reflection.Register(s)
 
-	log.Printf("server listening at %v", lis.Addr())
+	slog.Info("server listening", "address", lis.Addr())
 
 	// Handle graceful shutdown
 	stop := make(chan os.Signal, 1)
@@ -628,11 +802,12 @@ func main() {
 
 	go func() {
 		if err := s.Serve(lis); err != nil {
-			log.Fatalf("failed to serve: %v", err)
+			slog.Error("failed to serve", "error", err)
+			os.Exit(1)
 		}
 	}()
 
 	<-stop
-	log.Println("shutting down gRPC server...")
+	slog.Info("shutting down gRPC server...")
 	s.GracefulStop()
 }
