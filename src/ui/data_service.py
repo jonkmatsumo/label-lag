@@ -7,73 +7,270 @@ instead of ORM models to avoid coupling.
 
 import os
 from contextlib import contextmanager
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
 import requests
 import streamlit as st
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Engine
 # DATABASE_URL is no longer used by the UI for analytics.
 # Connection is now handled by the CRUD service.
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://synthetic:synthetic_dev_password@localhost:5432/synthetic_data",
+)
 
 # API timeout in seconds
 API_TIMEOUT = 5.0  # Increased for proxying
 
 # Risk score threshold for alerts
 ALERT_THRESHOLD = 80
+_DB_ENGINE: Engine | None = None
+
+
+def _use_db_analytics() -> bool:
+    """Decide whether analytics helpers should use the database directly."""
+    source = os.getenv("ANALYTICS_DATA_SOURCE")
+    if source:
+        return source.lower() in {"db", "database", "sql"}
+    return bool(os.getenv("PYTEST_CURRENT_TEST"))
+
+
+def get_db_engine() -> Engine:
+    """Return a cached SQLAlchemy engine."""
+    global _DB_ENGINE
+    if _DB_ENGINE is None:
+        _DB_ENGINE = create_engine(DATABASE_URL, pool_pre_ping=True)
+    return _DB_ENGINE
+
+
+@contextmanager
+def get_db_connection():
+    """Context manager for database connections."""
+    conn = get_db_engine().connect()
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+def _result_to_dataframe(result) -> pd.DataFrame:
+    """Convert a SQLAlchemy result into a DataFrame."""
+    rows = result.fetchall()
+    columns = result.keys()
+    return pd.DataFrame(rows, columns=columns)
+
+
+def _parse_timestamp(value: Any) -> datetime | None:
+    """Parse timestamp values from API responses."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    if isinstance(value, dict) and "seconds" in value:
+        try:
+            seconds = int(value.get("seconds", 0))
+            nanos = int(value.get("nanos", 0))
+            return datetime.fromtimestamp(seconds + nanos / 1e9, tz=UTC)
+        except (ValueError, TypeError):
+            return None
+    return None
 
 
 def fetch_daily_stats(days: int = 30) -> pd.DataFrame:
     """Fetch daily transaction statistics from API proxy."""
+    if not _use_db_analytics():
+        try:
+            response = requests.get(
+                f"{API_BASE_URL}/analytics/daily-stats",
+                params={"days": days},
+                timeout=API_TIMEOUT,
+            )
+            response.raise_for_status()
+            data = response.json().get("stats", [])
+            return pd.DataFrame(data)
+        except Exception as e:
+            print(f"API error in fetch_daily_stats: {e}")
     try:
-        response = requests.get(
-            f"{API_BASE_URL}/analytics/daily-stats",
-            params={"days": days},
-            timeout=API_TIMEOUT,
-        )
-        response.raise_for_status()
-        data = response.json().get("stats", [])
-        return pd.DataFrame(data)
+        with get_db_connection() as conn:
+            query = text(
+                """
+                SELECT
+                    date_trunc('day', created_at)::date AS date,
+                    COUNT(*) AS total_transactions,
+                    SUM(CASE WHEN is_fraudulent THEN 1 ELSE 0 END) AS fraud_count,
+                    AVG(CASE WHEN is_fraudulent THEN 1 ELSE 0 END) AS fraud_rate,
+                    SUM(amount) AS total_amount,
+                    AVG(balance_volatility_z_score) AS avg_z_score
+                FROM generated_records
+                WHERE created_at >= NOW() - (:days || ' days')::interval
+                GROUP BY 1
+                ORDER BY 1 DESC
+                """
+            )
+            result = conn.execute(query, {"days": days})
+            return _result_to_dataframe(result)
     except Exception as e:
-        print(f"API error in fetch_daily_stats: {e}")
+        print(f"DB error in fetch_daily_stats: {e}")
         return pd.DataFrame()
 
 
 def fetch_transaction_details(days: int = 7) -> pd.DataFrame:
     """Fetch individual transaction details from API proxy."""
+    if not _use_db_analytics():
+        try:
+            response = requests.get(
+                f"{API_BASE_URL}/analytics/transactions",
+                params={"days": days, "limit": 1000},
+                timeout=API_TIMEOUT,
+            )
+            response.raise_for_status()
+            data = response.json().get("transactions", [])
+            return pd.DataFrame(data)
+        except Exception as e:
+            print(f"API error in fetch_transaction_details: {e}")
     try:
-        response = requests.get(
-            f"{API_BASE_URL}/analytics/transactions",
-            params={"days": days, "limit": 1000},
-            timeout=API_TIMEOUT,
-        )
-        response.raise_for_status()
-        data = response.json().get("transactions", [])
-        return pd.DataFrame(data)
+        with get_db_connection() as conn:
+            query = text(
+                """
+                SELECT
+                    record_id,
+                    user_id,
+                    created_at,
+                    is_train_eligible,
+                    is_pre_fraud,
+                    amount,
+                    is_fraudulent,
+                    fraud_type,
+                    is_off_hours_txn,
+                    merchant_risk_score,
+                    velocity_24h,
+                    amount_to_avg_ratio_30d,
+                    balance_volatility_z_score
+                FROM generated_records
+                WHERE created_at >= NOW() - (:days || ' days')::interval
+                ORDER BY created_at DESC
+                LIMIT 1000
+                """
+            )
+            result = conn.execute(query, {"days": days})
+            return _result_to_dataframe(result)
     except Exception as e:
-        print(f"API error in fetch_transaction_details: {e}")
+        print(f"DB error in fetch_transaction_details: {e}")
         return pd.DataFrame()
 
 
 def fetch_recent_alerts(limit: int = 50) -> pd.DataFrame:
     """Fetch recent high-risk transactions from API proxy."""
+    if not _use_db_analytics():
+        try:
+            response = requests.get(
+                f"{API_BASE_URL}/analytics/recent-alerts",
+                params={"limit": limit},
+                timeout=API_TIMEOUT,
+            )
+            response.raise_for_status()
+            data = response.json().get("alerts", [])
+            return pd.DataFrame(data)
+        except Exception as e:
+            print(f"API error in fetch_recent_alerts: {e}")
     try:
-        response = requests.get(
-            f"{API_BASE_URL}/analytics/recent-alerts",
-            params={"limit": limit},
-            timeout=API_TIMEOUT,
-        )
-        response.raise_for_status()
-        data = response.json().get("alerts", [])
-        return pd.DataFrame(data)
+        with get_db_connection() as conn:
+            query = text(
+                """
+                SELECT
+                    record_id,
+                    user_id,
+                    created_at,
+                    amount,
+                    is_fraudulent,
+                    fraud_type,
+                    merchant_risk_score,
+                    velocity_24h,
+                    amount_to_avg_ratio_30d,
+                    balance_volatility_z_score,
+                    (
+                        merchant_risk_score
+                        + velocity_24h
+                        + (amount_to_avg_ratio_30d * 10)
+                        + (balance_volatility_z_score * 5)
+                    )::int AS computed_risk_score
+                FROM generated_records
+                ORDER BY computed_risk_score DESC, created_at DESC
+                LIMIT :limit
+                """
+            )
+            result = conn.execute(query, {"limit": limit})
+            return _result_to_dataframe(result)
     except Exception as e:
-        print(f"API error in fetch_recent_alerts: {e}")
+        print(f"DB error in fetch_recent_alerts: {e}")
         return pd.DataFrame()
 
 
 def fetch_fraud_summary() -> dict[str, Any]:
     """Fetch summary statistics for fraud metrics from API proxy overview."""
+    if not _use_db_analytics():
+        try:
+            response = requests.get(
+                f"{API_BASE_URL}/analytics/overview",
+                timeout=API_TIMEOUT,
+            )
+            response.raise_for_status()
+            data = response.json()
+            return {
+                "total_transactions": data.get("total_records", 0),
+                "total_fraud": data.get("fraud_records", 0),
+                "fraud_rate": data.get("fraud_rate", 0.0),
+                "total_amount": data.get("total_amount", 0.0),
+                "fraud_amount": data.get("fraud_amount", 0.0),
+            }
+        except Exception as e:
+            print(f"API error in fetch_fraud_summary: {e}")
+    try:
+        with get_db_connection() as conn:
+            query = text(
+                """
+                SELECT
+                    COUNT(*) AS total_transactions,
+                    SUM(CASE WHEN is_fraudulent THEN 1 ELSE 0 END) AS total_fraud,
+                    AVG(CASE WHEN is_fraudulent THEN 1 ELSE 0 END) * 100 AS fraud_rate,
+                    SUM(amount) AS total_amount,
+                    SUM(CASE WHEN is_fraudulent THEN amount ELSE 0 END) AS fraud_amount
+                FROM generated_records
+                """
+            )
+            result = conn.execute(query)
+            row = result.fetchone()
+            if row is None:
+                raise ValueError("No rows returned")
+            return {
+                "total_transactions": row.total_transactions or 0,
+                "total_fraud": row.total_fraud or 0,
+                "fraud_rate": row.fraud_rate or 0.0,
+                "total_amount": row.total_amount or 0.0,
+                "fraud_amount": row.fraud_amount or 0.0,
+            }
+    except Exception as e:
+        print(f"DB error in fetch_fraud_summary: {e}")
+        return {
+            "total_transactions": 0,
+            "total_fraud": 0,
+            "fraud_rate": 0.0,
+            "total_amount": 0.0,
+            "fraud_amount": 0.0,
+        }
+
+
+def fetch_overview_metrics() -> dict[str, Any]:
+    """Fetch dataset overview metrics for the UI."""
     try:
         response = requests.get(
             f"{API_BASE_URL}/analytics/overview",
@@ -81,21 +278,22 @@ def fetch_fraud_summary() -> dict[str, Any]:
         )
         response.raise_for_status()
         data = response.json()
-        return {
-            "total_transactions": data.get("total_records", 0),
-            "total_fraud": data.get("fraud_records", 0),
-            "fraud_rate": data.get("fraud_rate", 0.0),
-            "total_amount": data.get("total_amount", 0.0),
-            "fraud_amount": data.get("fraud_amount", 0.0),
-        }
+        data["min_transaction_timestamp"] = _parse_timestamp(
+            data.get("min_transaction_timestamp")
+        )
+        data["max_transaction_timestamp"] = _parse_timestamp(
+            data.get("max_transaction_timestamp")
+        )
+        return data
     except Exception as e:
-        print(f"API error in fetch_fraud_summary: {e}")
+        print(f"API error in fetch_overview_metrics: {e}")
         return {
-            "total_transactions": 0,
-            "total_fraud": 0,
+            "total_records": 0,
+            "fraud_records": 0,
             "fraud_rate": 0.0,
-            "total_amount": 0.0,
-            "fraud_amount": 0.0,
+            "unique_users": 0,
+            "min_transaction_timestamp": None,
+            "max_transaction_timestamp": None,
         }
 
 
@@ -106,21 +304,126 @@ def fetch_schema_summary() -> pd.DataFrame:
         DataFrame with columns: table_name, column_name, data_type,
         is_nullable, ordinal_position.
     """
+    if not _use_db_analytics():
+        try:
+            response = requests.get(
+                f"{API_BASE_URL}/analytics/schema",
+                timeout=API_TIMEOUT,
+            )
+            response.raise_for_status()
+            data = response.json().get("columns", [])
+            return normalize_schema_df(pd.DataFrame(data))
+        except Exception as e:
+            print(f"API error in fetch_schema_summary: {e}")
     try:
-        response = requests.get(
-            f"{API_BASE_URL}/analytics/schema",
-            timeout=API_TIMEOUT,
-        )
-        response.raise_for_status()
-        data = response.json().get("columns", [])
-        return pd.DataFrame(data)
+        with get_db_connection() as conn:
+            query = text(
+                """
+                SELECT
+                    table_name,
+                    column_name,
+                    data_type,
+                    is_nullable,
+                    ordinal_position
+                FROM information_schema.columns
+                WHERE table_name IN ('generated_records', 'feature_snapshots')
+                ORDER BY table_name, ordinal_position
+                """
+            )
+            result = conn.execute(query)
+            return normalize_schema_df(_result_to_dataframe(result))
     except Exception as e:
-        print(f"API error in fetch_schema_summary: {e}")
+        print(f"DB error in fetch_schema_summary: {e}")
         return pd.DataFrame()
 
 
+def get_dataset_fingerprint() -> dict[str, Any]:
+    """Fetch dataset fingerprint metadata."""
+    try:
+        response = requests.get(
+            f"{API_BASE_URL}/analytics/fingerprint",
+            timeout=API_TIMEOUT,
+        )
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"API error in get_dataset_fingerprint: {e}")
+        return {}
 
-    return pd.DataFrame()
+
+def compute_sample_fraction(total_rows: int, sample_size: int) -> float:
+    """Compute a safe sampling fraction."""
+    if total_rows <= 0 or sample_size <= 0:
+        return 0.0
+    if sample_size >= total_rows:
+        return 1.0
+    return sample_size / total_rows
+
+
+def split_stratified_counts(
+    total_rows: int,
+    fraud_rate: float,
+    sample_size: int,
+    min_per_class: int = 10,
+) -> tuple[int, int]:
+    """Split sample size into fraud and non-fraud counts with minimums."""
+    if total_rows <= 0 or sample_size <= 0:
+        return 0, 0
+
+    sample_size = min(sample_size, total_rows)
+    if fraud_rate <= 0:
+        return 0, sample_size
+    if fraud_rate >= 1:
+        return sample_size, 0
+
+    if sample_size < min_per_class * 2:
+        fraud_sample = int(round(sample_size * fraud_rate))
+        fraud_sample = max(0, min(sample_size, fraud_sample))
+        return fraud_sample, sample_size - fraud_sample
+
+    fraud_target = int(round(sample_size * fraud_rate))
+    non_fraud_target = sample_size - fraud_target
+    fraud_sample = max(fraud_target, min_per_class)
+    non_fraud_sample = max(non_fraud_target, min_per_class)
+
+    if fraud_sample + non_fraud_sample > sample_size:
+        excess = fraud_sample + non_fraud_sample - sample_size
+        if fraud_sample - min_per_class >= non_fraud_sample - min_per_class:
+            fraud_sample = max(min_per_class, fraud_sample - excess)
+        else:
+            non_fraud_sample = max(min_per_class, non_fraud_sample - excess)
+
+        if fraud_sample + non_fraud_sample > sample_size:
+            remaining = fraud_sample + non_fraud_sample - sample_size
+            if fraud_sample > min_per_class:
+                fraud_sample = max(min_per_class, fraud_sample - remaining)
+            elif non_fraud_sample > min_per_class:
+                non_fraud_sample = max(min_per_class, non_fraud_sample - remaining)
+
+    if fraud_sample + non_fraud_sample > sample_size:
+        fraud_sample = int(round(sample_size * fraud_rate))
+        fraud_sample = max(0, min(sample_size, fraud_sample))
+        non_fraud_sample = sample_size - fraud_sample
+
+    return fraud_sample, non_fraud_sample
+
+
+def normalize_schema_df(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize schema dataframe column names and ordering."""
+    if df.empty:
+        return df.copy()
+    normalized = df.copy()
+    normalized.columns = [col.lower() for col in normalized.columns]
+    preferred = [
+        "table_name",
+        "column_name",
+        "data_type",
+        "is_nullable",
+        "ordinal_position",
+    ]
+    ordered = [col for col in preferred if col in normalized.columns]
+    ordered.extend([col for col in normalized.columns if col not in ordered])
+    return normalized[ordered]
 
 
 @st.cache_data
