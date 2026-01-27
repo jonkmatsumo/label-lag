@@ -98,6 +98,7 @@ from api.schemas import (
     AnalyticsOverviewResponse,
     DatasetFingerprintResponse,
     FeatureSampleResponse,
+    SchemaSummaryResponse,
 )
 from api.services import get_evaluator
 from api.crud_client import get_crud_client
@@ -4208,7 +4209,11 @@ async def get_daily_stats(days: int = Query(default=30, ge=1, le=90)) -> dict:
     client = get_crud_client()
     try:
         resp = client.get_daily_stats(days=days)
-        return MessageToDict(resp, preserving_proto_field_name=True)
+        return MessageToDict(
+            resp,
+            preserving_proto_field_name=True,
+            including_default_value_fields=True,
+        )
     except Exception as e:
         logger.error(f"Failed to get daily stats from CRUD service: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -4228,7 +4233,11 @@ async def get_transaction_details(
     client = get_crud_client()
     try:
         resp = client.get_transaction_details(days=days, limit=limit)
-        return MessageToDict(resp, preserving_proto_field_name=True)
+        return MessageToDict(
+            resp,
+            preserving_proto_field_name=True,
+            including_default_value_fields=True,
+        )
     except Exception as e:
         logger.error(f"Failed to get transaction details from CRUD service: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -4247,7 +4256,11 @@ async def get_recent_alerts(
     client = get_crud_client()
     try:
         resp = client.get_recent_alerts(limit=limit)
-        return MessageToDict(resp, preserving_proto_field_name=True)
+        return MessageToDict(
+            resp,
+            preserving_proto_field_name=True,
+            including_default_value_fields=True,
+        )
     except Exception as e:
         logger.error(f"Failed to get recent alerts from CRUD service: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -4264,7 +4277,11 @@ async def get_overview_metrics() -> dict:
     client = get_crud_client()
     try:
         resp = client.get_overview_metrics()
-        return MessageToDict(resp, preserving_proto_field_name=True)
+        return MessageToDict(
+            resp,
+            preserving_proto_field_name=True,
+            including_default_value_fields=True,
+        )
     except Exception as e:
         logger.error(f"Failed to get overview metrics from CRUD service: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -4281,7 +4298,11 @@ async def get_dataset_fingerprint() -> dict:
     client = get_crud_client()
     try:
         resp = client.get_dataset_fingerprint()
-        return MessageToDict(resp, preserving_proto_field_name=True)
+        return MessageToDict(
+            resp,
+            preserving_proto_field_name=True,
+            including_default_value_fields=True,
+        )
     except Exception as e:
         logger.error(f"Failed to get dataset fingerprint from CRUD service: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -4301,9 +4322,38 @@ async def get_feature_sample(
     client = get_crud_client()
     try:
         resp = client.get_feature_sample(sample_size=sample_size, stratify=stratify)
-        return MessageToDict(resp, preserving_proto_field_name=True)
+        return MessageToDict(
+            resp,
+            preserving_proto_field_name=True,
+            including_default_value_fields=True,
+            use_integers_for_enums=True,
+        )
     except Exception as e:
         logger.error(f"Failed to get feature sample from CRUD service: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get(
+    "/analytics/schema",
+    response_model=SchemaSummaryResponse,
+    tags=["Analytics"],
+    summary="Get schema summary for tables",
+)
+async def get_schema_summary(
+    table_names: list[str] = Query(default=None),
+) -> dict:
+    """Proxy request to Go analytics service for schema summary."""
+    client = get_crud_client()
+    try:
+        resp = client.get_schema_summary(table_names=table_names)
+        return MessageToDict(
+            resp,
+            preserving_proto_field_name=True,
+            including_default_value_fields=True,
+            use_integers_for_enums=True,
+        )
+    except Exception as e:
+        logger.error(f"Failed to get schema summary from CRUD service: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
