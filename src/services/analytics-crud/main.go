@@ -8,6 +8,8 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -340,6 +342,94 @@ func (s *server) GetDatasetFingerprint(ctx context.Context, req *pb.GetDatasetFi
 	}
 
 	return resp, nil
+}
+
+// Helper functions for advanced sampling
+
+func getPostgresVersion(ctx context.Context, db *sql.DB) (int, error) {
+	var versionStr string
+	err := db.QueryRowContext(ctx, "SELECT version()").Scan(&versionStr)
+	if err != nil {
+		return 0, err
+	}
+
+	// Extract major version from string like "PostgreSQL 16.1 ..."
+	parts := strings.Split(versionStr, " ")
+	for i, part := range parts {
+		if part == "PostgreSQL" && i+1 < len(parts) {
+			versionParts := strings.Split(parts[i+1], ".")
+			if len(versionParts) > 0 {
+				major, err := strconv.Atoi(versionParts[0])
+				if err == nil {
+					return major, nil
+				}
+			}
+		}
+	}
+	return 0, fmt.Errorf("could not parse postgres version: %s", versionStr)
+}
+
+type tableStats struct {
+	minID      int64
+	maxID      int64
+	totalCount int64
+}
+
+func getTableStats(ctx context.Context, db *sql.DB, table string) (tableStats, error) {
+	var stats tableStats
+	query := fmt.Sprintf("SELECT MIN(id), MAX(id), COUNT(*) FROM %s", table)
+	err := db.QueryRowContext(ctx, query).Scan(&stats.minID, &stats.maxID, &stats.totalCount)
+	if err != nil {
+		return stats, err
+	}
+	return stats, nil
+}
+
+func calculateStratifiedCounts(total int64, fraudRate float64, sampleSize int32, minPerClass int32) (int32, int32) {
+	if total == 0 {
+		return 0, 0
+	}
+
+	fraudCount := int64(float64(total) * fraudRate)
+	nonFraudCount := total - fraudCount
+
+	// If dataset is too small for minimums, return what we can
+	if total < int64(minPerClass)*2 {
+		fraudSample := int32(fraudCount)
+		if fraudSample > sampleSize/2 {
+			fraudSample = sampleSize / 2
+		}
+		nonFraudSample := int32(nonFraudCount)
+		if nonFraudSample > sampleSize-fraudSample {
+			nonFraudSample = sampleSize - fraudSample
+		}
+		return fraudSample, nonFraudSample
+	}
+
+	// Calculate proportional sample sizes
+	fraudSample := int32(float64(sampleSize) * (float64(fraudCount) / float64(total)))
+	nonFraudSample := sampleSize - fraudSample
+
+	// Enforce minimums
+	if fraudSample < minPerClass && fraudCount >= int64(minPerClass) {
+		fraudSample = minPerClass
+		nonFraudSample = sampleSize - fraudSample
+	}
+
+	if nonFraudSample < minPerClass && nonFraudCount >= int64(minPerClass) {
+		nonFraudSample = minPerClass
+		fraudSample = sampleSize - nonFraudSample
+	}
+
+	// Ensure we don't exceed available counts
+	if int64(fraudSample) > fraudCount {
+		fraudSample = int32(fraudCount)
+	}
+	if int64(nonFraudSample) > nonFraudCount {
+		nonFraudSample = int32(nonFraudCount)
+	}
+
+	return fraudSample, nonFraudSample
 }
 
 func (s *server) GetFeatureSample(ctx context.Context, req *pb.GetFeatureSampleRequest) (*pb.GetFeatureSampleResponse, error) {
