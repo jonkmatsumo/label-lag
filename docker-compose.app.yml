@@ -35,6 +35,8 @@ services:
       - PORT=50051
     networks:
       - labellag_net
+    ports:
+      - "${ANALYTICS_CRUD_PORT:-50051}:50051"
     depends_on:
       db:
         condition: service_healthy
