@@ -1,5 +1,6 @@
 """Pydantic schemas for API request/response models."""
 
+from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 from typing import Any, Literal
@@ -1181,8 +1182,6 @@ class RuleAttributionResponse(BaseModel):
 # =============================================================================
 # Analytics CRUD Schemas
 # =============================================================================
-
-from datetime import datetime
 
 class DailyStat(BaseModel):
     date: str

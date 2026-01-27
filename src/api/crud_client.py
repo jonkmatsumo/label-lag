@@ -1,6 +1,9 @@
 import os
+
 import grpc
+
 from api.proto.proto.crud.v1 import analytics_pb2, analytics_pb2_grpc
+
 
 class AnalyticsCRUDClient:
     def __init__(self, target: str = None):
@@ -31,7 +34,10 @@ class AnalyticsCRUDClient:
         return self.stub.GetDatasetFingerprint(request)
 
     def get_feature_sample(self, sample_size: int = 100, stratify: bool = False):
-        request = analytics_pb2.GetFeatureSampleRequest(sample_size=sample_size, stratify=stratify)
+        request = analytics_pb2.GetFeatureSampleRequest(
+            sample_size=sample_size,
+            stratify=stratify,
+        )
         return self.stub.GetFeatureSample(request)
 
     def get_schema_summary(self, table_names: list[str] = None):
@@ -40,7 +46,9 @@ class AnalyticsCRUDClient:
         request = analytics_pb2.GetSchemaSummaryRequest(table_names=table_names)
         return self.stub.GetSchemaSummary(request)
 
+
 _client = None
+
 
 def get_crud_client():
     global _client

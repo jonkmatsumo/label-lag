@@ -5,16 +5,17 @@ This module is isolated from backend dependencies - uses raw SQL queries
 instead of ORM models to avoid coupling.
 """
 
-import os
 from contextlib import contextmanager
 from datetime import UTC, datetime
+import os
 from typing import Any
 
 import pandas as pd
 import requests
-import streamlit as st
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
+import streamlit as st
+
 # DATABASE_URL is no longer used by the UI for analytics.
 # Connection is now handled by the CRUD service.
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
