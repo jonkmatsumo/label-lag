@@ -41,6 +41,18 @@ services:
       db:
         condition: service_healthy
 
+  inference-gateway:
+    build:
+      context: src/services/inference-gateway
+      dockerfile: Dockerfile
+    container_name: inference-gateway
+    environment:
+      - PORT=8081
+    networks:
+      - labellag_net
+    ports:
+      - "${INFERENCE_GATEWAY_PORT:-8081}:8081"
+
   dashboard:
     build:
       context: src/ui
