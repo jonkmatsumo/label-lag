@@ -4212,7 +4212,7 @@ async def get_daily_stats(days: int = Query(default=30, ge=1, le=90)) -> dict:
         return MessageToDict(
             resp,
             preserving_proto_field_name=True,
-            including_default_value_fields=True,
+            always_print_fields_with_no_presence=True,
         )
     except Exception as e:
         logger.error(f"Failed to get daily stats from CRUD service: {e}")
@@ -4236,7 +4236,7 @@ async def get_transaction_details(
         return MessageToDict(
             resp,
             preserving_proto_field_name=True,
-            including_default_value_fields=True,
+            always_print_fields_with_no_presence=True,
         )
     except Exception as e:
         logger.error(f"Failed to get transaction details from CRUD service: {e}")
@@ -4259,7 +4259,7 @@ async def get_recent_alerts(
         return MessageToDict(
             resp,
             preserving_proto_field_name=True,
-            including_default_value_fields=True,
+            always_print_fields_with_no_presence=True,
         )
     except Exception as e:
         logger.error(f"Failed to get recent alerts from CRUD service: {e}")
@@ -4280,7 +4280,7 @@ async def get_overview_metrics() -> dict:
         return MessageToDict(
             resp,
             preserving_proto_field_name=True,
-            including_default_value_fields=True,
+            always_print_fields_with_no_presence=True,
         )
     except Exception as e:
         logger.error(f"Failed to get overview metrics from CRUD service: {e}")
@@ -4301,7 +4301,7 @@ async def get_dataset_fingerprint() -> dict:
         return MessageToDict(
             resp,
             preserving_proto_field_name=True,
-            including_default_value_fields=True,
+            always_print_fields_with_no_presence=True,
         )
     except Exception as e:
         logger.error(f"Failed to get dataset fingerprint from CRUD service: {e}")
@@ -4325,7 +4325,7 @@ async def get_feature_sample(
         return MessageToDict(
             resp,
             preserving_proto_field_name=True,
-            including_default_value_fields=True,
+            always_print_fields_with_no_presence=True,
             use_integers_for_enums=True,
         )
     except Exception as e:
@@ -4349,7 +4349,7 @@ async def get_schema_summary(
         return MessageToDict(
             resp,
             preserving_proto_field_name=True,
-            including_default_value_fields=True,
+            always_print_fields_with_no_presence=True,
             use_integers_for_enums=True,
         )
     except Exception as e:

@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-from proto.crud.v1 import analytics_pb2 as proto_dot_crud_dot_v1_dot_analytics__pb2
+from api.proto.proto.crud.v1 import analytics_pb2 as proto_dot_crud_dot_v1_dot_analytics__pb2
 
 GRPC_GENERATED_VERSION = '1.76.0'
 GRPC_VERSION = grpc.__version__
@@ -64,6 +64,11 @@ class AnalyticsServiceStub(object):
                 request_serializer=proto_dot_crud_dot_v1_dot_analytics__pb2.GetFeatureSampleRequest.SerializeToString,
                 response_deserializer=proto_dot_crud_dot_v1_dot_analytics__pb2.GetFeatureSampleResponse.FromString,
                 _registered_method=True)
+        self.GetSchemaSummary = channel.unary_unary(
+                '/crud.v1.AnalyticsService/GetSchemaSummary',
+                request_serializer=proto_dot_crud_dot_v1_dot_analytics__pb2.GetSchemaSummaryRequest.SerializeToString,
+                response_deserializer=proto_dot_crud_dot_v1_dot_analytics__pb2.GetSchemaSummaryResponse.FromString,
+                _registered_method=True)
 
 
 class AnalyticsServiceServicer(object):
@@ -105,6 +110,12 @@ class AnalyticsServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetSchemaSummary(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_AnalyticsServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -137,6 +148,11 @@ def add_AnalyticsServiceServicer_to_server(servicer, server):
                     servicer.GetFeatureSample,
                     request_deserializer=proto_dot_crud_dot_v1_dot_analytics__pb2.GetFeatureSampleRequest.FromString,
                     response_serializer=proto_dot_crud_dot_v1_dot_analytics__pb2.GetFeatureSampleResponse.SerializeToString,
+            ),
+            'GetSchemaSummary': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetSchemaSummary,
+                    request_deserializer=proto_dot_crud_dot_v1_dot_analytics__pb2.GetSchemaSummaryRequest.FromString,
+                    response_serializer=proto_dot_crud_dot_v1_dot_analytics__pb2.GetSchemaSummaryResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -301,6 +317,33 @@ class AnalyticsService(object):
             '/crud.v1.AnalyticsService/GetFeatureSample',
             proto_dot_crud_dot_v1_dot_analytics__pb2.GetFeatureSampleRequest.SerializeToString,
             proto_dot_crud_dot_v1_dot_analytics__pb2.GetFeatureSampleResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetSchemaSummary(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/crud.v1.AnalyticsService/GetSchemaSummary',
+            proto_dot_crud_dot_v1_dot_analytics__pb2.GetSchemaSummaryRequest.SerializeToString,
+            proto_dot_crud_dot_v1_dot_analytics__pb2.GetSchemaSummaryResponse.FromString,
             options,
             channel_credentials,
             insecure,
