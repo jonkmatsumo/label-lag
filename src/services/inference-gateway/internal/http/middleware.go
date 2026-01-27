@@ -6,6 +6,10 @@ import (
 	"encoding/hex"
 	"log/slog"
 	"net/http"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type requestIDKey struct{}
@@ -20,6 +24,14 @@ func requestIDMiddleware(logger *slog.Logger, next http.Handler) http.Handler {
 		w.Header().Set("X-Request-Id", requestID)
 
 		ctx := context.WithValue(r.Context(), requestIDKey{}, requestID)
+		tracer := otel.Tracer("inference-gateway")
+		ctx, span := tracer.Start(ctx, "HTTP "+r.Method+" "+r.URL.Path, trace.WithAttributes(
+			attribute.String("http.method", r.Method),
+			attribute.String("http.target", r.URL.Path),
+			attribute.String("request_id", requestID),
+		))
+		defer span.End()
+
 		next.ServeHTTP(w, r.WithContext(ctx))
 		logger.Info("request completed", "method", r.Method, "path", r.URL.Path, "request_id", requestID)
 	})
