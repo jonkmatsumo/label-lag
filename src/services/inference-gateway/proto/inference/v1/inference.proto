@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package inference.v1;
+
+option go_package = "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/grpc/inferencev1;inferencev1";
+
+import "google/protobuf/struct.proto";
+
+service InferenceService {
+  rpc Score(ScoreRequest) returns (ScoreResponse);
+}
+
+message ScoreRequest {
+  string request_id = 1;
+  string user_id = 2;
+  double amount = 3;
+  string currency = 4;
+  string client_transaction_id = 5;
+  google.protobuf.Struct context = 6;
+}
+
+message ScoreResponse {
+  string request_id = 1;
+  double model_score = 2;
+  string model_version = 3;
+  bool model_loaded = 4;
+  google.protobuf.Struct features_used = 5;
+}
+
+message ErrorDetail {
+  string code = 1;
+  string message = 2;
+}

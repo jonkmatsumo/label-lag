@@ -1,0 +1,146 @@
+syntax = "proto3";
+
+package crud.v1;
+
+option go_package = "github.com/jonkmatsumo/label-lag/src/services/analytics-crud/proto/crud/v1;crudv1";
+
+import "google/protobuf/timestamp.proto";
+
+service AnalyticsService {
+  rpc GetDailyStats(GetDailyStatsRequest) returns (GetDailyStatsResponse);
+  rpc GetTransactionDetails(GetTransactionDetailsRequest) returns (GetTransactionDetailsResponse);
+  rpc GetRecentAlerts(GetRecentAlertsRequest) returns (GetRecentAlertsResponse);
+  rpc GetOverviewMetrics(GetOverviewMetricsRequest) returns (GetOverviewMetricsResponse);
+  rpc GetDatasetFingerprint(GetDatasetFingerprintRequest) returns (GetDatasetFingerprintResponse);
+  rpc GetFeatureSample(GetFeatureSampleRequest) returns (GetFeatureSampleResponse);
+  rpc GetSchemaSummary(GetSchemaSummaryRequest) returns (GetSchemaSummaryResponse);
+}
+
+message GetDailyStatsRequest {
+  int32 days = 1;
+}
+
+message DailyStat {
+  string date = 1; // YYYY-MM-DD
+  int64 total_transactions = 2;
+  int64 fraud_count = 3;
+  double fraud_rate = 4;
+  double total_amount = 5;
+  double avg_z_score = 6;
+}
+
+// Re-evaluating Date: google.type.Date requires importing google/type/date.proto which might not be in standard path.
+// I'll use string "YYYY-MM-DD" for simplicity or a Timestamp. The UI uses date objects.
+
+message GetDailyStatsResponse {
+  repeated DailyStat stats = 1;
+}
+
+message GetTransactionDetailsRequest {
+  int32 days = 1;
+  int32 limit = 2;
+}
+
+message TransactionDetail {
+  string record_id = 1;
+  string user_id = 2;
+  google.protobuf.Timestamp created_at = 3;
+  bool is_train_eligible = 4;
+  bool is_pre_fraud = 5;
+  double amount = 6;
+  bool is_fraudulent = 7;
+  string fraud_type = 8;
+  bool is_off_hours_txn = 9;
+  int32 merchant_risk_score = 10;
+  int32 velocity_24h = 11;
+  double amount_to_avg_ratio_30d = 12;
+  double balance_volatility_z_score = 13;
+}
+
+message GetTransactionDetailsResponse {
+  repeated TransactionDetail transactions = 1;
+}
+
+message GetRecentAlertsRequest {
+  int32 limit = 1;
+}
+
+message Alert {
+  string record_id = 1;
+  string user_id = 2;
+  google.protobuf.Timestamp created_at = 3;
+  double amount = 4;
+  bool is_fraudulent = 5;
+  string fraud_type = 6;
+  int32 merchant_risk_score = 7;
+  int32 velocity_24h = 8;
+  double amount_to_avg_ratio_30d = 9;
+  double balance_volatility_z_score = 10;
+  int32 computed_risk_score = 11;
+}
+
+message GetRecentAlertsResponse {
+  repeated Alert alerts = 1;
+}
+
+message GetOverviewMetricsRequest {}
+
+message GetOverviewMetricsResponse {
+  int64 total_records = 1;
+  int64 fraud_records = 2;
+  double fraud_rate = 3;
+  int64 unique_users = 4;
+  google.protobuf.Timestamp min_transaction_timestamp = 5;
+  google.protobuf.Timestamp max_transaction_timestamp = 6;
+  google.protobuf.Timestamp min_created_at = 7;
+  google.protobuf.Timestamp max_created_at = 8;
+  double total_amount = 9;
+  double fraud_amount = 10;
+}
+
+message GetDatasetFingerprintRequest {}
+
+message TableFingerprint {
+  int64 count = 1;
+  google.protobuf.Timestamp max_created_at = 2;
+  google.protobuf.Timestamp max_timestamp = 3;
+  int64 max_id = 4;
+}
+
+message GetDatasetFingerprintResponse {
+  TableFingerprint generated_records = 1;
+  TableFingerprint feature_snapshots = 2;
+}
+
+message GetFeatureSampleRequest {
+  int32 sample_size = 1;
+  bool stratify = 2;
+}
+
+message FeatureSample {
+  string record_id = 1;
+  bool is_fraudulent = 2;
+  double velocity_24h = 3;
+  double amount_to_avg_ratio_30d = 4;
+  double balance_volatility_z_score = 5;
+}
+
+message GetFeatureSampleResponse {
+  repeated FeatureSample samples = 1;
+}
+
+message GetSchemaSummaryRequest {
+  repeated string table_names = 1;
+}
+
+message ColumnInfo {
+  string table_name = 1;
+  string column_name = 2;
+  string data_type = 3;
+  string is_nullable = 4;
+  int32 ordinal_position = 5;
+}
+
+message GetSchemaSummaryResponse {
+  repeated ColumnInfo columns = 1;
+}

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
+from google.protobuf.json_format import MessageToDict
 
 from api.analytics import RuleHealthEvaluator
 from api.attribution import AttributionService
@@ -22,6 +23,7 @@ from api.backtest import (
     BacktestStore,
     get_backtest_store,
 )
+from api.crud_client import get_crud_client
 from api.drift_cache import get_drift_cache
 from api.model_manager import get_model_manager
 from api.readiness import ReadinessEvaluator
@@ -30,6 +32,7 @@ from api.schemas import (
     AcceptSuggestionResponse,
     ActivateRuleRequest,
     ActivateRuleResponse,
+    AnalyticsOverviewResponse,
     ApprovalSignalsResponse,
     ApproveRuleRequest,
     ApproveRuleResponse,
@@ -43,6 +46,8 @@ from api.schemas import (
     ClearDataResponse,
     CompareRulesetsRequest,
     ConflictResponse,
+    DailyStatsResponse,
+    DatasetFingerprintResponse,
     DeployModelRequest,
     DeployModelResponse,
     DisableRuleRequest,
@@ -59,12 +64,14 @@ from api.schemas import (
     DraftRuleValidateResponse,
     DriftStatusResponse,
     FeatureDriftDetail,
+    FeatureSampleResponse,
     GenerateDataRequest,
     GenerateDataResponse,
     HealthResponse,
     PublishRuleRequest,
     PublishRuleResponse,
     ReadinessReportResponse,
+    RecentAlertsResponse,
     RedundancyResponse,
     RejectRuleRequest,
     RejectRuleResponse,
@@ -82,6 +89,7 @@ from api.schemas import (
     SandboxEvaluateRequest,
     SandboxEvaluateResponse,
     SandboxMatchedRule,
+    SchemaSummaryResponse,
     ShadowComparisonResponse,
     ShadowRuleRequest,
     ShadowRuleResponse,
@@ -91,6 +99,7 @@ from api.schemas import (
     SuggestionsListResponse,
     TrainRequest,
     TrainResponse,
+    TransactionDetailsResponse,
     ValidationResult,
 )
 from api.services import get_evaluator
@@ -630,6 +639,8 @@ async def generate_data(request: GenerateDataRequest) -> GenerateDataResponse:
         from pipeline.materialize_features import FeatureMaterializer
         from synthetic_pipeline.db.models import Base
         from synthetic_pipeline.db.session import DatabaseSession
+
+        # Assuming DataGenerator is imported or defined elsewhere
         from synthetic_pipeline.generator import DataGenerator
 
         # Generate data
@@ -4081,6 +4092,170 @@ async def get_rule_attribution(
         mean_impact=attribution.mean_impact,
         net_impact=attribution.net_impact,
     )
+
+
+# =============================================================================
+# Analytics Proxy Endpoints
+# =============================================================================
+
+
+@app.get(
+    "/analytics/daily-stats",
+    response_model=DailyStatsResponse,
+    tags=["Analytics"],
+    summary="Get daily transaction statistics",
+)
+async def get_daily_stats(days: int = Query(default=30, ge=1, le=90)) -> dict:
+    """Proxy request to Go analytics service for daily stats."""
+    client = get_crud_client()
+    try:
+        resp = client.get_daily_stats(days=days)
+        return MessageToDict(
+            resp,
+            preserving_proto_field_name=True,
+            always_print_fields_with_no_presence=True,
+        )
+    except Exception as e:
+        logger.error(f"Failed to get daily stats from CRUD service: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get(
+    "/analytics/transactions",
+    response_model=TransactionDetailsResponse,
+    tags=["Analytics"],
+    summary="Get transaction details",
+)
+async def get_transaction_details(
+    days: int = Query(default=7, ge=1, le=30),
+    limit: int = Query(default=1000, ge=1, le=5000),
+) -> dict:
+    """Proxy request to Go analytics service for transaction details."""
+    client = get_crud_client()
+    try:
+        resp = client.get_transaction_details(days=days, limit=limit)
+        return MessageToDict(
+            resp,
+            preserving_proto_field_name=True,
+            always_print_fields_with_no_presence=True,
+        )
+    except Exception as e:
+        logger.error(f"Failed to get transaction details from CRUD service: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get(
+    "/analytics/recent-alerts",
+    response_model=RecentAlertsResponse,
+    tags=["Analytics"],
+    summary="Get recent high-risk alerts",
+)
+async def get_recent_alerts(
+    limit: int = Query(default=50, ge=1, le=200),
+) -> dict:
+    """Proxy request to Go analytics service for recent alerts."""
+    client = get_crud_client()
+    try:
+        resp = client.get_recent_alerts(limit=limit)
+        return MessageToDict(
+            resp,
+            preserving_proto_field_name=True,
+            always_print_fields_with_no_presence=True,
+        )
+    except Exception as e:
+        logger.error(f"Failed to get recent alerts from CRUD service: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get(
+    "/analytics/overview",
+    response_model=AnalyticsOverviewResponse,
+    tags=["Analytics"],
+    summary="Get dataset overview metrics",
+)
+async def get_overview_metrics() -> dict:
+    """Proxy request to Go analytics service for overview metrics."""
+    client = get_crud_client()
+    try:
+        resp = client.get_overview_metrics()
+        return MessageToDict(
+            resp,
+            preserving_proto_field_name=True,
+            always_print_fields_with_no_presence=True,
+        )
+    except Exception as e:
+        logger.error(f"Failed to get overview metrics from CRUD service: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get(
+    "/analytics/fingerprint",
+    response_model=DatasetFingerprintResponse,
+    tags=["Analytics"],
+    summary="Get dataset fingerprint",
+)
+async def get_dataset_fingerprint() -> dict:
+    """Proxy request to Go analytics service for dataset fingerprint."""
+    client = get_crud_client()
+    try:
+        resp = client.get_dataset_fingerprint()
+        return MessageToDict(
+            resp,
+            preserving_proto_field_name=True,
+            always_print_fields_with_no_presence=True,
+        )
+    except Exception as e:
+        logger.error(f"Failed to get dataset fingerprint from CRUD service: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get(
+    "/analytics/feature-sample",
+    response_model=FeatureSampleResponse,
+    tags=["Analytics"],
+    summary="Get sampled features for diagnostics",
+)
+async def get_feature_sample(
+    sample_size: int = Query(default=100, ge=1, le=1000),
+    stratify: bool = Query(default=True),
+) -> dict:
+    """Proxy request to Go analytics service for feature sample."""
+    client = get_crud_client()
+    try:
+        resp = client.get_feature_sample(sample_size=sample_size, stratify=stratify)
+        return MessageToDict(
+            resp,
+            preserving_proto_field_name=True,
+            always_print_fields_with_no_presence=True,
+            use_integers_for_enums=True,
+        )
+    except Exception as e:
+        logger.error(f"Failed to get feature sample from CRUD service: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get(
+    "/analytics/schema",
+    response_model=SchemaSummaryResponse,
+    tags=["Analytics"],
+    summary="Get schema summary for tables",
+)
+async def get_schema_summary(
+    table_names: list[str] = Query(default=None),
+) -> dict:
+    """Proxy request to Go analytics service for schema summary."""
+    client = get_crud_client()
+    try:
+        resp = client.get_schema_summary(table_names=table_names)
+        return MessageToDict(
+            resp,
+            preserving_proto_field_name=True,
+            always_print_fields_with_no_presence=True,
+            use_integers_for_enums=True,
+        )
+    except Exception as e:
+        logger.error(f"Failed to get schema summary from CRUD service: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.exception_handler(Exception)

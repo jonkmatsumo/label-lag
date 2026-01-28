@@ -26,6 +26,8 @@ dependencies = [
     "xgboost>=2.0.0",
     "optuna>=4.0.0",
     "optuna-integration[xgboost]",
+    "grpcio>=1.76.0",
+    "grpcio-tools>=1.76.0",
 ]
 
 [project.scripts]
@@ -50,6 +52,7 @@ packages = ["src/synthetic_pipeline"]
 [tool.ruff]
 src = ["src"]
 line-length = 88
+exclude = ["src/grpc_inference/proto", "src/api/proto"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]

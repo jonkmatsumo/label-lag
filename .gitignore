@@ -58,3 +58,5 @@ config/*.yaml
 
 # MLflow artifacts
 mlflow_artifacts/
+.data/
+data/
