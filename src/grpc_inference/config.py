@@ -32,9 +32,7 @@ def load_config() -> GRPCInferenceConfig:
         mlflow_tracking_uri=os.getenv("GRPC_INFERENCE_MLFLOW_TRACKING_URI"),
         model_name=os.getenv("GRPC_INFERENCE_MODEL_NAME"),
         model_stage=os.getenv("GRPC_INFERENCE_MODEL_STAGE", "Production"),
-        include_features_used=_get_bool(
-            "GRPC_INFERENCE_INCLUDE_FEATURES_USED", False
-        ),
+        include_features_used=_get_bool("GRPC_INFERENCE_INCLUDE_FEATURES_USED", False),
         score_timeout_ms=_get_int("GRPC_INFERENCE_SCORE_TIMEOUT_MS", 1500),
         config_path=config_path,
     )

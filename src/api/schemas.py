@@ -1179,9 +1179,11 @@ class RuleAttributionResponse(BaseModel):
     mean_impact: float
     net_impact: float
 
+
 # =============================================================================
 # Analytics CRUD Schemas
 # =============================================================================
+
 
 class DailyStat(BaseModel):
     date: str
@@ -1191,8 +1193,10 @@ class DailyStat(BaseModel):
     total_amount: float
     avg_z_score: float
 
+
 class DailyStatsResponse(BaseModel):
     stats: list[DailyStat]
+
 
 class TransactionDetail(BaseModel):
     record_id: str
@@ -1209,8 +1213,10 @@ class TransactionDetail(BaseModel):
     amount_to_avg_ratio_30d: float
     balance_volatility_z_score: float
 
+
 class TransactionDetailsResponse(BaseModel):
     transactions: list[TransactionDetail]
+
 
 class Alert(BaseModel):
     record_id: str
@@ -1225,8 +1231,10 @@ class Alert(BaseModel):
     balance_volatility_z_score: float
     computed_risk_score: int
 
+
 class RecentAlertsResponse(BaseModel):
     alerts: list[Alert]
+
 
 class AnalyticsOverviewResponse(BaseModel):
     total_records: int
@@ -1240,15 +1248,18 @@ class AnalyticsOverviewResponse(BaseModel):
     total_amount: float
     fraud_amount: float
 
+
 class TableFingerprint(BaseModel):
     count: int
     max_created_at: datetime | None = None
     max_timestamp: datetime | None = None
     max_id: int | None = None
 
+
 class DatasetFingerprintResponse(BaseModel):
     generated_records: TableFingerprint
     feature_snapshots: TableFingerprint
+
 
 class FeatureSample(BaseModel):
     record_id: str
@@ -1256,6 +1267,7 @@ class FeatureSample(BaseModel):
     velocity_24h: float
     amount_to_avg_ratio_30d: float
     balance_volatility_z_score: float
+
 
 class FeatureSampleResponse(BaseModel):
     samples: list[FeatureSample]
@@ -1267,6 +1279,7 @@ class ColumnInfo(BaseModel):
     data_type: str
     is_nullable: str
     ordinal_position: int
+
 
 class SchemaSummaryResponse(BaseModel):
     columns: list[ColumnInfo]

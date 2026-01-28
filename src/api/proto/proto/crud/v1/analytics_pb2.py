@@ -5,18 +5,15 @@
 # source: proto/crud/v1/analytics.proto
 # Protobuf Python Version: 6.31.1
 """Generated protocol buffer code."""
+
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import descriptor_pool as _descriptor_pool
 from google.protobuf import runtime_version as _runtime_version
 from google.protobuf import symbol_database as _symbol_database
 from google.protobuf.internal import builder as _builder
+
 _runtime_version.ValidateProtobufRuntimeVersion(
-    _runtime_version.Domain.PUBLIC,
-    6,
-    31,
-    1,
-    '',
-    'proto/crud/v1/analytics.proto'
+    _runtime_version.Domain.PUBLIC, 6, 31, 1, "", "proto/crud/v1/analytics.proto"
 )
 # @@protoc_insertion_point(imports)
 
@@ -26,54 +23,60 @@ _sym_db = _symbol_database.Default()
 from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1dproto/crud/v1/analytics.proto\x12\x07\x63rud.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"$\n\x14GetDailyStatsRequest\x12\x0c\n\x04\x64\x61ys\x18\x01 \x01(\x05\"\x89\x01\n\tDailyStat\x12\x0c\n\x04\x64\x61te\x18\x01 \x01(\t\x12\x1a\n\x12total_transactions\x18\x02 \x01(\x03\x12\x13\n\x0b\x66raud_count\x18\x03 \x01(\x03\x12\x12\n\nfraud_rate\x18\x04 \x01(\x01\x12\x14\n\x0ctotal_amount\x18\x05 \x01(\x01\x12\x13\n\x0b\x61vg_z_score\x18\x06 \x01(\x01\":\n\x15GetDailyStatsResponse\x12!\n\x05stats\x18\x01 \x03(\x0b\x32\x12.crud.v1.DailyStat\";\n\x1cGetTransactionDetailsRequest\x12\x0c\n\x04\x64\x61ys\x18\x01 \x01(\x05\x12\r\n\x05limit\x18\x02 \x01(\x05\"\xe5\x02\n\x11TransactionDetail\x12\x11\n\trecord_id\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12.\n\ncreated_at\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x19\n\x11is_train_eligible\x18\x04 \x01(\x08\x12\x14\n\x0cis_pre_fraud\x18\x05 \x01(\x08\x12\x0e\n\x06\x61mount\x18\x06 \x01(\x01\x12\x15\n\ris_fraudulent\x18\x07 \x01(\x08\x12\x12\n\nfraud_type\x18\x08 \x01(\t\x12\x18\n\x10is_off_hours_txn\x18\t \x01(\x08\x12\x1b\n\x13merchant_risk_score\x18\n \x01(\x05\x12\x14\n\x0cvelocity_24h\x18\x0b \x01(\x05\x12\x1f\n\x17\x61mount_to_avg_ratio_30d\x18\x0c \x01(\x01\x12\"\n\x1a\x62\x61lance_volatility_z_score\x18\r \x01(\x01\"Q\n\x1dGetTransactionDetailsResponse\x12\x30\n\x0ctransactions\x18\x01 \x03(\x0b\x32\x1a.crud.v1.TransactionDetail\"\'\n\x16GetRecentAlertsRequest\x12\r\n\x05limit\x18\x01 \x01(\x05\"\xab\x02\n\x05\x41lert\x12\x11\n\trecord_id\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12.\n\ncreated_at\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x0e\n\x06\x61mount\x18\x04 \x01(\x01\x12\x15\n\ris_fraudulent\x18\x05 \x01(\x08\x12\x12\n\nfraud_type\x18\x06 \x01(\t\x12\x1b\n\x13merchant_risk_score\x18\x07 \x01(\x05\x12\x14\n\x0cvelocity_24h\x18\x08 \x01(\x05\x12\x1f\n\x17\x61mount_to_avg_ratio_30d\x18\t \x01(\x01\x12\"\n\x1a\x62\x61lance_volatility_z_score\x18\n \x01(\x01\x12\x1b\n\x13\x63omputed_risk_score\x18\x0b \x01(\x05\"9\n\x17GetRecentAlertsResponse\x12\x1e\n\x06\x61lerts\x18\x01 \x03(\x0b\x32\x0e.crud.v1.Alert\"\x1b\n\x19GetOverviewMetricsRequest\"\x86\x03\n\x1aGetOverviewMetricsResponse\x12\x15\n\rtotal_records\x18\x01 \x01(\x03\x12\x15\n\rfraud_records\x18\x02 \x01(\x03\x12\x12\n\nfraud_rate\x18\x03 \x01(\x01\x12\x14\n\x0cunique_users\x18\x04 \x01(\x03\x12=\n\x19min_transaction_timestamp\x18\x05 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12=\n\x19max_transaction_timestamp\x18\x06 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x32\n\x0emin_created_at\x18\x07 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x32\n\x0emax_created_at\x18\x08 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x14\n\x0ctotal_amount\x18\t \x01(\x01\x12\x14\n\x0c\x66raud_amount\x18\n \x01(\x01\"\x1e\n\x1cGetDatasetFingerprintRequest\"\x98\x01\n\x10TableFingerprint\x12\r\n\x05\x63ount\x18\x01 \x01(\x03\x12\x32\n\x0emax_created_at\x18\x02 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x31\n\rmax_timestamp\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x0e\n\x06max_id\x18\x04 \x01(\x03\"\x8b\x01\n\x1dGetDatasetFingerprintResponse\x12\x34\n\x11generated_records\x18\x01 \x01(\x0b\x32\x19.crud.v1.TableFingerprint\x12\x34\n\x11\x66\x65\x61ture_snapshots\x18\x02 \x01(\x0b\x32\x19.crud.v1.TableFingerprint\"@\n\x17GetFeatureSampleRequest\x12\x13\n\x0bsample_size\x18\x01 \x01(\x05\x12\x10\n\x08stratify\x18\x02 \x01(\x08\"\x94\x01\n\rFeatureSample\x12\x11\n\trecord_id\x18\x01 \x01(\t\x12\x15\n\ris_fraudulent\x18\x02 \x01(\x08\x12\x14\n\x0cvelocity_24h\x18\x03 \x01(\x01\x12\x1f\n\x17\x61mount_to_avg_ratio_30d\x18\x04 \x01(\x01\x12\"\n\x1a\x62\x61lance_volatility_z_score\x18\x05 \x01(\x01\"C\n\x18GetFeatureSampleResponse\x12\'\n\x07samples\x18\x01 \x03(\x0b\x32\x16.crud.v1.FeatureSample\".\n\x17GetSchemaSummaryRequest\x12\x13\n\x0btable_names\x18\x01 \x03(\t\"w\n\nColumnInfo\x12\x12\n\ntable_name\x18\x01 \x01(\t\x12\x13\n\x0b\x63olumn_name\x18\x02 \x01(\t\x12\x11\n\tdata_type\x18\x03 \x01(\t\x12\x13\n\x0bis_nullable\x18\x04 \x01(\t\x12\x18\n\x10ordinal_position\x18\x05 \x01(\x05\"@\n\x18GetSchemaSummaryResponse\x12$\n\x07\x63olumns\x18\x01 \x03(\x0b\x32\x13.crud.v1.ColumnInfo2\x99\x05\n\x10\x41nalyticsService\x12N\n\rGetDailyStats\x12\x1d.crud.v1.GetDailyStatsRequest\x1a\x1e.crud.v1.GetDailyStatsResponse\x12\x66\n\x15GetTransactionDetails\x12%.crud.v1.GetTransactionDetailsRequest\x1a&.crud.v1.GetTransactionDetailsResponse\x12T\n\x0fGetRecentAlerts\x12\x1f.crud.v1.GetRecentAlertsRequest\x1a .crud.v1.GetRecentAlertsResponse\x12]\n\x12GetOverviewMetrics\x12\".crud.v1.GetOverviewMetricsRequest\x1a#.crud.v1.GetOverviewMetricsResponse\x12\x66\n\x15GetDatasetFingerprint\x12%.crud.v1.GetDatasetFingerprintRequest\x1a&.crud.v1.GetDatasetFingerprintResponse\x12W\n\x10GetFeatureSample\x12 .crud.v1.GetFeatureSampleRequest\x1a!.crud.v1.GetFeatureSampleResponse\x12W\n\x10GetSchemaSummary\x12 .crud.v1.GetSchemaSummaryRequest\x1a!.crud.v1.GetSchemaSummaryResponseBSZQgithub.com/jonkmatsumo/label-lag/src/services/analytics-crud/proto/crud/v1;crudv1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
+    b'\n\x1dproto/crud/v1/analytics.proto\x12\x07\x63rud.v1\x1a\x1fgoogle/protobuf/timestamp.proto"$\n\x14GetDailyStatsRequest\x12\x0c\n\x04\x64\x61ys\x18\x01 \x01(\x05"\x89\x01\n\tDailyStat\x12\x0c\n\x04\x64\x61te\x18\x01 \x01(\t\x12\x1a\n\x12total_transactions\x18\x02 \x01(\x03\x12\x13\n\x0b\x66raud_count\x18\x03 \x01(\x03\x12\x12\n\nfraud_rate\x18\x04 \x01(\x01\x12\x14\n\x0ctotal_amount\x18\x05 \x01(\x01\x12\x13\n\x0b\x61vg_z_score\x18\x06 \x01(\x01":\n\x15GetDailyStatsResponse\x12!\n\x05stats\x18\x01 \x03(\x0b\x32\x12.crud.v1.DailyStat";\n\x1cGetTransactionDetailsRequest\x12\x0c\n\x04\x64\x61ys\x18\x01 \x01(\x05\x12\r\n\x05limit\x18\x02 \x01(\x05"\xe5\x02\n\x11TransactionDetail\x12\x11\n\trecord_id\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12.\n\ncreated_at\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x19\n\x11is_train_eligible\x18\x04 \x01(\x08\x12\x14\n\x0cis_pre_fraud\x18\x05 \x01(\x08\x12\x0e\n\x06\x61mount\x18\x06 \x01(\x01\x12\x15\n\ris_fraudulent\x18\x07 \x01(\x08\x12\x12\n\nfraud_type\x18\x08 \x01(\t\x12\x18\n\x10is_off_hours_txn\x18\t \x01(\x08\x12\x1b\n\x13merchant_risk_score\x18\n \x01(\x05\x12\x14\n\x0cvelocity_24h\x18\x0b \x01(\x05\x12\x1f\n\x17\x61mount_to_avg_ratio_30d\x18\x0c \x01(\x01\x12"\n\x1a\x62\x61lance_volatility_z_score\x18\r \x01(\x01"Q\n\x1dGetTransactionDetailsResponse\x12\x30\n\x0ctransactions\x18\x01 \x03(\x0b\x32\x1a.crud.v1.TransactionDetail"\'\n\x16GetRecentAlertsRequest\x12\r\n\x05limit\x18\x01 \x01(\x05"\xab\x02\n\x05\x41lert\x12\x11\n\trecord_id\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12.\n\ncreated_at\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x0e\n\x06\x61mount\x18\x04 \x01(\x01\x12\x15\n\ris_fraudulent\x18\x05 \x01(\x08\x12\x12\n\nfraud_type\x18\x06 \x01(\t\x12\x1b\n\x13merchant_risk_score\x18\x07 \x01(\x05\x12\x14\n\x0cvelocity_24h\x18\x08 \x01(\x05\x12\x1f\n\x17\x61mount_to_avg_ratio_30d\x18\t \x01(\x01\x12"\n\x1a\x62\x61lance_volatility_z_score\x18\n \x01(\x01\x12\x1b\n\x13\x63omputed_risk_score\x18\x0b \x01(\x05"9\n\x17GetRecentAlertsResponse\x12\x1e\n\x06\x61lerts\x18\x01 \x03(\x0b\x32\x0e.crud.v1.Alert"\x1b\n\x19GetOverviewMetricsRequest"\x86\x03\n\x1aGetOverviewMetricsResponse\x12\x15\n\rtotal_records\x18\x01 \x01(\x03\x12\x15\n\rfraud_records\x18\x02 \x01(\x03\x12\x12\n\nfraud_rate\x18\x03 \x01(\x01\x12\x14\n\x0cunique_users\x18\x04 \x01(\x03\x12=\n\x19min_transaction_timestamp\x18\x05 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12=\n\x19max_transaction_timestamp\x18\x06 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x32\n\x0emin_created_at\x18\x07 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x32\n\x0emax_created_at\x18\x08 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x14\n\x0ctotal_amount\x18\t \x01(\x01\x12\x14\n\x0c\x66raud_amount\x18\n \x01(\x01"\x1e\n\x1cGetDatasetFingerprintRequest"\x98\x01\n\x10TableFingerprint\x12\r\n\x05\x63ount\x18\x01 \x01(\x03\x12\x32\n\x0emax_created_at\x18\x02 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x31\n\rmax_timestamp\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x0e\n\x06max_id\x18\x04 \x01(\x03"\x8b\x01\n\x1dGetDatasetFingerprintResponse\x12\x34\n\x11generated_records\x18\x01 \x01(\x0b\x32\x19.crud.v1.TableFingerprint\x12\x34\n\x11\x66\x65\x61ture_snapshots\x18\x02 \x01(\x0b\x32\x19.crud.v1.TableFingerprint"@\n\x17GetFeatureSampleRequest\x12\x13\n\x0bsample_size\x18\x01 \x01(\x05\x12\x10\n\x08stratify\x18\x02 \x01(\x08"\x94\x01\n\rFeatureSample\x12\x11\n\trecord_id\x18\x01 \x01(\t\x12\x15\n\ris_fraudulent\x18\x02 \x01(\x08\x12\x14\n\x0cvelocity_24h\x18\x03 \x01(\x01\x12\x1f\n\x17\x61mount_to_avg_ratio_30d\x18\x04 \x01(\x01\x12"\n\x1a\x62\x61lance_volatility_z_score\x18\x05 \x01(\x01"C\n\x18GetFeatureSampleResponse\x12\'\n\x07samples\x18\x01 \x03(\x0b\x32\x16.crud.v1.FeatureSample".\n\x17GetSchemaSummaryRequest\x12\x13\n\x0btable_names\x18\x01 \x03(\t"w\n\nColumnInfo\x12\x12\n\ntable_name\x18\x01 \x01(\t\x12\x13\n\x0b\x63olumn_name\x18\x02 \x01(\t\x12\x11\n\tdata_type\x18\x03 \x01(\t\x12\x13\n\x0bis_nullable\x18\x04 \x01(\t\x12\x18\n\x10ordinal_position\x18\x05 \x01(\x05"@\n\x18GetSchemaSummaryResponse\x12$\n\x07\x63olumns\x18\x01 \x03(\x0b\x32\x13.crud.v1.ColumnInfo2\x99\x05\n\x10\x41nalyticsService\x12N\n\rGetDailyStats\x12\x1d.crud.v1.GetDailyStatsRequest\x1a\x1e.crud.v1.GetDailyStatsResponse\x12\x66\n\x15GetTransactionDetails\x12%.crud.v1.GetTransactionDetailsRequest\x1a&.crud.v1.GetTransactionDetailsResponse\x12T\n\x0fGetRecentAlerts\x12\x1f.crud.v1.GetRecentAlertsRequest\x1a .crud.v1.GetRecentAlertsResponse\x12]\n\x12GetOverviewMetrics\x12".crud.v1.GetOverviewMetricsRequest\x1a#.crud.v1.GetOverviewMetricsResponse\x12\x66\n\x15GetDatasetFingerprint\x12%.crud.v1.GetDatasetFingerprintRequest\x1a&.crud.v1.GetDatasetFingerprintResponse\x12W\n\x10GetFeatureSample\x12 .crud.v1.GetFeatureSampleRequest\x1a!.crud.v1.GetFeatureSampleResponse\x12W\n\x10GetSchemaSummary\x12 .crud.v1.GetSchemaSummaryRequest\x1a!.crud.v1.GetSchemaSummaryResponseBSZQgithub.com/jonkmatsumo/label-lag/src/services/analytics-crud/proto/crud/v1;crudv1b\x06proto3'
+)
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
-_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'proto.crud.v1.analytics_pb2', _globals)
+_builder.BuildTopDescriptorsAndMessages(
+    DESCRIPTOR, "proto.crud.v1.analytics_pb2", _globals
+)
 if not _descriptor._USE_C_DESCRIPTORS:
-  _globals['DESCRIPTOR']._loaded_options = None
-  _globals['DESCRIPTOR']._serialized_options = b'ZQgithub.com/jonkmatsumo/label-lag/src/services/analytics-crud/proto/crud/v1;crudv1'
-  _globals['_GETDAILYSTATSREQUEST']._serialized_start=75
-  _globals['_GETDAILYSTATSREQUEST']._serialized_end=111
-  _globals['_DAILYSTAT']._serialized_start=114
-  _globals['_DAILYSTAT']._serialized_end=251
-  _globals['_GETDAILYSTATSRESPONSE']._serialized_start=253
-  _globals['_GETDAILYSTATSRESPONSE']._serialized_end=311
-  _globals['_GETTRANSACTIONDETAILSREQUEST']._serialized_start=313
-  _globals['_GETTRANSACTIONDETAILSREQUEST']._serialized_end=372
-  _globals['_TRANSACTIONDETAIL']._serialized_start=375
-  _globals['_TRANSACTIONDETAIL']._serialized_end=732
-  _globals['_GETTRANSACTIONDETAILSRESPONSE']._serialized_start=734
-  _globals['_GETTRANSACTIONDETAILSRESPONSE']._serialized_end=815
-  _globals['_GETRECENTALERTSREQUEST']._serialized_start=817
-  _globals['_GETRECENTALERTSREQUEST']._serialized_end=856
-  _globals['_ALERT']._serialized_start=859
-  _globals['_ALERT']._serialized_end=1158
-  _globals['_GETRECENTALERTSRESPONSE']._serialized_start=1160
-  _globals['_GETRECENTALERTSRESPONSE']._serialized_end=1217
-  _globals['_GETOVERVIEWMETRICSREQUEST']._serialized_start=1219
-  _globals['_GETOVERVIEWMETRICSREQUEST']._serialized_end=1246
-  _globals['_GETOVERVIEWMETRICSRESPONSE']._serialized_start=1249
-  _globals['_GETOVERVIEWMETRICSRESPONSE']._serialized_end=1639
-  _globals['_GETDATASETFINGERPRINTREQUEST']._serialized_start=1641
-  _globals['_GETDATASETFINGERPRINTREQUEST']._serialized_end=1671
-  _globals['_TABLEFINGERPRINT']._serialized_start=1674
-  _globals['_TABLEFINGERPRINT']._serialized_end=1826
-  _globals['_GETDATASETFINGERPRINTRESPONSE']._serialized_start=1829
-  _globals['_GETDATASETFINGERPRINTRESPONSE']._serialized_end=1968
-  _globals['_GETFEATURESAMPLEREQUEST']._serialized_start=1970
-  _globals['_GETFEATURESAMPLEREQUEST']._serialized_end=2034
-  _globals['_FEATURESAMPLE']._serialized_start=2037
-  _globals['_FEATURESAMPLE']._serialized_end=2185
-  _globals['_GETFEATURESAMPLERESPONSE']._serialized_start=2187
-  _globals['_GETFEATURESAMPLERESPONSE']._serialized_end=2254
-  _globals['_GETSCHEMASUMMARYREQUEST']._serialized_start=2256
-  _globals['_GETSCHEMASUMMARYREQUEST']._serialized_end=2302
-  _globals['_COLUMNINFO']._serialized_start=2304
-  _globals['_COLUMNINFO']._serialized_end=2423
-  _globals['_GETSCHEMASUMMARYRESPONSE']._serialized_start=2425
-  _globals['_GETSCHEMASUMMARYRESPONSE']._serialized_end=2489
-  _globals['_ANALYTICSSERVICE']._serialized_start=2492
-  _globals['_ANALYTICSSERVICE']._serialized_end=3157
+    _globals["DESCRIPTOR"]._loaded_options = None
+    _globals[
+        "DESCRIPTOR"
+    ]._serialized_options = b"ZQgithub.com/jonkmatsumo/label-lag/src/services/analytics-crud/proto/crud/v1;crudv1"
+    _globals["_GETDAILYSTATSREQUEST"]._serialized_start = 75
+    _globals["_GETDAILYSTATSREQUEST"]._serialized_end = 111
+    _globals["_DAILYSTAT"]._serialized_start = 114
+    _globals["_DAILYSTAT"]._serialized_end = 251
+    _globals["_GETDAILYSTATSRESPONSE"]._serialized_start = 253
+    _globals["_GETDAILYSTATSRESPONSE"]._serialized_end = 311
+    _globals["_GETTRANSACTIONDETAILSREQUEST"]._serialized_start = 313
+    _globals["_GETTRANSACTIONDETAILSREQUEST"]._serialized_end = 372
+    _globals["_TRANSACTIONDETAIL"]._serialized_start = 375
+    _globals["_TRANSACTIONDETAIL"]._serialized_end = 732
+    _globals["_GETTRANSACTIONDETAILSRESPONSE"]._serialized_start = 734
+    _globals["_GETTRANSACTIONDETAILSRESPONSE"]._serialized_end = 815
+    _globals["_GETRECENTALERTSREQUEST"]._serialized_start = 817
+    _globals["_GETRECENTALERTSREQUEST"]._serialized_end = 856
+    _globals["_ALERT"]._serialized_start = 859
+    _globals["_ALERT"]._serialized_end = 1158
+    _globals["_GETRECENTALERTSRESPONSE"]._serialized_start = 1160
+    _globals["_GETRECENTALERTSRESPONSE"]._serialized_end = 1217
+    _globals["_GETOVERVIEWMETRICSREQUEST"]._serialized_start = 1219
+    _globals["_GETOVERVIEWMETRICSREQUEST"]._serialized_end = 1246
+    _globals["_GETOVERVIEWMETRICSRESPONSE"]._serialized_start = 1249
+    _globals["_GETOVERVIEWMETRICSRESPONSE"]._serialized_end = 1639
+    _globals["_GETDATASETFINGERPRINTREQUEST"]._serialized_start = 1641
+    _globals["_GETDATASETFINGERPRINTREQUEST"]._serialized_end = 1671
+    _globals["_TABLEFINGERPRINT"]._serialized_start = 1674
+    _globals["_TABLEFINGERPRINT"]._serialized_end = 1826
+    _globals["_GETDATASETFINGERPRINTRESPONSE"]._serialized_start = 1829
+    _globals["_GETDATASETFINGERPRINTRESPONSE"]._serialized_end = 1968
+    _globals["_GETFEATURESAMPLEREQUEST"]._serialized_start = 1970
+    _globals["_GETFEATURESAMPLEREQUEST"]._serialized_end = 2034
+    _globals["_FEATURESAMPLE"]._serialized_start = 2037
+    _globals["_FEATURESAMPLE"]._serialized_end = 2185
+    _globals["_GETFEATURESAMPLERESPONSE"]._serialized_start = 2187
+    _globals["_GETFEATURESAMPLERESPONSE"]._serialized_end = 2254
+    _globals["_GETSCHEMASUMMARYREQUEST"]._serialized_start = 2256
+    _globals["_GETSCHEMASUMMARYREQUEST"]._serialized_end = 2302
+    _globals["_COLUMNINFO"]._serialized_start = 2304
+    _globals["_COLUMNINFO"]._serialized_end = 2423
+    _globals["_GETSCHEMASUMMARYRESPONSE"]._serialized_start = 2425
+    _globals["_GETSCHEMASUMMARYRESPONSE"]._serialized_end = 2489
+    _globals["_ANALYTICSSERVICE"]._serialized_start = 2492
+    _globals["_ANALYTICSSERVICE"]._serialized_end = 3157
 # @@protoc_insertion_point(module_scope)
