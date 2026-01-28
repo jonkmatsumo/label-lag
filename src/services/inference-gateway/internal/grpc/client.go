@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/grpc/inferencev1"
+	inferencev1 "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/grpc/inferencev1/inference/v1"
 	httpserver "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/http"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

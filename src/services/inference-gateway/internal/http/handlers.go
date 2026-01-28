@@ -8,8 +8,8 @@ import (
 	"net/http"
 
 	grpcclient "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/grpc"
-	"github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/grpc/inferencev1"
-	"github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/http/gatewayv1"
+	inferencev1 "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/grpc/inferencev1/inference/v1"
+	gatewayv1 "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/http/gatewayv1/gateway/v1"
 	"github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/rules"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/encoding/protojson"
