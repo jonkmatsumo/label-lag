@@ -13,6 +13,8 @@ import {
   analyticsRoutes,
   monitoringRoutes,
   rulesDetailRoutes,
+  datasetRoutes,
+  mlflowRoutes,
 } from './routes/index.js';
 import { ErrorResponse } from './types/api.js';
 
@@ -83,6 +85,8 @@ async function main(): Promise<void> {
   await fastify.register(analyticsRoutes, { httpClient });
   await fastify.register(monitoringRoutes, { httpClient });
   await fastify.register(rulesDetailRoutes, { httpClient });
+  await fastify.register(datasetRoutes, { httpClient });
+  await fastify.register(mlflowRoutes, { httpClient, mlflowTrackingUri: config.mlflowTrackingUri });
 
   // Start server
   try {
