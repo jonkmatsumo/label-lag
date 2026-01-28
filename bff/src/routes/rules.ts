@@ -127,4 +127,46 @@ export async function rulesRoutes(
       }
     }
   );
+
+  // GET /bff/v1/suggestions/heuristic
+  fastify.get(
+    '/bff/v1/suggestions/heuristic',
+    async (request: FastifyRequest<{ Querystring: { field?: string; min_confidence?: number } }>, reply: FastifyReply) => {
+      try {
+        const response = await httpClient.request({
+          method: 'GET',
+          path: '/suggestions/heuristic',
+          query: request.query as Record<string, string | number>,
+          requestId: request.requestId,
+        });
+        return reply.status(response.statusCode).send(response.data);
+      } catch (error) {
+        if (error instanceof UpstreamError) {
+          return reply.status(error.statusCode).send(error.toResponse());
+        }
+        throw error;
+      }
+    }
+  );
+
+  // POST /bff/v1/suggestions/accept
+  fastify.post(
+    '/bff/v1/suggestions/accept',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const response = await httpClient.request({
+          method: 'POST',
+          path: '/suggestions/accept',
+          body: request.body,
+          requestId: request.requestId,
+        });
+        return reply.status(response.statusCode).send(response.data);
+      } catch (error) {
+        if (error instanceof UpstreamError) {
+          return reply.status(error.statusCode).send(error.toResponse());
+        }
+        throw error;
+      }
+    }
+  );
 }
