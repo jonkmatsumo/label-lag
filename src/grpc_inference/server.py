@@ -11,8 +11,8 @@ import grpc
 from api.model_manager import get_model_manager
 from grpc_inference.config import GRPCInferenceConfig, load_config
 from grpc_inference.logging import configure_logging
-from grpc_inference.service import InferenceService
 from grpc_inference.proto.inference.v1 import inference_pb2_grpc
+from grpc_inference.service import InferenceService
 
 logger = logging.getLogger(__name__)
 

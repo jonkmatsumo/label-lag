@@ -2,8 +2,8 @@ import grpc
 import pytest
 
 from grpc_inference.config import GRPCInferenceConfig
-from grpc_inference.service import InferenceService
 from grpc_inference.proto.inference.v1 import inference_pb2
+from grpc_inference.service import InferenceService
 
 
 class FakeContext(grpc.ServicerContext):

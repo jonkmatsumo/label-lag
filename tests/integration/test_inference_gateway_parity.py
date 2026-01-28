@@ -1,4 +1,5 @@
 import os
+
 import pytest
 import requests
 
@@ -37,7 +38,10 @@ def _normalize_response(payload: dict) -> dict:
     normalized.pop("request_id", None)
 
     def _sort_list(items, keys):
-        return sorted(items or [], key=lambda item: tuple(item.get(k, "") for k in keys))
+        def sort_key(item):
+            return tuple(item.get(k, "") for k in keys)
+
+        return sorted(items or [], key=sort_key)
 
     normalized["risk_components"] = _sort_list(
         normalized.get("risk_components"), ["key", "label"]

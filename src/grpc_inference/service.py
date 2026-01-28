@@ -10,13 +10,12 @@ from typing import Any
 import grpc
 from google.protobuf import struct_pb2
 
+from api.model_manager import get_model_manager
 from api.schemas import SignalRequest
 from api.services import SignalEvaluator
-from api.model_manager import get_model_manager
-from synthetic_pipeline.db.session import DatabaseSession
-
 from grpc_inference.config import GRPCInferenceConfig
 from grpc_inference.proto.inference.v1 import inference_pb2, inference_pb2_grpc
+from synthetic_pipeline.db.session import DatabaseSession
 
 logger = logging.getLogger(__name__)
 
@@ -35,13 +34,15 @@ class InferenceService(inference_pb2_grpc.InferenceServiceServicer):
     def score(self, request, context):
         return self.Score(request, context)
 
-    def Score(
+    def Score(  # noqa: N802
         self, request: inference_pb2.ScoreRequest, context: grpc.ServicerContext
     ) -> inference_pb2.ScoreResponse:
         if not request.user_id:
             context.abort(grpc.StatusCode.INVALID_ARGUMENT, "user_id is required")
         if request.amount <= 0:
-            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "amount must be greater than 0")
+            context.abort(
+                grpc.StatusCode.INVALID_ARGUMENT, "amount must be greater than 0"
+            )
         if not request.client_transaction_id:
             context.abort(
                 grpc.StatusCode.INVALID_ARGUMENT,
