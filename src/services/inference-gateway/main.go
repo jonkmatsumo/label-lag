@@ -54,7 +54,17 @@ func main() {
 		}
 	}()
 
-	handler := httpserver.NewHandler(logger, inferenceClient, rules.NewEmptyProvider())
+	rulesProvider := rules.Provider(rules.NewEmptyProvider())
+	if rulesPath := os.Getenv("INFERENCE_GATEWAY_RULES_PATH"); rulesPath != "" {
+		fileProvider, err := rules.NewFileProvider(rulesPath)
+		if err != nil {
+			logger.Error("failed to load rules file", "error", err)
+			os.Exit(1)
+		}
+		rulesProvider = fileProvider
+	}
+
+	handler := httpserver.NewHandler(logger, inferenceClient, rulesProvider)
 	srv := httpserver.NewServer("0.0.0.0:"+port, logger, handler)
 
 	errCh := make(chan error, 1)
