@@ -4,7 +4,13 @@ import pino from 'pino';
 import { loadConfig } from './config.js';
 import { requestIdMiddleware } from './middleware/request-id.js';
 import { HttpClient, UpstreamError } from './services/http-client.js';
-import { healthRoutes } from './routes/health.js';
+import {
+  healthRoutes,
+  evaluateRoutes,
+  modelRoutes,
+  rulesRoutes,
+  backtestRoutes,
+} from './routes/index.js';
 import { ErrorResponse } from './types/api.js';
 
 async function main(): Promise<void> {
@@ -67,6 +73,10 @@ async function main(): Promise<void> {
 
   // Register routes
   await fastify.register(healthRoutes, { httpClient });
+  await fastify.register(evaluateRoutes, { httpClient, config });
+  await fastify.register(modelRoutes, { httpClient });
+  await fastify.register(rulesRoutes, { httpClient });
+  await fastify.register(backtestRoutes, { httpClient });
 
   // Start server
   try {
