@@ -6,9 +6,12 @@ import (
 	"time"
 )
 
-func NewServer(addr string, logger *slog.Logger) *http.Server {
+func NewServer(addr string, logger *slog.Logger, handler *Handler) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", healthHandler)
+	if handler != nil {
+		handler.Register(mux)
+	}
 
 	h := requestIDMiddleware(logger, mux)
 

@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package gateway.v1;
+
+option go_package = "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/http/gatewayv1;gatewayv1";
+
+import "google/protobuf/wrappers.proto";
+
+message SignalRequest {
+  string user_id = 1;
+  double amount = 2;
+  string currency = 3;
+  string client_transaction_id = 4;
+}
+
+message RiskComponent {
+  string key = 1;
+  string label = 2;
+}
+
+message MatchedRule {
+  string rule_id = 1;
+  string severity = 2;
+  string reason = 3;
+}
+
+message SignalResponse {
+  string request_id = 1;
+  int32 score = 2;
+  repeated RiskComponent risk_components = 3;
+  string model_version = 4;
+  repeated MatchedRule matched_rules = 5;
+  google.protobuf.Int32Value model_score = 6;
+  google.protobuf.StringValue rules_version = 7;
+  repeated MatchedRule shadow_matched_rules = 8;
+}

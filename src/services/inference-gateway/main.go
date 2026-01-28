@@ -10,7 +10,9 @@ import (
 	"syscall"
 	"time"
 
+	grpcclient "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/grpc"
 	httpserver "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/http"
+	"github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/rules"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/propagation"
@@ -41,7 +43,19 @@ func main() {
 		port = "8081"
 	}
 
-	srv := httpserver.NewServer("0.0.0.0:"+port, logger)
+	inferenceClient, err := grpcclient.NewInferenceClient("", 0)
+	if err != nil {
+		logger.Error("failed to create inference client", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := inferenceClient.Close(); err != nil {
+			logger.Warn("failed to close inference client", "error", err)
+		}
+	}()
+
+	handler := httpserver.NewHandler(logger, inferenceClient, rules.NewEmptyProvider())
+	srv := httpserver.NewServer("0.0.0.0:"+port, logger, handler)
 
 	errCh := make(chan error, 1)
 	go func() {
