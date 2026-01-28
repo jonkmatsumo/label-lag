@@ -16,6 +16,11 @@ class FakeContext(grpc.ServicerContext):
         self._details = details
         raise grpc.RpcError(details)
 
+    def abort_with_status(self, status):
+        self._code = status.code
+        self._details = status.details
+        raise grpc.RpcError(status.details)
+
     def set_code(self, code):
         self._code = code
 
