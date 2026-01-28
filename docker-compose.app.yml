@@ -112,6 +112,58 @@ services:
     stdin_open: true
     tty: true
 
+  # BFF (Backend for Frontend) - Node.js proxy layer for React UI
+  bff:
+    build:
+      context: bff
+      dockerfile: Dockerfile
+    container_name: label-lag-bff
+    environment:
+      - BFF_PORT=3000
+      - BFF_HOST=0.0.0.0
+      - BFF_FASTAPI_BASE_URL=http://api:8000
+      - BFF_MLFLOW_TRACKING_URI=http://mlflow:5000
+      - BFF_INFERENCE_MODE=${BFF_INFERENCE_MODE:-fastapi}
+      - BFF_GATEWAY_BASE_URL=http://inference-gateway:8081
+      - BFF_REQUEST_TIMEOUT=30000
+      - BFF_LOG_LEVEL=info
+      - NODE_ENV=production
+    networks:
+      - labellag_net
+    ports:
+      - "${BFF_PORT:-3000}:3000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # React Web UI
+  web:
+    build:
+      context: web
+      dockerfile: Dockerfile
+    container_name: label-lag-web
+    networks:
+      - labellag_net
+    ports:
+      - "${WEB_PORT:-5173}:5173"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5173/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    depends_on:
+      bff:
+        condition: service_healthy
+
 # Network labellag_net is defined in docker-compose.infra.yml.
 # Run app with infra: -f docker-compose.infra.yml -f docker-compose.app.yml,
 # or use the convenience wrapper (include). Do not run app compose alone.
