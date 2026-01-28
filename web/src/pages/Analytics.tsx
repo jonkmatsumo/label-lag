@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { analyticsApi } from '../api';
+import { 
+  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart 
+} from 'recharts';
 
 export function Analytics() {
   const [daysFilter, setDaysFilter] = useState(30);
@@ -16,6 +19,10 @@ export function Analytics() {
     queryKey: ['analytics', 'daily-stats', daysFilter],
     queryFn: () => analyticsApi.getDailyStats(daysFilter),
   });
+  
+  // Sort stats by date ascending for chart
+  const chartData = dailyStatsQuery.data?.stats ? 
+    [...dailyStatsQuery.data.stats].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()) : [];
 
   // Fetch recent alerts
   const alertsQuery = useQuery({
@@ -74,7 +81,98 @@ export function Analytics() {
         )}
       </div>
 
-      {/* Daily Stats */}
+      {/* Transaction Volume & Trends Chart */}
+      <div className="card" style={{ marginTop: '1.5rem' }}>
+        <div className="card-header">
+           <h3 className="card-title">Transaction Volume & Fraud Trends</h3>
+        </div>
+        <div className="card-body" style={{ height: 400 }}>
+          {dailyStatsQuery.isLoading ? <div className="loading">Loading charts...</div> : (
+             chartData.length > 0 ? (
+               <ResponsiveContainer width="100%" height="100%">
+                 <ComposedChart data={chartData}>
+                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                   <XAxis 
+                     dataKey="date" 
+                     tickFormatter={d => new Date(d).toLocaleDateString(undefined, {month:'short', day:'numeric'})} 
+                   />
+                   <YAxis yAxisId="left" orientation="left" stroke="#8884d8" />
+                   <YAxis yAxisId="right" orientation="right" stroke="#ff7300" />
+                   <Tooltip labelFormatter={l => new Date(l).toLocaleDateString()}/>
+                   <Legend />
+                   <Bar yAxisId="left" dataKey="total_transactions" name="Volume" fill="#8884d8" barSize={20} />
+                   <Line yAxisId="right" type="monotone" dataKey="fraud_transactions" name="Fraud Count" stroke="#ff7300" strokeWidth={2} />
+                 </ComposedChart>
+               </ResponsiveContainer>
+             ) : <div className="text-center text-muted p-5">No data for charts</div>
+          )}
+        </div>
+      </div>
+
+      {/* Daily Stats Table */}
+      <div className="card" style={{ marginTop: '1.5rem' }}>
+        <div className="card-header">
+          <h3 className="card-title">Daily Statistics</h3>
+          <div className="card-actions">
+            <select
+              className="form-input"
+              value={daysFilter}
+              onChange={(e) => setDaysFilter(parseInt(e.target.value))}
+              style={{ width: 'auto' }}
+            >
+              <option value={7}>Last 7 days</option>
+              <option value={14}>Last 14 days</option>
+              <option value={30}>Last 30 days</option>
+              <option value={60}>Last 60 days</option>
+              <option value={90}>Last 90 days</option>
+            </select>
+          </div>
+        </div>
+        {dailyStatsQuery.isLoading ? (
+          <div className="loading">Loading daily stats...</div>
+        ) : dailyStatsQuery.isError ? (
+          <div className="alert alert-error">
+            Failed to load daily stats: {dailyStatsQuery.error?.message}
+          </div>
+        ) : dailyStatsQuery.data?.stats && dailyStatsQuery.data.stats.length > 0 ? (
+          <div className="table-container">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th style={{ textAlign: 'right' }}>Transactions</th>
+                  <th style={{ textAlign: 'right' }}>Fraud</th>
+                  <th style={{ textAlign: 'right' }}>Fraud Rate</th>
+                  <th style={{ textAlign: 'right' }}>Total Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dailyStatsQuery.data.stats.map((stat) => (
+                  <tr key={stat.date}>
+                    <td>{new Date(stat.date).toLocaleDateString()}</td>
+                    <td style={{ textAlign: 'right' }}>{stat.total_transactions.toLocaleString()}</td>
+                    <td style={{ textAlign: 'right' }}>{stat.fraud_transactions.toLocaleString()}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <span className={stat.fraud_rate > 0.05 ? 'text-danger' : ''}>
+                        {formatPercent(stat.fraud_rate)}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'right' }}>${stat.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="empty-state">
+            <div className="empty-state-icon">📊</div>
+            <div className="empty-state-title">No data available</div>
+            <p>No transaction data found for the selected period</p>
+          </div>
+        )}
+      </div>
+
+      {/* Recent Alerts */}
       <div className="card" style={{ marginTop: '1.5rem' }}>
         <div className="card-header">
           <h3 className="card-title">Daily Statistics</h3>

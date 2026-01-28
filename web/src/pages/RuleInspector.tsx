@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { rulesApi, monitoringApi, backtestApi } from '../api';
+import { rulesApi, monitoringApi, backtestApi, suggestionsApi } from '../api';
 import type {
   DraftRule,
   SandboxEvaluateRequest,
@@ -641,17 +641,91 @@ export function RuleBacktests() {
 }
 
 export function RuleSuggestions() {
+  const [minConfidence, setMinConfidence] = useState(0.7);
+  const queryClient = useQueryClient();
+
+  const suggestionsQuery = useQuery({
+    queryKey: ['suggestions', minConfidence],
+    queryFn: () => suggestionsApi.getHeuristic({ min_confidence: minConfidence }),
+  });
+
+  const acceptMutation = useMutation({
+    mutationFn: suggestionsApi.accept,
+    onSuccess: () => {
+      alert('Suggestion accepted! A draft rule has been created.');
+      // Refresh draft rules if we were showing them
+      queryClient.invalidateQueries({ queryKey: ['rules', 'draft'] });
+    },
+    onError: (err) => {
+      alert(`Failed to accept: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  });
+
   return (
     <div>
       <div className="section-header">
         <h3>AI Suggestions</h3>
         <p>ML-generated rule recommendations based on fraud patterns</p>
       </div>
-      <div className="empty-state">
-        <div className="empty-state-icon">🤖</div>
-        <div className="empty-state-title">Coming Soon</div>
-        <p>AI-powered rule suggestions will be available in the next release</p>
+
+      <div className="card mb-3">
+        <div className="card-body">
+          <label className="form-label me-2">Minimum Confidence:</label>
+          <input 
+            type="range" className="form-range" 
+            min="0.5" max="0.95" step="0.05" 
+            value={minConfidence} onChange={e => setMinConfidence(parseFloat(e.target.value))}
+            style={{maxWidth: '300px', display: 'inline-block', verticalAlign: 'middle'}}
+          />
+          <span className="ms-2 fw-bold">{minConfidence.toFixed(2)}</span>
+        </div>
       </div>
+
+      {suggestionsQuery.isLoading ? (
+        <div className="loading">Analyzing patterns...</div>
+      ) : suggestionsQuery.isError ? (
+         <div className="alert alert-error">Analysis failed: {suggestionsQuery.error?.message}</div>
+      ) : suggestionsQuery.data && suggestionsQuery.data.suggestions.length > 0 ? (
+        <div className="row">
+           {suggestionsQuery.data.suggestions.map((s: any, idx: number) => (
+             <div className="col-md-6 mb-3" key={idx}>
+               <div className="card h-100">
+                 <div className="card-header d-flex justify-content-between align-items-center">
+                   <span className="fw-bold">{s.field} {s.operator} {s.threshold}</span>
+                   <span className="badge bg-primary">{(s.confidence * 100).toFixed(0)}% Conf</span>
+                 </div>
+                 <div className="card-body">
+                   <p className="card-text small text-muted">{s.reason}</p>
+                   <ul className="small text-muted mb-3">
+                     <li>Action: <strong>{s.action}</strong></li>
+                     <li>Score: <strong>{s.suggested_score}</strong></li>
+                     {s.evidence && (
+                       <li>Evidence: Mean {s.evidence.mean?.toFixed(2)}, Count {s.evidence.sample_count}</li>
+                     )}
+                   </ul>
+                   <button 
+                     className="btn btn-outline-primary btn-sm w-100"
+                     onClick={() => acceptMutation.mutate({ 
+                       suggestion: s, 
+                       actor: 'user', 
+                       custom_id: `suggest_${Date.now()}_${idx}` 
+                     })}
+                     disabled={acceptMutation.isPending}
+                   >
+                     Accept & Create Draft
+                   </button>
+                 </div>
+               </div>
+             </div>
+           ))}
+        </div>
+      ) : (
+        <div className="empty-state">
+          <div className="empty-state-icon">🤖</div>
+          <div className="empty-state-title">No suggestions found</div>
+          <p>Try lowering the confidence threshold or generating more fraud data.</p>
+        </div>
+      )}
     </div>
   );
 }
