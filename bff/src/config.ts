@@ -10,6 +10,7 @@ export interface Config {
   inferenceMode: 'fastapi' | 'gateway';
   gatewayBaseUrl: string;
   requestTimeout: number;
+  upstreamTimeout: number;
   logLevel: string;
   testMode: boolean;
 }
@@ -45,6 +46,7 @@ export function loadConfig(): Config {
     inferenceMode: inferenceMode as 'fastapi' | 'gateway',
     gatewayBaseUrl: getEnvOrDefault('BFF_GATEWAY_BASE_URL', 'http://inference-gateway:8081'),
     requestTimeout: getEnvAsInt('BFF_REQUEST_TIMEOUT', 30000),
+    upstreamTimeout: getEnvAsInt('BFF_UPSTREAM_TIMEOUT_MS', 5000),
     logLevel: getEnvOrDefault('BFF_LOG_LEVEL', 'info'),
     testMode: getEnvAsBool('BFF_TEST_MODE', false),
   };

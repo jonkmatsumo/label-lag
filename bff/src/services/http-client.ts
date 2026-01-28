@@ -15,6 +15,7 @@ export interface RequestOptions {
   requestId: string;
   timeout?: number;
   target?: 'fastapi' | 'gateway' | 'mlflow';
+  query?: Record<string, string | number | boolean | undefined>;
 }
 
 export interface HttpResponse<T> {
@@ -25,7 +26,7 @@ export interface HttpResponse<T> {
 
 /**
  * HTTP client for upstream service calls
- * Handles timeouts, error normalization, and request ID forwarding
+ * Handles timeouts, error normalization, safe retries, and request ID forwarding
  */
 export class HttpClient {
   private config: Config;
@@ -49,13 +50,57 @@ export class HttpClient {
   }
 
   async request<T>(options: RequestOptions): Promise<HttpResponse<T>> {
-    const { method, path, body, requestId, timeout, target = 'fastapi' } = options;
+    const { method } = options;
+    const maxRetries = method === 'GET' ? 1 : 0;
+    
+    let lastError: Error | unknown;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await this.executeRequest<T>(options, attempt);
+      } catch (error) {
+        lastError = error;
+        const isRetryable = 
+          (error instanceof UpstreamError && error.statusCode >= 500) ||
+          (error instanceof Error && error.name === 'TimeoutError');
+          
+        if (attempt < maxRetries && isRetryable) {
+          const delay = 100 * (attempt + 1); // simple backoff
+          this.logger.warn({ 
+            requestId: options.requestId, 
+            attempt: attempt + 1, 
+            error: error instanceof Error ? error.message : 'Unknown' 
+          }, 'Retrying upstream request');
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw lastError;
+  }
+
+  private async executeRequest<T>(options: RequestOptions, attempt: number): Promise<HttpResponse<T>> {
+    const { method, path, body, requestId, timeout, target = 'fastapi', query } = options;
     const baseUrl = this.getBaseUrl(target);
-    const url = `${baseUrl}${path}`;
-    const requestTimeout = timeout ?? this.config.requestTimeout;
+    
+    // Construct URL with query params
+    const urlObj = new URL(baseUrl + path);
+    if (query) {
+      Object.entries(query).forEach(([key, value]) => {
+        if (value !== undefined) {
+          urlObj.searchParams.append(key, String(value));
+        }
+      });
+    }
+    const url = urlObj.toString();
+
+    // Use specific timeout if provided, else upstream timeout (short), else request timeout (long)
+    // Actually per requirement: BFF_UPSTREAM_TIMEOUT_MS default (e.g. 5000), allow endpoint overrides.
+    const requestTimeout = timeout ?? this.config.upstreamTimeout;
 
     const startTime = Date.now();
-    this.logger.debug({ method, url, requestId }, 'Upstream request started');
+    this.logger.debug({ method, url, requestId, attempt }, 'Upstream request started');
 
     try {
       const headers: Record<string, string> = {
@@ -87,7 +132,7 @@ export class HttpClient {
       }
 
       this.logger.debug(
-        { method, url, requestId, statusCode: response.statusCode, duration },
+        { method, url, requestId, statusCode: response.statusCode, duration, attempt },
         'Upstream request completed'
       );
 
@@ -105,8 +150,10 @@ export class HttpClient {
       const duration = Date.now() - startTime;
 
       if (error instanceof UpstreamError) {
-        this.logger.warn(
-          { method, url, requestId, duration, error: error.message },
+        // Log warn for client errors, error for server errors
+        const level = error.statusCode >= 500 ? 'error' : 'warn';
+        this.logger[level](
+          { method, url, requestId, duration, error: error.message, attempt },
           'Upstream error response'
         );
         throw error;
@@ -115,7 +162,7 @@ export class HttpClient {
       // Handle timeout
       if (error instanceof Error && error.name === 'TimeoutError') {
         this.logger.error(
-          { method, url, requestId, duration, timeout: requestTimeout },
+          { method, url, requestId, duration, timeout: requestTimeout, attempt },
           'Upstream request timeout'
         );
         throw new UpstreamError(
@@ -130,7 +177,7 @@ export class HttpClient {
 
       // Handle connection errors
       this.logger.error(
-        { method, url, requestId, duration, error: error instanceof Error ? error.message : 'Unknown error' },
+        { method, url, requestId, duration, error: error instanceof Error ? error.message : 'Unknown error', attempt },
         'Upstream request failed'
       );
       throw new UpstreamError(
