@@ -25,10 +25,10 @@ type InferenceClient struct {
 
 func NewInferenceClient(target string, timeout time.Duration) (*InferenceClient, error) {
 	if target == "" {
-		target = os.Getenv("PYTHON_INFERENCE_TARGET")
+		target = os.Getenv("INFERENCE_GATEWAY_PYTHON_GRPC_ADDR")
 	}
 	if target == "" {
-		target = "localhost:9001"
+		target = "grpc-inference:50052"
 	}
 	if timeout == 0 {
 		timeout = defaultTimeout
