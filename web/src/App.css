@@ -558,3 +558,18 @@ body {
   padding-bottom: 0.5rem;
   border-bottom: 1px solid var(--border-color);
 }
+
+/* Model lab layout */
+.model-lab-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Form hint */
+.form-hint {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 0.25rem;
+}
