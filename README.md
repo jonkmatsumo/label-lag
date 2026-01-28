@@ -118,6 +118,12 @@ All ports are configurable via `.env`.
 
 Both Streamlit (port 8501) and React (port 5173) UIs run simultaneously. The React UI communicates with FastAPI through the BFF proxy layer, while Streamlit connects directly to FastAPI. This allows safe migration without disrupting existing workflows.
 
+The React UI now supports:
+- **Synthetic Dataset Management**: Generate data, view distributions, and analyze correlations.
+- **Model Registry**: View MLflow models, CV metrics, and tuning trials.
+- **Rule Inspector**: Full rule lifecycle management including Shadow Mode and Backtesting.
+- **Analytics**: Historical trends and alert monitoring.
+
 ## Repository / File Structure
 
 The repo is organized around data flow and runtime boundaries so services can evolve independently while sharing a common domain model.
