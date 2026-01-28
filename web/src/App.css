@@ -699,3 +699,77 @@ body {
   font-size: 1.5rem;
   color: var(--text-secondary);
 }
+
+/* What-if layout */
+.whatif-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Form row */
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 600px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Comparison results */
+.comparison-results {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Metric indicator */
+.metric-indicator {
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.delta-positive .metric-indicator {
+  color: var(--success-color);
+}
+
+.delta-negative .metric-indicator {
+  color: var(--danger-color);
+}
+
+/* Metrics list */
+.metrics-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.metric-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.metric-row:last-child {
+  border-bottom: none;
+}
+
+.metric-row.separator {
+  margin-top: 0.5rem;
+  padding-top: 1rem;
+  border-top: 2px solid var(--border-color);
+}
+
+.metric-name {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.metric-val {
+  font-weight: 500;
+  font-size: 0.875rem;
+}
