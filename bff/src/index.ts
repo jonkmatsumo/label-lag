@@ -10,6 +10,9 @@ import {
   modelRoutes,
   rulesRoutes,
   backtestRoutes,
+  analyticsRoutes,
+  monitoringRoutes,
+  rulesDetailRoutes,
 } from './routes/index.js';
 import { ErrorResponse } from './types/api.js';
 
@@ -77,6 +80,9 @@ async function main(): Promise<void> {
   await fastify.register(modelRoutes, { httpClient });
   await fastify.register(rulesRoutes, { httpClient });
   await fastify.register(backtestRoutes, { httpClient });
+  await fastify.register(analyticsRoutes, { httpClient });
+  await fastify.register(monitoringRoutes, { httpClient });
+  await fastify.register(rulesDetailRoutes, { httpClient });
 
   // Start server
   try {

@@ -153,3 +153,244 @@ export interface BacktestCompareResponse {
   };
   job_id?: string;
 }
+
+// Analytics types
+export interface AnalyticsOverviewResponse {
+  total_users: number;
+  total_transactions: number;
+  fraud_rate: number;
+  unique_merchants: number;
+  date_range: {
+    min: string;
+    max: string;
+  };
+}
+
+export interface DailyStat {
+  date: string;
+  transaction_count: number;
+  fraud_count: number;
+  total_amount: number;
+  avg_amount: number;
+}
+
+export interface DailyStatsResponse {
+  stats: DailyStat[];
+  period_days: number;
+}
+
+export interface TransactionDetail {
+  id: string;
+  user_id: string;
+  amount: number;
+  timestamp: string;
+  is_fraud: boolean;
+  score?: number;
+  merchant_category?: string;
+}
+
+export interface TransactionDetailsResponse {
+  transactions: TransactionDetail[];
+  total: number;
+}
+
+export interface RecentAlert {
+  transaction_id: string;
+  user_id: string;
+  amount: number;
+  score: number;
+  timestamp: string;
+  matched_rules: string[];
+}
+
+export interface RecentAlertsResponse {
+  alerts: RecentAlert[];
+  total: number;
+}
+
+export interface DatasetFingerprintResponse {
+  fingerprint: string;
+  record_count: number;
+  created_at: string;
+  feature_stats: Record<string, {
+    mean: number;
+    std: number;
+    min: number;
+    max: number;
+  }>;
+}
+
+export interface FeatureSample {
+  id: string;
+  features: Record<string, number>;
+  is_fraud: boolean;
+}
+
+export interface FeatureSampleResponse {
+  samples: FeatureSample[];
+  total_sampled: number;
+  stratified: boolean;
+}
+
+export interface RuleHealthMetrics {
+  period_start: string;
+  period_end: string;
+  production_matches: number;
+  shadow_matches: number;
+  production_only_count: number;
+  shadow_only_count: number;
+  mean_score_delta: number;
+  mean_execution_time_ms: number;
+}
+
+export interface RuleHealthResponse {
+  rule_id: string;
+  status: string;
+  reason: string;
+  metrics: RuleHealthMetrics;
+}
+
+export interface RuleAnalyticsResponse {
+  rule_id: string;
+  health: RuleHealthResponse;
+  statistics: {
+    mean_score_delta: number;
+    mean_latency_ms: number;
+    total_matches: number;
+  };
+  history_summary: unknown[];
+}
+
+export interface RuleAttributionResponse {
+  rule_id: string;
+  total_matches: number;
+  mean_model_score: number;
+  mean_final_score: number;
+  mean_impact: number;
+  net_impact: number;
+}
+
+// Monitoring types
+export interface FeatureDriftDetail {
+  feature_name: string;
+  psi_value: number;
+  status: 'ok' | 'warning' | 'critical';
+  reference_mean?: number;
+  live_mean?: number;
+}
+
+export interface DriftStatusResponse {
+  status: 'ok' | 'warning' | 'critical' | 'error';
+  message: string;
+  drift_detected: boolean;
+  cached: boolean;
+  computed_at?: string;
+  hours_analyzed?: number;
+  threshold?: number;
+  feature_details?: FeatureDriftDetail[];
+}
+
+export interface RuleMetricsItem {
+  rule_id: string;
+  period_start: string;
+  period_end: string;
+  production_matches: number;
+  shadow_matches: number;
+  overlap_count: number;
+  production_only_count: number;
+  shadow_only_count: number;
+}
+
+export interface ShadowComparisonResponse {
+  period_start: string;
+  period_end: string;
+  rule_metrics: RuleMetricsItem[];
+  total_requests: number;
+}
+
+export interface BacktestResult {
+  id: string;
+  rule_id: string;
+  created_at: string;
+  status: string;
+  metrics?: BacktestMetrics;
+}
+
+export interface BacktestResultsListResponse {
+  results: BacktestResult[];
+  total: number;
+}
+
+// Rules detail types
+export interface ReadinessCheck {
+  policy_type: string;
+  name: string;
+  status: string;
+  message: string;
+  details?: Record<string, unknown>;
+}
+
+export interface ReadinessReportResponse {
+  rule_id: string;
+  timestamp: string;
+  overall_status: string;
+  checks: ReadinessCheck[];
+}
+
+export interface RuleVersionDetail {
+  rule_id: string;
+  field: string;
+  op: string;
+  value: unknown;
+  action: string;
+  score?: number;
+  severity: string;
+  reason: string;
+  status: string;
+  created_at?: string;
+}
+
+export interface RuleVersionResponse {
+  rule_id: string;
+  version_id: string;
+  rule: RuleVersionDetail;
+  timestamp: string;
+  created_by: string;
+  reason?: string;
+}
+
+export interface RuleVersionListResponse {
+  versions: RuleVersionResponse[];
+  total: number;
+}
+
+export interface FieldChange {
+  field: string;
+  old_value: unknown;
+  new_value: unknown;
+}
+
+export interface RuleDiffResponse {
+  rule_id: string;
+  version_a: string;
+  version_b: string;
+  changes: FieldChange[];
+  is_breaking: boolean;
+}
+
+export interface ProductionRule {
+  id: string;
+  field: string;
+  op: string;
+  value: unknown;
+  action: string;
+  score?: number;
+  severity: string;
+  reason: string;
+  status: string;
+}
+
+export interface ProductionRulesResponse {
+  version: string;
+  rules: ProductionRule[];
+}
