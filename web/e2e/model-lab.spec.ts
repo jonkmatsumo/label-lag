@@ -49,4 +49,22 @@ test.describe('Model Lab Page', () => {
 
     expect(hasResult).toBeTruthy();
   });
+
+  test('displays drift monitoring panel', async ({ page }) => {
+    // Drift panel should be visible
+    await expect(page.locator('text=Feature Drift Status')).toBeVisible();
+
+    // Wait for drift data to load
+    await page.waitForSelector('.loading, .drift-status-header, .alert-error', {
+      timeout: 10000,
+    });
+
+    // Should show status or error
+    const hasDriftContent =
+      (await page.locator('.loading').isVisible().catch(() => false)) ||
+      (await page.locator('.drift-status-header').isVisible().catch(() => false)) ||
+      (await page.locator('.alert-error').isVisible().catch(() => false));
+
+    expect(hasDriftContent).toBeTruthy();
+  });
 });
