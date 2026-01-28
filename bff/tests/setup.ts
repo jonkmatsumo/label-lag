@@ -10,6 +10,9 @@ import {
   modelRoutes,
   rulesRoutes,
   backtestRoutes,
+  analyticsRoutes,
+  monitoringRoutes,
+  rulesDetailRoutes,
 } from '../src/routes/index.js';
 import pino from 'pino';
 
@@ -67,6 +70,9 @@ export async function createTestApp(config?: Config): Promise<TestContext> {
   await app.register(modelRoutes, { httpClient });
   await app.register(rulesRoutes, { httpClient });
   await app.register(backtestRoutes, { httpClient });
+  await app.register(analyticsRoutes, { httpClient });
+  await app.register(monitoringRoutes, { httpClient });
+  await app.register(rulesDetailRoutes, { httpClient });
 
   return { app, config: testConfig, mockAgent, mockPool, originalDispatcher };
 }
