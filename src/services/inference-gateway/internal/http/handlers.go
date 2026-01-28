@@ -10,6 +10,7 @@ import (
 	grpcclient "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/grpc"
 	inferencev1 "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/grpc/inferencev1/inference/v1"
 	gatewayv1 "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/http/gatewayv1/gateway/v1"
+	"github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/requestid"
 	"github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/rules"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -69,7 +70,7 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 		Amount:              req.Amount,
 		Currency:            req.Currency,
 		ClientTransactionId: req.ClientTransactionId,
-		RequestId:           RequestIDFromContext(r.Context()),
+		RequestId:           requestid.FromContext(r.Context()),
 	})
 	if err != nil {
 		writeRPCError(w, err)
@@ -78,7 +79,7 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 
 	requestID := inferenceResp.GetRequestId()
 	if requestID == "" {
-		requestID = RequestIDFromContext(r.Context())
+		requestID = requestid.FromContext(r.Context())
 	}
 
 	features := map[string]any{}

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	inferencev1 "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/grpc/inferencev1/inference/v1"
-	httpserver "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/http"
+	"github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/requestid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -59,7 +59,7 @@ func (c *InferenceClient) Score(ctx context.Context, req *inferencev1.ScoreReque
 		return nil, fmt.Errorf("nil request")
 	}
 	if req.RequestId == "" {
-		req.RequestId = httpserver.RequestIDFromContext(ctx)
+		req.RequestId = requestid.FromContext(ctx)
 	}
 
 	callCtx := ctx
