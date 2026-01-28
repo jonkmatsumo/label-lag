@@ -244,3 +244,128 @@ export interface DriftStatus {
   drifted_features: string[];
   checked_at: string;
 }
+
+// P1 Analytics types
+export interface FeatureDriftDetail {
+  feature_name: string;
+  psi_value: number;
+  status: 'ok' | 'warning' | 'critical';
+  reference_mean?: number;
+  live_mean?: number;
+}
+
+export interface DriftStatusResponse {
+  status: 'ok' | 'warning' | 'critical' | 'error';
+  message: string;
+  drift_detected: boolean;
+  cached: boolean;
+  computed_at?: string;
+  hours_analyzed?: number;
+  threshold?: number;
+  feature_details?: FeatureDriftDetail[];
+}
+
+export interface RuleMetricsItem {
+  rule_id: string;
+  period_start: string;
+  period_end: string;
+  production_matches: number;
+  shadow_matches: number;
+  overlap_count: number;
+  production_only_count: number;
+  shadow_only_count: number;
+}
+
+export interface ShadowComparisonResponse {
+  period_start: string;
+  period_end: string;
+  rule_metrics: RuleMetricsItem[];
+  total_requests: number;
+}
+
+export interface BacktestResult {
+  id: string;
+  rule_id: string;
+  created_at: string;
+  status: string;
+  metrics?: BacktestMetrics;
+}
+
+export interface BacktestResultsListResponse {
+  results: BacktestResult[];
+  total: number;
+}
+
+// Rule readiness types
+export interface ReadinessCheck {
+  policy_type: string;
+  name: string;
+  status: string;
+  message: string;
+  details?: Record<string, unknown>;
+}
+
+export interface ReadinessReportResponse {
+  rule_id: string;
+  timestamp: string;
+  overall_status: string;
+  checks: ReadinessCheck[];
+}
+
+// Rule version types
+export interface RuleVersionDetail {
+  rule_id: string;
+  field: string;
+  op: string;
+  value: unknown;
+  action: string;
+  score?: number;
+  severity: string;
+  reason: string;
+  status: string;
+  created_at?: string;
+}
+
+export interface RuleVersionResponse {
+  rule_id: string;
+  version_id: string;
+  rule: RuleVersionDetail;
+  timestamp: string;
+  created_by: string;
+  reason?: string;
+}
+
+export interface RuleVersionListResponse {
+  versions: RuleVersionResponse[];
+  total: number;
+}
+
+// Rule analytics types
+export interface RuleHealthMetrics {
+  period_start: string;
+  period_end: string;
+  production_matches: number;
+  shadow_matches: number;
+  production_only_count: number;
+  shadow_only_count: number;
+  mean_score_delta: number;
+  mean_execution_time_ms: number;
+}
+
+export interface RuleHealthResponse {
+  rule_id: string;
+  status: string;
+  reason: string;
+  metrics: RuleHealthMetrics;
+}
+
+export interface RuleAnalyticsResponse {
+  rule_id: string;
+  health: RuleHealthResponse;
+  statistics: {
+    mean_score_delta: number;
+    mean_latency_ms: number;
+    total_matches: number;
+  };
+  history_summary: unknown[];
+}

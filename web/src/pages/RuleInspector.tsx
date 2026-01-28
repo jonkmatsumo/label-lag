@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { rulesApi } from '../api';
+import { rulesApi, monitoringApi, backtestApi } from '../api';
 import type {
   DraftRule,
   SandboxEvaluateRequest,
@@ -414,33 +414,228 @@ export function RuleSandbox() {
 }
 
 export function RuleShadow() {
+  const [dateRange, setDateRange] = useState(() => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - 7);
+    return {
+      start: start.toISOString().split('T')[0],
+      end: end.toISOString().split('T')[0],
+    };
+  });
+
+  const shadowQuery = useQuery({
+    queryKey: ['shadow-comparison', dateRange.start, dateRange.end],
+    queryFn: () => monitoringApi.getShadowComparison(dateRange.start, dateRange.end),
+  });
+
+  const handleDateChange = (field: 'start' | 'end', value: string) => {
+    setDateRange((prev) => ({ ...prev, [field]: value }));
+  };
+
   return (
     <div>
       <div className="section-header">
         <h3>Shadow Metrics</h3>
         <p>Compare production vs shadow mode performance</p>
       </div>
-      <div className="empty-state">
-        <div className="empty-state-icon">📊</div>
-        <div className="empty-state-title">Coming Soon</div>
-        <p>Shadow metrics comparison will be available in the next release</p>
+
+      {/* Date Range Filter */}
+      <div className="card" style={{ marginBottom: '1rem' }}>
+        <div className="filter-row">
+          <div className="form-group inline">
+            <label className="form-label">Start Date</label>
+            <input
+              type="date"
+              className="form-input"
+              value={dateRange.start}
+              onChange={(e) => handleDateChange('start', e.target.value)}
+            />
+          </div>
+          <div className="form-group inline">
+            <label className="form-label">End Date</label>
+            <input
+              type="date"
+              className="form-input"
+              value={dateRange.end}
+              onChange={(e) => handleDateChange('end', e.target.value)}
+            />
+          </div>
+        </div>
       </div>
+
+      {/* Results */}
+      {shadowQuery.isLoading ? (
+        <div className="loading">Loading shadow metrics...</div>
+      ) : shadowQuery.isError ? (
+        <div className="alert alert-error">
+          Failed to load shadow metrics: {shadowQuery.error?.message}
+        </div>
+      ) : shadowQuery.data && shadowQuery.data.rule_metrics.length > 0 ? (
+        <div className="card">
+          <div className="card-header">
+            <h4 className="card-title">Rule Comparison</h4>
+            <span className="text-muted">
+              {shadowQuery.data.total_requests.toLocaleString()} total requests
+            </span>
+          </div>
+          <div className="table-container">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Rule ID</th>
+                  <th style={{ textAlign: 'right' }}>Production</th>
+                  <th style={{ textAlign: 'right' }}>Shadow</th>
+                  <th style={{ textAlign: 'right' }}>Overlap</th>
+                  <th style={{ textAlign: 'right' }}>Prod Only</th>
+                  <th style={{ textAlign: 'right' }}>Shadow Only</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shadowQuery.data.rule_metrics.map((metric) => (
+                  <tr key={metric.rule_id}>
+                    <td><code>{metric.rule_id}</code></td>
+                    <td style={{ textAlign: 'right' }}>{metric.production_matches.toLocaleString()}</td>
+                    <td style={{ textAlign: 'right' }}>{metric.shadow_matches.toLocaleString()}</td>
+                    <td style={{ textAlign: 'right' }}>{metric.overlap_count.toLocaleString()}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <span className={metric.production_only_count > 0 ? 'text-warning' : ''}>
+                        {metric.production_only_count.toLocaleString()}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <span className={metric.shadow_only_count > 0 ? 'text-info' : ''}>
+                        {metric.shadow_only_count.toLocaleString()}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        <div className="empty-state">
+          <div className="empty-state-icon">📊</div>
+          <div className="empty-state-title">No shadow data</div>
+          <p>No shadow metrics available for the selected date range</p>
+        </div>
+      )}
     </div>
   );
 }
 
 export function RuleBacktests() {
+  const [ruleFilter, setRuleFilter] = useState('');
+
+  const backtestsQuery = useQuery({
+    queryKey: ['backtest-results', ruleFilter],
+    queryFn: () => backtestApi.listResults({ rule_id: ruleFilter || undefined, limit: 50 }),
+  });
+
+  const getStatusBadgeClass = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'completed':
+      case 'success':
+        return 'status-published';
+      case 'running':
+      case 'pending':
+        return 'status-pending';
+      case 'failed':
+      case 'error':
+        return 'status-rejected';
+      default:
+        return 'status-draft';
+    }
+  };
+
   return (
     <div>
       <div className="section-header">
         <h3>Backtests</h3>
-        <p>Run and view historical backtest results</p>
+        <p>View historical backtest results</p>
       </div>
-      <div className="empty-state">
-        <div className="empty-state-icon">⏱️</div>
-        <div className="empty-state-title">Coming Soon</div>
-        <p>Backtest management will be available in the next release</p>
+
+      {/* Filter */}
+      <div className="card" style={{ marginBottom: '1rem' }}>
+        <div className="filter-row">
+          <div className="form-group inline">
+            <label className="form-label">Filter by Rule ID</label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="e.g., rule-001"
+              value={ruleFilter}
+              onChange={(e) => setRuleFilter(e.target.value)}
+              style={{ width: '200px' }}
+            />
+          </div>
+        </div>
       </div>
+
+      {/* Results */}
+      {backtestsQuery.isLoading ? (
+        <div className="loading">Loading backtest results...</div>
+      ) : backtestsQuery.isError ? (
+        <div className="alert alert-error">
+          Failed to load backtests: {backtestsQuery.error?.message}
+        </div>
+      ) : backtestsQuery.data && backtestsQuery.data.results.length > 0 ? (
+        <div className="card">
+          <div className="card-header">
+            <h4 className="card-title">Results</h4>
+            <span className="text-muted">{backtestsQuery.data.total} total</span>
+          </div>
+          <div className="table-container">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Rule</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th style={{ textAlign: 'right' }}>Precision</th>
+                  <th style={{ textAlign: 'right' }}>Recall</th>
+                  <th style={{ textAlign: 'right' }}>F1</th>
+                </tr>
+              </thead>
+              <tbody>
+                {backtestsQuery.data.results.map((result) => (
+                  <tr key={result.id}>
+                    <td><code>{result.id.slice(0, 8)}</code></td>
+                    <td><code>{result.rule_id}</code></td>
+                    <td>
+                      <span className={`status-badge ${getStatusBadgeClass(result.status)}`}>
+                        {result.status}
+                      </span>
+                    </td>
+                    <td>{new Date(result.created_at).toLocaleString()}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      {result.metrics?.precision?.toFixed(3) ?? '-'}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      {result.metrics?.recall?.toFixed(3) ?? '-'}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      {result.metrics?.f1_score?.toFixed(3) ?? '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        <div className="empty-state">
+          <div className="empty-state-icon">⏱️</div>
+          <div className="empty-state-title">No backtests found</div>
+          <p>
+            {ruleFilter
+              ? `No backtest results for rule "${ruleFilter}"`
+              : 'No backtest results available. Run a backtest from What-If Simulation.'}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

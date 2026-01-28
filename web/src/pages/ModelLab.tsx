@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { modelApi, healthApi } from '../api';
+import { modelApi, healthApi, monitoringApi } from '../api';
 import type { TrainRequest, TrainResponse, DeployResponse } from '../types/api';
 
 export function ModelLab() {
@@ -17,6 +17,13 @@ export function ModelLab() {
     queryKey: ['health'],
     queryFn: healthApi.getHealth,
     refetchInterval: 30000,
+  });
+
+  // Fetch drift status
+  const driftQuery = useQuery({
+    queryKey: ['drift'],
+    queryFn: () => monitoringApi.getDrift({ hours: 24 }),
+    refetchInterval: 60000, // Refresh every minute
   });
 
   // Training mutation
@@ -109,6 +116,86 @@ export function ModelLab() {
                 </span>
               </div>
             </div>
+          </div>
+        ) : null}
+      </div>
+
+      {/* Drift Monitoring Panel */}
+      <div className="card" style={{ marginTop: '1rem' }}>
+        <div className="card-header">
+          <h3 className="card-title">Feature Drift Status</h3>
+          {driftQuery.data?.cached && (
+            <span className="text-muted" style={{ fontSize: '0.75rem' }}>cached</span>
+          )}
+        </div>
+        {driftQuery.isLoading ? (
+          <div className="loading">Checking drift...</div>
+        ) : driftQuery.isError ? (
+          <div className="alert alert-error">
+            Failed to check drift: {driftQuery.error?.message}
+          </div>
+        ) : driftQuery.data ? (
+          <div>
+            <div className="drift-status-header" style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+              <span
+                className={`status-badge ${
+                  driftQuery.data.status === 'ok'
+                    ? 'status-published'
+                    : driftQuery.data.status === 'warning'
+                    ? 'status-pending'
+                    : 'status-rejected'
+                }`}
+                style={{ fontSize: '1rem', padding: '0.5rem 1rem' }}
+              >
+                {driftQuery.data.status.toUpperCase()}
+              </span>
+              <span>{driftQuery.data.message}</span>
+            </div>
+
+            {driftQuery.data.feature_details && driftQuery.data.feature_details.length > 0 && (
+              <div className="drift-features">
+                <h4 style={{ fontSize: '0.875rem', marginBottom: '0.75rem' }}>Feature Details</h4>
+                <div className="table-container">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Feature</th>
+                        <th style={{ textAlign: 'right' }}>PSI</th>
+                        <th style={{ textAlign: 'center' }}>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {driftQuery.data.feature_details.slice(0, 10).map((feature) => (
+                        <tr key={feature.feature_name}>
+                          <td>{feature.feature_name}</td>
+                          <td style={{ textAlign: 'right' }}>{feature.psi_value.toFixed(4)}</td>
+                          <td style={{ textAlign: 'center' }}>
+                            <span
+                              className={`status-badge ${
+                                feature.status === 'ok'
+                                  ? 'status-published'
+                                  : feature.status === 'warning'
+                                  ? 'status-pending'
+                                  : 'status-rejected'
+                              }`}
+                            >
+                              {feature.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {driftQuery.data.computed_at && (
+              <div className="text-muted" style={{ marginTop: '0.75rem', fontSize: '0.75rem' }}>
+                Last checked: {new Date(driftQuery.data.computed_at).toLocaleString()}
+                {driftQuery.data.hours_analyzed && ` (${driftQuery.data.hours_analyzed}h window)`}
+              </div>
+            )}
           </div>
         ) : null}
       </div>
