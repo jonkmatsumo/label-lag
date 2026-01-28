@@ -70,6 +70,8 @@ async function main(): Promise<void> {
       error: {
         code: 'INTERNAL_ERROR',
         message: 'An unexpected error occurred',
+        // @ts-ignore - extending ErrorResponse locally for now or we update the type def
+        request_id: requestId,
       },
     };
 
