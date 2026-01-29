@@ -82,6 +82,7 @@ services:
       context: src/ui
       dockerfile: Dockerfile
     container_name: synthetic-data-dashboard
+    profiles: ["streamlit", "all"]
     environment:
       - API_BASE_URL=http://api:8000
       - MLFLOW_TRACKING_URI=http://mlflow:5000
@@ -118,6 +119,7 @@ services:
       context: bff
       dockerfile: Dockerfile
     container_name: label-lag-bff
+    profiles: ["react", "all"]
     environment:
       - BFF_PORT=3000
       - BFF_HOST=0.0.0.0
@@ -149,6 +151,7 @@ services:
       context: web
       dockerfile: Dockerfile
     container_name: label-lag-web
+    profiles: ["react", "all"]
     networks:
       - labellag_net
     ports:
