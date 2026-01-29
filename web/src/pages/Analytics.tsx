@@ -4,6 +4,8 @@ import { analyticsApi } from '../api';
 import { 
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart 
 } from 'recharts';
+import { exportToCsv } from '../utils';
+import { Download } from 'lucide-react';
 
 export function Analytics() {
   const [daysFilter, setDaysFilter] = useState(30);
@@ -109,11 +111,18 @@ export function Analytics() {
         </div>
       </div>
 
-      {/* Daily Stats Table */}
       <div className="card" style={{ marginTop: '1.5rem' }}>
         <div className="card-header">
           <h3 className="card-title">Daily Statistics</h3>
           <div className="card-actions">
+            <button 
+              className="btn btn-secondary btn-sm me-2"
+              onClick={() => dailyStatsQuery.data?.stats && exportToCsv(dailyStatsQuery.data.stats, 'daily_stats.csv')}
+              disabled={!dailyStatsQuery.data?.stats?.length}
+              style={{ marginRight: '0.5rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+            >
+              <Download size={14} /> Export
+            </button>
             <select
               className="form-input"
               value={daysFilter}
