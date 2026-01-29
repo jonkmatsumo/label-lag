@@ -20,6 +20,7 @@ import numpy as np
 import pandas as pd
 
 from api.rules import RuleSet
+from api.rule_store import RuleStore
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -63,6 +64,7 @@ class ModelManager:
         self._model_source: str = "none"
         self._required_features: list[str] | None = None
         self._ruleset: RuleSet | None = None
+        self._rule_store = RuleStore()
         self._initialized = True
 
     @property
@@ -116,34 +118,50 @@ class ModelManager:
             return None
         return self._ruleset.version
 
-    def update_production_ruleset(self, ruleset: RuleSet) -> None:
-        """Update the in-memory production ruleset.
+    def update_production_ruleset(self, ruleset: RuleSet, actor: str = "system", reason: str | None = None) -> None:
+        """Update the production ruleset and persist to DB.
 
         Called by /rules/{id}/publish endpoint to sync approved rules
         to the production ruleset used for inference.
 
-        Note: This updates the in-memory ruleset only. On API restart,
-        the ruleset is reloaded from MLflow artifacts or default_rules.json.
-        Published rules in DraftRuleStore are not automatically rehydrated.
-
         Args:
             ruleset: RuleSet to use for production inference.
+            actor: Who is performing the update.
+            reason: Optional reason for update.
         """
+        # Persist all rules in ruleset to DB first to ensure versions exist
+        for rule in ruleset.rules:
+            self._rule_store.save_rule(rule, actor=actor)
+        
+        # Snapshot the ruleset in DB
+        self._rule_store.publish_ruleset(
+            version_name=ruleset.version,
+            actor=actor,
+            reason=reason
+        )
+
         self._ruleset = ruleset
         logger.info(
             f"Production ruleset updated to version {ruleset.version} "
-            f"with {len(ruleset.rules)} rules"
+            f"with {len(ruleset.rules)} rules and persisted to DB"
         )
 
     def load_production_model(self) -> bool:
-        """Load the production model from MLflow registry.
+        """Load the production model from MLflow registry and rules from DB.
 
-        Attempts to load from MLflow first. If that fails, falls back to
+        Attempts to load model from MLflow first. If that fails, falls back to
         a local pickle file if available.
+        Rules are loaded from Postgres DB (System of Record).
 
         Returns:
             True if a model was loaded successfully, False otherwise.
         """
+        # Load rules from DB first (System of Record)
+        db_ruleset = self._rule_store.get_latest_published_ruleset()
+        if db_ruleset:
+            self._ruleset = db_ruleset
+            logger.info(f"Loaded rules version {self._ruleset.version} from DB")
+
         # Try loading from MLflow first
         if self._load_from_mlflow():
             return True
@@ -228,11 +246,15 @@ class ModelManager:
             logger.debug(f"Could not load feature_columns artifact: {e}")
 
     def _load_rules_artifact(self) -> None:
-        """Load rules.json artifact from the model run.
+        """Load rules.json artifact from the model run if not in DB.
 
         Tries to load from MLflow artifacts first. If not found, falls back
         to config/default_rules.json. If that also fails, uses empty RuleSet.
         """
+        # If rules already loaded from DB, we don't need to load from artifacts
+        if self._ruleset is not None:
+            return
+
         # Try loading from MLflow artifacts
         try:
             client = mlflow.MlflowClient()

@@ -161,8 +161,14 @@ def _metadata_to_db(meta: "EvaluationMetadata") -> "EvaluationMetadataDB":
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan - load model on startup."""
-    # Startup: Load the production model
-    logger.info("Starting up - loading production model...")
+    # Startup: Ensure tables exist
+    logger.info("Starting up - ensuring database tables exist...")
+    from synthetic_pipeline.db.session import DatabaseSession
+    db_session = DatabaseSession()
+    db_session.create_tables()
+
+    # Load the production model
+    logger.info("Loading production model...")
     manager = get_model_manager()
     success = manager.load_production_model()
 
@@ -1335,6 +1341,9 @@ async def accept_suggestion(
     # Save to draft store
     try:
         store.save(rule)
+        # Also persist to DB
+        from api.rule_store import RuleStore
+        RuleStore().save_rule(rule, actor=request.actor)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -1462,6 +1471,9 @@ async def create_draft_rule(request: DraftRuleCreateRequest) -> DraftRuleCreateR
     # Save to store
     try:
         store.save(rule)
+        # Also persist to DB
+        from api.rule_store import RuleStore
+        RuleStore().save_rule(rule, actor=request.actor)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -1757,6 +1769,9 @@ async def update_draft_rule(
     # Save updated rule
     try:
         store.save(updated_rule)
+        # Also persist to DB
+        from api.rule_store import RuleStore
+        RuleStore().save_rule(updated_rule, actor=request.actor)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -1904,6 +1919,10 @@ async def delete_draft_rule(
 
     # Get archived rule for audit
     archived_rule = store.get(rule_id)
+    if archived_rule:
+        # Also persist to DB
+        from api.rule_store import RuleStore
+        RuleStore().save_rule(archived_rule, actor=actor)
 
     # Create audit record
     audit_logger.log(
@@ -2545,7 +2564,11 @@ async def publish_rule(
     # Create new ruleset version
     ruleset_version = f"v{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
     new_ruleset = RuleSet(version=ruleset_version, rules=all_active_rules)
-    manager.update_production_ruleset(new_ruleset)
+    manager.update_production_ruleset(
+        new_ruleset, 
+        actor=request.actor, 
+        reason=request.reason or "Published to production"
+    )
 
     # Log publish event
     audit_logger.log(
@@ -2647,6 +2670,8 @@ async def reject_draft_rule(
 
     # Update in store
     store.save(updated_rule)
+    from api.rule_store import RuleStore
+    RuleStore().save_rule(updated_rule, actor=request.actor)
 
     # Create version snapshot
     version_store.save(
@@ -2817,6 +2842,9 @@ async def activate_rule(
         active_rule = Rule(**rule_dict)
         store._rules[rule_id] = active_rule
         store._save_rules()
+    
+    from api.rule_store import RuleStore
+    RuleStore().save_rule(updated_rule, actor=request.actor)
 
     # Create version snapshot
     version_store.save(
@@ -2930,6 +2958,9 @@ async def disable_rule(
         disabled_rule = Rule(**rule_dict)
         store._rules[rule_id] = disabled_rule
         store._save_rules()
+    
+    from api.rule_store import RuleStore
+    RuleStore().save_rule(updated_rule, actor=request.actor)
 
     # Create version snapshot
     version_store.save(
@@ -3042,6 +3073,9 @@ async def shadow_rule(rule_id: str, request: ShadowRuleRequest) -> ShadowRuleRes
         shadow_rule_obj = Rule(**rule_dict)
         store._rules[rule_id] = shadow_rule_obj
         store._save_rules()
+    
+    from api.rule_store import RuleStore
+    RuleStore().save_rule(updated_rule, actor=request.actor)
 
     # Create version snapshot
     version_store.save(
@@ -3363,6 +3397,8 @@ async def rollback_rule_version(
     if rule is not None:
         # Update to rolled back version
         store.save(new_version.rule)
+        from api.rule_store import RuleStore
+        RuleStore().save_rule(new_version.rule, actor=request.actor)
 
     # Convert to response
     rule_response = DraftRuleResponse(

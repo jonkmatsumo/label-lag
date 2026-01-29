@@ -5,22 +5,94 @@ from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
+    Column,
     DateTime,
+    Enum,
     Float,
     ForeignKey,
     Index,
     Integer,
     Numeric,
     String,
+    Table,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+import enum
+
+class RuleStatus(enum.Enum):
+    DRAFT = "draft"
+    PENDING_REVIEW = "pending_review"
+    APPROVED = "approved"
+    ACTIVE = "active"
+    SHADOW = "shadow"
+    DISABLED = "disabled"
+    ARCHIVED = "archived"
 
 class Base(DeclarativeBase):
     """Base class for all SQLAlchemy models."""
 
     pass
+
+# Association table for PublishedRuleSet -> RuleVersion
+published_ruleset_versions = Table(
+    "published_ruleset_versions",
+    Base.metadata,
+    Column("ruleset_id", Integer, ForeignKey("published_rulesets.id"), primary_key=True),
+    Column("version_id", Integer, ForeignKey("rule_versions.id"), primary_key=True),
+)
+
+class RuleDB(Base):
+    """Logical rule identity."""
+    __tablename__ = "rules"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    status: Mapped[RuleStatus] = mapped_column(Enum(RuleStatus), default=RuleStatus.DRAFT, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("now()"), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("now()"), onupdate=text("now()"), nullable=False)
+
+    versions = relationship("RuleVersionDB", back_populates="rule", cascade="all, delete-orphan")
+
+class RuleVersionDB(Base):
+    """Immutable rule content version."""
+    __tablename__ = "rule_versions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    rule_id: Mapped[str] = mapped_column(String(100), ForeignKey("rules.id"), nullable=False, index=True)
+    
+    # Rule content (matches api.rules.Rule dataclass fields)
+    field: Mapped[str] = mapped_column(String(100), nullable=False)
+    op: Mapped[str] = mapped_column(String(20), nullable=False)
+    value: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    action: Mapped[str] = mapped_column(String(50), nullable=False)
+    score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    severity: Mapped[str] = mapped_column(String(20), default="medium", nullable=False)
+    reason: Mapped[str] = mapped_column(String(500), default="", nullable=False)
+    
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("now()"), nullable=False)
+    created_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    rule = relationship("RuleDB", back_populates="versions")
+
+    __table_args__ = (
+        Index("ix_rule_version_content", "rule_id", "content_hash"),
+    )
+
+class PublishedRuleSetDB(Base):
+    """Snapshot of active rules used for inference."""
+    __tablename__ = "published_rulesets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    version_name: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    published_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("now()"), nullable=False, index=True)
+    published_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # Many-to-many relationship to RuleVersionDB
+    rule_versions = relationship("RuleVersionDB", secondary=published_ruleset_versions)
 
 
 class GeneratedRecordDB(Base):
