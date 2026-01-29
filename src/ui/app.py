@@ -56,11 +56,12 @@ from ui.mlflow_utils import (
     promote_to_staging,
 )
 
-# Configuration from environment
-API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
-DATABASE_URL = os.getenv(
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8100")
+
+# Connection to the database
+DB_DSN = os.getenv(
     "DATABASE_URL",
-    "postgresql://synthetic:synthetic_dev_password@localhost:5432/synthetic_data",
+    "postgresql://synthetic:synthetic_dev_password@localhost:5542/synthetic_data",
 )
 
 # Page configuration

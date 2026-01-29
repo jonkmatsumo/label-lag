@@ -42,7 +42,7 @@ export function loadConfig(): Config {
   }
 
   return {
-    port: getEnvAsInt('BFF_PORT', 3000),
+    port: getEnvAsInt('BFF_PORT', 3210),
     host: getEnvOrDefault('BFF_HOST', '0.0.0.0'),
     fastApiBaseUrl: getEnvOrDefault('BFF_FASTAPI_BASE_URL', 'http://api:8000'),
     mlflowTrackingUri: getEnvOrDefault('BFF_MLFLOW_TRACKING_URI', 'http://mlflow:5005'),

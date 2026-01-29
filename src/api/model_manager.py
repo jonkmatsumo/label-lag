@@ -25,7 +25,7 @@ from api.rules import RuleSet
 logger = logging.getLogger(__name__)
 
 # MLflow configuration from environment
-MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5005")
 
 # Model registry name
 MODEL_NAME = "ach-fraud-detection"

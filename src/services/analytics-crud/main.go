@@ -752,7 +752,7 @@ func main() {
 
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		dbURL = "postgresql://synthetic:synthetic_dev_password@localhost:5432/synthetic_data?sslmode=disable"
+		dbURL = "postgresql://synthetic:synthetic_dev_password@localhost:5542/synthetic_data?sslmode=disable"
 	}
 
 	db, err := sql.Open("postgres", dbURL)

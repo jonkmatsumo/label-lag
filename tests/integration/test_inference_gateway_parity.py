@@ -3,8 +3,8 @@ import os
 import pytest
 import requests
 
-FASTAPI_BASE_URL = os.getenv("FASTAPI_BASE_URL", "http://localhost:8000")
-GATEWAY_BASE_URL = os.getenv("GATEWAY_BASE_URL", "http://localhost:8081")
+FASTAPI_BASE_URL = os.getenv("FASTAPI_BASE_URL", "http://localhost:8100")
+GATEWAY_BASE_URL = os.getenv("GATEWAY_BASE_URL", "http://localhost:8181")
 
 FIXTURES = [
     {

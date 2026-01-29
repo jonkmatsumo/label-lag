@@ -17,7 +17,7 @@ from mlflow.exceptions import MlflowException
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
 
 # API configuration (for model reload)
-API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8100")
 
 # Set tracking URI
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)

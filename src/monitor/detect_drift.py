@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://synthetic:synthetic_dev_password@localhost:5432/synthetic_data",
+    "postgresql://synthetic:synthetic_dev_password@localhost:5542/synthetic_data",
 )
 
 # Model registry name
