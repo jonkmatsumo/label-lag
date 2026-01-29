@@ -3836,7 +3836,7 @@ def main() -> None:
     st.sidebar.markdown("---")
     st.sidebar.markdown("### Configuration")
     st.sidebar.text(f"API: {API_BASE_URL}")
-    db_display = DATABASE_URL.split("@")[-1] if "@" in DATABASE_URL else "configured"
+    db_display = DB_DSN.split("@")[-1] if "@" in DB_DSN else "configured"
     st.sidebar.text(f"DB: {db_display}")
 
     # Render selected page

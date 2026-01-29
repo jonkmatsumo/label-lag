@@ -46,7 +46,7 @@ def get_db_engine() -> Engine:
     """Return a cached SQLAlchemy engine."""
     global _DB_ENGINE
     if _DB_ENGINE is None:
-        _DB_ENGINE = create_engine(DATABASE_URL, pool_pre_ping=True)
+        _DB_ENGINE = create_engine(DB_DSN, pool_pre_ping=True)
     return _DB_ENGINE
 
 
