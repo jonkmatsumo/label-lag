@@ -19,7 +19,7 @@ export async function mlflowRoutes(
       ...httpClient.config,
       fastApiBaseUrl: mlflowTrackingUri, // Override base URL to point to MLflow
     },
-    logger: fastify.log,
+    logger: fastify.log as unknown as import('pino').Logger,
   });
 
   // GET /bff/v1/mlflow/experiments/search

@@ -3,7 +3,6 @@ import { HttpClient, UpstreamError } from '../services/http-client.js';
 import type {
   DriftStatusResponse,
   ShadowComparisonResponse,
-  BacktestResultsListResponse,
 } from '../types/api.js';
 
 export interface MonitoringRoutesOptions {
@@ -20,13 +19,6 @@ interface ShadowComparisonQuery {
   start_date: string;
   end_date: string;
   rule_ids?: string;
-}
-
-interface BacktestResultsQuery {
-  rule_id?: string;
-  start_date?: string;
-  end_date?: string;
-  limit?: number;
 }
 
 /**

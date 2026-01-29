@@ -29,7 +29,7 @@ export interface HttpResponse<T> {
  * Handles timeouts, error normalization, safe retries, and request ID forwarding
  */
 export class HttpClient {
-  private config: Config;
+  public readonly config: Config;
   private logger: pino.Logger;
 
   constructor(options: HttpClientOptions) {
