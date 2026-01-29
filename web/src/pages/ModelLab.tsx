@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { modelApi, healthApi, monitoringApi } from '../api';
-import { mlflowApi, MlflowModelVersion, CvMetricsArtifact, TuningTrial, SplitManifest } from '../api/mlflow';
+import { mlflowApi } from '../api/mlflow';
+import type { MlflowModelVersion, CvMetricsArtifact, TuningTrial, SplitManifest } from '../api/mlflow';
 import type { TrainRequest, TrainResponse, DeployResponse } from '../types/api';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
