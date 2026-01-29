@@ -121,7 +121,7 @@ services:
     container_name: label-lag-bff
     profiles: ["react", "all"]
     environment:
-      - BFF_PORT=3000
+      - BFF_PORT=${BFF_PORT:-3210}
       - BFF_HOST=0.0.0.0
       - BFF_FASTAPI_BASE_URL=http://api:8000
       - BFF_MLFLOW_TRACKING_URI=http://mlflow:5000
@@ -133,10 +133,10 @@ services:
     networks:
       - labellag_net
     ports:
-      - "${BFF_PORT:-3000}:3000"
+      - "${BFF_PORT:-3210}:${BFF_PORT:-3210}"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:${BFF_PORT:-3210}/health"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -155,10 +155,10 @@ services:
     networks:
       - labellag_net
     ports:
-      - "${WEB_PORT:-5173}:5173"
+      - "${WEB_PORT:-5180}:${WEB_PORT:-5180}"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5173/"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${WEB_PORT:-5180}/"]
       interval: 10s
       timeout: 5s
       retries: 3

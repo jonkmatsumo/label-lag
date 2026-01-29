@@ -5,9 +5,10 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
+    port: 5180,
     proxy: {
       '/bff': {
-        target: process.env.VITE_BFF_BASE_URL || 'http://localhost:3000',
+        target: process.env.VITE_BFF_BASE_URL || 'http://localhost:3210',
         changeOrigin: true,
       },
     },
