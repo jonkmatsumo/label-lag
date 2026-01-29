@@ -124,6 +124,46 @@ The React UI now supports:
 - **Rule Inspector**: Full rule lifecycle management including Shadow Mode and Backtesting.
 - **Analytics**: Historical trends and alert monitoring.
 
+## Go Inference Cutover Readiness
+
+The system includes a Go-based `inference-gateway` designed to replace the FastAPI `/evaluate/signal` endpoint for high-throughput inference.
+
+### Switching Inference Modes
+
+The BFF supports toggling between FastAPI and Go Gateway via environment variable:
+
+- **FastAPI Mode (Default)**: `BFF_INFERENCE_MODE=fastapi`
+- **Go Gateway Mode**: `BFF_INFERENCE_MODE=gateway`
+
+To switch:
+1. Update `.env`: `BFF_INFERENCE_MODE=gateway`
+2. Restart BFF: `docker compose -f docker-compose.infra.yml -f docker-compose.app.yml restart bff`
+
+### Verifying Parity
+
+A parity test suite is available to compare outputs from both engines:
+
+```bash
+# Run parity integration tests (requires stack running)
+export RUN_PARITY_TESTS=1
+export BFF_FASTAPI_BASE_URL=http://localhost:8000
+export BFF_GATEWAY_BASE_URL=http://localhost:8081
+cd bff && npm test tests/parity.test.ts
+```
+
+### UI Modes
+
+You can control which UIs are started using Docker Compose profiles:
+
+- `UI_MODE=streamlit` (Starts only Streamlit)
+- `UI_MODE=react` (Starts React + BFF)
+- `UI_MODE=both` (Starts all - default if unset)
+
+Example:
+```bash
+COMPOSE_PROFILES=react docker compose ... up -d
+```
+
 ## Repository / File Structure
 
 The repo is organized around data flow and runtime boundaries so services can evolve independently while sharing a common domain model.
