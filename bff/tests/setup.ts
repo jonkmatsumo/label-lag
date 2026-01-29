@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import { MockAgent, setGlobalDispatcher, getGlobalDispatcher, Dispatcher } from 'undici';
 import { requestIdMiddleware } from '../src/middleware/request-id.js';
 import { HttpClient } from '../src/services/http-client.js';
+import { SimpleCache } from '../src/services/cache.js';
 import { Config } from '../src/config.js';
 import {
   healthRoutes,
@@ -13,6 +14,8 @@ import {
   analyticsRoutes,
   monitoringRoutes,
   rulesDetailRoutes,
+  datasetRoutes,
+  mlflowRoutes,
 } from '../src/routes/index.js';
 import pino from 'pino';
 
@@ -33,6 +36,9 @@ export function createTestConfig(): Config {
     inferenceMode: 'fastapi',
     gatewayBaseUrl: 'http://mock-gateway:8081',
     requestTimeout: 5000,
+    upstreamTimeout: 1000,
+    cacheEnabled: false, // Disable cache for tests by default
+    cacheTtlMs: 1000,
     logLevel: 'silent',
     testMode: true,
   };
@@ -64,15 +70,18 @@ export async function createTestApp(config?: Config): Promise<TestContext> {
   app.addHook('onRequest', requestIdMiddleware);
 
   const httpClient = new HttpClient({ config: testConfig, logger });
+  const cache = new SimpleCache(testConfig, logger);
 
   await app.register(healthRoutes, { httpClient });
   await app.register(evaluateRoutes, { httpClient, config: testConfig });
   await app.register(modelRoutes, { httpClient });
   await app.register(rulesRoutes, { httpClient });
   await app.register(backtestRoutes, { httpClient });
-  await app.register(analyticsRoutes, { httpClient });
+  await app.register(analyticsRoutes, { httpClient, cache });
   await app.register(monitoringRoutes, { httpClient });
   await app.register(rulesDetailRoutes, { httpClient });
+  await app.register(datasetRoutes, { httpClient });
+  await app.register(mlflowRoutes, { httpClient, mlflowTrackingUri: testConfig.mlflowTrackingUri });
 
   return { app, config: testConfig, mockAgent, mockPool, originalDispatcher };
 }
