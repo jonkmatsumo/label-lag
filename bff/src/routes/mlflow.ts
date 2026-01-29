@@ -91,16 +91,30 @@ export async function mlflowRoutes(
     '/bff/v1/mlflow/runs/:run_id/artifacts',
     async (request: FastifyRequest<{ Params: { run_id: string }; Querystring: { path: string } }>, reply: FastifyReply) => {
       try {
-        // MLflow 2.0 API for artifacts is tricky. It often returns a signed URL or requires direct access to S3.
-        // However, the standard server supports /get-artifact?path=...&run_uuid=...
-        // This endpoint returns the raw bytes.
-        
+        const { run_id } = request.params;
+        const { path } = request.query;
+
+        // Security: Validate run_id (alphanumeric/dashes)
+        if (!/^[a-zA-Z0-9-]+$/.test(run_id)) {
+          return reply.status(400).send({ error: { code: 'INVALID_INPUT', message: 'Invalid run_id' } });
+        }
+
+        // Security: Sanitize path to prevent traversal
+        if (path.includes('..') || path.startsWith('/') || path.includes('\\')) {
+          return reply.status(400).send({ error: { code: 'INVALID_INPUT', message: 'Invalid artifact path' } });
+        }
+
+        // Allow only specific file extensions (JSON, PNG, CSV) to prevent fetching dangerous content or massive binaries
+        if (!/\.(json|csv|png|txt|yaml|yml)$/i.test(path)) {
+           return reply.status(400).send({ error: { code: 'INVALID_INPUT', message: 'Artifact type not allowed' } });
+        }
+
         const response = await mlflowClient.request({
           method: 'GET',
           path: '/get-artifact',
           query: {
-            path: request.query.path,
-            run_uuid: request.params.run_id,
+            path,
+            run_uuid: run_id,
           },
           requestId: request.requestId,
         });

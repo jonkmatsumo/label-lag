@@ -37,7 +37,23 @@ async function main(): Promise<void> {
 
   // Register CORS
   await fastify.register(cors, {
-    origin: true, // Allow all origins in development
+    origin: (origin, cb) => {
+      const allowed = config.corsOrigin;
+      if (allowed === 'true') {
+        cb(null, true);
+        return;
+      }
+      if (!origin) {
+        cb(null, true); // Allow requests with no origin (like curl)
+        return;
+      }
+      const origins = allowed.split(',').map(s => s.trim());
+      if (origins.includes(origin)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Not allowed by CORS'), false);
+      }
+    },
     credentials: true,
   });
 
