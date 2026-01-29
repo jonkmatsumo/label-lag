@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { HttpClient, UpstreamError } from '../services/http-client.js';
+import { SimpleCache } from '../services/cache.js';
 import type {
   AnalyticsOverviewResponse,
   DailyStatsResponse,
@@ -13,6 +14,7 @@ import type {
 
 export interface AnalyticsRoutesOptions {
   httpClient: HttpClient;
+  cache: SimpleCache;
 }
 
 interface DailyStatsQuery {
@@ -53,12 +55,16 @@ export async function analyticsRoutes(
   fastify: FastifyInstance,
   options: AnalyticsRoutesOptions
 ): Promise<void> {
-  const { httpClient } = options;
+  const { httpClient, cache } = options;
 
   // GET /bff/v1/analytics/overview - Get dataset overview metrics
   fastify.get(
     '/bff/v1/analytics/overview',
     async (request: FastifyRequest, reply: FastifyReply) => {
+      const cacheKey = 'analytics:overview';
+      const cached = cache.get<AnalyticsOverviewResponse>(cacheKey);
+      if (cached) return reply.send(cached);
+
       try {
         const response = await httpClient.request<AnalyticsOverviewResponse>({
           method: 'GET',
@@ -66,6 +72,7 @@ export async function analyticsRoutes(
           requestId: request.requestId,
         });
 
+        cache.set(cacheKey, response.data);
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
         if (error instanceof UpstreamError) {
@@ -95,6 +102,9 @@ export async function analyticsRoutes(
     ) => {
       try {
         const { days = 30 } = request.query;
+        const cacheKey = `analytics:daily-stats:${days}`;
+        const cached = cache.get<DailyStatsResponse>(cacheKey);
+        if (cached) return reply.send(cached);
 
         const response = await httpClient.request<DailyStatsResponse>({
           method: 'GET',
@@ -102,6 +112,7 @@ export async function analyticsRoutes(
           requestId: request.requestId,
         });
 
+        cache.set(cacheKey, response.data);
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
         if (error instanceof UpstreamError) {
