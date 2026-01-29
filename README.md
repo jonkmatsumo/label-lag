@@ -86,7 +86,7 @@ stateDiagram-v2
 
 1) Copy `.env.example` to `.env` and adjust ports or credentials as needed.  
 2) Start the stack with `docker compose up -d`.  
-3) Open the dashboard at `http://localhost:8501` and verify Live Scoring renders.
+3) Open the dashboard at `http://localhost:8601` and verify Live Scoring renders.
 
 ## Detailed Architecture Breakdown
 
@@ -104,19 +104,20 @@ All ports are configurable via `.env`.
 
 | Service | Port | Purpose |
 |---------|------|---------|
-| Dashboard (Streamlit) | 8501 | Streamlit UI for scoring, analytics, model training, and rule authoring |
-| Web (React) | 5173 | React UI - modern alternative to Streamlit (runs in parallel) |
-| BFF | 3000 | Backend for Frontend - Node.js proxy layer for React UI |
-| API | 8000 | FastAPI fraud scoring and training endpoints |
-| API Docs | 8000 | Swagger UI served by the API |
+| Dashboard (Streamlit) | 8601 | Streamlit UI for scoring, analytics, model training, and rule authoring |
+| Web (React) | 5180 | React UI - modern alternative to Streamlit (runs in parallel) |
+| BFF | 3210 | Backend for Frontend - Node.js proxy layer for React UI |
+| API | 8100 | FastAPI fraud scoring and training endpoints |
+| API Docs | 8100 | Swagger UI served by the API |
 | MLflow | 5005 | Experiment tracking and model registry |
-| MinIO API | 9000 | Object storage API for artifacts |
-| MinIO Console | 9001 | Object storage console (minioadmin/minioadmin) |
-| PostgreSQL | 5432 | Transaction and feature storage |
+| MinIO API | 9100 | Object storage API for artifacts |
+| MinIO Console | 9101 | Object storage console (minioadmin/minioadmin) |
+| PostgreSQL | 5542 | Transaction and feature storage |
+| Inference Gateway | 8181 | Go-based high-throughput inference gateway |
 
 ### Parallel UI Operation
 
-Both Streamlit (port 8501) and React (port 5173) UIs run simultaneously. The React UI communicates with FastAPI through the BFF proxy layer, while Streamlit connects directly to FastAPI. This allows safe migration without disrupting existing workflows.
+Both Streamlit (port 8601) and React (port 5180) UIs run simultaneously. The React UI communicates with FastAPI through the BFF proxy layer (port 3210), while Streamlit connects directly to FastAPI. This allows safe migration without disrupting existing workflows.
 
 The React UI now supports:
 - **Synthetic Dataset Management**: Generate data, view distributions, and analyze correlations.
@@ -146,8 +147,8 @@ A parity test suite is available to compare outputs from both engines:
 ```bash
 # Run parity integration tests (requires stack running)
 export RUN_PARITY_TESTS=1
-export BFF_FASTAPI_BASE_URL=http://localhost:8000
-export BFF_GATEWAY_BASE_URL=http://localhost:8081
+export BFF_FASTAPI_BASE_URL=http://localhost:8100
+export BFF_GATEWAY_BASE_URL=http://localhost:8181
 cd bff && npm test tests/parity.test.ts
 ```
 
@@ -230,20 +231,21 @@ Copy `.env.example` to `.env` and adjust as needed.
 POSTGRES_USER=synthetic
 POSTGRES_PASSWORD=synthetic_dev_password
 POSTGRES_DB=synthetic_data
-DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}
+DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5542/${POSTGRES_DB}
 ```
 
 ### Service Ports
 
 ```
-DB_PORT=5432
-API_PORT=8000
-DASHBOARD_PORT=8501
-WEB_PORT=5173
-BFF_PORT=3000
+DB_PORT=5542
+API_PORT=8100
+INFERENCE_GATEWAY_PORT=8181
+DASHBOARD_PORT=8601
+WEB_PORT=5180
+BFF_PORT=3210
 MLFLOW_PORT=5005
-MINIO_API_PORT=9000
-MINIO_CONSOLE_PORT=9001
+MINIO_API_PORT=9100
+MINIO_CONSOLE_PORT=9101
 ```
 
 ### BFF Configuration
@@ -261,7 +263,7 @@ BFF_LOG_LEVEL=info
 
 ```
 MLFLOW_TRACKING_URI=http://localhost:5005
-MLFLOW_S3_ENDPOINT_URL=http://localhost:9000
+MLFLOW_S3_ENDPOINT_URL=http://localhost:9100
 AWS_ACCESS_KEY_ID=minioadmin
 AWS_SECRET_ACCESS_KEY=minioadmin
 ```

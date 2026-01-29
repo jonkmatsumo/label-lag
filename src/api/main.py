@@ -497,7 +497,7 @@ async def deploy_model(request: DeployModelRequest) -> DeployModelResponse:
     # Log deployment to MLflow tags
     try:
         mlflow.set_tracking_uri(
-            os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
+            os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5005")
         )
         client = mlflow.MlflowClient()
         versions = client.search_model_versions(

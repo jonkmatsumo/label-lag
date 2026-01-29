@@ -9,7 +9,7 @@ Usage:
     pytest tests/integration/test_analytics_smoke.py -v
 
     # Override API URL
-    API_BASE_URL=http://localhost:8000 pytest tests/integration/test_analytics_smoke.py
+    API_BASE_URL=http://localhost:8100 pytest tests/integration/test_analytics_smoke.py
 """
 
 import os

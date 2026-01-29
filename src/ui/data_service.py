@@ -18,10 +18,12 @@ from sqlalchemy.engine import Engine
 
 # DATABASE_URL is no longer used by the UI for analytics.
 # Connection is now handled by the CRUD service.
-API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
-DATABASE_URL = os.getenv(
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8100")
+
+# Connection to the database
+DB_DSN = os.getenv(
     "DATABASE_URL",
-    "postgresql://synthetic:synthetic_dev_password@localhost:5432/synthetic_data",
+    "postgresql://synthetic:synthetic_dev_password@localhost:5542/synthetic_data",
 )
 
 # API timeout in seconds
@@ -44,7 +46,7 @@ def get_db_engine() -> Engine:
     """Return a cached SQLAlchemy engine."""
     global _DB_ENGINE
     if _DB_ENGINE is None:
-        _DB_ENGINE = create_engine(DATABASE_URL, pool_pre_ping=True)
+        _DB_ENGINE = create_engine(DB_DSN, pool_pre_ping=True)
     return _DB_ENGINE
 
 

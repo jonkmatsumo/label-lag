@@ -56,11 +56,12 @@ from ui.mlflow_utils import (
     promote_to_staging,
 )
 
-# Configuration from environment
-API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
-DATABASE_URL = os.getenv(
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8100")
+
+# Connection to the database
+DB_DSN = os.getenv(
     "DATABASE_URL",
-    "postgresql://synthetic:synthetic_dev_password@localhost:5432/synthetic_data",
+    "postgresql://synthetic:synthetic_dev_password@localhost:5542/synthetic_data",
 )
 
 # Page configuration
@@ -3835,7 +3836,7 @@ def main() -> None:
     st.sidebar.markdown("---")
     st.sidebar.markdown("### Configuration")
     st.sidebar.text(f"API: {API_BASE_URL}")
-    db_display = DATABASE_URL.split("@")[-1] if "@" in DATABASE_URL else "configured"
+    db_display = DB_DSN.split("@")[-1] if "@" in DB_DSN else "configured"
     st.sidebar.text(f"DB: {db_display}")
 
     # Render selected page

@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { request } from 'undici';
 
 const RUN_PARITY = process.env.RUN_PARITY_TESTS === '1';
-const FASTAPI_URL = process.env.BFF_FASTAPI_BASE_URL || 'http://localhost:8000';
-const GATEWAY_URL = process.env.BFF_GATEWAY_BASE_URL || 'http://localhost:8081';
+const FASTAPI_URL = process.env.BFF_FASTAPI_BASE_URL || 'http://localhost:8100';
+const GATEWAY_URL = process.env.BFF_GATEWAY_BASE_URL || 'http://localhost:8181';
 
 describe.skipIf(!RUN_PARITY)('Parity: FastAPI vs Go Gateway', () => {
   it('should return identical scores for same input', async () => {
