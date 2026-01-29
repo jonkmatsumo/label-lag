@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Outlet, Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { rulesApi, monitoringApi, backtestApi, suggestionsApi } from '../api';
 import type {
@@ -526,12 +526,26 @@ export function RuleShadow() {
 }
 
 export function RuleBacktests() {
-  const [ruleFilter, setRuleFilter] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const ruleFilter = searchParams.get('rule_id') || '';
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
 
   const backtestsQuery = useQuery({
     queryKey: ['backtest-results', ruleFilter],
-    queryFn: () => backtestApi.listResults({ rule_id: ruleFilter || undefined, limit: 50 }),
+    queryFn: () => backtestApi.listResults({ rule_id: ruleFilter || undefined, limit: 100 }),
   });
+
+  useEffect(() => {
+    setPage(1);
+  }, [ruleFilter]);
+
+  const handleFilterChange = (val: string) => {
+    const newParams = new URLSearchParams(searchParams);
+    if (val) newParams.set('rule_id', val);
+    else newParams.delete('rule_id');
+    setSearchParams(newParams);
+  };
 
   const getStatusBadgeClass = (status: string) => {
     switch (status.toLowerCase()) {
@@ -548,6 +562,10 @@ export function RuleBacktests() {
         return 'status-draft';
     }
   };
+
+  const results = backtestsQuery.data?.results || [];
+  const totalPages = Math.ceil(results.length / pageSize);
+  const paginatedResults = results.slice((page - 1) * pageSize, page * pageSize);
 
   return (
     <div>
@@ -566,7 +584,7 @@ export function RuleBacktests() {
               className="form-input"
               placeholder="e.g., rule-001"
               value={ruleFilter}
-              onChange={(e) => setRuleFilter(e.target.value)}
+              onChange={(e) => handleFilterChange(e.target.value)}
               style={{ width: '200px' }}
             />
           </div>
@@ -580,11 +598,11 @@ export function RuleBacktests() {
         <div className="alert alert-error">
           Failed to load backtests: {backtestsQuery.error?.message}
         </div>
-      ) : backtestsQuery.data && backtestsQuery.data.results.length > 0 ? (
+      ) : results.length > 0 ? (
         <div className="card">
           <div className="card-header">
             <h4 className="card-title">Results</h4>
-            <span className="text-muted">{backtestsQuery.data.total} total</span>
+            <span className="text-muted">{results.length} recent results</span>
           </div>
           <div className="table-container">
             <table className="table">
@@ -600,7 +618,7 @@ export function RuleBacktests() {
                 </tr>
               </thead>
               <tbody>
-                {backtestsQuery.data.results.map((result) => (
+                {paginatedResults.map((result) => (
                   <tr key={result.id}>
                     <td><code>{result.id.slice(0, 8)}</code></td>
                     <td><code>{result.rule_id}</code></td>
@@ -624,6 +642,26 @@ export function RuleBacktests() {
               </tbody>
             </table>
           </div>
+          
+          {totalPages > 1 && (
+            <div className="pagination-controls" style={{ padding: '1rem', display: 'flex', justifyContent: 'center', gap: '1rem', alignItems: 'center' }}>
+              <button 
+                className="btn btn-secondary btn-sm" 
+                disabled={page === 1}
+                onClick={() => setPage(p => p - 1)}
+              >
+                &lt; Prev
+              </button>
+              <span className="text-muted small">Page {page} of {totalPages}</span>
+              <button 
+                className="btn btn-secondary btn-sm" 
+                disabled={page === totalPages}
+                onClick={() => setPage(p => p + 1)}
+              >
+                Next &gt;
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="empty-state">
