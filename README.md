@@ -104,13 +104,65 @@ All ports are configurable via `.env`.
 
 | Service | Port | Purpose |
 |---------|------|---------|
-| Dashboard | 8501 | Streamlit UI for scoring, analytics, model training, and rule authoring |
+| Dashboard (Streamlit) | 8501 | Streamlit UI for scoring, analytics, model training, and rule authoring |
+| Web (React) | 5173 | React UI - modern alternative to Streamlit (runs in parallel) |
+| BFF | 3000 | Backend for Frontend - Node.js proxy layer for React UI |
 | API | 8000 | FastAPI fraud scoring and training endpoints |
 | API Docs | 8000 | Swagger UI served by the API |
 | MLflow | 5005 | Experiment tracking and model registry |
 | MinIO API | 9000 | Object storage API for artifacts |
 | MinIO Console | 9001 | Object storage console (minioadmin/minioadmin) |
 | PostgreSQL | 5432 | Transaction and feature storage |
+
+### Parallel UI Operation
+
+Both Streamlit (port 8501) and React (port 5173) UIs run simultaneously. The React UI communicates with FastAPI through the BFF proxy layer, while Streamlit connects directly to FastAPI. This allows safe migration without disrupting existing workflows.
+
+The React UI now supports:
+- **Synthetic Dataset Management**: Generate data, view distributions, and analyze correlations.
+- **Model Registry**: View MLflow models, CV metrics, and tuning trials.
+- **Rule Inspector**: Full rule lifecycle management including Shadow Mode and Backtesting.
+- **Analytics**: Historical trends and alert monitoring.
+
+## Go Inference Cutover Readiness
+
+The system includes a Go-based `inference-gateway` designed to replace the FastAPI `/evaluate/signal` endpoint for high-throughput inference.
+
+### Switching Inference Modes
+
+The BFF supports toggling between FastAPI and Go Gateway via environment variable:
+
+- **FastAPI Mode (Default)**: `BFF_INFERENCE_MODE=fastapi`
+- **Go Gateway Mode**: `BFF_INFERENCE_MODE=gateway`
+
+To switch:
+1. Update `.env`: `BFF_INFERENCE_MODE=gateway`
+2. Restart BFF: `docker compose -f docker-compose.infra.yml -f docker-compose.app.yml restart bff`
+
+### Verifying Parity
+
+A parity test suite is available to compare outputs from both engines:
+
+```bash
+# Run parity integration tests (requires stack running)
+export RUN_PARITY_TESTS=1
+export BFF_FASTAPI_BASE_URL=http://localhost:8000
+export BFF_GATEWAY_BASE_URL=http://localhost:8081
+cd bff && npm test tests/parity.test.ts
+```
+
+### UI Modes
+
+You can control which UIs are started using Docker Compose profiles:
+
+- `UI_MODE=streamlit` (Starts only Streamlit)
+- `UI_MODE=react` (Starts React + BFF)
+- `UI_MODE=both` (Starts all - default if unset)
+
+Example:
+```bash
+COMPOSE_PROFILES=react docker compose ... up -d
+```
 
 ## Repository / File Structure
 
@@ -125,6 +177,8 @@ src/
 ├── generator/           # Stateful fraud profile simulation
 ├── synthetic_pipeline/  # Core data generation, DB models
 └── ui/                  # Streamlit dashboard
+bff/                     # Node.js BFF (Backend for Frontend) for React UI
+web/                     # React + TypeScript frontend
 ```
 
 Key folders:
@@ -185,9 +239,22 @@ DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/$
 DB_PORT=5432
 API_PORT=8000
 DASHBOARD_PORT=8501
+WEB_PORT=5173
+BFF_PORT=3000
 MLFLOW_PORT=5005
 MINIO_API_PORT=9000
 MINIO_CONSOLE_PORT=9001
+```
+
+### BFF Configuration
+
+```
+BFF_FASTAPI_BASE_URL=http://api:8000
+BFF_MLFLOW_TRACKING_URI=http://mlflow:5000
+BFF_INFERENCE_MODE=fastapi  # or 'gateway' to use inference-gateway
+BFF_GATEWAY_BASE_URL=http://inference-gateway:8081
+BFF_REQUEST_TIMEOUT=30000
+BFF_LOG_LEVEL=info
 ```
 
 ### MLflow / MinIO

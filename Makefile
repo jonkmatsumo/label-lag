@@ -1,4 +1,4 @@
-.PHONY: install test lint clean infra-up infra-down infra-logs app-up app-down app-build app-rebuild app-logs rebuild-api reset-db reset-minio reset-all
+.PHONY: install test lint clean infra-up infra-down infra-logs app-up app-down app-build app-rebuild app-logs rebuild-api rebuild-bff rebuild-web bff-test web-test reset-db reset-minio reset-all
 
 install:
 	uv sync --all-extras
@@ -72,3 +72,25 @@ reset-minio:
 reset-all:
 	docker compose -f docker-compose.infra.yml down -v
 	docker compose -f docker-compose.app.yml down
+
+# BFF (Backend for Frontend) targets
+rebuild-bff:
+	docker compose -f docker-compose.infra.yml -f docker-compose.app.yml build bff
+	docker compose -f docker-compose.infra.yml -f docker-compose.app.yml up -d bff
+
+bff-test:
+	cd bff && npm test
+
+bff-dev:
+	cd bff && npm run dev
+
+# Web (React UI) targets
+rebuild-web:
+	docker compose -f docker-compose.infra.yml -f docker-compose.app.yml build web
+	docker compose -f docker-compose.infra.yml -f docker-compose.app.yml up -d web
+
+web-test:
+	cd web && npm test
+
+web-dev:
+	cd web && npm run dev
