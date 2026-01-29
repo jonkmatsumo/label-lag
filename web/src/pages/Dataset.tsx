@@ -3,10 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { datasetApi } from '../api/dataset';
 import type { FeatureSample } from '../api/dataset';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  ScatterChart, Scatter, ZAxis
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
-import { AlertCircle, CheckCircle, RefreshCw, Trash2, Database, Activity, Table as TableIcon } from 'lucide-react';
+import { CheckCircle, RefreshCw, Trash2, Database, Activity } from 'lucide-react';
 
 export function Dataset() {
   const [activeTab, setActiveTab] = useState<'overview' | 'generate' | 'diagnostics'>('overview');
@@ -295,7 +294,7 @@ function GenerateTab() {
 
 function DiagnosticsTab() {
   const [selectedFeature, setSelectedFeature] = useState<string>('velocity_24h');
-  const [stratify, setStratify] = useState(true);
+  const [stratify] = useState(true);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['dataset', 'sample', stratify],
@@ -350,11 +349,12 @@ function DiagnosticsTab() {
     if (!samples.length || !numericKeys.length) return [];
     
     const fraudVals = samples.map(s => s.is_fraudulent ? 1 : 0);
-    const fraudMean = fraudVals.reduce((a,b) => a+b, 0) / fraudVals.length;
+    const initialVal: number = 0;
+    const fraudMean = fraudVals.reduce((a, b) => a + b, initialVal) / fraudVals.length;
 
     return numericKeys.map(key => {
       const vals = samples.map(s => Number(s[key]) || 0);
-      const mean = vals.reduce((a,b) => a+b, 0) / vals.length;
+      const mean = vals.reduce((a, b) => a + b, initialVal) / vals.length;
       
       let num = 0, den1 = 0, den2 = 0;
       for(let i=0; i<samples.length; i++) {

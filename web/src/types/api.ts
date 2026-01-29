@@ -65,10 +65,12 @@ export interface TrainRequest {
 }
 
 export interface TrainResponse {
-  run_id: string;
+  run_id?: string; // Optional if failed
   status: string;
-  message: string;
+  message?: string; // Optional
   metrics?: Record<string, number>;
+  success?: boolean; // Added for compatibility
+  error?: string; // Added for compatibility
 }
 
 // Model deployment types
@@ -81,6 +83,9 @@ export interface DeployResponse {
   status: string;
   message: string;
   model_version?: string;
+  success?: boolean; // Added for compatibility
+  error?: string; // Added for compatibility
+  deployed_at?: string; // Added for compatibility
 }
 
 // Rule types
@@ -249,20 +254,29 @@ export interface DriftStatus {
 export interface FeatureDriftDetail {
   feature_name: string;
   psi_value: number;
-  status: 'ok' | 'warning' | 'critical';
+  status: 'ok' | 'warning' | 'critical' | 'OK' | 'WARNING' | 'CRITICAL'; // Support both casing
+  feature?: string; // Alias for feature_name from backend
+  psi?: number; // Alias for psi_value from backend
   reference_mean?: number;
   live_mean?: number;
 }
 
 export interface DriftStatusResponse {
-  status: 'ok' | 'warning' | 'critical' | 'error';
+  status: 'ok' | 'warn' | 'fail' | 'warning' | 'critical' | 'error' | 'unknown'; // Normalized status
   message: string;
   drift_detected: boolean;
   cached: boolean;
   computed_at?: string;
   hours_analyzed?: number;
   threshold?: number;
+  thresholds?: { warn: number; fail: number };
   feature_details?: FeatureDriftDetail[];
+  top_features?: FeatureDriftDetail[]; // Alias for feature_details
+  reference_size?: number;
+  live_size?: number;
+  reference_window?: string;
+  current_window?: string;
+  error?: string;
 }
 
 export interface RuleMetricsItem {

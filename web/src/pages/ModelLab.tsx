@@ -6,10 +6,9 @@ import type { MlflowModelVersion, CvMetricsArtifact, TuningTrial, SplitManifest 
 import type { TrainRequest, TrainResponse, DeployResponse } from '../types/api';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  LineChart, Line, ScatterChart, Scatter, ZAxis
 } from 'recharts';
 import { 
-  Activity, Box, GitBranch, Play, Database, Server, AlertTriangle, 
+  GitBranch, Play, AlertTriangle, 
   CheckCircle, ChevronDown, ChevronRight, Terminal
 } from 'lucide-react';
 
@@ -153,7 +152,7 @@ function TrainTab() {
               <div>
                 <div className={`alert ${
                   driftQuery.data.status === 'ok' ? 'alert-success' : 
-                  driftQuery.data.status === 'warn' ? 'alert-warning' : 'alert-danger'
+                  (driftQuery.data.status === 'warn' || driftQuery.data.status === 'warning') ? 'alert-warning' : 'alert-danger'
                 } mb-3`}>
                   <div className="d-flex align-items-center">
                     {driftQuery.data.status === 'ok' ? <CheckCircle size={18} className="me-2"/> : <AlertTriangle size={18} className="me-2"/>}
