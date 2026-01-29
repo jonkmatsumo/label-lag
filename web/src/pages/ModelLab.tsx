@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { modelApi, healthApi, monitoringApi } from '../api';
 import { mlflowApi } from '../api/mlflow';
-import type { MlflowModelVersion, CvMetricsArtifact, TuningTrial, SplitManifest } from '../api/mlflow';
+import type { CvMetricsArtifact, TuningTrial, SplitManifest } from '../api/mlflow';
 import type { TrainRequest, TrainResponse, DeployResponse } from '../types/api';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -168,7 +168,7 @@ function TrainTab() {
                         <li key={f.feature} className="d-flex justify-content-between mb-1">
                           <span className="text-truncate" style={{maxWidth: '180px'}} title={f.feature}>{f.feature}</span>
                           <span className={`fw-mono ${f.status !== 'OK' ? 'text-danger fw-bold' : 'text-muted'}`}>
-                            {f.psi.toFixed(3)}
+                            {(f.psi ?? 0).toFixed(3)}
                           </span>
                         </li>
                       ))}
@@ -260,7 +260,7 @@ function TrainTab() {
                {deployResult && (
                   <div className={`alert mt-3 ${deployResult.success ? 'alert-success' : 'alert-danger'}`}>
                     {deployResult.success ? 
-                      `Deployed version ${deployResult.model_version} at ${new Date(deployResult.deployed_at).toLocaleTimeString()}` : 
+                      `Deployed version ${deployResult.model_version} at ${deployResult.deployed_at ? new Date(deployResult.deployed_at).toLocaleTimeString() : 'Unknown Time'}` : 
                       `Deployment failed: ${deployResult.error}`}
                   </div>
                )}

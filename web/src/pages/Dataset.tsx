@@ -1,11 +1,10 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { datasetApi } from '../api/dataset';
-import type { FeatureSample } from '../api/dataset';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
-import { CheckCircle, RefreshCw, Trash2, Database, Activity } from 'lucide-react';
+import { AlertCircle, CheckCircle, RefreshCw, Trash2, Database, Activity } from 'lucide-react';
 
 export function Dataset() {
   const [activeTab, setActiveTab] = useState<'overview' | 'generate' | 'diagnostics'>('overview');
