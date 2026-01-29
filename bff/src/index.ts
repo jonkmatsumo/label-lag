@@ -31,7 +31,7 @@ async function main(): Promise<void> {
   });
 
   const fastify = Fastify({
-    logger,
+    loggerInstance: logger,
     disableRequestLogging: false,
   });
 
