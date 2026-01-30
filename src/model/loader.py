@@ -58,6 +58,9 @@ class DataLoader:
         "velocity_24h",
         "amount_to_avg_ratio_30d",
         "balance_volatility_z_score",
+        "velocity_7d",
+        "max_amount_30d",
+        "off_hours_count_7d",
     ]
 
     # Columns that should not be used as training features
@@ -255,7 +258,9 @@ class DataLoader:
                 fs.velocity_24h,
                 fs.amount_to_avg_ratio_30d,
                 fs.balance_volatility_z_score,
-                fs.experimental_signals,
+                (fs.experimental_signals->>'velocity_7d')::INTEGER as velocity_7d,
+                (fs.experimental_signals->>'max_amount_30d')::FLOAT as max_amount_30d,
+                (fs.experimental_signals->>'off_hours_count_7d')::INTEGER as off_hours_count_7d,
                 em.is_train_eligible,
                 em.fraud_confirmed_at,
                 gr.is_fraudulent,
@@ -296,7 +301,9 @@ class DataLoader:
                 fs.velocity_24h,
                 fs.amount_to_avg_ratio_30d,
                 fs.balance_volatility_z_score,
-                fs.experimental_signals,
+                (fs.experimental_signals->>'velocity_7d')::INTEGER as velocity_7d,
+                (fs.experimental_signals->>'max_amount_30d')::FLOAT as max_amount_30d,
+                (fs.experimental_signals->>'off_hours_count_7d')::INTEGER as off_hours_count_7d,
                 em.is_train_eligible,
                 em.fraud_confirmed_at,
                 gr.is_fraudulent,
