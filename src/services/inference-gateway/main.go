@@ -55,7 +55,23 @@ func main() {
 	}()
 
 	rulesProvider := rules.Provider(rules.NewEmptyProvider())
-	if rulesPath := os.Getenv("INFERENCE_GATEWAY_RULES_PATH"); rulesPath != "" {
+	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
+		dbProvider, err := rules.NewDBProvider(dsn, logger)
+		if err != nil {
+			logger.Error("failed to create db rules provider", "error", err)
+			os.Exit(1)
+		}
+		// CachingProvider will perform initial load and fail if it can't load rules
+		cachingProvider, err := rules.NewCachingProvider(dbProvider, 1*time.Minute, logger)
+		if err != nil {
+			logger.Error("failed to initialize caching rules provider", "error", err)
+			os.Exit(1)
+		}
+		defer cachingProvider.Stop()
+		defer dbProvider.Close()
+		rulesProvider = cachingProvider
+		logger.Info("using database rules provider with 1m cache")
+	} else if rulesPath := os.Getenv("INFERENCE_GATEWAY_RULES_PATH"); rulesPath != "" {
 		fileProvider, err := rules.NewFileProvider(rulesPath)
 		if err != nil {
 			logger.Error("failed to load rules file", "error", err)
