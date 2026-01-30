@@ -362,3 +362,12 @@ class FeatureSnapshotDB(Base):
         Index("ix_feature_user_id", "user_id"),
         Index("ix_feature_computed_at", "computed_at"),
     )
+
+class FeatureMaterializationStateDB(Base):
+    """Tracks incremental materialization progress."""
+    __tablename__ = "feature_materialization_state"
+
+    feature_set: Mapped[str] = mapped_column(String(100), primary_key=True)
+    last_processed_id: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("now()"), onupdate=text("now()"), nullable=False)
+    schema_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)

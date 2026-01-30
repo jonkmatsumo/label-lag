@@ -10,10 +10,11 @@ import json
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from synthetic_pipeline.db import DatabaseSession
+from synthetic_pipeline.db.models import FeatureMaterializationStateDB
 from synthetic_pipeline.logging import configure_logging, get_logger
 
 # SQL query for computing features with window functions
@@ -28,7 +29,6 @@ WITH feature_calculations AS (
         gr.available_balance,
 
         -- Velocity 24h: Count of transactions in preceding 24-hour window
-        -- Uses RANGE BETWEEN to include only past transactions up to current row
         COUNT(*) OVER (
             PARTITION BY gr.user_id
             ORDER BY gr.transaction_timestamp
@@ -36,7 +36,6 @@ WITH feature_calculations AS (
         ) AS velocity_24h,
 
         -- Amount to average ratio (30-day window)
-        -- Current amount / rolling average of amounts in past 30 days
         CASE
             WHEN AVG(gr.amount) OVER (
                 PARTITION BY gr.user_id
@@ -52,8 +51,6 @@ WITH feature_calculations AS (
         END AS amount_to_avg_ratio_30d,
 
         -- Balance volatility z-score (30-day window)
-        -- (current_balance - avg_balance) / stddev_balance
-        -- Handle edge cases where stddev is 0 or NULL
         CASE
             WHEN COALESCE(STDDEV(gr.available_balance) OVER (
                 PARTITION BY gr.user_id
@@ -74,34 +71,34 @@ WITH feature_calculations AS (
             ELSE 0.0
         END AS balance_volatility_z_score,
 
-        -- Additional signals for experimental_signals JSONB
-        -- Transaction count in 7-day window
+        -- Additional signals
         COUNT(*) OVER (
             PARTITION BY gr.user_id
             ORDER BY gr.transaction_timestamp
             RANGE BETWEEN INTERVAL '7 days' PRECEDING AND CURRENT ROW
         ) AS velocity_7d,
 
-        -- Max amount in 30-day window (for detecting unusual spikes)
         MAX(gr.amount) OVER (
             PARTITION BY gr.user_id
             ORDER BY gr.transaction_timestamp
             RANGE BETWEEN INTERVAL '30 days' PRECEDING AND CURRENT ROW
         ) AS max_amount_30d,
 
-        -- Off-hours transaction count in 7 days
         SUM(CASE WHEN gr.is_off_hours_txn THEN 1 ELSE 0 END) OVER (
             PARTITION BY gr.user_id
             ORDER BY gr.transaction_timestamp
             RANGE BETWEEN INTERVAL '7 days' PRECEDING AND CURRENT ROW
         ) AS off_hours_count_7d,
 
-        -- Bank connection velocity (from source data)
         gr.bank_connections_count_24h,
-        gr.merchant_risk_score
+        gr.merchant_risk_score,
+        gr.id as internal_id
 
     FROM generated_records gr
-    WHERE gr.record_id NOT IN (SELECT record_id FROM feature_snapshots)
+    -- We must include historical context for window functions, but only select NEW records for output
+    WHERE gr.user_id IN (
+        SELECT DISTINCT user_id FROM generated_records WHERE id > :last_id
+    )
 )
 SELECT
     record_id,
@@ -109,16 +106,18 @@ SELECT
     velocity_24h::INTEGER,
     amount_to_avg_ratio_30d::FLOAT,
     balance_volatility_z_score::FLOAT,
-    -- Build experimental signals JSON
     jsonb_build_object(
         'velocity_7d', velocity_7d,
         'max_amount_30d', max_amount_30d::FLOAT,
         'off_hours_count_7d', off_hours_count_7d,
         'bank_connections_24h', bank_connections_count_24h,
         'merchant_risk_score', merchant_risk_score
-    ) AS experimental_signals
+    ) AS experimental_signals,
+    internal_id
 FROM feature_calculations
-ORDER BY user_id, record_id;
+WHERE internal_id > :last_id
+ORDER BY internal_id ASC
+LIMIT :batch_size;
 """
 
 # SQL for inserting computed features
@@ -219,16 +218,29 @@ class FeatureMaterializer:
         Returns:
             Number of pending records.
         """
+        last_id = self.get_materialization_cursor(session)
         result = session.execute(
-            text("""
-                SELECT COUNT(*)
-                FROM generated_records gr
-                WHERE gr.record_id NOT IN (
-                    SELECT record_id FROM feature_snapshots
-                )
-            """)
+            text("SELECT COUNT(*) FROM generated_records WHERE id > :last_id"),
+            {"last_id": last_id}
         )
         return result.scalar() or 0
+
+    def get_materialization_cursor(self, session: Session, feature_set: str = "default") -> int:
+        """Get the current materialization cursor from DB."""
+        stmt = select(FeatureMaterializationStateDB).where(FeatureMaterializationStateDB.feature_set == feature_set)
+        state = session.execute(stmt).scalar_one_or_none()
+        return state.last_processed_id if state else 0
+
+    def update_materialization_cursor(self, session: Session, last_id: int, feature_set: str = "default") -> None:
+        """Update the materialization cursor in DB."""
+        stmt = select(FeatureMaterializationStateDB).where(FeatureMaterializationStateDB.feature_set == feature_set)
+        state = session.execute(stmt).scalar_one_or_none()
+        if not state:
+            state = FeatureMaterializationStateDB(feature_set=feature_set, last_processed_id=last_id)
+            session.add(state)
+        else:
+            state.last_processed_id = max(state.last_processed_id, last_id)
+        session.flush()
 
     def compute_features_batch(
         self,
@@ -244,19 +256,23 @@ class FeatureMaterializer:
         Returns:
             Number of features computed.
         """
+        last_id = self.get_materialization_cursor(session)
+        
         # Compute features using window functions
-        result = session.execute(text(FEATURE_ENGINEERING_SQL))
+        result = session.execute(
+            text(FEATURE_ENGINEERING_SQL), 
+            {"last_id": last_id, "batch_size": batch_size}
+        )
         rows = result.fetchall()
 
         if not rows:
             return 0
 
-        # Limit to batch size
-        rows_to_process = rows[:batch_size]
         computed_at = datetime.utcnow()
+        max_id_in_batch = last_id
 
         # Insert computed features
-        for row in rows_to_process:
+        for row in rows:
             (
                 record_id,
                 user_id,
@@ -264,6 +280,7 @@ class FeatureMaterializer:
                 amount_ratio,
                 volatility_z,
                 exp_signals,
+                internal_id
             ) = row
 
             # Handle experimental_signals - ensure it's JSON string for binding
@@ -281,8 +298,12 @@ class FeatureMaterializer:
                     "computed_at": computed_at,
                 },
             )
+            max_id_in_batch = max(max_id_in_batch, internal_id)
 
-        return len(rows_to_process)
+        # Update cursor
+        self.update_materialization_cursor(session, max_id_in_batch)
+
+        return len(rows)
 
     def materialize_all(
         self,

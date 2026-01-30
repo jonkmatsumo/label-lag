@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 from google.protobuf.json_format import MessageToDict
+from sqlalchemy import text
 
 from api.analytics import RuleHealthEvaluator
 from api.attribution import AttributionService
@@ -681,7 +682,7 @@ async def generate_data(request: GenerateDataRequest) -> GenerateDataResponse:
 
             session.commit()
 
-        # Materialize features
+        # Materialize features (RE-ENABLED, now incremental and efficient)
         materializer = FeatureMaterializer()
         materialize_stats = materializer.materialize_all()
         features_count = materialize_stats.get("total_processed", 0)
@@ -725,6 +726,11 @@ async def clear_data() -> ClearDataResponse:
 
         # Recreate empty tables
         Base.metadata.create_all(db_session.engine)
+
+        # Reset materialization state
+        with db_session.get_session() as session:
+            session.execute(text("DELETE FROM feature_materialization_state"))
+            session.commit()
 
         return ClearDataResponse(
             success=True,
