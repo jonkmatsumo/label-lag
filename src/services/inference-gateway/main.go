@@ -61,6 +61,17 @@ func main() {
 			logger.Error("failed to create db rules provider", "error", err)
 			os.Exit(1)
 		}
+
+		// Perform schema validation on startup
+		vCtx, vCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if err := dbProvider.ValidateSchema(vCtx); err != nil {
+			vCancel()
+			logger.Error("database schema validation failed", "error", err)
+			os.Exit(1)
+		}
+		vCancel()
+		logger.Info("database schema validated")
+
 		// CachingProvider will perform initial load and fail if it can't load rules
 		cachingProvider, err := rules.NewCachingProvider(dbProvider, 1*time.Minute, logger)
 		if err != nil {

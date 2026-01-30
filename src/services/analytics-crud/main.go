@@ -15,6 +15,7 @@ import (
 	"time"
 
 	pb "github.com/jonkmatsumo/label-lag/src/services/analytics-crud/proto/crud/v1"
+	schemadb "github.com/jonkmatsumo/label-lag/src/services/analytics-crud/internal/db"
 	_ "github.com/lib/pq"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel"
@@ -769,6 +770,19 @@ func main() {
 	if err := db.Ping(); err != nil {
 		slog.Warn("failed to ping database", "error", err)
 	}
+
+	// Perform schema validation on startup
+	expectedSchema := []schemadb.TableSchema{
+		{Name: "evaluation_metadata", Columns: []string{"record_id", "user_id", "created_at", "is_train_eligible", "is_pre_fraud"}},
+		{Name: "generated_records", Columns: []string{"record_id", "user_id", "amount", "is_fraudulent", "is_off_hours_txn", "merchant_risk_score"}},
+		{Name: "feature_snapshots", Columns: []string{"record_id", "velocity_24h", "amount_to_avg_ratio_30d", "balance_volatility_z_score"}},
+	}
+
+	if err := schemadb.ValidateSchema(ctx, db, expectedSchema); err != nil {
+		slog.Error("database schema validation failed", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("database schema validated")
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
 	if err != nil {

@@ -39,6 +39,52 @@ func (p *DBProvider) Close() error {
 	return p.db.Close()
 }
 
+func (p *DBProvider) ValidateSchema(ctx context.Context) error {
+	expected := []struct {
+		name    string
+		columns []string
+	}{
+		{"published_rulesets", []string{"id", "version_name", "published_at"}},
+		{"rule_versions", []string{"id", "rule_id", "field", "op", "value", "action", "score", "severity", "reason"}},
+		{"published_ruleset_versions", []string{"ruleset_id", "version_id"}},
+	}
+
+	for _, ts := range expected {
+		var exists bool
+		err := p.db.QueryRowContext(ctx, `
+			SELECT EXISTS (
+				SELECT FROM information_schema.tables 
+				WHERE table_schema = 'public' 
+				AND table_name = $1
+			)
+		`, ts.name).Scan(&exists)
+		if err != nil {
+			return fmt.Errorf("check table %s existence: %w", ts.name, err)
+		}
+		if !exists {
+			return fmt.Errorf("required table %s is missing", ts.name)
+		}
+
+		for _, col := range ts.columns {
+			err := p.db.QueryRowContext(ctx, `
+				SELECT EXISTS (
+					SELECT FROM information_schema.columns 
+					WHERE table_schema = 'public' 
+					AND table_name = $1 
+					AND column_name = $2
+				)
+			`, ts.name, col).Scan(&exists)
+			if err != nil {
+				return fmt.Errorf("check column %s.%s existence: %w", ts.name, col, err)
+			}
+			if !exists {
+				return fmt.Errorf("required column %s.%s is missing", ts.name, col)
+			}
+		}
+	}
+	return nil
+}
+
 func (p *DBProvider) GetRules(ctx context.Context) (RuleSet, error) {
 	// 1. Get latest published ruleset
 	var rulesetID int
