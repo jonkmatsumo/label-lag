@@ -57,12 +57,12 @@ All new features must:
 
 ## Feature Flags Convention
 
-| Flag | Default | Purpose |
-|------|---------|---------|
-| `RULE_STORE_BACKEND` | `inmemory` | Ruleset persistence backend |
-| `INFERENCE_EVENT_SINK` | `stdout` | Inference logging destination |
-| `FEATURE_MATERIALIZATION_MODE` | `legacy` | Feature materialization strategy |
-| `INFERENCE_BACKEND` | `python` | Inference routing backend |
+| Flag | Default | Options | Purpose |
+|------|---------|---------|---------|
+| `RULE_STORE_BACKEND` | `inmemory` | inmemory, postgres | Ruleset persistence backend |
+| `INFERENCE_EVENT_SINK` | `jsonl` | jsonl, stdout, postgres, none | Inference logging destination |
+| `FEATURE_MATERIALIZATION_MODE` | `legacy` | legacy, cursor | Feature materialization strategy |
+| `INFERENCE_BACKEND` | `python` | python, go, go_with_fallback | Inference routing backend |
 
 ## Verification Commands
 
@@ -78,7 +78,7 @@ All new features must:
 
 - [x] Phase 0: Baseline lock + branch protocol
 - [x] Phase 1: Ruleset persistence v2
-- [ ] Phase 2: Durable inference logging v2
+- [x] Phase 2: Durable inference logging v2
 - [ ] Phase 3: Feature materialization cursor mode v2
 - [ ] Phase 4: Go inference routing v2
 - [ ] Phase 5: Regression guardrails
