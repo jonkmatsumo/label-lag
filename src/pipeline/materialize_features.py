@@ -2,19 +2,39 @@
 
 This module provides SQL-based feature engineering that ensures Point-in-Time
 correctness by using window functions that only look at past data (no future leakage).
+
+Supports two materialization modes (via FEATURE_MATERIALIZATION_MODE env var):
+- "legacy" (default): Offset-based batch processing
+- "cursor": Cursor-based pagination using record_id for better scalability
 """
 
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from synthetic_pipeline.db import DatabaseSession
 from synthetic_pipeline.logging import configure_logging, get_logger
+
+MaterializationMode = Literal["legacy", "cursor"]
+
+
+def get_materialization_mode() -> MaterializationMode:
+    """Get the configured feature materialization mode.
+
+    Returns:
+        The mode from FEATURE_MATERIALIZATION_MODE env var, defaulting to "legacy".
+    """
+    mode = os.getenv("FEATURE_MATERIALIZATION_MODE", "legacy")
+    if mode not in ("legacy", "cursor"):
+        return "legacy"
+    return mode  # type: ignore[return-value]
+
 
 # SQL query for computing features with window functions
 # Uses RANGE BETWEEN to ensure Point-in-Time correctness (no future data leakage)
@@ -179,6 +199,106 @@ ON CONFLICT (record_id) DO UPDATE SET
     computed_at = EXCLUDED.computed_at;
 """
 
+# Cursor-based SQL for scalable pagination using record_id
+# This approach uses keyset pagination instead of OFFSET for better performance
+CURSOR_FEATURE_ENGINEERING_SQL = """
+WITH pending_records AS (
+    SELECT gr.record_id
+    FROM generated_records gr
+    WHERE gr.record_id NOT IN (SELECT record_id FROM feature_snapshots)
+      AND gr.record_id > :cursor
+    ORDER BY gr.record_id
+    LIMIT :batch_size
+),
+feature_calculations AS (
+    SELECT
+        gr.record_id,
+        gr.user_id,
+        gr.transaction_timestamp,
+        gr.amount,
+        gr.available_balance,
+
+        COUNT(*) OVER (
+            PARTITION BY gr.user_id
+            ORDER BY gr.transaction_timestamp
+            RANGE BETWEEN INTERVAL '24 hours' PRECEDING AND CURRENT ROW
+        ) AS velocity_24h,
+
+        CASE
+            WHEN AVG(gr.amount) OVER (
+                PARTITION BY gr.user_id
+                ORDER BY gr.transaction_timestamp
+                RANGE BETWEEN INTERVAL '30 days' PRECEDING AND CURRENT ROW
+            ) > 0
+            THEN gr.amount / AVG(gr.amount) OVER (
+                PARTITION BY gr.user_id
+                ORDER BY gr.transaction_timestamp
+                RANGE BETWEEN INTERVAL '30 days' PRECEDING AND CURRENT ROW
+            )
+            ELSE 1.0
+        END AS amount_to_avg_ratio_30d,
+
+        CASE
+            WHEN COALESCE(STDDEV(gr.available_balance) OVER (
+                PARTITION BY gr.user_id
+                ORDER BY gr.transaction_timestamp
+                RANGE BETWEEN INTERVAL '30 days' PRECEDING AND CURRENT ROW
+            ), 0) > 0
+            THEN (
+                gr.available_balance - AVG(gr.available_balance) OVER (
+                    PARTITION BY gr.user_id
+                    ORDER BY gr.transaction_timestamp
+                    RANGE BETWEEN INTERVAL '30 days' PRECEDING AND CURRENT ROW
+                )
+            ) / STDDEV(gr.available_balance) OVER (
+                PARTITION BY gr.user_id
+                ORDER BY gr.transaction_timestamp
+                RANGE BETWEEN INTERVAL '30 days' PRECEDING AND CURRENT ROW
+            )
+            ELSE 0.0
+        END AS balance_volatility_z_score,
+
+        COUNT(*) OVER (
+            PARTITION BY gr.user_id
+            ORDER BY gr.transaction_timestamp
+            RANGE BETWEEN INTERVAL '7 days' PRECEDING AND CURRENT ROW
+        ) AS velocity_7d,
+
+        MAX(gr.amount) OVER (
+            PARTITION BY gr.user_id
+            ORDER BY gr.transaction_timestamp
+            RANGE BETWEEN INTERVAL '30 days' PRECEDING AND CURRENT ROW
+        ) AS max_amount_30d,
+
+        SUM(CASE WHEN gr.is_off_hours_txn THEN 1 ELSE 0 END) OVER (
+            PARTITION BY gr.user_id
+            ORDER BY gr.transaction_timestamp
+            RANGE BETWEEN INTERVAL '7 days' PRECEDING AND CURRENT ROW
+        ) AS off_hours_count_7d,
+
+        gr.bank_connections_count_24h,
+        gr.merchant_risk_score
+
+    FROM generated_records gr
+    WHERE gr.record_id IN (SELECT record_id FROM pending_records)
+)
+SELECT
+    record_id,
+    user_id,
+    velocity_24h::INTEGER,
+    amount_to_avg_ratio_30d::FLOAT,
+    balance_volatility_z_score::FLOAT,
+    jsonb_build_object(
+        'velocity_7d', velocity_7d,
+        'max_amount_30d', max_amount_30d::FLOAT,
+        'off_hours_count_7d', off_hours_count_7d,
+        'bank_connections_24h', bank_connections_count_24h,
+        'merchant_risk_score', merchant_risk_score
+    ) AS experimental_signals
+FROM feature_calculations
+ORDER BY record_id;
+"""
+
 
 class FeatureMaterializer:
     """Materializes features from generated_records into feature_snapshots.
@@ -186,24 +306,34 @@ class FeatureMaterializer:
     Uses SQL window functions to compute point-in-time correct features
     without future data leakage.
 
+    Supports two modes:
+    - "legacy": Offset-based batch processing (default)
+    - "cursor": Cursor-based pagination for better scalability
+
     Attributes:
         db: DatabaseSession instance for database operations.
         log: Logger instance.
+        mode: Materialization mode ("legacy" or "cursor").
     """
 
     def __init__(
         self,
         database_url: str | None = None,
         echo: bool = False,
+        mode: MaterializationMode | None = None,
     ):
         """Initialize the feature materializer.
 
         Args:
             database_url: Database connection URL.
             echo: Whether to echo SQL statements.
+            mode: Materialization mode. If None, uses FEATURE_MATERIALIZATION_MODE
+                  env var, defaulting to "legacy".
         """
         self.db = DatabaseSession(database_url=database_url, echo=echo)
         self.log = get_logger("feature_materializer")
+        self.mode = mode or get_materialization_mode()
+        self.log.info(f"Feature materializer initialized with mode: {self.mode}")
 
     def create_table(self) -> None:
         """Create the feature_snapshots table if it doesn't exist."""
@@ -284,6 +414,63 @@ class FeatureMaterializer:
 
         return len(rows_to_process)
 
+    def compute_features_batch_cursor(
+        self,
+        session: Session,
+        cursor: str,
+        batch_size: int = 1000,
+    ) -> tuple[int, str | None]:
+        """Compute features for a batch of records using cursor pagination.
+
+        Args:
+            session: SQLAlchemy session.
+            cursor: Last processed record_id (empty string for first batch).
+            batch_size: Maximum records to process.
+
+        Returns:
+            Tuple of (records_processed, next_cursor).
+            next_cursor is None when no more records.
+        """
+        result = session.execute(
+            text(CURSOR_FEATURE_ENGINEERING_SQL),
+            {"cursor": cursor, "batch_size": batch_size},
+        )
+        rows = result.fetchall()
+
+        if not rows:
+            return 0, None
+
+        computed_at = datetime.utcnow()
+        last_record_id = None
+
+        for row in rows:
+            (
+                record_id,
+                user_id,
+                velocity_24h,
+                amount_ratio,
+                volatility_z,
+                exp_signals,
+            ) = row
+
+            last_record_id = record_id
+            exp_signals_json = json.dumps(dict(exp_signals)) if exp_signals else None
+
+            session.execute(
+                text(INSERT_FEATURES_SQL),
+                {
+                    "record_id": record_id,
+                    "user_id": user_id,
+                    "velocity_24h": velocity_24h,
+                    "amount_to_avg_ratio_30d": float(amount_ratio),
+                    "balance_volatility_z_score": float(volatility_z),
+                    "experimental_signals": exp_signals_json,
+                    "computed_at": computed_at,
+                },
+            )
+
+        return len(rows), last_record_id
+
     def materialize_all(
         self,
         batch_size: int = 1000,
@@ -291,20 +478,36 @@ class FeatureMaterializer:
     ) -> dict[str, Any]:
         """Materialize features for all pending records.
 
+        Uses the mode specified at initialization (legacy or cursor).
+
         Args:
             batch_size: Records per batch.
             max_batches: Maximum number of batches (None for unlimited).
 
         Returns:
-            Statistics dict with total_processed, batches, duration.
+            Statistics dict with total_processed, batches, duration, mode.
         """
+        if self.mode == "cursor":
+            return self._materialize_cursor_mode(batch_size, max_batches)
+        else:
+            return self._materialize_legacy_mode(batch_size, max_batches)
+
+    def _materialize_legacy_mode(
+        self,
+        batch_size: int,
+        max_batches: int | None,
+    ) -> dict[str, Any]:
+        """Legacy offset-based materialization (default behavior)."""
         start_time = datetime.utcnow()
         total_processed = 0
         batch_count = 0
 
         with self.db.get_session() as session:
             pending = self.get_pending_record_count(session)
-            self.log.info("Starting feature materialization", pending_records=pending)
+            self.log.info(
+                "Starting feature materialization (legacy mode)",
+                pending_records=pending,
+            )
 
             while True:
                 if max_batches is not None and batch_count >= max_batches:
@@ -335,6 +538,64 @@ class FeatureMaterializer:
             "batches": batch_count,
             "duration_seconds": duration,
             "records_per_second": total_processed / duration if duration > 0 else 0,
+            "mode": "legacy",
+        }
+
+        self.log.info("Feature materialization complete", **stats)
+        return stats
+
+    def _materialize_cursor_mode(
+        self,
+        batch_size: int,
+        max_batches: int | None,
+    ) -> dict[str, Any]:
+        """Cursor-based materialization for better scalability."""
+        start_time = datetime.utcnow()
+        total_processed = 0
+        batch_count = 0
+        cursor = ""  # Start from beginning
+
+        with self.db.get_session() as session:
+            pending = self.get_pending_record_count(session)
+            self.log.info(
+                "Starting feature materialization (cursor mode)",
+                pending_records=pending,
+            )
+
+            while True:
+                if max_batches is not None and batch_count >= max_batches:
+                    self.log.info("Max batches reached", max_batches=max_batches)
+                    break
+
+                processed, next_cursor = self.compute_features_batch_cursor(
+                    session, cursor, batch_size
+                )
+
+                if processed == 0 or next_cursor is None:
+                    break
+
+                cursor = next_cursor
+                total_processed += processed
+                batch_count += 1
+
+                self.log.info(
+                    "Batch completed",
+                    batch=batch_count,
+                    processed=processed,
+                    total=total_processed,
+                    cursor=cursor[:20] + "..." if len(cursor) > 20 else cursor,
+                )
+
+            session.commit()
+
+        duration = (datetime.utcnow() - start_time).total_seconds()
+
+        stats = {
+            "total_processed": total_processed,
+            "batches": batch_count,
+            "duration_seconds": duration,
+            "records_per_second": total_processed / duration if duration > 0 else 0,
+            "mode": "cursor",
         }
 
         self.log.info("Feature materialization complete", **stats)
@@ -380,6 +641,7 @@ def materialize_features(
     batch_size: int = 1000,
     max_batches: int | None = None,
     verbose: bool = False,
+    mode: MaterializationMode | None = None,
 ) -> dict[str, Any]:
     """Convenience function to materialize all features.
 
@@ -388,15 +650,18 @@ def materialize_features(
         batch_size: Records per batch.
         max_batches: Maximum batches (None for unlimited).
         verbose: Enable verbose logging.
+        mode: Materialization mode ("legacy" or "cursor"). If None, uses
+              FEATURE_MATERIALIZATION_MODE env var, defaulting to "legacy".
 
     Returns:
-        Statistics dict.
+        Statistics dict including mode used.
     """
     configure_logging(level="DEBUG" if verbose else "INFO")
 
     materializer = FeatureMaterializer(
         database_url=database_url,
         echo=verbose,
+        mode=mode,
     )
 
     # Ensure table exists
