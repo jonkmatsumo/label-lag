@@ -371,3 +371,24 @@ class FeatureMaterializationStateDB(Base):
     last_processed_id: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("now()"), onupdate=text("now()"), nullable=False)
     schema_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+class JobStatus(enum.Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+class JobDB(Base):
+    """Background jobs."""
+    __tablename__ = "jobs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    type: Mapped[str] = mapped_column(String(50), nullable=False) # 'generate_data', 'train'
+    status: Mapped[JobStatus] = mapped_column(Enum(JobStatus), default=JobStatus.PENDING, nullable=False)
+    payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    result: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    error: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("now()"), nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

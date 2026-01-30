@@ -71,6 +71,7 @@ from api.schemas import (
     GenerateDataRequest,
     GenerateDataResponse,
     HealthResponse,
+    JobResponse,
     PublishRuleRequest,
     PublishRuleResponse,
     ReadinessReportResponse,
@@ -217,6 +218,52 @@ async def health_check() -> HealthResponse:
         model_loaded=manager.model_loaded,
         version=version,
     )
+
+
+@app.get("/jobs/{job_id}", response_model=JobResponse, tags=["System"])
+async def get_job_status(job_id: int, user: User = Depends(get_current_user)) -> dict:
+    """Get status of a background job."""
+    from synthetic_pipeline.db.models import JobDB
+    from synthetic_pipeline.db.session import DatabaseSession
+
+    db_session = DatabaseSession()
+    with db_session.get_session() as session:
+        job = session.get(JobDB, job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        
+        return {
+            "job_id": job.id,
+            "type": job.type,
+            "status": job.status.value,
+            "created_at": job.created_at.isoformat(),
+            "started_at": job.started_at.isoformat() if job.started_at else None,
+            "finished_at": job.finished_at.isoformat() if job.finished_at else None,
+            "result": job.result,
+            "error": job.error
+        }
+
+
+@app.get("/jobs", tags=["System"])
+async def list_jobs(limit: int = 10, user: User = Depends(require_admin)) -> list[dict]:
+    """List recent background jobs."""
+    from sqlalchemy import select
+    from synthetic_pipeline.db.models import JobDB
+    from synthetic_pipeline.db.session import DatabaseSession
+
+    db_session = DatabaseSession()
+    with db_session.get_session() as session:
+        stmt = select(JobDB).order_by(JobDB.created_at.desc()).limit(limit)
+        jobs = session.execute(stmt).scalars().all()
+        return [
+            {
+                "id": job.id,
+                "type": job.type,
+                "status": job.status.value,
+                "created_at": job.created_at.isoformat()
+            }
+            for job in jobs
+        ]
 
 
 @app.get(
@@ -633,78 +680,29 @@ async def evaluate_signal(request: SignalRequest) -> SignalResponse:
 
 @app.post(
     "/data/generate",
-    response_model=GenerateDataResponse,
+    response_model=JobResponse,
     tags=["Data Management"],
-    summary="Generate synthetic data",
-    description="Generate synthetic transaction data with configurable fraud rate.",
+    summary="Enqueue synthetic data generation",
+    description="Enqueue a job to generate synthetic transaction data.",
 )
 async def generate_data(
     request: GenerateDataRequest, 
     user: User = Depends(require_admin)
-) -> GenerateDataResponse:
-    """Generate synthetic transaction data.
+) -> dict:
+    """Enqueue synthetic transaction data generation job."""
+    from synthetic_pipeline.db.models import JobDB, JobStatus
+    from synthetic_pipeline.db.session import DatabaseSession
 
-    Args:
-        request: Generation request with num_users, fraud_rate, and drop_existing.
-
-    Returns:
-        GenerateDataResponse with counts of generated records.
-    """
-    try:
-        from pipeline.materialize_features import FeatureMaterializer
-        from synthetic_pipeline.db.models import Base
-        from synthetic_pipeline.db.session import DatabaseSession
-
-        # Assuming DataGenerator is imported or defined elsewhere
-        from synthetic_pipeline.generator import DataGenerator
-
-        # Generate data
-        generator = DataGenerator()
-        result = generator.generate_dataset_with_sequences(
-            num_users=request.num_users,
-            fraud_rate=request.fraud_rate,
+    db_session = DatabaseSession()
+    with db_session.get_session() as session:
+        job = JobDB(
+            type="generate_data",
+            status=JobStatus.PENDING,
+            payload=request.model_dump() if hasattr(request, "model_dump") else request.dict()
         )
-
-        # Count fraud records
-        fraud_count = sum(1 for r in result.records if r.is_fraudulent)
-
-        # Connect to database
-        db_session = DatabaseSession()
-
-        with db_session.get_session() as session:
-            if request.drop_existing:
-                # Drop and recreate tables
-                Base.metadata.drop_all(db_session.engine)
-                Base.metadata.create_all(db_session.engine)
-            else:
-                # Just ensure tables exist
-                Base.metadata.create_all(db_session.engine)
-
-            # Convert and insert records
-            db_records = [_pydantic_to_db(record) for record in result.records]
-            session.bulk_save_objects(db_records)
-
-            # Insert metadata
-            meta_records = [_metadata_to_db(meta) for meta in result.metadata]
-            session.bulk_save_objects(meta_records)
-
-            session.commit()
-
-        # Materialize features (RE-ENABLED, now incremental and efficient)
-        materializer = FeatureMaterializer()
-        materialize_stats = materializer.materialize_all()
-        features_count = materialize_stats.get("total_processed", 0)
-
-        return GenerateDataResponse(
-            success=True,
-            total_records=len(result.records),
-            fraud_records=fraud_count,
-            features_materialized=features_count,
-        )
-
-    except Exception as e:
-        logger.exception("Data generation failed")
-        return GenerateDataResponse(success=False, error=str(e))
+        session.add(job)
+        session.commit()
+        return {"job_id": job.id, "status": job.status.value}
 
 
 @app.delete(
@@ -752,49 +750,29 @@ async def clear_data(user: User = Depends(require_admin)) -> ClearDataResponse:
 
 @app.post(
     "/train",
-    response_model=TrainResponse,
+    response_model=JobResponse,
     tags=["Training"],
     summary="Train a new model",
-    description="Train a new XGBoost model with the specified hyperparameters.",
+    description="Enqueue a job to train a new XGBoost model.",
 )
 async def train_model_endpoint(
     request: TrainRequest,
     user: User = Depends(require_admin)
-) -> TrainResponse:
-    """Train a new model with specified parameters.
+) -> dict:
+    """Enqueue model training job."""
+    from synthetic_pipeline.db.models import JobDB, JobStatus
+    from synthetic_pipeline.db.session import DatabaseSession
 
-    Args:
-        request: Training request with max_depth and training_window_days.
-
-    Returns:
-        TrainResponse with success status and run_id or error.
-    """
-    try:
-        from model.train import train_model
-
-        run_id = train_model(
-            max_depth=request.max_depth,
-            training_window_days=request.training_window_days,
-            feature_columns=request.selected_feature_columns,
-            split_config=request.split_config,
-            n_estimators=request.n_estimators,
-            learning_rate=request.learning_rate,
-            min_child_weight=request.min_child_weight,
-            subsample=request.subsample,
-            colsample_bytree=request.colsample_bytree,
-            gamma=request.gamma,
-            reg_alpha=request.reg_alpha,
-            reg_lambda=request.reg_lambda,
-            random_state=request.random_state,
-            early_stopping_rounds=request.early_stopping_rounds,
-            tuning_config=request.tuning_config,
+    db_session = DatabaseSession()
+    with db_session.get_session() as session:
+        job = JobDB(
+            type="train",
+            status=JobStatus.PENDING,
+            payload=request.model_dump() if hasattr(request, "model_dump") else request.dict()
         )
-        return TrainResponse(success=True, run_id=run_id)
-    except ValueError as e:
-        return TrainResponse(success=False, error=str(e))
-    except Exception as e:
-        logger.exception("Training failed")
-        return TrainResponse(success=False, error=str(e))
+        session.add(job)
+        session.commit()
+        return {"job_id": job.id, "status": job.status.value}
 
 
 # =============================================================================

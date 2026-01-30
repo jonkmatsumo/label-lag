@@ -67,6 +67,15 @@ export async function datasetRoutes(
             drop_existing: { type: 'boolean' },
           },
         },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              job_id: { type: 'number' },
+              status: { type: 'string' },
+            }
+          }
+        }
       },
     },
     async (request: FastifyRequest<{ Body: { num_users: number; fraud_rate: number; drop_existing?: boolean } }>, reply: FastifyReply) => {

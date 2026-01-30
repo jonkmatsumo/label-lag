@@ -12,6 +12,7 @@ services:
       - AWS_ACCESS_KEY_ID=minioadmin
       - AWS_SECRET_ACCESS_KEY=minioadmin
       - PYTHONPATH=/app/src:/app/src/api/proto
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-dev-secret-keep-it-safe}
     networks:
       - labellag_net
     ports:
@@ -24,6 +25,30 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: synthetic-data-worker
+    env_file:
+      - .env
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - PYTHONPATH=/app/src:/app/src/api/proto
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-dev-secret-keep-it-safe}
+    networks:
+      - labellag_net
+    command: [ "uv", "run", "python", "src/api/worker.py" ]
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
 
   analytics-crud:
     build:

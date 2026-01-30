@@ -339,6 +339,16 @@ class ClearDataResponse(BaseModel):
     error: str | None = Field(None, description="Error message if clearing failed")
 
 
+class JobResponse(BaseModel):
+    """Response schema for job enqueuing and status."""
+
+    job_id: int = Field(..., description="Background job identifier")
+    status: str = Field(..., description="Current job status")
+    type: str | None = Field(None, description="Job type")
+    result: dict[str, Any] | None = Field(None, description="Job result if completed")
+    error: str | None = Field(None, description="Error message if failed")
+
+
 # =============================================================================
 # Rule Inspector Schemas (Phase 1)
 # =============================================================================
