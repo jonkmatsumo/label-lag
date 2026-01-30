@@ -101,10 +101,14 @@ services:
     environment:
       - PORT=8081
       - INFERENCE_GATEWAY_PYTHON_GRPC_ADDR=grpc-inference:50052
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-synthetic}:${POSTGRES_PASSWORD:-synthetic_dev_password}@db:5432/${POSTGRES_DB:-synthetic_data}?sslmode=disable
     networks:
       - labellag_net
     ports:
       - "${INFERENCE_GATEWAY_PORT:-8081}:8081"
+    depends_on:
+      db:
+        condition: service_healthy
 
   dashboard:
     build:
