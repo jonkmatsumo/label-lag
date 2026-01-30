@@ -101,6 +101,12 @@ class UserState:
 
 
 @dataclass
+class UserSequenceResult:
+    """Result of generating a user's transaction sequence."""
+    records: list[GeneratedRecord]
+    metadata: list[EvaluationMetadata]
+
+@dataclass
 class TransactionResult:
     """Result of generating a single transaction."""
 

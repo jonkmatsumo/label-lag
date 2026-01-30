@@ -6,6 +6,7 @@ from generator.core import (
     LabelDelaySimulator,
     SleeperProfile,
     UserSimulator,
+    UserSequenceResult,
     generate_and_persist,
 )
 
@@ -15,5 +16,6 @@ __all__ = [
     "LabelDelaySimulator",
     "SleeperProfile",
     "UserSimulator",
+    "UserSequenceResult",
     "generate_and_persist",
 ]

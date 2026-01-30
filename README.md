@@ -221,6 +221,37 @@ Fraud patterns used by the generator:
 | Bust-Out | Build trust then fraud | 20-50 legit transactions, then >500% spike |
 | Sleeper ATO | Dormant then active | 30+ days dormancy, link burst, high-value withdrawal |
 
+## Ops Runbook
+
+### Authentication
+The system uses JWT-based authentication. In development, you can obtain an admin token using:
+```bash
+curl -X POST http://localhost:3210/bff/v1/auth/dev-login -H "Content-Type: application/json" -d '{"role": "admin"}'
+```
+Include this token in the `Authorization: Bearer <token>` header for all protected API/BFF calls.
+
+### Rule Lifecycle & Persistence
+Rules are persisted in Postgres. To verify state or recover:
+- **Draft Store**: Rehydrates from the `rules` and `rule_versions` tables on startup.
+- **Production Ruleset**: Loaded from the `published_rulesets` table (latest snapshot).
+- **Restarting**: `docker compose restart api` will reload the rules from DB, preserving any published or draft state.
+
+### Monitoring Inference
+Inference events are durably logged to the `inference_events` table and backed up to `data/inference_events.jsonl` (mounted volume).
+Query recent events:
+```bash
+curl -H "Authorization: Bearer <token>" http://localhost:8100/inference/events?limit=50
+```
+
+### Background Jobs
+Data generation and training are async. Use the Jobs API to monitor:
+```bash
+curl -H "Authorization: Bearer <token>" http://localhost:8100/jobs/<job_id>
+```
+
+### Feature Materialization
+Materialization is now incremental and cursor-based (table `feature_materialization_state`). It runs automatically during data generation and on-demand during inference if stale features are detected.
+
 ## Environment Variables
 
 Copy `.env.example` to `.env` and adjust as needed.

@@ -12,6 +12,7 @@ from pathlib import Path
 from threading import Lock
 
 from api.rules import Rule, RuleStatus
+from api.rule_store import RuleStore
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,18 @@ class DraftRuleStore:
             temp_path.replace(self.storage_path)
         except OSError as e:
             logger.error(f"Failed to save draft rules to {self.storage_path}: {e}")
+
+    def rehydrate_from_db(self) -> None:
+        """Re-populate local cache from Postgres (System of Record)."""
+        logger.info("Rehydrating DraftRuleStore from DB...")
+        try:
+            db_rules = RuleStore().list_draft_rules()
+            with self._lock:
+                for rule in db_rules:
+                    self._rules[rule.id] = rule
+            logger.info(f"Rehydrated {len(db_rules)} rules from DB")
+        except Exception as e:
+            logger.error(f"Failed to rehydrate rules from DB: {e}")
 
     def save(self, rule: Rule) -> None:
         """Save a draft rule or update an existing rule's status.
@@ -219,15 +232,14 @@ _global_draft_store: DraftRuleStore | None = None
 
 
 def get_draft_store() -> DraftRuleStore:
-    """Get the global draft rule store instance.
-
-    Returns:
-        Global DraftRuleStore instance.
-    """
+    """Get the global draft rule store instance."""
     global _global_draft_store
     if _global_draft_store is None:
         storage_path = os.getenv("DRAFT_STORAGE_PATH")
         _global_draft_store = DraftRuleStore(storage_path=storage_path)
+        # Rehydrate from DB if cache is empty
+        if not _global_draft_store._rules:
+            _global_draft_store.rehydrate_from_db()
     return _global_draft_store
 
 

@@ -155,3 +155,27 @@ class RuleStore:
                         status=r.status.value
                     ))
             return rules
+
+    def get_rule(self, rule_id: str) -> Rule | None:
+        """Get a logical rule and its latest version content."""
+        with self.db_session.get_session() as session:
+            db_rule = session.get(RuleDB, rule_id)
+            if not db_rule or db_rule.status == RuleStatusDB.ARCHIVED:
+                return None
+            
+            v_stmt = select(RuleVersionDB).where(RuleVersionDB.rule_id == rule_id).order_by(RuleVersionDB.created_at.desc()).limit(1)
+            v = session.execute(v_stmt).scalar_one_or_none()
+            if not v:
+                return None
+                
+            return Rule(
+                id=db_rule.id,
+                field=v.field,
+                op=v.op,
+                value=v.value["v"] if isinstance(v.value, dict) and "v" in v.value else v.value,
+                action=v.action,
+                score=v.score,
+                severity=v.severity,
+                reason=v.reason,
+                status=db_rule.status.value
+            )
