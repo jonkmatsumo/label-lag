@@ -758,7 +758,8 @@ func main() {
 
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
+		slog.Error("failed to open database connection", "error", err)
+		os.Exit(1)
 	}
 	defer db.Close()
 
@@ -767,9 +768,14 @@ func main() {
 	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(time.Hour)
 
-	if err := db.Ping(); err != nil {
-		slog.Warn("failed to ping database", "error", err)
+	// Ping is essential to verify connection
+	pCtx, pCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer pCancel()
+	if err := db.PingContext(pCtx); err != nil {
+		slog.Error("failed to ping database", "error", err)
+		os.Exit(1)
 	}
+	slog.Info("database connection established")
 
 	// Perform schema validation on startup
 	expectedSchema := []schemadb.TableSchema{
