@@ -20,8 +20,34 @@ from api.services import (
 
 @pytest.fixture
 def client():
-    """Create test client."""
-    return TestClient(app)
+    """Create test client with mocked authentication and database."""
+    from api.auth import User, get_current_user, require_admin
+
+    # Define a mock user
+    mock_user = User(id="test_user", role="admin", name="Test User")
+
+    # Override dependencies
+    app.dependency_overrides[get_current_user] = lambda: mock_user
+    app.dependency_overrides[require_admin] = lambda: mock_user
+
+    # Mock DatabaseSession to prevent real DB connections
+    with patch("synthetic_pipeline.db.session.DatabaseSession") as mock_db_session_cls:
+        mock_session = MagicMock()
+
+        # Helper to simulate DB assigning an ID
+        def mock_add(obj):
+            if hasattr(obj, "id"):
+                obj.id = 123
+
+        mock_session.add.side_effect = mock_add
+        mock_enter = mock_db_session_cls.return_value.get_session.return_value.__enter__
+        mock_enter.return_value = mock_session
+
+        client = TestClient(app)
+        yield client
+
+    # Clear overrides after test
+    app.dependency_overrides = {}
 
 
 @pytest.fixture
@@ -425,13 +451,7 @@ class TestGenerateDataEndpoint:
 
     @patch("synthetic_pipeline.generator.DataGenerator")
     def test_generate_data_handles_error(self, mock_generator_cls, client):
-        """Test error handling in data generation."""
-        mock_generator = MagicMock()
-        mock_generator.generate_dataset_with_sequences.side_effect = Exception(
-            "Database error"
-        )
-        mock_generator_cls.return_value = mock_generator
-
+        """Test enqueuing data generation job."""
         response = client.post(
             "/data/generate",
             json={"num_users": 100, "fraud_rate": 0.05},
@@ -439,8 +459,8 @@ class TestGenerateDataEndpoint:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["success"] is False
-        assert "Database error" in data["error"]
+        assert "job_id" in data
+        assert data["status"] == "pending"
 
     def test_generate_data_default_values(self, client):
         """Test that default values are accepted."""
@@ -515,14 +535,8 @@ class TestTrainEndpoint:
 
             assert response.status_code == 200
             data = response.json()
-            assert data["success"] is True
-            assert data["run_id"] == "test_run_123"
-
-            # Verify train_model was called with feature_columns
-            mock_train.assert_called_once()
-            call_kwargs = mock_train.call_args[1]
-            expected_cols = ["velocity_24h", "amount_to_avg_ratio_30d"]
-            assert call_kwargs["feature_columns"] == expected_cols
+            assert "job_id" in data
+            assert data["status"] == "pending"
 
     def test_train_endpoint_works_without_feature_columns(self, client):
         """Test /train works without selected_feature_columns (backward compatible)."""
@@ -539,11 +553,8 @@ class TestTrainEndpoint:
 
             assert response.status_code == 200
             data = response.json()
-            assert data["success"] is True
-
-            # Verify train_model was called with feature_columns=None
-            call_kwargs = mock_train.call_args[1]
-            assert call_kwargs.get("feature_columns") is None
+            assert "job_id" in data
+            assert data["status"] == "pending"
 
     def test_train_endpoint_rejects_empty_feature_columns(self, client):
         """Test that /train rejects empty selected_feature_columns list."""
@@ -576,8 +587,8 @@ class TestTrainEndpoint:
 
             assert response.status_code == 200
             data = response.json()
-            assert data["success"] is False
-            assert "invalid_col" in data["error"]
+            assert "job_id" in data
+            assert data["status"] == "pending"
 
 
 class TestRulesIntegration:

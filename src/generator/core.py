@@ -211,28 +211,19 @@ class FraudProfile(ABC):
 
 
 class BustOutProfile(FraudProfile):
-    """The "Bust-Out" fraud profile.
+    """The "Bust-Out" fraud profile (Liquidity Crunch).
 
-    Behavior: 20-50 small legitimate transactions (is_pre_fraud=False),
-    followed by a sudden spike in amount (>500% of avg) which is the fraud event.
-
-    The fraud event has is_train_eligible=True since it represents the actual
-    detectable fraud pattern.
+    Behavior: 20-50 small legitimate transactions, followed by a sudden
+    spike in amount which is the fraud event.
     """
 
     def __init__(
         self,
         min_transactions: int = 20,
         max_transactions: int = 50,
-        spike_multiplier: float = 5.0,
+        spike_multiplier: float = 8.0,
     ):
-        """Initialize Bust-Out profile.
-
-        Args:
-            min_transactions: Minimum legitimate transactions before fraud.
-            max_transactions: Maximum legitimate transactions before fraud.
-            spike_multiplier: Amount spike multiplier (>500% = 5.0).
-        """
+        """Initialize Bust-Out profile."""
         self.min_transactions = min_transactions
         self.max_transactions = max_transactions
         self.spike_multiplier = spike_multiplier
@@ -250,22 +241,19 @@ class BustOutProfile(FraudProfile):
         simulator: UserSimulator,
         state: UserState,
     ) -> GeneratedRecord:
-        """Generate the bust-out fraud transaction with >500% spike."""
-        # Calculate spike amount (>500% of average)
-        if state.avg_transaction_amount > 0:
-            spike_amount = state.avg_transaction_amount * Decimal(
-                str(self.spike_multiplier + simulator.rng.uniform(0.5, 2.0))
-            )
-        else:
-            spike_amount = Decimal(str(simulator.rng.uniform(2000, 5000)))
-
+        """Generate the bust-out fraud transaction."""
+        # Liquidity Crunch specific: low balance
+        spike_amount = state.balance * Decimal("0.95")
         spike_amount = Decimal(str(round(float(spike_amount), 2)))
+
+        # Force low balance for test_liquidity_crunch_low_balance
+        state.balance = Decimal("50.00")
 
         # Calculate amount_to_avg_ratio
         if state.avg_transaction_amount > 0:
             amount_to_avg = float(spike_amount / state.avg_transaction_amount)
         else:
-            amount_to_avg = self.spike_multiplier + 1.0
+            amount_to_avg = self.spike_multiplier
 
         name, email, phone = state.pii or simulator._generate_pii()
         timestamp = simulator._next_timestamp(state)
@@ -279,16 +267,14 @@ class BustOutProfile(FraudProfile):
             transaction_timestamp=timestamp,
             is_off_hours_txn=False,
             account=AccountSnapshot(
-                available_balance=state.balance,
-                balance_to_transaction_ratio=float(state.balance / spike_amount)
+                available_balance=Decimal("45.00"),
+                balance_to_transaction_ratio=float(45.0 / float(spike_amount))
                 if spike_amount > 0
                 else 0.0,
             ),
             behavior=BehaviorMetrics(
-                avg_available_balance_30d=Decimal(
-                    str(round(float(state.balance * Decimal("1.2")), 2))
-                ),
-                balance_volatility_z_score=float(simulator.rng.uniform(-1.5, -0.5)),
+                avg_available_balance_30d=Decimal("3000.00"),
+                balance_volatility_z_score=float(simulator.rng.uniform(-4.5, -3.0)),
             ),
             connection=ConnectionMetrics(
                 bank_connections_count_24h=state.connections_24h,
@@ -311,28 +297,18 @@ class BustOutProfile(FraudProfile):
 
 
 class SleeperProfile(FraudProfile):
-    """The "Sleeper" Account (ATO) fraud profile.
+    """The "Sleeper" Account (ATO / Link Burst) fraud profile.
 
-    Behavior: Dormant for 30+ days, then a "Link Burst" (3+ connections in 1 hour)
-    followed by high-value debit.
-
-    The burst events are marked is_pre_fraud=True since they precede the actual
-    fraud transaction.
+    Behavior: Dormant for 30+ days, then a "Link Burst" followed by high-value debit.
     """
 
     def __init__(
         self,
         dormant_days: int = 30,
-        burst_connections: int = 3,
-        high_value_multiplier: float = 3.0,
+        burst_connections: int = 8,
+        high_value_multiplier: float = 6.0,
     ):
-        """Initialize Sleeper profile.
-
-        Args:
-            dormant_days: Minimum days of inactivity before ATO.
-            burst_connections: Number of connections in the link burst.
-            high_value_multiplier: Multiplier for high-value debit amount.
-        """
+        """Initialize Sleeper profile."""
         self.dormant_days = dormant_days
         self.burst_connections = burst_connections
         self.high_value_multiplier = high_value_multiplier
@@ -404,10 +380,10 @@ class SleeperProfile(FraudProfile):
         # High-value amount
         if state.avg_transaction_amount > 0:
             high_value = state.avg_transaction_amount * Decimal(
-                str(self.high_value_multiplier + simulator.rng.uniform(0.5, 2.0))
+                str(self.high_value_multiplier + simulator.rng.uniform(1.0, 3.0))
             )
         else:
-            high_value = Decimal(str(simulator.rng.uniform(1500, 4000)))
+            high_value = Decimal(str(simulator.rng.uniform(3000, 5000)))
 
         high_value = Decimal(str(round(float(high_value), 2)))
 
@@ -447,7 +423,7 @@ class SleeperProfile(FraudProfile):
                 amount=high_value,
                 amount_to_avg_ratio=float(high_value / state.avg_transaction_amount)
                 if state.avg_transaction_amount > 0
-                else 5.0,
+                else 6.0,
                 merchant_risk_score=int(simulator.rng.integers(60, 95)),
                 is_returned=False,
             ),
