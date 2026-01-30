@@ -76,8 +76,8 @@ All new features must:
 
 ## Phase Checklist
 
-- [ ] Phase 0: Baseline lock + branch protocol
-- [ ] Phase 1: Ruleset persistence v2
+- [x] Phase 0: Baseline lock + branch protocol
+- [x] Phase 1: Ruleset persistence v2
 - [ ] Phase 2: Durable inference logging v2
 - [ ] Phase 3: Feature materialization cursor mode v2
 - [ ] Phase 4: Go inference routing v2
