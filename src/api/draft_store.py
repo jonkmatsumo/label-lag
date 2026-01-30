@@ -262,3 +262,15 @@ def set_draft_store(store: DraftRuleStore) -> None:
     """
     global _global_draft_store
     _global_draft_store = store
+
+
+def reset_draft_store() -> None:
+    """Reset the global draft rule store instance.
+
+    Clears the cached store instance so next call to get_draft_store()
+    will create a fresh instance based on current environment config.
+
+    This is primarily useful in tests to ensure clean state between tests.
+    """
+    global _global_draft_store
+    _global_draft_store = None
