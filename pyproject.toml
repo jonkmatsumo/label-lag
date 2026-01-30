@@ -28,6 +28,7 @@ dependencies = [
     "optuna-integration[xgboost]",
     "grpcio>=1.76.0",
     "grpcio-tools>=1.76.0",
+    "pyjwt>=2.8.0",
 ]
 
 [project.scripts]

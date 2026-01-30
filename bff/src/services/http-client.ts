@@ -16,6 +16,7 @@ export interface RequestOptions {
   timeout?: number;
   target?: 'fastapi' | 'gateway' | 'mlflow';
   query?: Record<string, string | number | boolean | undefined>;
+  authToken?: string;
 }
 
 export interface HttpResponse<T> {
@@ -81,7 +82,7 @@ export class HttpClient {
   }
 
   private async executeRequest<T>(options: RequestOptions, attempt: number): Promise<HttpResponse<T>> {
-    const { method, path, body, requestId, timeout, target = 'fastapi', query } = options;
+    const { method, path, body, requestId, timeout, target = 'fastapi', query, authToken } = options;
     const baseUrl = this.getBaseUrl(target);
     
     // Construct URL with query params
@@ -107,6 +108,10 @@ export class HttpClient {
         'Content-Type': 'application/json',
         'X-Request-Id': requestId,
       };
+
+      if (authToken) {
+        headers['Authorization'] = authToken;
+      }
 
       const response = await request(url, {
         method,

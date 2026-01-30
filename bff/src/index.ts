@@ -1,10 +1,12 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import jwt from '@fastify/jwt';
 import pino from 'pino';
 import { loadConfig } from './config.js';
 import { requestIdMiddleware } from './middleware/request-id.js';
 import { HttpClient, UpstreamError } from './services/http-client.js';
 import { SimpleCache } from './services/cache.js';
+import { authenticate, authorize } from './middleware/auth.js';
 import {
   healthRoutes,
   evaluateRoutes,
@@ -57,6 +59,11 @@ async function main(): Promise<void> {
     credentials: true,
   });
 
+  // Register JWT
+  await fastify.register(jwt, {
+    secret: config.authJwtSecret,
+  });
+
   // Register request ID middleware
   fastify.addHook('onRequest', requestIdMiddleware);
 
@@ -98,15 +105,39 @@ async function main(): Promise<void> {
 
   // Register routes
   await fastify.register(healthRoutes, { httpClient });
+
+  // Dev-only login endpoint
+  fastify.post('/bff/v1/auth/dev-login', async (request) => {
+    const { role = 'admin' } = request.body as { role?: string };
+    const token = fastify.jwt.sign({ 
+      sub: 'dev-user', 
+      role: role as 'admin' | 'scoring-only',
+      name: 'Dev User' 
+    });
+    return { token };
+  });
+
   await fastify.register(evaluateRoutes, { httpClient, config });
-  await fastify.register(modelRoutes, { httpClient });
-  await fastify.register(rulesRoutes, { httpClient });
-  await fastify.register(backtestRoutes, { httpClient });
-  await fastify.register(analyticsRoutes, { httpClient, cache });
-  await fastify.register(monitoringRoutes, { httpClient });
-  await fastify.register(rulesDetailRoutes, { httpClient });
-  await fastify.register(datasetRoutes, { httpClient });
-  await fastify.register(mlflowRoutes, { httpClient, mlflowTrackingUri: config.mlflowTrackingUri });
+  
+  // Protected routes
+  await fastify.register(async (protectedPart) => {
+    protectedPart.addHook('preHandler', authenticate);
+    
+    await protectedPart.register(analyticsRoutes, { httpClient, cache });
+    await protectedPart.register(monitoringRoutes, { httpClient });
+    
+    // Admin-only routes
+    await protectedPart.register(async (adminPart) => {
+      adminPart.addHook('preHandler', authorize(['admin']));
+      
+      await adminPart.register(modelRoutes, { httpClient });
+      await adminPart.register(rulesRoutes, { httpClient });
+      await adminPart.register(backtestRoutes, { httpClient });
+      await adminPart.register(rulesDetailRoutes, { httpClient });
+      await adminPart.register(datasetRoutes, { httpClient });
+      await adminPart.register(mlflowRoutes, { httpClient, mlflowTrackingUri: config.mlflowTrackingUri });
+    });
+  });
 
   // Start server
   try {

@@ -20,6 +20,7 @@ export async function datasetRoutes(
           method: 'GET',
           path: '/analytics/overview', // Proxies to Python API
           requestId: request.requestId,
+          authToken: request.headers.authorization,
         });
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
@@ -40,6 +41,7 @@ export async function datasetRoutes(
           method: 'GET',
           path: '/analytics/schema',
           requestId: request.requestId,
+          authToken: request.headers.authorization,
         });
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
@@ -75,6 +77,7 @@ export async function datasetRoutes(
           body: request.body,
           requestId: request.requestId,
           timeout: 300000, // 5 min timeout for generation
+          authToken: request.headers.authorization,
         });
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
@@ -96,6 +99,7 @@ export async function datasetRoutes(
           path: '/data/clear',
           requestId: request.requestId,
           timeout: 60000, // 1 min timeout
+          authToken: request.headers.authorization,
         });
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
@@ -128,6 +132,7 @@ export async function datasetRoutes(
           path: '/analytics/feature-sample',
           query: request.query as Record<string, string | number | boolean>,
           requestId: request.requestId,
+          authToken: request.headers.authorization,
         });
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {

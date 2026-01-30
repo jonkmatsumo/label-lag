@@ -8,9 +8,25 @@ const BFF_BASE_URL = import.meta.env.VITE_BFF_BASE_URL ?? '/api';
 
 export class ApiClient {
   private baseUrl: string;
+  private token: string | null = null;
 
   constructor(baseUrl: string = BFF_BASE_URL) {
     this.baseUrl = baseUrl;
+    // Load from local storage on init
+    this.token = localStorage.getItem('auth_token');
+  }
+
+  setToken(token: string | null): void {
+    this.token = token;
+    if (token) {
+      localStorage.setItem('auth_token', token);
+    } else {
+      localStorage.removeItem('auth_token');
+    }
+  }
+
+  getToken(): string | null {
+    return this.token;
   }
 
   private async request<T>(
@@ -25,6 +41,10 @@ export class ApiClient {
       'X-Request-Id': requestId,
       ...options.headers,
     };
+
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
+    }
 
     try {
       const response = await fetch(url, {

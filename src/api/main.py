@@ -10,12 +10,14 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import JSONResponse
 from google.protobuf.json_format import MessageToDict
 from sqlalchemy import text
+from fastapi import FastAPI, HTTPException, Query, Depends
+from fastapi.responses import JSONResponse
 
 from api.analytics import RuleHealthEvaluator
+from api.auth import get_current_user, require_admin, User
+
 from api.attribution import AttributionService
 from api.audit import get_audit_logger
 from api.backtest import (
@@ -462,7 +464,10 @@ Requires:
 - Actor must be provided
 """,
 )
-async def deploy_model(request: DeployModelRequest) -> DeployModelResponse:
+async def deploy_model(
+    request: DeployModelRequest,
+    user: User = Depends(require_admin)
+) -> DeployModelResponse:
     """Deploy a model to production.
 
     Deploys the current Production stage model from MLflow to live traffic.
@@ -633,7 +638,10 @@ async def evaluate_signal(request: SignalRequest) -> SignalResponse:
     summary="Generate synthetic data",
     description="Generate synthetic transaction data with configurable fraud rate.",
 )
-async def generate_data(request: GenerateDataRequest) -> GenerateDataResponse:
+async def generate_data(
+    request: GenerateDataRequest, 
+    user: User = Depends(require_admin)
+) -> GenerateDataResponse:
     """Generate synthetic transaction data.
 
     Args:
@@ -706,7 +714,7 @@ async def generate_data(request: GenerateDataRequest) -> GenerateDataResponse:
     summary="Clear all data",
     description="Delete all records from the database tables.",
 )
-async def clear_data() -> ClearDataResponse:
+async def clear_data(user: User = Depends(require_admin)) -> ClearDataResponse:
     """Clear all data from the database.
 
     Returns:
@@ -749,7 +757,10 @@ async def clear_data() -> ClearDataResponse:
     summary="Train a new model",
     description="Train a new XGBoost model with the specified hyperparameters.",
 )
-async def train_model_endpoint(request: TrainRequest) -> TrainResponse:
+async def train_model_endpoint(
+    request: TrainRequest,
+    user: User = Depends(require_admin)
+) -> TrainResponse:
     """Train a new model with specified parameters.
 
     Args:
@@ -1433,7 +1444,10 @@ The rule will be validated for schema correctness, conflicts, and
 redundancies. Validation results are returned but do not block creation.
 """,
 )
-async def create_draft_rule(request: DraftRuleCreateRequest) -> DraftRuleCreateResponse:
+async def create_draft_rule(
+    request: DraftRuleCreateRequest,
+    user: User = Depends(require_admin)
+) -> DraftRuleCreateResponse:
     """Create a new draft rule.
 
     Args:
