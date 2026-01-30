@@ -392,3 +392,26 @@ class JobDB(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("now()"), nullable=False)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+class InferenceEventDB(Base):
+    """Structured record of an inference event."""
+    __tablename__ = "inference_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ts: Mapped[datetime] = mapped_column(DateTime, server_default=text("now()"), nullable=False, index=True)
+    request_id: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True)
+    user_id: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    
+    model_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    rules_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    
+    model_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    final_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    
+    # Details about rule matches and their impact
+    rule_impacts: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    
+    # Metadata
+    latency_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    is_shadow: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    raw_request: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

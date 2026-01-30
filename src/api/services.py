@@ -2,6 +2,7 @@
 
 import logging
 import uuid
+import json
 from dataclasses import dataclass, field
 from decimal import Decimal
 
@@ -161,6 +162,7 @@ class SignalEvaluator:
             from datetime import datetime, timezone
 
             from api.inference_log import InferenceEvent, InferenceLogger
+            from synthetic_pipeline.db.models import InferenceEventDB
 
             event_logger = InferenceLogger()
             event = InferenceEvent(
@@ -173,6 +175,25 @@ class SignalEvaluator:
                 rule_impacts=impact_objects,
             )
             event_logger.log_event(event)
+
+            # Persistent DB logging
+            with self.db_session.get_session() as session:
+                db_event = InferenceEventDB(
+                    request_id=request_id,
+                    user_id=request.user_id,
+                    model_version=model_version,
+                    rules_version=manager.rules_version or "unknown",
+                    model_score=score,
+                    final_score=final_score,
+                    rule_impacts=[{
+                        "rule_id": ri.rule_id,
+                        "is_shadow": ri.is_shadow,
+                        "score_delta": ri.score_delta
+                    } for ri in impact_objects],
+                    raw_request=json.loads(request.model_dump_json()) if hasattr(request, "model_dump_json") else json.loads(request.json())
+                )
+                session.add(db_event)
+                session.commit()
 
         except Exception as e:
             # Don't fail inference if metrics/logging fails

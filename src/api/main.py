@@ -678,6 +678,41 @@ async def evaluate_signal(request: SignalRequest) -> SignalResponse:
         ) from e
 
 
+@app.get("/inference/events", tags=["Evaluation"])
+async def list_inference_events(
+    limit: int = 50, 
+    user_id: str | None = None,
+    user: User = Depends(get_current_user)
+) -> list[dict]:
+    """Query durable inference logs."""
+    from sqlalchemy import select
+    from synthetic_pipeline.db.models import InferenceEventDB
+    from synthetic_pipeline.db.session import DatabaseSession
+
+    db_session = DatabaseSession()
+    with db_session.get_session() as session:
+        stmt = select(InferenceEventDB).order_by(InferenceEventDB.ts.desc())
+        if user_id:
+            stmt = stmt.where(InferenceEventDB.user_id == user_id)
+        stmt = stmt.limit(limit)
+        
+        events = session.execute(stmt).scalars().all()
+        return [
+            {
+                "id": e.id,
+                "ts": e.ts.isoformat(),
+                "request_id": e.request_id,
+                "user_id": e.user_id,
+                "model_version": e.model_version,
+                "rules_version": e.rules_version,
+                "model_score": e.model_score,
+                "final_score": e.final_score,
+                "rule_impacts": e.rule_impacts
+            }
+            for e in events
+        ]
+
+
 @app.post(
     "/data/generate",
     response_model=JobResponse,

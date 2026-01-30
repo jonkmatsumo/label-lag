@@ -17,6 +17,8 @@ services:
       - labellag_net
     ports:
       - "${API_PORT:-8000}:8000"
+    volumes:
+      - labellag_data:/app/data
     command: [ "uv", "run", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000" ]
     restart: unless-stopped
     healthcheck:
@@ -42,6 +44,8 @@ services:
       - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-dev-secret-keep-it-safe}
     networks:
       - labellag_net
+    volumes:
+      - labellag_data:/app/data
     command: [ "uv", "run", "python", "src/api/worker.py" ]
     restart: unless-stopped
     depends_on:
@@ -195,3 +199,7 @@ services:
 # Network labellag_net is defined in docker-compose.infra.yml.
 # Run app with infra: -f docker-compose.infra.yml -f docker-compose.app.yml,
 # or use the convenience wrapper (include). Do not run app compose alone.
+
+volumes:
+  labellag_data:
+    name: labellag_data
