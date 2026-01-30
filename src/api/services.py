@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 
 import numpy as np
-from sqlalchemy import text
+from sqlalchemy import text, select, func
 
 from api.rules import RuleResult, evaluate_rules
 from api.schemas import (
@@ -17,6 +17,8 @@ from api.schemas import (
 )
 from model.evaluate import ScoreCalibrator
 from synthetic_pipeline.db.session import DatabaseSession
+from synthetic_pipeline.db.models import GeneratedRecordDB, FeatureSnapshotDB
+from pipeline.materialize_features import FeatureMaterializer
 
 logger = logging.getLogger(__name__)
 
@@ -275,10 +277,11 @@ class SignalEvaluator:
             return self._calculate_probability(features)
 
     def _fetch_features(self, request: SignalRequest) -> FeatureVector:
-        """Fetch features for the user from feature store.
+        """Fetch features for the user from feature store with freshness check.
 
-        Queries the feature_snapshots table for the most recent features
-        for the given user. Falls back to simulated features if not found.
+        Queries the feature_snapshots table. If the snapshot is missing or stale
+        (behind the latest generated record for this user), it triggers an
+        on-demand materialization.
 
         Args:
             request: The signal request containing user_id.
@@ -288,35 +291,47 @@ class SignalEvaluator:
         """
         try:
             with self.db_session.get_session() as session:
-                # Get most recent feature snapshot for this user
-                query = text("""
-                    SELECT
-                        velocity_24h,
-                        amount_to_avg_ratio_30d,
-                        balance_volatility_z_score
-                    FROM feature_snapshots
-                    WHERE user_id = :user_id
-                    ORDER BY computed_at DESC
-                    LIMIT 1
-                """)
-                result = session.execute(query, {"user_id": request.user_id})
-                row = result.fetchone()
+                # 1. Get latest record_id for this user
+                latest_rec_stmt = select(GeneratedRecordDB.record_id).where(
+                    GeneratedRecordDB.user_id == request.user_id
+                ).order_by(GeneratedRecordDB.id.desc()).limit(1)
+                latest_rec_id = session.execute(latest_rec_stmt).scalar_one_or_none()
 
-                if row is not None:
-                    logger.debug(f"Found features for user {request.user_id}")
-                    return FeatureVector(
-                        velocity_24h=int(row.velocity_24h),
-                        amount_to_avg_ratio_30d=float(row.amount_to_avg_ratio_30d),
-                        balance_volatility_z_score=float(
-                            row.balance_volatility_z_score
-                        ),
-                        bank_connections_24h=0,  # Not in feature_snapshots yet
-                        merchant_risk_score=0,  # Not in feature_snapshots yet
-                        has_history=True,
-                        transaction_amount=request.amount,
-                    )
-                else:
-                    logger.debug(f"No features found for user {request.user_id}")
+                if latest_rec_id:
+                    # 2. Get latest snapshot for this user
+                    snap_stmt = select(FeatureSnapshotDB).where(
+                        FeatureSnapshotDB.user_id == request.user_id
+                    ).order_by(FeatureSnapshotDB.computed_at.desc()).limit(1)
+                    snapshot = session.execute(snap_stmt).scalar_one_or_none()
+
+                    # 3. Check staleness: if snapshot missing OR behind latest record
+                    is_stale = snapshot is None or snapshot.record_id != latest_rec_id
+                    
+                    if is_stale:
+                        logger.info(f"Features stale for user {request.user_id}, materializing on-demand")
+                        materializer = FeatureMaterializer(database_url=self.db_session.database_url)
+                        # Compute features for all users who have new data (including this one)
+                        # In a high-traffic system, we might isolate this user, but incremental
+                        # batching is efficient enough for now.
+                        materializer.materialize_all(batch_size=1000)
+                        
+                        # Re-fetch snapshot after materialization
+                        session.expire_all()
+                        snapshot = session.execute(snap_stmt).scalar_one_or_none()
+
+                    if snapshot:
+                        logger.debug(f"Found fresh features for user {request.user_id}")
+                        return FeatureVector(
+                            velocity_24h=int(snapshot.velocity_24h),
+                            amount_to_avg_ratio_30d=float(snapshot.amount_to_avg_ratio_30d),
+                            balance_volatility_z_score=float(snapshot.balance_volatility_z_score),
+                            bank_connections_24h=0,
+                            merchant_risk_score=0,
+                            has_history=True,
+                            transaction_amount=request.amount,
+                        )
+
+                logger.debug(f"No history found for user {request.user_id}")
 
         except Exception as e:
             logger.warning(f"Failed to fetch features from DB: {e}")
