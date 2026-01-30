@@ -1,4 +1,12 @@
-.PHONY: install test lint clean infra-up infra-down infra-logs app-up app-down app-build app-rebuild app-logs rebuild-api rebuild-bff rebuild-web bff-test web-test reset-db reset-minio reset-all
+.PHONY: up down install test lint clean infra-up infra-down infra-logs app-up app-down app-build app-rebuild app-logs rebuild-api rebuild-bff rebuild-web bff-test web-test reset-db reset-minio reset-all
+
+# Catch-all start command
+up: app-up
+
+# Catch-all stop command
+down:
+	docker compose -f docker-compose.app.yml down
+	docker compose -f docker-compose.infra.yml down
 
 install:
 	uv sync --all-extras
