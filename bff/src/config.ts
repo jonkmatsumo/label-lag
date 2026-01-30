@@ -37,7 +37,7 @@ function getEnvAsBool(key: string, defaultValue: boolean): boolean {
 }
 
 export function loadConfig(): Config {
-  const inferenceMode = getEnvOrDefault('BFF_INFERENCE_MODE', 'fastapi');
+  const inferenceMode = getEnvOrDefault('BFF_INFERENCE_MODE', 'gateway');
   if (inferenceMode !== 'fastapi' && inferenceMode !== 'gateway') {
     throw new Error(`Invalid BFF_INFERENCE_MODE: ${inferenceMode}. Must be 'fastapi' or 'gateway'`);
   }

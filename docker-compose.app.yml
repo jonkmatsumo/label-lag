@@ -154,7 +154,7 @@ services:
       - BFF_HOST=0.0.0.0
       - BFF_FASTAPI_BASE_URL=http://api:8000
       - BFF_MLFLOW_TRACKING_URI=http://mlflow:5000
-      - BFF_INFERENCE_MODE=${BFF_INFERENCE_MODE:-fastapi}
+      - BFF_INFERENCE_MODE=${BFF_INFERENCE_MODE:-gateway}
       - BFF_GATEWAY_BASE_URL=http://inference-gateway:8081
       - BFF_REQUEST_TIMEOUT=30000
       - BFF_LOG_LEVEL=info
