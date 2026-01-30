@@ -215,19 +215,42 @@ class DraftRuleStore:
 
 
 # Global draft rule store instance
+# Type is broader to support PostgresRuleStore which implements the same interface
 _global_draft_store: DraftRuleStore | None = None
 
 
 def get_draft_store() -> DraftRuleStore:
     """Get the global draft rule store instance.
 
+    The backend is selected based on RULE_STORE_BACKEND environment variable:
+    - "inmemory" (default): Uses DraftRuleStore with optional file persistence
+    - "postgres": Uses PostgresRuleStore for PostgreSQL persistence
+
     Returns:
-        Global DraftRuleStore instance.
+        Rule store instance (DraftRuleStore or PostgresRuleStore).
     """
     global _global_draft_store
     if _global_draft_store is None:
-        storage_path = os.getenv("DRAFT_STORAGE_PATH")
-        _global_draft_store = DraftRuleStore(storage_path=storage_path)
+        from api.rule_store import get_rule_store_backend
+
+        backend = get_rule_store_backend()
+
+        if backend == "postgres":
+            # Only import PostgresRuleStore when postgres backend is enabled
+            # This avoids database dependencies in unit tests
+            from api.postgres_rule_store import PostgresRuleStore
+
+            _global_draft_store = PostgresRuleStore()  # type: ignore[assignment]
+            logger.info("Using PostgreSQL rule store backend")
+        else:
+            # Default: in-memory with optional file persistence
+            storage_path = os.getenv("DRAFT_STORAGE_PATH")
+            _global_draft_store = DraftRuleStore(storage_path=storage_path)
+            logger.info(
+                f"Using in-memory rule store backend"
+                f"{' with file persistence' if storage_path else ''}"
+            )
+
     return _global_draft_store
 
 
@@ -235,7 +258,19 @@ def set_draft_store(store: DraftRuleStore) -> None:
     """Set the global draft rule store instance (for testing).
 
     Args:
-        store: DraftRuleStore instance to use.
+        store: Rule store instance to use (DraftRuleStore or compatible).
     """
     global _global_draft_store
     _global_draft_store = store
+
+
+def reset_draft_store() -> None:
+    """Reset the global draft rule store instance.
+
+    Clears the cached store instance so next call to get_draft_store()
+    will create a fresh instance based on current environment config.
+
+    This is primarily useful in tests to ensure clean state between tests.
+    """
+    global _global_draft_store
+    _global_draft_store = None
