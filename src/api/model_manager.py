@@ -19,8 +19,8 @@ import mlflow
 import numpy as np
 import pandas as pd
 
-from api.rules import RuleSet
 from api.rule_store import RuleStore
+from api.rules import RuleSet
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -118,7 +118,9 @@ class ModelManager:
             return None
         return self._ruleset.version
 
-    def update_production_ruleset(self, ruleset: RuleSet, actor: str = "system", reason: str | None = None) -> None:
+    def update_production_ruleset(
+        self, ruleset: RuleSet, actor: str = "system", reason: str | None = None
+    ) -> None:
         """Update the production ruleset and persist to DB.
 
         Called by /rules/{id}/publish endpoint to sync approved rules
@@ -132,7 +134,7 @@ class ModelManager:
         # Persist all rules in ruleset to DB first to ensure versions exist
         for rule in ruleset.rules:
             self._rule_store.save_rule(rule, actor=actor)
-        
+
         # Snapshot the ruleset in DB
         self._rule_store.publish_ruleset(
             version_name=ruleset.version,

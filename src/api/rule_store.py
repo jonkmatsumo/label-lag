@@ -3,18 +3,17 @@
 import hashlib
 import json
 import logging
-from datetime import datetime, timezone
-from typing import Any
 
-from sqlalchemy import select, text
-from sqlalchemy.orm import Session
+from sqlalchemy import select
 
 from api.rules import Rule, RuleSet, RuleStatus
 from synthetic_pipeline.db.models import (
     PublishedRuleSetDB,
     RuleDB,
-    RuleStatus as RuleStatusDB,
     RuleVersionDB,
+)
+from synthetic_pipeline.db.models import (
+    RuleStatus as RuleStatusDB,
 )
 from synthetic_pipeline.db.session import DatabaseSession
 
@@ -43,7 +42,7 @@ class RuleStore:
     def save_rule(self, rule: Rule, actor: str | None = None) -> RuleVersionDB:
         """Save a rule and a new version if content changed."""
         content_hash = self._compute_content_hash(rule)
-        
+
         with self.db_session.get_session() as session:
             # Ensure logical rule exists
             db_rule = session.get(RuleDB, rule.id)
@@ -59,7 +58,7 @@ class RuleStore:
                 RuleVersionDB.content_hash == content_hash
             )
             existing_version = session.execute(stmt).scalar_one_or_none()
-            
+
             if existing_version:
                 return existing_version
 
@@ -68,7 +67,8 @@ class RuleStore:
                 rule_id=rule.id,
                 field=rule.field,
                 op=rule.op,
-                value={"v": rule.value}, # Wrap in dict for JSONB compatibility if needed
+                # Wrap in dict for JSONB compatibility if needed
+                value={"v": rule.value},
                 action=rule.action,
                 score=rule.score,
                 severity=rule.severity,
@@ -80,18 +80,27 @@ class RuleStore:
             session.flush()
             return new_version
 
-    def publish_ruleset(self, version_name: str, actor: str, reason: str | None = None) -> PublishedRuleSetDB:
+    def publish_ruleset(
+        self, version_name: str, actor: str, reason: str | None = None
+    ) -> PublishedRuleSetDB:
         """Snapshot all active rules into a new published ruleset."""
         with self.db_session.get_session() as session:
             # Find latest versions of all ACTIVE rules
-            # This is a simplified query: latest version per rule ID where rule is ACTIVE
-            active_rules_stmt = select(RuleDB).where(RuleDB.status == RuleStatusDB.ACTIVE)
+            # latest version per rule ID where rule is ACTIVE
+            active_rules_stmt = select(RuleDB).where(
+                RuleDB.status == RuleStatusDB.ACTIVE
+            )
             active_rules = session.execute(active_rules_stmt).scalars().all()
-            
+
             latest_versions = []
             for r in active_rules:
                 # Get the latest version for this rule
-                v_stmt = select(RuleVersionDB).where(RuleVersionDB.rule_id == r.id).order_by(RuleVersionDB.created_at.desc()).limit(1)
+                v_stmt = (
+                    select(RuleVersionDB)
+                    .where(RuleVersionDB.rule_id == r.id)
+                    .order_by(RuleVersionDB.created_at.desc())
+                    .limit(1)
+                )
                 v = session.execute(v_stmt).scalar_one_or_none()
                 if v:
                     latest_versions.append(v)
@@ -109,26 +118,35 @@ class RuleStore:
     def get_latest_published_ruleset(self) -> RuleSet | None:
         """Load the most recent published ruleset from DB."""
         with self.db_session.get_session() as session:
-            stmt = select(PublishedRuleSetDB).order_by(PublishedRuleSetDB.published_at.desc()).limit(1)
+            stmt = (
+                select(PublishedRuleSetDB)
+                .order_by(PublishedRuleSetDB.published_at.desc())
+                .limit(1)
+            )
             db_rs = session.execute(stmt).scalar_one_or_none()
-            
+
             if not db_rs:
                 return None
-            
+
             rules = []
             for v in db_rs.rule_versions:
+                val = (
+                    v.value["v"]
+                    if isinstance(v.value, dict) and "v" in v.value
+                    else v.value
+                )
                 rules.append(Rule(
                     id=v.rule_id,
                     field=v.field,
                     op=v.op,
-                    value=v.value["v"] if isinstance(v.value, dict) and "v" in v.value else v.value,
+                    value=val,
                     action=v.action,
                     score=v.score,
                     severity=v.severity,
                     reason=v.reason,
                     status=RuleStatus.ACTIVE.value
                 ))
-            
+
             return RuleSet(version=db_rs.version_name, rules=rules)
 
     def list_draft_rules(self) -> list[Rule]:
@@ -136,18 +154,28 @@ class RuleStore:
         with self.db_session.get_session() as session:
             stmt = select(RuleDB).where(RuleDB.status != RuleStatusDB.ARCHIVED)
             db_rules = session.execute(stmt).scalars().all()
-            
+
             rules = []
             for r in db_rules:
                 # Get latest version for content
-                v_stmt = select(RuleVersionDB).where(RuleVersionDB.rule_id == r.id).order_by(RuleVersionDB.created_at.desc()).limit(1)
+                v_stmt = (
+                    select(RuleVersionDB)
+                    .where(RuleVersionDB.rule_id == r.id)
+                    .order_by(RuleVersionDB.created_at.desc())
+                    .limit(1)
+                )
                 v = session.execute(v_stmt).scalar_one_or_none()
                 if v:
+                    val = (
+                        v.value["v"]
+                        if isinstance(v.value, dict) and "v" in v.value
+                        else v.value
+                    )
                     rules.append(Rule(
                         id=r.id,
                         field=v.field,
                         op=v.op,
-                        value=v.value["v"] if isinstance(v.value, dict) and "v" in v.value else v.value,
+                        value=val,
                         action=v.action,
                         score=v.score,
                         severity=v.severity,
@@ -162,17 +190,27 @@ class RuleStore:
             db_rule = session.get(RuleDB, rule_id)
             if not db_rule or db_rule.status == RuleStatusDB.ARCHIVED:
                 return None
-            
-            v_stmt = select(RuleVersionDB).where(RuleVersionDB.rule_id == rule_id).order_by(RuleVersionDB.created_at.desc()).limit(1)
+
+            v_stmt = (
+                select(RuleVersionDB)
+                .where(RuleVersionDB.rule_id == rule_id)
+                .order_by(RuleVersionDB.created_at.desc())
+                .limit(1)
+            )
             v = session.execute(v_stmt).scalar_one_or_none()
             if not v:
                 return None
-                
+
+            val = (
+                v.value["v"]
+                if isinstance(v.value, dict) and "v" in v.value
+                else v.value
+            )
             return Rule(
                 id=db_rule.id,
                 field=v.field,
                 op=v.op,
-                value=v.value["v"] if isinstance(v.value, dict) and "v" in v.value else v.value,
+                value=val,
                 action=v.action,
                 score=v.score,
                 severity=v.severity,

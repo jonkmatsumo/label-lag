@@ -11,8 +11,8 @@ from dataclasses import asdict
 from pathlib import Path
 from threading import Lock
 
-from api.rules import Rule, RuleStatus
 from api.rule_store import RuleStore
+from api.rules import Rule, RuleStatus
 
 logger = logging.getLogger(__name__)
 

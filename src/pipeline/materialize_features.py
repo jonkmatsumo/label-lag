@@ -95,7 +95,7 @@ WITH feature_calculations AS (
         gr.id as internal_id
 
     FROM generated_records gr
-    -- We must include historical context for window functions, but only select NEW records for output
+    -- Include context for window functions, only select NEW records for output
     WHERE gr.user_id IN (
         SELECT DISTINCT user_id FROM generated_records WHERE id > :last_id
     )
@@ -225,18 +225,28 @@ class FeatureMaterializer:
         )
         return result.scalar() or 0
 
-    def get_materialization_cursor(self, session: Session, feature_set: str = "default") -> int:
+    def get_materialization_cursor(
+        self, session: Session, feature_set: str = "default"
+    ) -> int:
         """Get the current materialization cursor from DB."""
-        stmt = select(FeatureMaterializationStateDB).where(FeatureMaterializationStateDB.feature_set == feature_set)
+        stmt = select(FeatureMaterializationStateDB).where(
+            FeatureMaterializationStateDB.feature_set == feature_set
+        )
         state = session.execute(stmt).scalar_one_or_none()
         return state.last_processed_id if state else 0
 
-    def update_materialization_cursor(self, session: Session, last_id: int, feature_set: str = "default") -> None:
+    def update_materialization_cursor(
+        self, session: Session, last_id: int, feature_set: str = "default"
+    ) -> None:
         """Update the materialization cursor in DB."""
-        stmt = select(FeatureMaterializationStateDB).where(FeatureMaterializationStateDB.feature_set == feature_set)
+        stmt = select(FeatureMaterializationStateDB).where(
+            FeatureMaterializationStateDB.feature_set == feature_set
+        )
         state = session.execute(stmt).scalar_one_or_none()
         if not state:
-            state = FeatureMaterializationStateDB(feature_set=feature_set, last_processed_id=last_id)
+            state = FeatureMaterializationStateDB(
+                feature_set=feature_set, last_processed_id=last_id
+            )
             session.add(state)
         else:
             state.last_processed_id = max(state.last_processed_id, last_id)
@@ -257,10 +267,10 @@ class FeatureMaterializer:
             Number of features computed.
         """
         last_id = self.get_materialization_cursor(session)
-        
+
         # Compute features using window functions
         result = session.execute(
-            text(FEATURE_ENGINEERING_SQL), 
+            text(FEATURE_ENGINEERING_SQL),
             {"last_id": last_id, "batch_size": batch_size}
         )
         rows = result.fetchall()

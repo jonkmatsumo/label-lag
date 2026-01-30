@@ -5,8 +5,8 @@ from generator.core import (
     FraudProfile,
     LabelDelaySimulator,
     SleeperProfile,
-    UserSimulator,
     UserSequenceResult,
+    UserSimulator,
     generate_and_persist,
 )
 

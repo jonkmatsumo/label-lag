@@ -1,5 +1,6 @@
 """SQLAlchemy models mirroring Pydantic models."""
 
+import enum
 from datetime import datetime
 from decimal import Decimal
 
@@ -20,7 +21,6 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-import enum
 
 class RuleStatus(enum.Enum):
     DRAFT = "draft"
@@ -40,7 +40,9 @@ class Base(DeclarativeBase):
 published_ruleset_versions = Table(
     "published_ruleset_versions",
     Base.metadata,
-    Column("ruleset_id", Integer, ForeignKey("published_rulesets.id"), primary_key=True),
+    Column(
+        "ruleset_id", Integer, ForeignKey("published_rulesets.id"), primary_key=True
+    ),
     Column("version_id", Integer, ForeignKey("rule_versions.id"), primary_key=True),
 )
 
@@ -49,19 +51,32 @@ class RuleDB(Base):
     __tablename__ = "rules"
 
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
-    status: Mapped[RuleStatus] = mapped_column(Enum(RuleStatus), default=RuleStatus.DRAFT, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("now()"), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("now()"), onupdate=text("now()"), nullable=False)
+    status: Mapped[RuleStatus] = mapped_column(
+        Enum(RuleStatus), default=RuleStatus.DRAFT, nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=text("now()"), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        server_default=text("now()"),
+        onupdate=text("now()"),
+        nullable=False,
+    )
 
-    versions = relationship("RuleVersionDB", back_populates="rule", cascade="all, delete-orphan")
+    versions = relationship(
+        "RuleVersionDB", back_populates="rule", cascade="all, delete-orphan"
+    )
 
 class RuleVersionDB(Base):
     """Immutable rule content version."""
     __tablename__ = "rule_versions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    rule_id: Mapped[str] = mapped_column(String(100), ForeignKey("rules.id"), nullable=False, index=True)
-    
+    rule_id: Mapped[str] = mapped_column(
+        String(100), ForeignKey("rules.id"), nullable=False, index=True
+    )
+
     # Rule content (matches api.rules.Rule dataclass fields)
     field: Mapped[str] = mapped_column(String(100), nullable=False)
     op: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -70,9 +85,11 @@ class RuleVersionDB(Base):
     score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     severity: Mapped[str] = mapped_column(String(20), default="medium", nullable=False)
     reason: Mapped[str] = mapped_column(String(500), default="", nullable=False)
-    
+
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("now()"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=text("now()"), nullable=False
+    )
     created_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     rule = relationship("RuleDB", back_populates="versions")
@@ -87,7 +104,9 @@ class PublishedRuleSetDB(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     version_name: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    published_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("now()"), nullable=False, index=True)
+    published_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=text("now()"), nullable=False, index=True
+    )
     published_by: Mapped[str] = mapped_column(String(100), nullable=False)
     reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
@@ -369,7 +388,12 @@ class FeatureMaterializationStateDB(Base):
 
     feature_set: Mapped[str] = mapped_column(String(100), primary_key=True)
     last_processed_id: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("now()"), onupdate=text("now()"), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        server_default=text("now()"),
+        onupdate=text("now()"),
+        nullable=False,
+    )
     schema_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 class JobStatus(enum.Enum):
@@ -383,13 +407,19 @@ class JobDB(Base):
     __tablename__ = "jobs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    type: Mapped[str] = mapped_column(String(50), nullable=False) # 'generate_data', 'train'
-    status: Mapped[JobStatus] = mapped_column(Enum(JobStatus), default=JobStatus.PENDING, nullable=False)
+    type: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    ) # 'generate_data', 'train'
+    status: Mapped[JobStatus] = mapped_column(
+        Enum(JobStatus), default=JobStatus.PENDING, nullable=False
+    )
     payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     result: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     error: Mapped[str | None] = mapped_column(String(1000), nullable=True)
-    
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("now()"), nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=text("now()"), nullable=False
+    )
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -398,19 +428,23 @@ class InferenceEventDB(Base):
     __tablename__ = "inference_events"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    ts: Mapped[datetime] = mapped_column(DateTime, server_default=text("now()"), nullable=False, index=True)
-    request_id: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True)
+    ts: Mapped[datetime] = mapped_column(
+        DateTime, server_default=text("now()"), nullable=False, index=True
+    )
+    request_id: Mapped[str] = mapped_column(
+        String(50), nullable=False, unique=True, index=True
+    )
     user_id: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
-    
+
     model_version: Mapped[str] = mapped_column(String(50), nullable=False)
     rules_version: Mapped[str] = mapped_column(String(50), nullable=False)
-    
+
     model_score: Mapped[int] = mapped_column(Integer, nullable=False)
     final_score: Mapped[int] = mapped_column(Integer, nullable=False)
-    
+
     # Details about rule matches and their impact
     rule_impacts: Mapped[list | None] = mapped_column(JSONB, nullable=True)
-    
+
     # Metadata
     latency_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
     is_shadow: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

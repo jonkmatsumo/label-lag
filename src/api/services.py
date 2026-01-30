@@ -1,13 +1,13 @@
 """Business logic for signal evaluation."""
 
+import json
 import logging
 import uuid
-import json
 from dataclasses import dataclass, field
 from decimal import Decimal
 
 import numpy as np
-from sqlalchemy import text, select, func
+from sqlalchemy import select
 
 from api.rules import RuleResult, evaluate_rules
 from api.schemas import (
@@ -17,9 +17,9 @@ from api.schemas import (
     SignalResponse,
 )
 from model.evaluate import ScoreCalibrator
-from synthetic_pipeline.db.session import DatabaseSession
-from synthetic_pipeline.db.models import GeneratedRecordDB, FeatureSnapshotDB
 from pipeline.materialize_features import FeatureMaterializer
+from synthetic_pipeline.db.models import FeatureSnapshotDB, GeneratedRecordDB
+from synthetic_pipeline.db.session import DatabaseSession
 
 logger = logging.getLogger(__name__)
 
@@ -190,7 +190,11 @@ class SignalEvaluator:
                         "is_shadow": ri.is_shadow,
                         "score_delta": ri.score_delta
                     } for ri in impact_objects],
-                    raw_request=json.loads(request.model_dump_json()) if hasattr(request, "model_dump_json") else json.loads(request.json())
+                    raw_request=(
+                        json.loads(request.model_dump_json())
+                        if hasattr(request, "model_dump_json")
+                        else json.loads(request.json())
+                    )
                 )
                 session.add(db_event)
                 session.commit()
@@ -327,15 +331,20 @@ class SignalEvaluator:
 
                     # 3. Check staleness: if snapshot missing OR behind latest record
                     is_stale = snapshot is None or snapshot.record_id != latest_rec_id
-                    
+
                     if is_stale:
-                        logger.info(f"Features stale for user {request.user_id}, materializing on-demand")
-                        materializer = FeatureMaterializer(database_url=self.db_session.database_url)
-                        # Compute features for all users who have new data (including this one)
-                        # In a high-traffic system, we might isolate this user, but incremental
-                        # batching is efficient enough for now.
+                        logger.info(
+                            f"Features stale for user {request.user_id}, "
+                            "materializing on-demand"
+                        )
+                        materializer = FeatureMaterializer(
+                            database_url=self.db_session.database_url
+                        )
+                        # Compute features for users with new data (including this one)
+                        # In a high-traffic system, we might isolate this user, but
+                        # incremental batching is efficient enough for now.
                         materializer.materialize_all(batch_size=1000)
-                        
+
                         # Re-fetch snapshot after materialization
                         session.expire_all()
                         snapshot = session.execute(snap_stmt).scalar_one_or_none()

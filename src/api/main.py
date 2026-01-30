@@ -10,16 +10,15 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
+from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi.responses import JSONResponse
 from google.protobuf.json_format import MessageToDict
 from sqlalchemy import text
-from fastapi import FastAPI, HTTPException, Query, Depends
-from fastapi.responses import JSONResponse
 
 from api.analytics import RuleHealthEvaluator
-from api.auth import get_current_user, require_admin, User
-
 from api.attribution import AttributionService
 from api.audit import get_audit_logger
+from api.auth import User, get_current_user, require_admin
 from api.backtest import (
     BacktestComparator,
     BacktestRunner,
@@ -69,7 +68,6 @@ from api.schemas import (
     FeatureDriftDetail,
     FeatureSampleResponse,
     GenerateDataRequest,
-    GenerateDataResponse,
     HealthResponse,
     JobResponse,
     PublishRuleRequest,
@@ -102,7 +100,6 @@ from api.schemas import (
     SuggestionEvidence,
     SuggestionsListResponse,
     TrainRequest,
-    TrainResponse,
     TransactionDetailsResponse,
     ValidationResult,
 )
@@ -231,7 +228,7 @@ async def get_job_status(job_id: int, user: User = Depends(get_current_user)) ->
         job = session.get(JobDB, job_id)
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
-        
+
         return {
             "job_id": job.id,
             "type": job.type,
@@ -248,6 +245,7 @@ async def get_job_status(job_id: int, user: User = Depends(get_current_user)) ->
 async def list_jobs(limit: int = 10, user: User = Depends(require_admin)) -> list[dict]:
     """List recent background jobs."""
     from sqlalchemy import select
+
     from synthetic_pipeline.db.models import JobDB
     from synthetic_pipeline.db.session import DatabaseSession
 
@@ -680,12 +678,13 @@ async def evaluate_signal(request: SignalRequest) -> SignalResponse:
 
 @app.get("/inference/events", tags=["Evaluation"])
 async def list_inference_events(
-    limit: int = 50, 
+    limit: int = 50,
     user_id: str | None = None,
     user: User = Depends(get_current_user)
 ) -> list[dict]:
     """Query durable inference logs."""
     from sqlalchemy import select
+
     from synthetic_pipeline.db.models import InferenceEventDB
     from synthetic_pipeline.db.session import DatabaseSession
 
@@ -695,7 +694,7 @@ async def list_inference_events(
         if user_id:
             stmt = stmt.where(InferenceEventDB.user_id == user_id)
         stmt = stmt.limit(limit)
-        
+
         events = session.execute(stmt).scalars().all()
         return [
             {
@@ -721,7 +720,7 @@ async def list_inference_events(
     description="Enqueue a job to generate synthetic transaction data.",
 )
 async def generate_data(
-    request: GenerateDataRequest, 
+    request: GenerateDataRequest,
     user: User = Depends(require_admin)
 ) -> dict:
     """Enqueue synthetic transaction data generation job."""
@@ -730,11 +729,10 @@ async def generate_data(
 
     db_session = DatabaseSession()
     with db_session.get_session() as session:
-        job = JobDB(
-            type="generate_data",
-            status=JobStatus.PENDING,
-            payload=request.model_dump() if hasattr(request, "model_dump") else request.dict()
+        payload = (
+            request.model_dump() if hasattr(request, "model_dump") else request.dict()
         )
+        job = JobDB(type="generate_data", status=JobStatus.PENDING, payload=payload)
         session.add(job)
         session.commit()
         return {"job_id": job.id, "status": job.status.value}
@@ -800,11 +798,10 @@ async def train_model_endpoint(
 
     db_session = DatabaseSession()
     with db_session.get_session() as session:
-        job = JobDB(
-            type="train",
-            status=JobStatus.PENDING,
-            payload=request.model_dump() if hasattr(request, "model_dump") else request.dict()
+        payload = (
+            request.model_dump() if hasattr(request, "model_dump") else request.dict()
         )
+        job = JobDB(type="train", status=JobStatus.PENDING, payload=payload)
         session.add(job)
         session.commit()
         return {"job_id": job.id, "status": job.status.value}
@@ -2598,8 +2595,8 @@ async def publish_rule(
     ruleset_version = f"v{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
     new_ruleset = RuleSet(version=ruleset_version, rules=all_active_rules)
     manager.update_production_ruleset(
-        new_ruleset, 
-        actor=request.actor, 
+        new_ruleset,
+        actor=request.actor,
         reason=request.reason or "Published to production"
     )
 
@@ -2875,7 +2872,7 @@ async def activate_rule(
         active_rule = Rule(**rule_dict)
         store._rules[rule_id] = active_rule
         store._save_rules()
-    
+
     from api.rule_store import RuleStore
     RuleStore().save_rule(updated_rule, actor=request.actor)
 
@@ -2991,7 +2988,7 @@ async def disable_rule(
         disabled_rule = Rule(**rule_dict)
         store._rules[rule_id] = disabled_rule
         store._save_rules()
-    
+
     from api.rule_store import RuleStore
     RuleStore().save_rule(updated_rule, actor=request.actor)
 
@@ -3106,7 +3103,7 @@ async def shadow_rule(rule_id: str, request: ShadowRuleRequest) -> ShadowRuleRes
         shadow_rule_obj = Rule(**rule_dict)
         store._rules[rule_id] = shadow_rule_obj
         store._save_rules()
-    
+
     from api.rule_store import RuleStore
     RuleStore().save_rule(updated_rule, actor=request.actor)
 

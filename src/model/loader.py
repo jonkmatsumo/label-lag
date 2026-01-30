@@ -260,7 +260,8 @@ class DataLoader:
                 fs.balance_volatility_z_score,
                 (fs.experimental_signals->>'velocity_7d')::INTEGER as velocity_7d,
                 (fs.experimental_signals->>'max_amount_30d')::FLOAT as max_amount_30d,
-                (fs.experimental_signals->>'off_hours_count_7d')::INTEGER as off_hours_count_7d,
+                (fs.experimental_signals->>'off_hours_count_7d')::INTEGER
+                    as off_hours_count_7d,
                 em.is_train_eligible,
                 em.fraud_confirmed_at,
                 gr.is_fraudulent,
@@ -303,7 +304,8 @@ class DataLoader:
                 fs.balance_volatility_z_score,
                 (fs.experimental_signals->>'velocity_7d')::INTEGER as velocity_7d,
                 (fs.experimental_signals->>'max_amount_30d')::FLOAT as max_amount_30d,
-                (fs.experimental_signals->>'off_hours_count_7d')::INTEGER as off_hours_count_7d,
+                (fs.experimental_signals->>'off_hours_count_7d')::INTEGER
+                    as off_hours_count_7d,
                 em.is_train_eligible,
                 em.fraud_confirmed_at,
                 gr.is_fraudulent,

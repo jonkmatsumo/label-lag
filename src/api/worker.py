@@ -1,12 +1,13 @@
 """Simple background worker for processing jobs from the database."""
 
-import time
 import logging
-import json
+import time
 from datetime import datetime, timezone
+
 from sqlalchemy import select
-from synthetic_pipeline.db.session import DatabaseSession
+
 from synthetic_pipeline.db.models import JobDB, JobStatus
+from synthetic_pipeline.db.session import DatabaseSession
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -14,12 +15,12 @@ logger = logging.getLogger(__name__)
 
 def process_generate_data(payload):
     """Execution logic for data generation."""
+    from api.main import _metadata_to_db, _pydantic_to_db
     from api.schemas import GenerateDataRequest
     from pipeline.materialize_features import FeatureMaterializer
     from synthetic_pipeline.db.models import Base
     from synthetic_pipeline.generator import DataGenerator
-    from api.main import _pydantic_to_db, _metadata_to_db
-    
+
     request = GenerateDataRequest(**payload)
     generator = DataGenerator()
     result = generator.generate_dataset_with_sequences(
@@ -55,9 +56,9 @@ def process_generate_data(payload):
 
 def process_train(payload):
     """Execution logic for model training."""
-    from model.train import train_model
     from api.schemas import TrainRequest
-    
+    from model.train import train_model
+
     request = TrainRequest(**payload)
     run_id = train_model(
         max_depth=request.max_depth,
@@ -86,46 +87,51 @@ JOB_PROCESSORS = {
 def run_worker():
     db_session = DatabaseSession()
     logger.info("Worker started, polling for jobs...")
-    
+
     while True:
         try:
             with db_session.get_session() as session:
                 # Find a pending job
-                stmt = select(JobDB).where(JobDB.status == JobStatus.PENDING).order_by(JobDB.created_at.asc()).limit(1)
+                stmt = (
+                    select(JobDB)
+                    .where(JobDB.status == JobStatus.PENDING)
+                    .order_by(JobDB.created_at.asc())
+                    .limit(1)
+                )
                 job = session.execute(stmt).scalar_one_or_none()
-                
+
                 if not job:
                     time.sleep(2)
                     continue
-                
+
                 # Mark as running
                 job.status = JobStatus.RUNNING
                 job.started_at = datetime.now(timezone.utc)
                 session.commit()
-                
+
                 logger.info(f"Processing job {job.id} (type: {job.type})")
-                
+
                 try:
                     processor = JOB_PROCESSORS.get(job.type)
                     if not processor:
                         raise ValueError(f"Unknown job type: {job.type}")
-                    
+
                     result = processor(job.payload)
-                    
+
                     # Mark as completed
                     job.status = JobStatus.COMPLETED
                     job.result = result
                     job.finished_at = datetime.now(timezone.utc)
                     logger.info(f"Job {job.id} completed successfully")
-                    
+
                 except Exception as e:
                     logger.exception(f"Job {job.id} failed")
                     job.status = JobStatus.FAILED
                     job.error = str(e)
                     job.finished_at = datetime.now(timezone.utc)
-                
+
                 session.commit()
-                
+
         except Exception as e:
             logger.error(f"Worker loop error: {e}")
             time.sleep(5)

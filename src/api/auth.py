@@ -1,7 +1,8 @@
 import os
+
 import jwt
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
 security = HTTPBearer()
@@ -14,7 +15,9 @@ class User(BaseModel):
     role: str
     name: str
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> User:
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> User:
     token = credentials.credentials
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
