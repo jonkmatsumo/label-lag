@@ -137,9 +137,7 @@ class ModelManager:
 
         # Snapshot the ruleset in DB
         self._rule_store.publish_ruleset(
-            version_name=ruleset.version,
-            actor=actor,
-            reason=reason
+            version_name=ruleset.version, actor=actor, reason=reason
         )
 
         self._ruleset = ruleset

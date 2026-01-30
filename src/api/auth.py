@@ -10,10 +10,12 @@ security = HTTPBearer()
 JWT_SECRET = os.getenv("AUTH_JWT_SECRET", "dev-secret-keep-it-safe")
 ALGORITHM = "HS256"
 
+
 class User(BaseModel):
     id: str
     role: str
     name: str
+
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -36,6 +38,7 @@ async def get_current_user(
             detail="Invalid authentication credentials",
         )
 
+
 def require_role(roles: list[str]):
     async def role_checker(current_user: User = Depends(get_current_user)):
         if current_user.role not in roles:
@@ -44,6 +47,8 @@ def require_role(roles: list[str]):
                 detail="Insufficient permissions",
             )
         return current_user
+
     return role_checker
+
 
 require_admin = require_role(["admin"])

@@ -24,6 +24,7 @@ class DataGenerator:
         # Simple implementation using UserSimulator directly to match old interface
         # but with improved stateful logic
         import numpy as np
+
         rng = np.random.default_rng(self.seed)
 
         num_fraud = int(num_users * fraud_rate)
@@ -41,11 +42,10 @@ class DataGenerator:
             profile = BustOutProfile() if i % 2 == 0 else SleeperProfile()
             s = UserSimulator(
                 fraud_profile=profile,
-                seed=int(rng.integers(0, 2**31)) if self.seed else None
+                seed=int(rng.integers(0, 2**31)) if self.seed else None,
             )
             recs, meta = s.generate_full_sequence()
             all_records.extend(recs)
             all_metadata.extend(meta)
 
         return UserSequenceResult(records=all_records, metadata=all_metadata)
-

@@ -19,6 +19,7 @@ from synthetic_pipeline.db.session import DatabaseSession
 
 logger = logging.getLogger(__name__)
 
+
 class RuleStore:
     """Manages rules and rulesets in Postgres."""
 
@@ -55,7 +56,7 @@ class RuleStore:
             # Check for existing version with same hash
             stmt = select(RuleVersionDB).where(
                 RuleVersionDB.rule_id == rule.id,
-                RuleVersionDB.content_hash == content_hash
+                RuleVersionDB.content_hash == content_hash,
             )
             existing_version = session.execute(stmt).scalar_one_or_none()
 
@@ -74,7 +75,7 @@ class RuleStore:
                 severity=rule.severity,
                 reason=rule.reason,
                 content_hash=content_hash,
-                created_by=actor
+                created_by=actor,
             )
             session.add(new_version)
             session.flush()
@@ -109,7 +110,7 @@ class RuleStore:
                 version_name=version_name,
                 published_by=actor,
                 reason=reason,
-                rule_versions=latest_versions
+                rule_versions=latest_versions,
             )
             session.add(published_rs)
             session.flush()
@@ -135,17 +136,19 @@ class RuleStore:
                     if isinstance(v.value, dict) and "v" in v.value
                     else v.value
                 )
-                rules.append(Rule(
-                    id=v.rule_id,
-                    field=v.field,
-                    op=v.op,
-                    value=val,
-                    action=v.action,
-                    score=v.score,
-                    severity=v.severity,
-                    reason=v.reason,
-                    status=RuleStatus.ACTIVE.value
-                ))
+                rules.append(
+                    Rule(
+                        id=v.rule_id,
+                        field=v.field,
+                        op=v.op,
+                        value=val,
+                        action=v.action,
+                        score=v.score,
+                        severity=v.severity,
+                        reason=v.reason,
+                        status=RuleStatus.ACTIVE.value,
+                    )
+                )
 
             return RuleSet(version=db_rs.version_name, rules=rules)
 
@@ -171,17 +174,19 @@ class RuleStore:
                         if isinstance(v.value, dict) and "v" in v.value
                         else v.value
                     )
-                    rules.append(Rule(
-                        id=r.id,
-                        field=v.field,
-                        op=v.op,
-                        value=val,
-                        action=v.action,
-                        score=v.score,
-                        severity=v.severity,
-                        reason=v.reason,
-                        status=r.status.value
-                    ))
+                    rules.append(
+                        Rule(
+                            id=r.id,
+                            field=v.field,
+                            op=v.op,
+                            value=val,
+                            action=v.action,
+                            score=v.score,
+                            severity=v.severity,
+                            reason=v.reason,
+                            status=r.status.value,
+                        )
+                    )
             return rules
 
     def get_rule(self, rule_id: str) -> Rule | None:
@@ -215,5 +220,5 @@ class RuleStore:
                 score=v.score,
                 severity=v.severity,
                 reason=v.reason,
-                status=db_rule.status.value
+                status=db_rule.status.value,
             )

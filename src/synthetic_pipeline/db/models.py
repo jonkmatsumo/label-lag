@@ -31,10 +31,12 @@ class RuleStatus(enum.Enum):
     DISABLED = "disabled"
     ARCHIVED = "archived"
 
+
 class Base(DeclarativeBase):
     """Base class for all SQLAlchemy models."""
 
     pass
+
 
 # Association table for PublishedRuleSet -> RuleVersion
 published_ruleset_versions = Table(
@@ -46,8 +48,10 @@ published_ruleset_versions = Table(
     Column("version_id", Integer, ForeignKey("rule_versions.id"), primary_key=True),
 )
 
+
 class RuleDB(Base):
     """Logical rule identity."""
+
     __tablename__ = "rules"
 
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
@@ -68,8 +72,10 @@ class RuleDB(Base):
         "RuleVersionDB", back_populates="rule", cascade="all, delete-orphan"
     )
 
+
 class RuleVersionDB(Base):
     """Immutable rule content version."""
+
     __tablename__ = "rule_versions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -94,12 +100,12 @@ class RuleVersionDB(Base):
 
     rule = relationship("RuleDB", back_populates="versions")
 
-    __table_args__ = (
-        Index("ix_rule_version_content", "rule_id", "content_hash"),
-    )
+    __table_args__ = (Index("ix_rule_version_content", "rule_id", "content_hash"),)
+
 
 class PublishedRuleSetDB(Base):
     """Snapshot of active rules used for inference."""
+
     __tablename__ = "published_rulesets"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -382,8 +388,10 @@ class FeatureSnapshotDB(Base):
         Index("ix_feature_computed_at", "computed_at"),
     )
 
+
 class FeatureMaterializationStateDB(Base):
     """Tracks incremental materialization progress."""
+
     __tablename__ = "feature_materialization_state"
 
     feature_set: Mapped[str] = mapped_column(String(100), primary_key=True)
@@ -396,20 +404,23 @@ class FeatureMaterializationStateDB(Base):
     )
     schema_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
+
 class JobStatus(enum.Enum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
 
+
 class JobDB(Base):
     """Background jobs."""
+
     __tablename__ = "jobs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     type: Mapped[str] = mapped_column(
         String(50), nullable=False
-    ) # 'generate_data', 'train'
+    )  # 'generate_data', 'train'
     status: Mapped[JobStatus] = mapped_column(
         Enum(JobStatus), default=JobStatus.PENDING, nullable=False
     )
@@ -423,8 +434,10 @@ class JobDB(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
+
 class InferenceEventDB(Base):
     """Structured record of an inference event."""
+
     __tablename__ = "inference_events"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

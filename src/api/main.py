@@ -165,6 +165,7 @@ async def lifespan(app: FastAPI):
     # Startup: Ensure tables exist
     logger.info("Starting up - ensuring database tables exist...")
     from synthetic_pipeline.db.session import DatabaseSession
+
     db_session = DatabaseSession()
     db_session.create_tables()
 
@@ -237,7 +238,7 @@ async def get_job_status(job_id: int, user: User = Depends(get_current_user)) ->
             "started_at": job.started_at.isoformat() if job.started_at else None,
             "finished_at": job.finished_at.isoformat() if job.finished_at else None,
             "result": job.result,
-            "error": job.error
+            "error": job.error,
         }
 
 
@@ -258,7 +259,7 @@ async def list_jobs(limit: int = 10, user: User = Depends(require_admin)) -> lis
                 "id": job.id,
                 "type": job.type,
                 "status": job.status.value,
-                "created_at": job.created_at.isoformat()
+                "created_at": job.created_at.isoformat(),
             }
             for job in jobs
         ]
@@ -510,8 +511,7 @@ Requires:
 """,
 )
 async def deploy_model(
-    request: DeployModelRequest,
-    user: User = Depends(require_admin)
+    request: DeployModelRequest, user: User = Depends(require_admin)
 ) -> DeployModelResponse:
     """Deploy a model to production.
 
@@ -678,9 +678,7 @@ async def evaluate_signal(request: SignalRequest) -> SignalResponse:
 
 @app.get("/inference/events", tags=["Evaluation"])
 async def list_inference_events(
-    limit: int = 50,
-    user_id: str | None = None,
-    user: User = Depends(get_current_user)
+    limit: int = 50, user_id: str | None = None, user: User = Depends(get_current_user)
 ) -> list[dict]:
     """Query durable inference logs."""
     from sqlalchemy import select
@@ -706,7 +704,7 @@ async def list_inference_events(
                 "rules_version": e.rules_version,
                 "model_score": e.model_score,
                 "final_score": e.final_score,
-                "rule_impacts": e.rule_impacts
+                "rule_impacts": e.rule_impacts,
             }
             for e in events
         ]
@@ -720,8 +718,7 @@ async def list_inference_events(
     description="Enqueue a job to generate synthetic transaction data.",
 )
 async def generate_data(
-    request: GenerateDataRequest,
-    user: User = Depends(require_admin)
+    request: GenerateDataRequest, user: User = Depends(require_admin)
 ) -> dict:
     """Enqueue synthetic transaction data generation job."""
     from synthetic_pipeline.db.models import JobDB, JobStatus
@@ -789,8 +786,7 @@ async def clear_data(user: User = Depends(require_admin)) -> ClearDataResponse:
     description="Enqueue a job to train a new XGBoost model.",
 )
 async def train_model_endpoint(
-    request: TrainRequest,
-    user: User = Depends(require_admin)
+    request: TrainRequest, user: User = Depends(require_admin)
 ) -> dict:
     """Enqueue model training job."""
     from synthetic_pipeline.db.models import JobDB, JobStatus
@@ -1370,6 +1366,7 @@ async def accept_suggestion(
         store.save(rule)
         # Also persist to DB
         from api.rule_store import RuleStore
+
         RuleStore().save_rule(rule, actor=request.actor)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -1455,8 +1452,7 @@ redundancies. Validation results are returned but do not block creation.
 """,
 )
 async def create_draft_rule(
-    request: DraftRuleCreateRequest,
-    user: User = Depends(require_admin)
+    request: DraftRuleCreateRequest, user: User = Depends(require_admin)
 ) -> DraftRuleCreateResponse:
     """Create a new draft rule.
 
@@ -1503,6 +1499,7 @@ async def create_draft_rule(
         store.save(rule)
         # Also persist to DB
         from api.rule_store import RuleStore
+
         RuleStore().save_rule(rule, actor=request.actor)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -1801,6 +1798,7 @@ async def update_draft_rule(
         store.save(updated_rule)
         # Also persist to DB
         from api.rule_store import RuleStore
+
         RuleStore().save_rule(updated_rule, actor=request.actor)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -1952,6 +1950,7 @@ async def delete_draft_rule(
     if archived_rule:
         # Also persist to DB
         from api.rule_store import RuleStore
+
         RuleStore().save_rule(archived_rule, actor=actor)
 
     # Create audit record
@@ -2597,7 +2596,7 @@ async def publish_rule(
     manager.update_production_ruleset(
         new_ruleset,
         actor=request.actor,
-        reason=request.reason or "Published to production"
+        reason=request.reason or "Published to production",
     )
 
     # Log publish event
@@ -2701,6 +2700,7 @@ async def reject_draft_rule(
     # Update in store
     store.save(updated_rule)
     from api.rule_store import RuleStore
+
     RuleStore().save_rule(updated_rule, actor=request.actor)
 
     # Create version snapshot
@@ -2874,6 +2874,7 @@ async def activate_rule(
         store._save_rules()
 
     from api.rule_store import RuleStore
+
     RuleStore().save_rule(updated_rule, actor=request.actor)
 
     # Create version snapshot
@@ -2990,6 +2991,7 @@ async def disable_rule(
         store._save_rules()
 
     from api.rule_store import RuleStore
+
     RuleStore().save_rule(updated_rule, actor=request.actor)
 
     # Create version snapshot
@@ -3105,6 +3107,7 @@ async def shadow_rule(rule_id: str, request: ShadowRuleRequest) -> ShadowRuleRes
         store._save_rules()
 
     from api.rule_store import RuleStore
+
     RuleStore().save_rule(updated_rule, actor=request.actor)
 
     # Create version snapshot
@@ -3428,6 +3431,7 @@ async def rollback_rule_version(
         # Update to rolled back version
         store.save(new_version.rule)
         from api.rule_store import RuleStore
+
         RuleStore().save_rule(new_version.rule, actor=request.actor)
 
     # Convert to response

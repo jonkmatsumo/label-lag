@@ -221,7 +221,7 @@ class FeatureMaterializer:
         last_id = self.get_materialization_cursor(session)
         result = session.execute(
             text("SELECT COUNT(*) FROM generated_records WHERE id > :last_id"),
-            {"last_id": last_id}
+            {"last_id": last_id},
         )
         return result.scalar() or 0
 
@@ -271,7 +271,7 @@ class FeatureMaterializer:
         # Compute features using window functions
         result = session.execute(
             text(FEATURE_ENGINEERING_SQL),
-            {"last_id": last_id, "batch_size": batch_size}
+            {"last_id": last_id, "batch_size": batch_size},
         )
         rows = result.fetchall()
 
@@ -290,7 +290,7 @@ class FeatureMaterializer:
                 amount_ratio,
                 volatility_z,
                 exp_signals,
-                internal_id
+                internal_id,
             ) = row
 
             # Handle experimental_signals - ensure it's JSON string for binding

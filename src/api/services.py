@@ -185,16 +185,19 @@ class SignalEvaluator:
                     rules_version=manager.rules_version or "unknown",
                     model_score=score,
                     final_score=final_score,
-                    rule_impacts=[{
-                        "rule_id": ri.rule_id,
-                        "is_shadow": ri.is_shadow,
-                        "score_delta": ri.score_delta
-                    } for ri in impact_objects],
+                    rule_impacts=[
+                        {
+                            "rule_id": ri.rule_id,
+                            "is_shadow": ri.is_shadow,
+                            "score_delta": ri.score_delta,
+                        }
+                        for ri in impact_objects
+                    ],
                     raw_request=(
                         json.loads(request.model_dump_json())
                         if hasattr(request, "model_dump_json")
                         else json.loads(request.json())
-                    )
+                    ),
                 )
                 session.add(db_event)
                 session.commit()
@@ -317,16 +320,22 @@ class SignalEvaluator:
         try:
             with self.db_session.get_session() as session:
                 # 1. Get latest record_id for this user
-                latest_rec_stmt = select(GeneratedRecordDB.record_id).where(
-                    GeneratedRecordDB.user_id == request.user_id
-                ).order_by(GeneratedRecordDB.id.desc()).limit(1)
+                latest_rec_stmt = (
+                    select(GeneratedRecordDB.record_id)
+                    .where(GeneratedRecordDB.user_id == request.user_id)
+                    .order_by(GeneratedRecordDB.id.desc())
+                    .limit(1)
+                )
                 latest_rec_id = session.execute(latest_rec_stmt).scalar_one_or_none()
 
                 if latest_rec_id:
                     # 2. Get latest snapshot for this user
-                    snap_stmt = select(FeatureSnapshotDB).where(
-                        FeatureSnapshotDB.user_id == request.user_id
-                    ).order_by(FeatureSnapshotDB.computed_at.desc()).limit(1)
+                    snap_stmt = (
+                        select(FeatureSnapshotDB)
+                        .where(FeatureSnapshotDB.user_id == request.user_id)
+                        .order_by(FeatureSnapshotDB.computed_at.desc())
+                        .limit(1)
+                    )
                     snapshot = session.execute(snap_stmt).scalar_one_or_none()
 
                     # 3. Check staleness: if snapshot missing OR behind latest record
@@ -353,8 +362,12 @@ class SignalEvaluator:
                         logger.debug(f"Found fresh features for user {request.user_id}")
                         return FeatureVector(
                             velocity_24h=int(snapshot.velocity_24h),
-                            amount_to_avg_ratio_30d=float(snapshot.amount_to_avg_ratio_30d),
-                            balance_volatility_z_score=float(snapshot.balance_volatility_z_score),
+                            amount_to_avg_ratio_30d=float(
+                                snapshot.amount_to_avg_ratio_30d
+                            ),
+                            balance_volatility_z_score=float(
+                                snapshot.balance_volatility_z_score
+                            ),
                             bank_connections_24h=0,
                             merchant_risk_score=0,
                             has_history=True,

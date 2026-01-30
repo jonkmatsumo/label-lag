@@ -13,6 +13,7 @@ from synthetic_pipeline.db.session import DatabaseSession
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 def process_generate_data(payload):
     """Execution logic for data generation."""
     from api.main import _metadata_to_db, _pydantic_to_db
@@ -51,8 +52,9 @@ def process_generate_data(payload):
     return {
         "total_records": len(result.records),
         "fraud_records": fraud_count,
-        "features_materialized": features_count
+        "features_materialized": features_count,
     }
+
 
 def process_train(payload):
     """Execution logic for model training."""
@@ -79,10 +81,9 @@ def process_train(payload):
     )
     return {"run_id": run_id}
 
-JOB_PROCESSORS = {
-    "generate_data": process_generate_data,
-    "train": process_train
-}
+
+JOB_PROCESSORS = {"generate_data": process_generate_data, "train": process_train}
+
 
 def run_worker():
     db_session = DatabaseSession()
@@ -135,6 +136,7 @@ def run_worker():
         except Exception as e:
             logger.error(f"Worker loop error: {e}")
             time.sleep(5)
+
 
 if __name__ == "__main__":
     run_worker()
