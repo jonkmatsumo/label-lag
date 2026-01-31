@@ -5,6 +5,8 @@ import type {
   PublishRuleResponse,
   SandboxEvaluateRequest,
   SandboxEvaluateResponse,
+  PublishRuleRequest,
+  ApprovalSignalsResponse,
 } from '../types/api.js';
 
 export interface RulesRoutesOptions {
@@ -12,6 +14,10 @@ export interface RulesRoutesOptions {
 }
 
 interface PublishRuleParams {
+  id: string;
+}
+
+interface RuleIdParams {
   id: string;
 }
 
@@ -43,6 +49,39 @@ export async function rulesRoutes(
         const response = await httpClient.request<DraftRulesResponse>({
           method: 'GET',
           path: '/rules/draft',
+          requestId: request.requestId,
+        });
+
+        return reply.status(response.statusCode).send(response.data);
+      } catch (error) {
+        if (error instanceof UpstreamError) {
+          return reply.status(error.statusCode).send(error.toResponse());
+        }
+        throw error;
+      }
+    }
+  );
+
+  // GET /bff/v1/rules/draft/:id/signals - Get approval signals
+  fastify.get<{ Params: RuleIdParams }>(
+    '/bff/v1/rules/draft/:id/signals',
+    {
+      schema: {
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: {
+            id: { type: 'string' },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest<{ Params: RuleIdParams }>, reply: FastifyReply) => {
+      try {
+        const { id } = request.params;
+        const response = await httpClient.request<ApprovalSignalsResponse>({
+          method: 'GET',
+          path: `/rules/draft/${encodeURIComponent(id)}/signals`,
           requestId: request.requestId,
         });
 
