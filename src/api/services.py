@@ -71,7 +71,10 @@ class SignalEvaluator:
         Returns:
             SignalResponse with score and risk components.
         """
+        import time
         from api.model_manager import get_model_manager
+
+        start_time = time.time()
 
         # Generate unique request ID
         request_id = f"req_{uuid.uuid4().hex[:12]}"
@@ -192,9 +195,21 @@ class SignalEvaluator:
                 )
             )
 
+        latency_ms = (time.time() - start_time) * 1000
+
+        # Determine risk label
+        if final_score >= 80:
+            risk_label = "HIGH"
+        elif final_score >= 30:
+            risk_label = "MEDIUM"
+        else:
+            risk_label = "LOW"
+
         return SignalResponse(
             request_id=request_id,
             score=final_score,
+            risk_label=risk_label,
+            latency_ms=latency_ms,
             risk_components=risk_components,
             model_version=model_version,
             matched_rules=[
@@ -202,6 +217,7 @@ class SignalEvaluator:
                     rule_id=exp["rule_id"],
                     severity=exp["severity"],
                     reason=exp["reason"],
+                    explanation=exp.get("explanation"),
                 )
                 for exp in rule_result.explanations
             ],
@@ -212,6 +228,7 @@ class SignalEvaluator:
                     rule_id=exp["rule_id"],
                     severity=exp["severity"],
                     reason=exp["reason"],
+                    explanation=exp.get("explanation"),
                 )
                 for exp in rule_result.shadow_explanations
             ],

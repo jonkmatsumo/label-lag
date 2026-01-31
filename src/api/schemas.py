@@ -76,6 +76,10 @@ class MatchedRule(BaseModel):
         description="Human-readable explanation of why the rule matched",
         examples=["high transaction velocity", "transaction amount exceeds threshold"],
     )
+    explanation: str | None = Field(
+        default=None,
+        description="Detailed explanation of the rule match",
+    )
 
 
 class SignalResponse(BaseModel):
@@ -92,6 +96,16 @@ class SignalResponse(BaseModel):
         le=99,
         description="Risk score from 1 (lowest risk) to 99 (highest risk)",
         examples=[85],
+    )
+    risk_label: Literal["LOW", "MEDIUM", "HIGH"] = Field(
+        ...,
+        description="Risk category label",
+        examples=["HIGH"],
+    )
+    latency_ms: float = Field(
+        ...,
+        description="Inference latency in milliseconds",
+        examples=[45.2],
     )
     risk_components: list[RiskComponent] = Field(
         default_factory=list,
@@ -119,6 +133,10 @@ class SignalResponse(BaseModel):
     shadow_matched_rules: list[MatchedRule] = Field(
         default_factory=list,
         description="Shadow rules that matched (evaluated but not applied to score)",
+    )
+    debug: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional debug information (behind flag)",
     )
 
     model_config = {
