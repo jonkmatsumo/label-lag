@@ -7,7 +7,7 @@ It does not modify transaction state - it only provides an evaluation.
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI, HTTPException, Query
@@ -26,7 +26,7 @@ from api.backtest import (
 from api.crud_client import get_crud_client
 from api.drift_cache import get_drift_cache
 from api.model_manager import get_model_manager
-from api.readiness import ReadinessEvaluator
+from api.readiness import CheckStatus, ReadinessEvaluator
 from api.schemas import (
     AcceptSuggestionRequest,
     AcceptSuggestionResponse,
@@ -2497,6 +2497,22 @@ async def publish_rule(
             status_code=400,
             detail=f"Rule {rule_id} is not approved (status: {rule.status}). "
             "Only approved rules can be published.",
+        )
+
+    # Get readiness report
+    end_date = datetime.now(timezone.utc)
+    start_date = end_date - timedelta(days=7)
+    collector = get_metrics_collector()
+    metrics = collector.get_rule_metrics(rule_id, start_date, end_date)
+    total_requests = 1000  # TODO: Real total
+    evaluator = ReadinessEvaluator(audit_logger=audit_logger)
+    report = evaluator.evaluate(rule, metrics, total_requests)
+
+    if report.overall_status == CheckStatus.FAIL:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Rule {rule_id} failed readiness checks and cannot be published. "
+            f"Reasons: {[c.message for c in report.checks if c.status == CheckStatus.FAIL]}",
         )
 
     # Transition to active
