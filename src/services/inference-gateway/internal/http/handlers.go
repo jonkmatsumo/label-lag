@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"time"
 
 	grpcclient "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/grpc"
 	inferencev1 "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/grpc/inferencev1/inference/v1"
@@ -40,6 +41,13 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
+
+	importTime := func() {
+		// Just to satisfy the need for time if needed, but we will use time package
+	}
+	_ = importTime
+
+	startTime := time.Now()
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -109,9 +117,20 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	latencyMs := float64(time.Since(startTime).Microseconds()) / 1000.0
+
+	riskLabel := "LOW"
+	if ruleResult.FinalScore >= 80 {
+		riskLabel = "HIGH"
+	} else if ruleResult.FinalScore >= 30 {
+		riskLabel = "MEDIUM"
+	}
+
 	response := &gatewayv1.SignalResponse{
 		RequestId:          requestID,
 		Score:              int32(ruleResult.FinalScore),
+		RiskLabel:          riskLabel,
+		LatencyMs:          latencyMs,
 		RiskComponents:     riskComponents,
 		ModelVersion:       inferenceResp.GetModelVersion(),
 		MatchedRules:       buildMatchedRules(ruleResult.Explanations),
@@ -151,9 +170,10 @@ func buildMatchedRules(explanations []rules.Explanation) []*gatewayv1.MatchedRul
 	matched := make([]*gatewayv1.MatchedRule, 0, len(explanations))
 	for _, exp := range explanations {
 		matched = append(matched, &gatewayv1.MatchedRule{
-			RuleId:   exp.RuleID,
-			Severity: exp.Severity,
-			Reason:   exp.Reason,
+			RuleId:      exp.RuleID,
+			Severity:    exp.Severity,
+			Reason:      exp.Reason,
+			Explanation: exp.Explanation,
 		})
 	}
 	return matched

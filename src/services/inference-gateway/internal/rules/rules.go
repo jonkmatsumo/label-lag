@@ -36,9 +36,10 @@ type RuleSet struct {
 }
 
 type Explanation struct {
-	RuleID   string
-	Severity string
-	Reason   string
+	RuleID      string
+	Severity    string
+	Reason      string
+	Explanation string
 }
 
 type RuleResult struct {
@@ -84,9 +85,10 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset RuleSet) (
 
 		matched = append(matched, rule.ID)
 		explanations = append(explanations, Explanation{
-			RuleID:   rule.ID,
-			Severity: defaultSeverity(rule.Severity),
-			Reason:   defaultReason(rule.Reason, fmt.Sprintf("rule_matched:%s", rule.ID)),
+			RuleID:      rule.ID,
+			Severity:    defaultSeverity(rule.Severity),
+			Reason:      defaultReason(rule.Reason, fmt.Sprintf("rule_matched:%s", rule.ID)),
+			Explanation: rule.Reason,
 		})
 
 		switch rule.Action {
@@ -135,9 +137,10 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset RuleSet) (
 
 		shadowMatched = append(shadowMatched, rule.ID)
 		shadowExplanations = append(shadowExplanations, Explanation{
-			RuleID:   rule.ID,
-			Severity: defaultSeverity(rule.Severity),
-			Reason:   defaultReason(rule.Reason, fmt.Sprintf("shadow_rule_matched:%s", rule.ID)),
+			RuleID:      rule.ID,
+			Severity:    defaultSeverity(rule.Severity),
+			Reason:      defaultReason(rule.Reason, fmt.Sprintf("shadow_rule_matched:%s", rule.ID)),
+			Explanation: rule.Reason,
 		})
 	}
 
