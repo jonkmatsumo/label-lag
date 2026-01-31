@@ -16,6 +16,8 @@ interface TrainBody {
 interface DeployBody {
   model_version?: string;
   run_id?: string;
+  actor: string;
+  reason: string;
 }
 
 /**
@@ -72,9 +74,12 @@ export async function modelRoutes(
       schema: {
         body: {
           type: 'object',
+          required: ['actor', 'reason'],
           properties: {
             model_version: { type: 'string' },
             run_id: { type: 'string' },
+            actor: { type: 'string' },
+            reason: { type: 'string' },
           },
         },
       },

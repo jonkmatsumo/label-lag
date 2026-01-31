@@ -281,7 +281,7 @@ class DeployModelRequest(BaseModel):
     """Request schema for deploying a model to production."""
 
     actor: str = Field(..., description="Who is deploying this model")
-    reason: str | None = Field(None, description="Optional reason for deployment")
+    reason: str = Field(..., description="Reason for deployment")
 
 
 class DeployModelResponse(BaseModel):
@@ -897,7 +897,7 @@ class PublishRuleRequest(BaseModel):
     """Request schema for publishing an approved rule."""
 
     actor: str = Field(..., description="Who is publishing this rule")
-    reason: str | None = Field(None, description="Optional reason for publishing")
+    reason: str = Field(..., description="Reason for publishing")
 
 
 class PublishRuleResponse(BaseModel):

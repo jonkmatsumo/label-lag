@@ -15,6 +15,11 @@ interface PublishRuleParams {
   id: string;
 }
 
+interface PublishRuleBody {
+  actor: string;
+  reason: string;
+}
+
 interface SandboxEvaluateBody {
   base_score: number;
   features: Record<string, unknown>;
@@ -52,7 +57,7 @@ export async function rulesRoutes(
   );
 
   // POST /bff/v1/rules/:id/publish - Publish approved rule to production
-  fastify.post<{ Params: PublishRuleParams }>(
+  fastify.post<{ Params: PublishRuleParams; Body: PublishRuleBody }>(
     '/bff/v1/rules/:id/publish',
     {
       schema: {
@@ -63,18 +68,28 @@ export async function rulesRoutes(
             id: { type: 'string' },
           },
         },
+        body: {
+          type: 'object',
+          required: ['actor', 'reason'],
+          properties: {
+            actor: { type: 'string' },
+            reason: { type: 'string' },
+          },
+        },
       },
     },
     async (
-      request: FastifyRequest<{ Params: PublishRuleParams }>,
+      request: FastifyRequest<{ Params: PublishRuleParams; Body: PublishRuleBody }>,
       reply: FastifyReply
     ) => {
       try {
         const { id } = request.params;
+        const publishRequest: PublishRuleRequest = request.body;
 
         const response = await httpClient.request<PublishRuleResponse>({
           method: 'POST',
           path: `/rules/${id}/publish`,
+          body: publishRequest,
           requestId: request.requestId,
         });
 
