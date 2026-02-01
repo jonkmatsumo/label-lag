@@ -190,8 +190,8 @@ export function WhatIf() {
                   format="percent"
                 />
                 <DeltaMetric
-                  label="Flagged Rate"
-                  value={result.delta.flagged_rate_change}
+                  label="Match Rate"
+                  value={result.delta.match_rate_delta}
                   format="percent"
                 />
               </div>
