@@ -37,10 +37,22 @@ type server struct {
 	db *sql.DB
 }
 
+const (
+	maxDaysLimit         = 365
+	maxTransactionLimit  = 5000
+	maxAlertLimit        = 1000
+	maxSampleSizeLimit   = 5000
+	defaultDailyStatsDay = 30
+	defaultTxnDays       = 7
+	defaultTxnLimit      = 1000
+	defaultAlertLimit    = 50
+	defaultSampleSize    = 100
+)
+
 func (s *server) GetDailyStats(ctx context.Context, req *pb.GetDailyStatsRequest) (*pb.GetDailyStatsResponse, error) {
-	days := req.Days
-	if days == 0 {
-		days = 30
+	days, err := normalizeDays(req.Days, defaultDailyStatsDay, maxDaysLimit)
+	if err != nil {
+		return nil, err
 	}
 	cutoffDate := time.Now().AddDate(0, 0, -int(days))
 
@@ -92,13 +104,13 @@ func (s *server) GetDailyStats(ctx context.Context, req *pb.GetDailyStatsRequest
 }
 
 func (s *server) GetTransactionDetails(ctx context.Context, req *pb.GetTransactionDetailsRequest) (*pb.GetTransactionDetailsResponse, error) {
-	days := req.Days
-	if days == 0 {
-		days = 7
+	days, err := normalizeDays(req.Days, defaultTxnDays, maxDaysLimit)
+	if err != nil {
+		return nil, err
 	}
-	limit := req.Limit
-	if limit == 0 {
-		limit = 1000
+	limit, err := normalizeLimit(req.Limit, defaultTxnLimit, maxTransactionLimit, "limit")
+	if err != nil {
+		return nil, err
 	}
 	cutoffDate := time.Now().AddDate(0, 0, -int(days))
 
@@ -161,9 +173,9 @@ func (s *server) GetTransactionDetails(ctx context.Context, req *pb.GetTransacti
 }
 
 func (s *server) GetRecentAlerts(ctx context.Context, req *pb.GetRecentAlertsRequest) (*pb.GetRecentAlertsResponse, error) {
-	limit := req.Limit
-	if limit == 0 {
-		limit = 50
+	limit, err := normalizeLimit(req.Limit, defaultAlertLimit, maxAlertLimit, "limit")
+	if err != nil {
+		return nil, err
 	}
 
 	// Constants taken from data_service.py
@@ -506,9 +518,9 @@ func (s *server) GetSchemaSummary(ctx context.Context, req *pb.GetSchemaSummaryR
 }
 
 func (s *server) GetFeatureSample(ctx context.Context, req *pb.GetFeatureSampleRequest) (*pb.GetFeatureSampleResponse, error) {
-	sampleSize := req.SampleSize
-	if sampleSize <= 0 {
-		sampleSize = 100
+	sampleSize, err := normalizeLimit(req.SampleSize, defaultSampleSize, maxSampleSizeLimit, "sample_size")
+	if err != nil {
+		return nil, err
 	}
 
 	pgVersion, _ := getPostgresVersion(ctx, s.db)
@@ -643,6 +655,26 @@ func (s *server) executeQuery(ctx context.Context, query string) ([]*pb.FeatureS
 		samples = append(samples, &sample)
 	}
 	return samples, nil
+}
+
+func normalizeDays(value, fallback, max int32) (int32, error) {
+	if value == 0 {
+		value = fallback
+	}
+	if value < 1 || value > max {
+		return 0, status.Errorf(codes.InvalidArgument, "days must be between 1 and %d", max)
+	}
+	return value, nil
+}
+
+func normalizeLimit(value, fallback, max int32, field string) (int32, error) {
+	if value == 0 {
+		value = fallback
+	}
+	if value < 1 || value > max {
+		return 0, status.Errorf(codes.InvalidArgument, "%s must be between 1 and %d", field, max)
+	}
+	return value, nil
 }
 
 // loggingInterceptor logs the details of each gRPC request and response.
