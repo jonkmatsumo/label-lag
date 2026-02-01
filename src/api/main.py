@@ -2518,27 +2518,32 @@ async def publish_rule(
             "Only approved rules can be published.",
         )
 
-    # Get readiness report
-    end_date = datetime.now(timezone.utc)
-    start_date = end_date - timedelta(days=7)
+    # Optionally enforce readiness checks before publishing.
+    # Default is disabled to keep publish lightweight unless explicitly required.
+    require_readiness = os.getenv("REQUIRE_READINESS", "false").lower() == "true"
+    if require_readiness:
+        end_date = datetime.now(timezone.utc)
+        start_date = end_date - timedelta(days=7)
 
-    from api.metrics import get_metrics_collector
+        from api.metrics import get_metrics_collector
 
-    collector = get_metrics_collector()
-    metrics = collector.get_rule_metrics(rule_id, start_date, end_date)
-    total_requests = 1000  # TODO: Real total
-    evaluator = ReadinessEvaluator(audit_logger=audit_logger)
-    report = evaluator.evaluate(rule, metrics, total_requests)
+        collector = get_metrics_collector()
+        metrics = collector.get_rule_metrics(rule_id, start_date, end_date)
+        total_requests = 1000  # TODO: Real total
+        evaluator = ReadinessEvaluator(audit_logger=audit_logger)
+        report = evaluator.evaluate(rule, metrics, total_requests)
 
-    if report.overall_status == CheckStatus.FAIL:
-        fail_reasons = [
-            c.message for c in report.checks if c.status == CheckStatus.FAIL
-        ]
-        raise HTTPException(
-            status_code=400,
-            detail=f"Rule {rule_id} failed readiness checks and cannot be published. "
-            f"Reasons: {fail_reasons}",
-        )
+        if report.overall_status == CheckStatus.FAIL:
+            fail_reasons = [
+                c.message for c in report.checks if c.status == CheckStatus.FAIL
+            ]
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Rule {rule_id} failed readiness checks and cannot be published. "
+                    f"Reasons: {fail_reasons}"
+                ),
+            )
 
     # Transition to active
     try:

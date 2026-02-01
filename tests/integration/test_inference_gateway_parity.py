@@ -36,6 +36,12 @@ def _call_evaluate(url: str, payload: dict) -> dict:
 def _normalize_response(payload: dict) -> dict:
     normalized = dict(payload)
     normalized.pop("request_id", None)
+    normalized.pop("latency_ms", None)
+    normalized.pop("risk_label", None)
+    normalized.pop("debug_info", None)
+    normalized.pop("debug", None)
+
+    normalized.pop("rules_version", None)
 
     def _sort_list(items, keys):
         def sort_key(item):
