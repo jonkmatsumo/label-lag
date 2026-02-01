@@ -35,17 +35,14 @@ export interface SignalRequest {
 }
 
 export interface RiskComponent {
-  name: string;
-  score: number;
-  weight: number;
+  key: string;
+  label: string;
 }
 
 export interface MatchedRule {
   rule_id: string;
-  name: string;
-  action: string;
-  score_adjustment?: number;
-  reason?: string;
+  severity: string;
+  reason: string;
   explanation?: string;
 }
 
