@@ -55,12 +55,22 @@ func main() {
 	}()
 
 	rulesProvider := rules.Provider(rules.NewEmptyProvider())
-	if rulesPath := os.Getenv("INFERENCE_GATEWAY_RULES_PATH"); rulesPath != "" {
+	if apiURL := os.Getenv("INFERENCE_GATEWAY_API_URL"); apiURL != "" {
+		ttl := 5 * time.Minute
+		if ttlStr := os.Getenv("INFERENCE_GATEWAY_RULES_TTL"); ttlStr != "" {
+			if d, err := time.ParseDuration(ttlStr); err == nil {
+				ttl = d
+			}
+		}
+		logger.Info("using API rules provider", "url", apiURL, "ttl", ttl)
+		rulesProvider = rules.NewAPIProvider(apiURL, ttl)
+	} else if rulesPath := os.Getenv("INFERENCE_GATEWAY_RULES_PATH"); rulesPath != "" {
 		fileProvider, err := rules.NewFileProvider(rulesPath)
 		if err != nil {
 			logger.Error("failed to load rules file", "error", err)
 			os.Exit(1)
 		}
+		logger.Info("using file rules provider", "path", rulesPath)
 		rulesProvider = fileProvider
 	}
 

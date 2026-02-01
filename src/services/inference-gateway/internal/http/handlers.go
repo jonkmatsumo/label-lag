@@ -6,12 +6,15 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"time"
 
 	grpcclient "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/grpc"
 	inferencev1 "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/grpc/inferencev1/inference/v1"
 	gatewayv1 "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/http/gatewayv1/gateway/v1"
 	"github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/requestid"
 	"github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/rules"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -40,6 +43,9 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
+
+	startTime := time.Now()
+	span := trace.SpanFromContext(r.Context())
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -101,6 +107,57 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Calculate rule impacts for logging
+	impacts := make(map[string]float64)
+	ruleImpacts := []map[string]any{}
+
+	if int(rawScore) != ruleResult.FinalScore {
+		totalDelta := math.Abs(float64(ruleResult.FinalScore - int(rawScore)))
+		if len(ruleResult.MatchedRules) > 0 {
+			perRuleDelta := totalDelta / float64(len(ruleResult.MatchedRules))
+			for _, rid := range ruleResult.MatchedRules {
+				impacts[rid] = perRuleDelta
+			}
+		}
+	}
+
+	for _, rid := range ruleResult.MatchedRules {
+		ruleImpacts = append(ruleImpacts, map[string]any{
+			"rule_id":     rid,
+			"is_shadow":   false,
+			"score_delta": impacts[rid],
+		})
+	}
+	for _, rid := range ruleResult.ShadowMatchedRules {
+		ruleImpacts = append(ruleImpacts, map[string]any{
+			"rule_id":     rid,
+			"is_shadow":   true,
+			"score_delta": 0.0,
+		})
+	}
+
+	// Structured inference event logging
+	event := map[string]any{
+		"request_id":    requestID,
+		"timestamp":     time.Now().Format(time.RFC3339),
+		"model_version": inferenceResp.GetModelVersion(),
+		"rules_version": ruleset.Version,
+		"model_score":   rawScore,
+		"final_score":   ruleResult.FinalScore,
+		"rule_impacts":  ruleImpacts,
+	}
+	h.logger.Info("InferenceEvent", "event", event)
+
+	// OTEL attributes
+	span.SetAttributes(
+		attribute.String("app.request_id", requestID),
+		attribute.String("app.model_version", inferenceResp.GetModelVersion()),
+		attribute.String("app.rules_version", ruleset.Version),
+		attribute.Int("app.model_score", int(rawScore)),
+		attribute.Int("app.final_score", ruleResult.FinalScore),
+		attribute.Int("app.rule_matches", len(ruleResult.MatchedRules)),
+	)
+
 	riskComponents := buildRiskComponents(features)
 	for _, explanation := range ruleResult.Explanations {
 		riskComponents = append(riskComponents, &gatewayv1.RiskComponent{
@@ -109,9 +166,20 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	latencyMs := float64(time.Since(startTime).Microseconds()) / 1000.0
+
+	riskLabel := "LOW"
+	if ruleResult.FinalScore >= 80 {
+		riskLabel = "HIGH"
+	} else if ruleResult.FinalScore >= 30 {
+		riskLabel = "MEDIUM"
+	}
+
 	response := &gatewayv1.SignalResponse{
 		RequestId:          requestID,
 		Score:              int32(ruleResult.FinalScore),
+		RiskLabel:          riskLabel,
+		LatencyMs:          latencyMs,
 		RiskComponents:     riskComponents,
 		ModelVersion:       inferenceResp.GetModelVersion(),
 		MatchedRules:       buildMatchedRules(ruleResult.Explanations),
@@ -151,9 +219,10 @@ func buildMatchedRules(explanations []rules.Explanation) []*gatewayv1.MatchedRul
 	matched := make([]*gatewayv1.MatchedRule, 0, len(explanations))
 	for _, exp := range explanations {
 		matched = append(matched, &gatewayv1.MatchedRule{
-			RuleId:   exp.RuleID,
-			Severity: exp.Severity,
-			Reason:   exp.Reason,
+			RuleId:      exp.RuleID,
+			Severity:    exp.Severity,
+			Reason:      exp.Reason,
+			Explanation: exp.Explanation,
 		})
 	}
 	return matched

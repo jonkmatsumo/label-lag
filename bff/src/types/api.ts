@@ -45,23 +45,39 @@ export interface MatchedRule {
   name: string;
   action: string;
   score_adjustment?: number;
+  explanation?: string;
 }
 
 export interface SignalResponse {
   request_id: string;
   score: number;
+  risk_label: 'LOW' | 'MEDIUM' | 'HIGH';
+  latency_ms: number;
   risk_components: RiskComponent[];
   model_version: string;
+  ruleset_version?: string;
   matched_rules: MatchedRule[];
   shadow_matched_rules?: MatchedRule[];
+  debug?: Record<string, unknown>;
 }
 
 // Training types
+export interface TuningConfig {
+  enabled: boolean;
+  n_trials?: number;
+  timeout_minutes?: number;
+  metric?: 'pr_auc' | 'roc_auc' | 'f1';
+}
+
 export interface TrainRequest {
   name?: string;
   test_size?: number;
   random_seed?: number;
   selected_columns?: string[];
+  max_depth?: number;
+  learning_rate?: number;
+  n_estimators?: number;
+  tuning_config?: TuningConfig;
 }
 
 export interface TrainResponse {
@@ -75,12 +91,16 @@ export interface TrainResponse {
 export interface DeployRequest {
   model_version?: string;
   run_id?: string;
+  actor: string;
+  reason: string;
 }
 
 export interface DeployResponse {
   status: string;
   message: string;
   model_version?: string;
+  deployed_at?: string;
+  previous_version?: string;
 }
 
 // Rule types
@@ -97,9 +117,61 @@ export interface DraftRule {
   created_by?: string;
 }
 
+export interface ApprovalSignalItem {
+  signal_id: string;
+  category: string;
+  severity: 'info' | 'warning' | 'risk';
+  value: unknown;
+  label: string;
+  description: string;
+}
+
+export interface ApprovalSignalsSummary {
+  risk_count: number;
+  warning_count: number;
+  info_count: number;
+  has_blockers: boolean;
+}
+
+export interface ApprovalSignalsResponse {
+  rule_id: string;
+  computed_at: string;
+  signals: ApprovalSignalItem[];
+  summary: ApprovalSignalsSummary;
+  partial: boolean;
+  unavailable_signals: string[];
+}
+
 export interface DraftRulesResponse {
   rules: DraftRule[];
   total: number;
+}
+
+export interface ApprovalSignal {
+  type: string;
+  label: string;
+  severity: 'info' | 'warning' | 'risk';
+  description: string;
+  value?: unknown;
+}
+
+export interface RuleGovernance {
+  actor?: string;
+  reason?: string;
+  readiness?: {
+    status: 'pass' | 'warn' | 'fail';
+    checks: Array<{
+      name: string;
+      status: 'pass' | 'warn' | 'fail';
+      message: string;
+    }>;
+  };
+  approval_signals?: ApprovalSignal[];
+}
+
+export interface PublishRuleRequest {
+  actor: string;
+  reason: string;
 }
 
 export interface PublishRuleResponse {
@@ -114,10 +186,12 @@ export interface SandboxEvaluateRequest {
   base_score: number;
   features: Record<string, unknown>;
   rule_ids?: string[];
+  custom_ruleset?: unknown;
 }
 
 export interface SandboxEvaluateResponse {
   final_score: number;
+  risk_label: 'LOW' | 'MEDIUM' | 'HIGH';
   matched_rules: MatchedRule[];
   shadow_matched_rules: MatchedRule[];
   evaluation_details: Record<string, unknown>;
@@ -140,6 +214,8 @@ export interface BacktestMetrics {
   flagged_transactions: number;
   true_positives: number;
   false_positives: number;
+  match_rate: number;
+  rejected_count: number;
 }
 
 export interface BacktestCompareResponse {
@@ -150,6 +226,8 @@ export interface BacktestCompareResponse {
     recall: number;
     f1_score: number;
     flagged_rate_change: number;
+    match_rate_delta: number;
+    rejected_count_delta: number;
   };
   job_id?: string;
 }
@@ -159,19 +237,18 @@ export interface AnalyticsOverviewResponse {
   total_users: number;
   total_transactions: number;
   fraud_rate: number;
+  fraud_count: number;
   unique_merchants: number;
-  date_range: {
-    min: string;
-    max: string;
-  };
+  min_timestamp: string;
+  max_timestamp: string;
 }
 
 export interface DailyStat {
   date: string;
-  transaction_count: number;
-  fraud_count: number;
+  total_transactions: number;
+  fraud_transactions: number;
+  fraud_rate: number;
   total_amount: number;
-  avg_amount: number;
 }
 
 export interface DailyStatsResponse {
@@ -195,11 +272,11 @@ export interface TransactionDetailsResponse {
 }
 
 export interface RecentAlert {
-  transaction_id: string;
+  id: string;
   user_id: string;
   amount: number;
   score: number;
-  timestamp: string;
+  created_at: string;
   matched_rules: string[];
 }
 
@@ -221,9 +298,9 @@ export interface DatasetFingerprintResponse {
 }
 
 export interface FeatureSample {
-  id: string;
-  features: Record<string, number>;
-  is_fraud: boolean;
+  record_id: string;
+  is_fraudulent: boolean;
+  [key: string]: unknown;
 }
 
 export interface FeatureSampleResponse {
@@ -272,28 +349,28 @@ export interface RuleAttributionResponse {
 
 // Monitoring types
 export interface FeatureDriftDetail {
-  feature_name: string;
-  psi_value: number;
-  status: 'ok' | 'warning' | 'critical';
+  feature: string;
+  psi: number;
+  status: 'OK' | 'WARN' | 'FAIL';
   reference_mean?: number;
   live_mean?: number;
 }
 
 export interface DriftStatusResponse {
-  status: 'ok' | 'warning' | 'critical' | 'error';
+  status: 'ok' | 'warn' | 'fail' | 'error';
   message: string;
   drift_detected: boolean;
   cached: boolean;
   computed_at?: string;
   hours_analyzed?: number;
+  live_size: number;
+  reference_size: number;
   threshold?: number;
-  feature_details?: FeatureDriftDetail[];
+  top_features?: FeatureDriftDetail[];
 }
 
 export interface RuleMetricsItem {
   rule_id: string;
-  period_start: string;
-  period_end: string;
   production_matches: number;
   shadow_matches: number;
   overlap_count: number;
@@ -309,11 +386,14 @@ export interface ShadowComparisonResponse {
 }
 
 export interface BacktestResult {
-  id: string;
-  rule_id: string;
+  job_id: string;
+  rule_id: string | null;
+  ruleset_version: string;
   created_at: string;
+  completed_at?: string;
   status: string;
   metrics?: BacktestMetrics;
+  error?: string;
 }
 
 export interface BacktestResultsListResponse {
@@ -323,17 +403,15 @@ export interface BacktestResultsListResponse {
 
 // Rules detail types
 export interface ReadinessCheck {
-  policy_type: string;
   name: string;
-  status: string;
+  status: 'pass' | 'warn' | 'fail';
   message: string;
-  details?: Record<string, unknown>;
 }
 
 export interface ReadinessReportResponse {
   rule_id: string;
   timestamp: string;
-  overall_status: string;
+  overall_status: 'pass' | 'warn' | 'fail';
   checks: ReadinessCheck[];
 }
 
@@ -365,17 +443,22 @@ export interface RuleVersionListResponse {
 }
 
 export interface FieldChange {
-  field: string;
+  field_name: string;
+  change_type: 'modified' | 'unchanged';
   old_value: unknown;
   new_value: unknown;
 }
 
 export interface RuleDiffResponse {
   rule_id: string;
-  version_a: string;
-  version_b: string;
+  version_a_id: string;
+  version_b_id: string;
   changes: FieldChange[];
   is_breaking: boolean;
+  version_a_timestamp?: string;
+  version_a_created_by?: string;
+  version_b_timestamp?: string;
+  version_b_created_by?: string;
 }
 
 export interface ProductionRule {

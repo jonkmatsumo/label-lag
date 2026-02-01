@@ -5,6 +5,8 @@ import type {
   PublishRuleResponse,
   SandboxEvaluateRequest,
   SandboxEvaluateResponse,
+  PublishRuleRequest,
+  ApprovalSignalsResponse,
 } from '../types/api.js';
 
 export interface RulesRoutesOptions {
@@ -13,6 +15,15 @@ export interface RulesRoutesOptions {
 
 interface PublishRuleParams {
   id: string;
+}
+
+interface RuleIdParams {
+  id: string;
+}
+
+interface PublishRuleBody {
+  actor: string;
+  reason: string;
 }
 
 interface SandboxEvaluateBody {
@@ -51,9 +62,9 @@ export async function rulesRoutes(
     }
   );
 
-  // POST /bff/v1/rules/:id/publish - Publish approved rule to production
-  fastify.post<{ Params: PublishRuleParams }>(
-    '/bff/v1/rules/:id/publish',
+  // GET /bff/v1/rules/draft/:id/signals - Get approval signals
+  fastify.get<{ Params: RuleIdParams }>(
+    '/bff/v1/rules/draft/:id/signals',
     {
       schema: {
         params: {
@@ -65,16 +76,59 @@ export async function rulesRoutes(
         },
       },
     },
+    async (request: FastifyRequest<{ Params: RuleIdParams }>, reply: FastifyReply) => {
+      try {
+        const { id } = request.params;
+        const response = await httpClient.request<ApprovalSignalsResponse>({
+          method: 'GET',
+          path: `/rules/draft/${encodeURIComponent(id)}/signals`,
+          requestId: request.requestId,
+        });
+
+        return reply.status(response.statusCode).send(response.data);
+      } catch (error) {
+        if (error instanceof UpstreamError) {
+          return reply.status(error.statusCode).send(error.toResponse());
+        }
+        throw error;
+      }
+    }
+  );
+
+  // POST /bff/v1/rules/:id/publish - Publish approved rule to production
+  fastify.post<{ Params: PublishRuleParams; Body: PublishRuleBody }>(
+    '/bff/v1/rules/:id/publish',
+    {
+      schema: {
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: {
+            id: { type: 'string' },
+          },
+        },
+        body: {
+          type: 'object',
+          required: ['actor', 'reason'],
+          properties: {
+            actor: { type: 'string' },
+            reason: { type: 'string' },
+          },
+        },
+      },
+    },
     async (
-      request: FastifyRequest<{ Params: PublishRuleParams }>,
+      request: FastifyRequest<{ Params: PublishRuleParams; Body: PublishRuleBody }>,
       reply: FastifyReply
     ) => {
       try {
         const { id } = request.params;
+        const publishRequest: PublishRuleRequest = request.body;
 
         const response = await httpClient.request<PublishRuleResponse>({
           method: 'POST',
           path: `/rules/${id}/publish`,
+          body: publishRequest,
           requestId: request.requestId,
         });
 

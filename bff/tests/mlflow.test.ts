@@ -78,4 +78,42 @@ describe('MLflow Routes', () => {
     expect(response.statusCode).toBe(200);
     expect(JSON.parse(response.payload).accuracy).toBe(0.9);
   });
+
+  it('POST /bff/v1/mlflow/runs/search should return runs with metrics', async () => {
+    const mockPool = mockAgent.get('http://mlflow:5000');
+    mockPool.intercept({
+      path: '/api/2.0/mlflow/runs/search',
+      method: 'POST'
+    }).reply(200, {
+      runs: [
+        { 
+          info: { run_id: "run1" }, 
+          data: { 
+            metrics: [{ key: "pr_auc", value: 0.85 }],
+            tags: [{ key: "mlflow.runName", value: "v1" }]
+          } 
+        },
+        { 
+          info: { run_id: "run2" }, 
+          data: { 
+            metrics: [{ key: "pr_auc", value: 0.88 }],
+            tags: [{ key: "mlflow.runName", value: "v2" }]
+          } 
+        }
+      ]
+    });
+
+    const response = await fastify.inject({
+      method: 'POST',
+      url: '/bff/v1/mlflow/runs/search',
+      payload: {
+        filter: "metrics.pr_auc > 0.8"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.payload);
+    expect(body.runs).toHaveLength(2);
+    expect(body.runs[0].data.metrics[0].key).toBe("pr_auc");
+  });
 });

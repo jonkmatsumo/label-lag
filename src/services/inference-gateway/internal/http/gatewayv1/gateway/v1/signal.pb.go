@@ -9,6 +9,7 @@ package gatewayv1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	structpb "google.golang.org/protobuf/types/known/structpb"
 	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 	reflect "reflect"
 	sync "sync"
@@ -147,6 +148,7 @@ type MatchedRule struct {
 	RuleId        string                 `protobuf:"bytes,1,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
 	Severity      string                 `protobuf:"bytes,2,opt,name=severity,proto3" json:"severity,omitempty"`
 	Reason        string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	Explanation   string                 `protobuf:"bytes,4,opt,name=explanation,proto3" json:"explanation,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -202,16 +204,26 @@ func (x *MatchedRule) GetReason() string {
 	return ""
 }
 
+func (x *MatchedRule) GetExplanation() string {
+	if x != nil {
+		return x.Explanation
+	}
+	return ""
+}
+
 type SignalResponse struct {
 	state              protoimpl.MessageState  `protogen:"open.v1"`
 	RequestId          string                  `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
 	Score              int32                   `protobuf:"varint,2,opt,name=score,proto3" json:"score,omitempty"`
+	RiskLabel          string                  `protobuf:"bytes,9,opt,name=risk_label,json=riskLabel,proto3" json:"risk_label,omitempty"`
+	LatencyMs          float64                 `protobuf:"fixed64,10,opt,name=latency_ms,json=latencyMs,proto3" json:"latency_ms,omitempty"`
 	RiskComponents     []*RiskComponent        `protobuf:"bytes,3,rep,name=risk_components,json=riskComponents,proto3" json:"risk_components,omitempty"`
 	ModelVersion       string                  `protobuf:"bytes,4,opt,name=model_version,json=modelVersion,proto3" json:"model_version,omitempty"`
 	MatchedRules       []*MatchedRule          `protobuf:"bytes,5,rep,name=matched_rules,json=matchedRules,proto3" json:"matched_rules,omitempty"`
 	ModelScore         *wrapperspb.Int32Value  `protobuf:"bytes,6,opt,name=model_score,json=modelScore,proto3" json:"model_score,omitempty"`
 	RulesVersion       *wrapperspb.StringValue `protobuf:"bytes,7,opt,name=rules_version,json=rulesVersion,proto3" json:"rules_version,omitempty"`
 	ShadowMatchedRules []*MatchedRule          `protobuf:"bytes,8,rep,name=shadow_matched_rules,json=shadowMatchedRules,proto3" json:"shadow_matched_rules,omitempty"`
+	DebugInfo          *structpb.Struct        `protobuf:"bytes,11,opt,name=debug_info,json=debugInfo,proto3" json:"debug_info,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -260,6 +272,20 @@ func (x *SignalResponse) GetScore() int32 {
 	return 0
 }
 
+func (x *SignalResponse) GetRiskLabel() string {
+	if x != nil {
+		return x.RiskLabel
+	}
+	return ""
+}
+
+func (x *SignalResponse) GetLatencyMs() float64 {
+	if x != nil {
+		return x.LatencyMs
+	}
+	return 0
+}
+
 func (x *SignalResponse) GetRiskComponents() []*RiskComponent {
 	if x != nil {
 		return x.RiskComponents
@@ -302,12 +328,19 @@ func (x *SignalResponse) GetShadowMatchedRules() []*MatchedRule {
 	return nil
 }
 
+func (x *SignalResponse) GetDebugInfo() *structpb.Struct {
+	if x != nil {
+		return x.DebugInfo
+	}
+	return nil
+}
+
 var File_gateway_v1_signal_proto protoreflect.FileDescriptor
 
 const file_gateway_v1_signal_proto_rawDesc = "" +
 	"\n" +
 	"\x17gateway/v1/signal.proto\x12\n" +
-	"gateway.v1\x1a\x1egoogle/protobuf/wrappers.proto\"\x90\x01\n" +
+	"gateway.v1\x1a\x1egoogle/protobuf/wrappers.proto\x1a\x1cgoogle/protobuf/struct.proto\"\x90\x01\n" +
 	"\rSignalRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x16\n" +
 	"\x06amount\x18\x02 \x01(\x01R\x06amount\x12\x1a\n" +
@@ -315,22 +348,30 @@ const file_gateway_v1_signal_proto_rawDesc = "" +
 	"\x15client_transaction_id\x18\x04 \x01(\tR\x13clientTransactionId\"7\n" +
 	"\rRiskComponent\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05label\x18\x02 \x01(\tR\x05label\"Z\n" +
+	"\x05label\x18\x02 \x01(\tR\x05label\"|\n" +
 	"\vMatchedRule\x12\x17\n" +
 	"\arule_id\x18\x01 \x01(\tR\x06ruleId\x12\x1a\n" +
 	"\bseverity\x18\x02 \x01(\tR\bseverity\x12\x16\n" +
-	"\x06reason\x18\x03 \x01(\tR\x06reason\"\xb8\x03\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\x12 \n" +
+	"\vexplanation\x18\x04 \x01(\tR\vexplanation\"\xae\x04\n" +
 	"\x0eSignalResponse\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x14\n" +
-	"\x05score\x18\x02 \x01(\x05R\x05score\x12B\n" +
+	"\x05score\x18\x02 \x01(\x05R\x05score\x12\x1d\n" +
+	"\n" +
+	"risk_label\x18\t \x01(\tR\triskLabel\x12\x1d\n" +
+	"\n" +
+	"latency_ms\x18\n" +
+	" \x01(\x01R\tlatencyMs\x12B\n" +
 	"\x0frisk_components\x18\x03 \x03(\v2\x19.gateway.v1.RiskComponentR\x0eriskComponents\x12#\n" +
 	"\rmodel_version\x18\x04 \x01(\tR\fmodelVersion\x12<\n" +
 	"\rmatched_rules\x18\x05 \x03(\v2\x17.gateway.v1.MatchedRuleR\fmatchedRules\x12<\n" +
 	"\vmodel_score\x18\x06 \x01(\v2\x1b.google.protobuf.Int32ValueR\n" +
 	"modelScore\x12A\n" +
 	"\rrules_version\x18\a \x01(\v2\x1c.google.protobuf.StringValueR\frulesVersion\x12I\n" +
-	"\x14shadow_matched_rules\x18\b \x03(\v2\x17.gateway.v1.MatchedRuleR\x12shadowMatchedRulesBcZagithub.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/http/gatewayv1;gatewayv1b\x06proto3"
+	"\x14shadow_matched_rules\x18\b \x03(\v2\x17.gateway.v1.MatchedRuleR\x12shadowMatchedRules\x126\n" +
+	"\n" +
+	"debug_info\x18\v \x01(\v2\x17.google.protobuf.StructR\tdebugInfoBcZagithub.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/http/gatewayv1;gatewayv1b\x06proto3"
 
 var (
 	file_gateway_v1_signal_proto_rawDescOnce sync.Once
@@ -352,6 +393,7 @@ var file_gateway_v1_signal_proto_goTypes = []any{
 	(*SignalResponse)(nil),         // 3: gateway.v1.SignalResponse
 	(*wrapperspb.Int32Value)(nil),  // 4: google.protobuf.Int32Value
 	(*wrapperspb.StringValue)(nil), // 5: google.protobuf.StringValue
+	(*structpb.Struct)(nil),        // 6: google.protobuf.Struct
 }
 var file_gateway_v1_signal_proto_depIdxs = []int32{
 	1, // 0: gateway.v1.SignalResponse.risk_components:type_name -> gateway.v1.RiskComponent
@@ -359,11 +401,12 @@ var file_gateway_v1_signal_proto_depIdxs = []int32{
 	4, // 2: gateway.v1.SignalResponse.model_score:type_name -> google.protobuf.Int32Value
 	5, // 3: gateway.v1.SignalResponse.rules_version:type_name -> google.protobuf.StringValue
 	2, // 4: gateway.v1.SignalResponse.shadow_matched_rules:type_name -> gateway.v1.MatchedRule
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	6, // 5: gateway.v1.SignalResponse.debug_info:type_name -> google.protobuf.Struct
+	6, // [6:6] is the sub-list for method output_type
+	6, // [6:6] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_gateway_v1_signal_proto_init() }

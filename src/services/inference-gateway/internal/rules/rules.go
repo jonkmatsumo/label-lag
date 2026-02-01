@@ -36,9 +36,10 @@ type RuleSet struct {
 }
 
 type Explanation struct {
-	RuleID   string
-	Severity string
-	Reason   string
+	RuleID      string
+	Severity    string
+	Reason      string
+	Explanation string
 }
 
 type RuleResult struct {
@@ -84,9 +85,10 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset RuleSet) (
 
 		matched = append(matched, rule.ID)
 		explanations = append(explanations, Explanation{
-			RuleID:   rule.ID,
-			Severity: defaultSeverity(rule.Severity),
-			Reason:   defaultReason(rule.Reason, fmt.Sprintf("rule_matched:%s", rule.ID)),
+			RuleID:      rule.ID,
+			Severity:    defaultSeverity(rule.Severity),
+			Reason:      defaultReason(rule.Reason, fmt.Sprintf("rule_matched:%s", rule.ID)),
+			Explanation: rule.Reason,
 		})
 
 		switch rule.Action {
@@ -98,11 +100,13 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset RuleSet) (
 				if rule.Score == nil {
 					return RuleResult{}, errors.New("override_score requires score")
 				}
-				score = *rule.Score
+				if !rejected {
+					score = *rule.Score
+				}
 				overrideApplied = true
 			}
 		case "clamp_min":
-			if !overrideApplied {
+			if !overrideApplied && !rejected {
 				if rule.Score == nil {
 					return RuleResult{}, errors.New("clamp_min requires score")
 				}
@@ -111,7 +115,7 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset RuleSet) (
 				}
 			}
 		case "clamp_max":
-			if !overrideApplied {
+			if !overrideApplied && !rejected {
 				if rule.Score == nil {
 					return RuleResult{}, errors.New("clamp_max requires score")
 				}
@@ -135,9 +139,10 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset RuleSet) (
 
 		shadowMatched = append(shadowMatched, rule.ID)
 		shadowExplanations = append(shadowExplanations, Explanation{
-			RuleID:   rule.ID,
-			Severity: defaultSeverity(rule.Severity),
-			Reason:   defaultReason(rule.Reason, fmt.Sprintf("shadow_rule_matched:%s", rule.ID)),
+			RuleID:      rule.ID,
+			Severity:    defaultSeverity(rule.Severity),
+			Reason:      defaultReason(rule.Reason, fmt.Sprintf("shadow_rule_matched:%s", rule.ID)),
+			Explanation: rule.Reason,
 		})
 	}
 

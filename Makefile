@@ -1,4 +1,14 @@
-.PHONY: install test lint clean infra-up infra-down infra-logs app-up app-down app-build app-rebuild app-logs rebuild-api rebuild-bff rebuild-web bff-test web-test reset-db reset-minio reset-all
+.PHONY: up down restart install test lint clean infra-up infra-down infra-logs app-up app-down app-build app-rebuild app-logs rebuild-api rebuild-bff rebuild-web bff-test web-test reset-db reset-minio reset-all
+
+# Catch-all start command
+up: app-up
+
+# Catch-all stop command
+down:
+	docker compose -f docker-compose.infra.yml -f docker-compose.app.yml down
+
+# Catch-all restart command
+restart: down up
 
 install:
 	uv sync --all-extras
@@ -40,7 +50,7 @@ app-up:
 	docker compose -f docker-compose.infra.yml -f docker-compose.app.yml up -d
 
 app-down:
-	docker compose -f docker-compose.app.yml down
+	docker compose -f docker-compose.infra.yml -f docker-compose.app.yml down
 
 app-build:
 	docker compose -f docker-compose.infra.yml -f docker-compose.app.yml build
@@ -70,8 +80,7 @@ reset-minio:
 	docker compose -f docker-compose.infra.yml up -d minio create-buckets
 
 reset-all:
-	docker compose -f docker-compose.infra.yml down -v
-	docker compose -f docker-compose.app.yml down
+	docker compose -f docker-compose.infra.yml -f docker-compose.app.yml down -v
 
 # BFF (Backend for Frontend) targets
 rebuild-bff:

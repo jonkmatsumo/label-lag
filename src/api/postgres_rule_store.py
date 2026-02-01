@@ -109,7 +109,7 @@ def get_rule_database_url() -> str:
     # Construct from individual variables
     user = os.getenv("POSTGRES_USER", "synthetic")
     password = os.getenv("POSTGRES_PASSWORD", "synthetic_dev_password")
-    host = os.getenv("POSTGRES_HOST", "localhost")
+    host = os.getenv("POSTGRES_HOST", "db")
     port = os.getenv("POSTGRES_PORT", "5432")
     db = os.getenv("POSTGRES_DB", "synthetic_data")
 

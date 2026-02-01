@@ -8,11 +8,9 @@ from concurrent import futures
 
 import grpc
 
-from api.model_manager import get_model_manager
 from grpc_inference.config import GRPCInferenceConfig, load_config
 from grpc_inference.logging import configure_logging
 from grpc_inference.proto.inference.v1 import inference_pb2_grpc
-from grpc_inference.service import InferenceService
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +19,9 @@ def main() -> None:
     configure_logging()
     config = load_config()
     _apply_env_overrides(config)
+
+    from api.model_manager import get_model_manager
+    from grpc_inference.service import InferenceService
 
     manager = get_model_manager()
     if manager.load_production_model():

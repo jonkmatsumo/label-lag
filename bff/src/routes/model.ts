@@ -11,11 +11,22 @@ interface TrainBody {
   test_size?: number;
   random_seed?: number;
   selected_columns?: string[];
+  max_depth?: number;
+  learning_rate?: number;
+  n_estimators?: number;
+  tuning_config?: {
+    enabled: boolean;
+    n_trials?: number;
+    timeout_minutes?: number;
+    metric?: 'pr_auc' | 'roc_auc' | 'f1';
+  };
 }
 
 interface DeployBody {
   model_version?: string;
   run_id?: string;
+  actor: string;
+  reason: string;
 }
 
 /**
@@ -39,6 +50,19 @@ export async function modelRoutes(
             test_size: { type: 'number' },
             random_seed: { type: 'number' },
             selected_columns: { type: 'array', items: { type: 'string' } },
+            max_depth: { type: 'number' },
+            learning_rate: { type: 'number' },
+            n_estimators: { type: 'number' },
+            tuning_config: {
+              type: 'object',
+              required: ['enabled'],
+              properties: {
+                enabled: { type: 'boolean' },
+                n_trials: { type: 'number' },
+                timeout_minutes: { type: 'number' },
+                metric: { type: 'string', enum: ['pr_auc', 'roc_auc', 'f1'] },
+              },
+            },
           },
         },
       },
@@ -72,9 +96,12 @@ export async function modelRoutes(
       schema: {
         body: {
           type: 'object',
+          required: ['actor', 'reason'],
           properties: {
             model_version: { type: 'string' },
             run_id: { type: 'string' },
+            actor: { type: 'string' },
+            reason: { type: 'string' },
           },
         },
       },

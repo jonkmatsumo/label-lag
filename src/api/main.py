@@ -7,7 +7,7 @@ It does not modify transaction state - it only provides an evaluation.
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI, HTTPException, Query
@@ -26,7 +26,7 @@ from api.backtest import (
 from api.crud_client import get_crud_client
 from api.drift_cache import get_drift_cache
 from api.model_manager import get_model_manager
-from api.readiness import ReadinessEvaluator
+from api.readiness import CheckStatus, ReadinessEvaluator
 from api.schemas import (
     AcceptSuggestionRequest,
     AcceptSuggestionResponse,
@@ -1213,6 +1213,24 @@ async def get_heuristic_suggestions(
         engine = SuggestionEngine(min_confidence=min_confidence)
         suggestions = engine.generate_suggestions(field=field, min_samples=min_samples)
 
+        # Compute fingerprint from dataset state
+        fingerprint = None
+        try:
+            client = get_crud_client()
+            fp_resp = client.get_dataset_fingerprint()
+            if fp_resp:
+                import hashlib
+
+                # Create a simple hash from counts and timestamps
+                s = (
+                    f"{fp_resp.generated_records.count}-"
+                    f"{fp_resp.feature_snapshots.count}"
+                )
+                fingerprint = hashlib.sha256(s.encode()).hexdigest()
+        except Exception:
+            # Swallow errors for fingerprinting to avoid failing main request
+            pass
+
         # Convert to response (limit to 50)
         response_suggestions = []
         for s in suggestions[:50]:
@@ -1233,6 +1251,7 @@ async def get_heuristic_suggestions(
                         sample_count=evidence.get("sample_count", 0),
                     ),
                     reason=s.reason,
+                    dataset_fingerprint=fingerprint,
                 )
             )
 
@@ -2498,6 +2517,33 @@ async def publish_rule(
             detail=f"Rule {rule_id} is not approved (status: {rule.status}). "
             "Only approved rules can be published.",
         )
+
+    # Optionally enforce readiness checks before publishing.
+    # Default is disabled to keep publish lightweight unless explicitly required.
+    require_readiness = os.getenv("REQUIRE_READINESS", "false").lower() == "true"
+    if require_readiness:
+        end_date = datetime.now(timezone.utc)
+        start_date = end_date - timedelta(days=7)
+
+        from api.metrics import get_metrics_collector
+
+        collector = get_metrics_collector()
+        metrics = collector.get_rule_metrics(rule_id, start_date, end_date)
+        total_requests = 1000  # TODO: Real total
+        evaluator = ReadinessEvaluator(audit_logger=audit_logger)
+        report = evaluator.evaluate(rule, metrics, total_requests)
+
+        if report.overall_status == CheckStatus.FAIL:
+            fail_reasons = [
+                c.message for c in report.checks if c.status == CheckStatus.FAIL
+            ]
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Rule {rule_id} failed readiness checks and cannot be published. "
+                    f"Reasons: {fail_reasons}"
+                ),
+            )
 
     # Transition to active
     try:
@@ -4034,8 +4080,14 @@ async def check_rule_readiness(
     collector = get_metrics_collector()
     metrics = collector.get_rule_metrics(rule_id, start_date, end_date)
 
-    # Get total requests (placeholder logic, same as analytics)
-    total_requests = 1000  # TODO: Real total
+    # Get total requests
+    try:
+        crud = get_crud_client()
+        overview = crud.get_overview_metrics()
+        total_requests = overview.total_transactions
+    except Exception as e:
+        logger.warning(f"Failed to fetch total requests: {e}")
+        total_requests = 1000  # Fallback
 
     audit_logger = get_audit_logger()
     evaluator = ReadinessEvaluator(audit_logger=audit_logger)
