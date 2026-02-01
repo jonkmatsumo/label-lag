@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -74,7 +75,16 @@ func main() {
 		rulesProvider = fileProvider
 	}
 
-	handler := httpserver.NewHandler(logger, inferenceClient, rulesProvider)
+	maxBodyBytes := int64(1 << 20)
+	if maxBodyStr := os.Getenv("INFERENCE_GATEWAY_MAX_BODY_BYTES"); maxBodyStr != "" {
+		if parsed, err := strconv.ParseInt(maxBodyStr, 10, 64); err == nil && parsed > 0 {
+			maxBodyBytes = parsed
+		} else {
+			logger.Warn("invalid INFERENCE_GATEWAY_MAX_BODY_BYTES", "value", maxBodyStr)
+		}
+	}
+
+	handler := httpserver.NewHandler(logger, inferenceClient, rulesProvider, maxBodyBytes)
 	srv := httpserver.NewServer("0.0.0.0:"+port, logger, handler)
 
 	errCh := make(chan error, 1)

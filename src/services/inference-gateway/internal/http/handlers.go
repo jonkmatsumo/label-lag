@@ -24,13 +24,18 @@ type Handler struct {
 	logger          *slog.Logger
 	inferenceClient *grpcclient.InferenceClient
 	rulesProvider   rules.Provider
+	maxBodyBytes    int64
 }
 
-func NewHandler(logger *slog.Logger, client *grpcclient.InferenceClient, provider rules.Provider) *Handler {
+func NewHandler(logger *slog.Logger, client *grpcclient.InferenceClient, provider rules.Provider, maxBodyBytes int64) *Handler {
+	if maxBodyBytes <= 0 {
+		maxBodyBytes = 1 << 20
+	}
 	return &Handler{
 		logger:          logger,
 		inferenceClient: client,
 		rulesProvider:   provider,
+		maxBodyBytes:    maxBodyBytes,
 	}
 }
 
@@ -47,8 +52,14 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 	span := trace.SpanFromContext(r.Context())
 
+	r.Body = http.MaxBytesReader(w, r.Body, h.maxBodyBytes)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		}
 		writeJSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
