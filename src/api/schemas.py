@@ -1301,3 +1301,15 @@ class ColumnInfo(BaseModel):
 
 class SchemaSummaryResponse(BaseModel):
     columns: list[ColumnInfo]
+
+
+class RelationshipMetric(BaseModel):
+    feature_a: str
+    feature_b: str
+    metric_type: str  # 'pearson', 'cramers_v', 'eta'
+    value: float
+
+
+class DatasetRelationshipsResponse(BaseModel):
+    relationships: list[RelationshipMetric]
+    target_column: str

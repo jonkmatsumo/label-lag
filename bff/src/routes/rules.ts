@@ -30,6 +30,7 @@ interface SandboxEvaluateBody {
   base_score: number;
   features: Record<string, unknown>;
   rule_ids?: string[];
+  custom_ruleset?: unknown;
 }
 
 /**
@@ -154,6 +155,7 @@ export async function rulesRoutes(
             base_score: { type: 'number' },
             features: { type: 'object' },
             rule_ids: { type: 'array', items: { type: 'string' } },
+            custom_ruleset: { type: 'object', additionalProperties: true },
           },
         },
       },

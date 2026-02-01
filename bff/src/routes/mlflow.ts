@@ -130,4 +130,39 @@ export async function mlflowRoutes(
       }
     }
   );
+
+  // POST /bff/v1/mlflow/model-versions/transition-stage
+  fastify.post(
+    '/bff/v1/mlflow/model-versions/transition-stage',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['name', 'version', 'stage'],
+          properties: {
+            name: { type: 'string' },
+            version: { type: 'string' },
+            stage: { type: 'string', enum: ['Staging', 'Production', 'Archived', 'None'] },
+            archive_existing_versions: { type: 'boolean', default: false },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest<{ Body: { name: string; version: string; stage: string; archive_existing_versions?: boolean } }>, reply: FastifyReply) => {
+      try {
+        const response = await mlflowClient.request({
+          method: 'POST',
+          path: '/api/2.0/mlflow/model-versions/transition-stage',
+          body: request.body,
+          requestId: request.requestId,
+        });
+        return reply.status(response.statusCode).send(response.data);
+      } catch (error) {
+        if (error instanceof UpstreamError) {
+          return reply.status(error.statusCode).send(error.toResponse());
+        }
+        throw error;
+      }
+    }
+  );
 }

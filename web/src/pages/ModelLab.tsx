@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { modelApi, healthApi, monitoringApi } from '../api';
+import { useState, useMemo, useEffect } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { modelApi, healthApi, monitoringApi, datasetApi } from '../api';
 import { mlflowApi } from '../api/mlflow';
 import type { CvMetricsArtifact, TuningTrial, SplitManifest } from '../api/mlflow';
 import type { TrainRequest, TrainResponse, DeployResponse } from '../types/api';
@@ -9,7 +9,8 @@ import {
 } from 'recharts';
 import { 
   GitBranch, Play, AlertTriangle, 
-  CheckCircle, ChevronDown, ChevronRight, Terminal
+  CheckCircle, ChevronDown, ChevronRight, Terminal,
+  Filter, Calendar, Image as ImageIcon, FileText as FileIcon
 } from 'lucide-react';
 
 export function ModelLab() {
@@ -58,6 +59,8 @@ function TrainTab() {
     name: '',
     test_size: 0.2,
     random_seed: 42,
+    training_window_days: 30,
+    selected_feature_columns: [],
     max_depth: 6,
     learning_rate: 0.1,
     n_estimators: 100,
@@ -77,6 +80,12 @@ function TrainTab() {
     queryKey: ['health'],
     queryFn: healthApi.getHealth,
     refetchInterval: 30000,
+  });
+
+  // Fetch dataset schema for feature selection
+  const schemaQuery = useQuery({
+    queryKey: ['dataset', 'schema'],
+    queryFn: datasetApi.getSchema,
   });
 
   // Fetch drift status
@@ -227,6 +236,20 @@ function TrainTab() {
                   />
                 </div>
                 <div className="col-md-3">
+                  <label className="form-label d-flex align-items-center">
+                    <Calendar size={14} className="me-1 text-muted"/> Training Window
+                  </label>
+                  <input
+                    type="number"
+                    name="training_window_days"
+                    className="form-control"
+                    value={trainForm.training_window_days}
+                    onChange={e => setTrainForm({...trainForm, training_window_days: parseInt(e.target.value)})}
+                    min="7" max="90"
+                  />
+                  <div className="form-text small">7-90 days</div>
+                </div>
+                <div className="col-md-3">
                   <label className="form-label">Seed</label>
                   <input
                     type="number"
@@ -235,6 +258,42 @@ function TrainTab() {
                     value={trainForm.random_seed}
                     onChange={e => setTrainForm({...trainForm, random_seed: parseInt(e.target.value)})}
                   />
+                </div>
+
+                <div className="col-12">
+                  <label className="form-label d-flex align-items-center fw-bold">
+                    <Filter size={14} className="me-1 text-primary"/> Feature Selection
+                  </label>
+                  {schemaQuery.isLoading ? (
+                    <div className="text-center py-2"><div className="spinner-border spinner-border-sm text-primary"/></div>
+                  ) : schemaQuery.data ? (
+                    <div className="border rounded bg-light p-3" style={{maxHeight: '160px', overflowY: 'auto'}}>
+                      <div className="row g-2">
+                        {schemaQuery.data.columns.filter(c => c !== 'is_fraudulent').map(col => (
+                          <div key={col} className="col-md-4 col-sm-6">
+                            <div className="form-check">
+                              <input 
+                                className="form-check-input" type="checkbox" 
+                                id={`feat-${col}`}
+                                checked={trainForm.selected_feature_columns?.includes(col)}
+                                onChange={e => {
+                                  const current = trainForm.selected_feature_columns || [];
+                                  const next = e.target.checked 
+                                    ? [...current, col]
+                                    : current.filter(c => c !== col);
+                                  setTrainForm({...trainForm, selected_feature_columns: next});
+                                }}
+                              />
+                              <label className="form-check-label small text-truncate d-block" htmlFor={`feat-${col}`} title={col}>
+                                {col}
+                              </label>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : <div className="alert alert-warning py-1 small">Could not load feature list.</div>}
+                  <div className="form-text small">Leave all unchecked to use default feature set.</div>
                 </div>
 
                 <div className="col-12">
@@ -460,9 +519,17 @@ import { Send, User, FileText } from 'lucide-react';
 import React from 'react'; // Ensure React is imported for Fragments if used
 
 function RegistryTab() {
+  const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ['mlflow', 'versions'],
     queryFn: () => mlflowApi.searchModelVersions(),
+  });
+
+  const transitionMutation = useMutation({
+    mutationFn: mlflowApi.transitionStage,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['mlflow', 'versions'] });
+    },
   });
 
   const [expandedVersion, setExpandedVersion] = useState<string | null>(null);
@@ -556,8 +623,46 @@ function RegistryTab() {
                 </tr>
                 {!compareMode && expandedVersion === v.version && (
                   <tr>
-                    <td colSpan={6} className="bg-light p-0">
+                    <td colSpan={7} className="bg-light p-0">
                       <div className="p-4">
+                         <div className="d-flex justify-content-end gap-2 mb-3">
+                            {v.current_stage !== 'Staging' && (
+                              <button 
+                                className="btn btn-sm btn-outline-warning"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  transitionMutation.mutate({ name: v.name, version: v.version, stage: 'Staging' });
+                                }}
+                                disabled={transitionMutation.isPending}
+                              >
+                                Promote to Staging
+                              </button>
+                            )}
+                            {v.current_stage !== 'Production' && (
+                              <button 
+                                className="btn btn-sm btn-outline-success"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  transitionMutation.mutate({ name: v.name, version: v.version, stage: 'Production', archive_existing_versions: true });
+                                }}
+                                disabled={transitionMutation.isPending}
+                              >
+                                Promote to Production
+                              </button>
+                            )}
+                            {v.current_stage !== 'Archived' && (
+                              <button 
+                                className="btn btn-sm btn-outline-secondary"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  transitionMutation.mutate({ name: v.name, version: v.version, stage: 'Archived' });
+                                }}
+                                disabled={transitionMutation.isPending}
+                              >
+                                Archive
+                              </button>
+                            )}
+                         </div>
                          <RunDetail runId={v.run_id} />
                       </div>
                     </td>
@@ -631,6 +736,21 @@ function RunDetail({ runId }: { runId: string }) {
          ) : splitLoading ? <div className="spinner-border spinner-border-sm"/> : <div className="text-muted">No split manifest found.</div>}
       </div>
 
+      {/* Visual Artifacts */}
+      <div className="col-md-12">
+        <h6 className="fw-bold mb-3 border-bottom pb-2 d-flex align-items-center">
+          <ImageIcon size={16} className="me-2 text-primary" /> Visual Evaluation
+        </h6>
+        <div className="row g-3">
+          <div className="col-md-6">
+            <ArtifactImage runId={runId} path="confusion_matrix.png" title="Confusion Matrix" />
+          </div>
+          <div className="col-md-6">
+            <ArtifactImage runId={runId} path="feature_importance_plot.png" title="Feature Importance" />
+          </div>
+        </div>
+      </div>
+
       {/* CV Metrics Chart */}
       <div className="col-md-6">
         <h6 className="fw-bold mb-3 border-bottom pb-2">Cross-Validation Metrics</h6>
@@ -671,6 +791,74 @@ function RunDetail({ runId }: { runId: string }) {
              </table>
            </div>
         ) : tuningLoading ? <div className="spinner-border text-primary"/> : <div className="text-muted">No tuning data available.</div>}
+      </div>
+
+      {/* Model Card */}
+      <div className="col-md-12">
+        <h6 className="fw-bold mb-3 border-bottom pb-2 d-flex align-items-center">
+          <FileIcon size={16} className="me-2 text-primary" /> Model Documentation
+        </h6>
+        <ArtifactMarkdown runId={runId} path="model_card.md" title="Model Card" />
+      </div>
+    </div>
+  );
+}
+
+function ArtifactImage({ runId, path, title }: { runId: string, path: string, title: string }) {
+  const { data: blob, isLoading, isError } = useQuery({
+    queryKey: ['run', runId, 'artifact', 'blob', path],
+    queryFn: async () => {
+      const resp = await fetch(`/bff/v1/mlflow/runs/${runId}/artifacts?path=${encodeURIComponent(path)}`);
+      if (!resp.ok) throw new Error('Failed to fetch artifact');
+      return resp.blob();
+    },
+    retry: false
+  });
+
+  const [url, setUrl] = useState<string | null>(null);
+  
+  useEffect(() => {
+    if (blob) {
+      const u = URL.createObjectURL(blob);
+      setUrl(u);
+      return () => URL.revokeObjectURL(u);
+    }
+  }, [blob]);
+
+  if (isLoading) return <div className="p-3 text-center"><div className="spinner-border spinner-border-sm text-primary"/></div>;
+  if (isError || !url) return <div className="p-3 text-center border rounded bg-light text-muted small italic">Artifact {path} not available</div>;
+
+  return (
+    <div className="card shadow-sm border-0 mb-3 overflow-hidden">
+      <div className="card-header py-2 small fw-bold bg-light border-bottom-0">{title}</div>
+      <div className="card-body p-0 text-center bg-white border">
+        <img src={url} alt={title} className="img-fluid" style={{ maxHeight: '350px', width: '100%', objectFit: 'contain' }} />
+      </div>
+    </div>
+  );
+}
+
+function ArtifactMarkdown({ runId, path, title }: { runId: string, path: string, title: string }) {
+  const { data: text, isLoading, isError } = useQuery({
+    queryKey: ['run', runId, 'artifact', 'text', path],
+    queryFn: async () => {
+      const resp = await fetch(`/bff/v1/mlflow/runs/${runId}/artifacts?path=${encodeURIComponent(path)}`);
+      if (!resp.ok) throw new Error('Failed to fetch artifact');
+      return resp.text();
+    },
+    retry: false
+  });
+
+  if (isLoading) return <div className="p-3 text-center"><div className="spinner-border spinner-border-sm text-primary"/></div>;
+  if (isError || !text) return <div className="p-3 text-center border rounded bg-light text-muted small italic">Documentation {path} not available</div>;
+
+  return (
+    <div className="card shadow-sm border-0 mb-3">
+      <div className="card-header py-2 small fw-bold bg-light border-bottom-0">{title}</div>
+      <div className="card-body border rounded-bottom bg-white">
+        <pre className="small mb-0 text-dark" style={{ whiteSpace: 'pre-wrap', fontSize: '0.85rem', fontFamily: 'inherit' }}>
+          {text}
+        </pre>
       </div>
     </div>
   );

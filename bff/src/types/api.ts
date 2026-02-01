@@ -71,7 +71,8 @@ export interface TrainRequest {
   name?: string;
   test_size?: number;
   random_seed?: number;
-  selected_columns?: string[];
+  selected_feature_columns?: string[];
+  training_window_days?: number;
   max_depth?: number;
   learning_rate?: number;
   n_estimators?: number;

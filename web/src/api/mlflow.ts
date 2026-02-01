@@ -73,4 +73,7 @@ export const mlflowApi = {
 
   getArtifact: <T>(runId: string, path: string) =>
     apiClient.get<T>(`/bff/v1/mlflow/runs/${runId}/artifacts?path=${encodeURIComponent(path)}`),
+
+  transitionStage: (data: { name: string; version: string; stage: string; archive_existing_versions?: boolean }) =>
+    apiClient.post('/bff/v1/mlflow/model-versions/transition-stage', data),
 };
