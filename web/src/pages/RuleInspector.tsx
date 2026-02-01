@@ -588,216 +588,184 @@ export function RuleSandbox() {
     base_score: 50,
     features: {},
   });
-  const [featuresJson, setFeaturesJson] = useState('{\n  \n}');
+  const [inputMode, setInputMode] = useState<'sliders' | 'json'>('sliders');
+  const [featuresJson, setFeaturesJson] = useState('{}');
+  
+  // Default common features for sliders
+  const [sliderFeatures, setSliderFeatures] = useState({
+    amount: 100,
+    velocity_24h: 1,
+    amount_to_avg_ratio_30d: 1.0,
+    merchant_risk_score: 20,
+    bank_connections_24h: 1,
+    balance_volatility_z_score: 0.0,
+    has_history: true
+  });
+
   const [result, setResult] = useState<SandboxEvaluateResponse | null>(null);
   const [jsonError, setJsonError] = useState<string | null>(null);
 
-  // Sandbox evaluate mutation
+  // Sync sliders to JSON
+  useEffect(() => {
+    if (inputMode === 'sliders') {
+      setFeaturesJson(JSON.stringify(sliderFeatures, null, 2));
+    }
+  }, [sliderFeatures, inputMode]);
+
   const evaluateMutation = useMutation({
     mutationFn: rulesApi.sandboxEvaluate,
-    onSuccess: (data) => {
-      setResult(data);
-    },
+    onSuccess: (data) => setResult(data),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setJsonError(null);
-
     try {
       const features = JSON.parse(featuresJson);
-      evaluateMutation.mutate({
-        ...formData,
-        features,
-      });
+      evaluateMutation.mutate({ ...formData, features });
     } catch {
       setJsonError('Invalid JSON format');
     }
   };
 
-  const loadSampleFeatures = () => {
-    const sample = {
-      amount: 5000,
-      velocity_24h: 15,
-      amount_to_avg_ratio_30d: 2.5,
-      is_new_device: true,
-      hour_of_day: 3,
-      days_since_last_transaction: 45,
-    };
-    setFeaturesJson(JSON.stringify(sample, null, 2));
+  const updateSlider = (key: string, val: any) => {
+    setSliderFeatures(prev => ({ ...prev, [key]: val }));
   };
 
   return (
     <div>
-      <div className="section-header">
-        <h3>Sandbox Evaluation</h3>
-        <p>Test rules against sample transactions without affecting production</p>
+      <div className="section-header mb-4">
+        <h3>Rule Sandbox</h3>
+        <p className="text-muted">Experiment with rule logic by simulating feature inputs. No production impact.</p>
       </div>
 
-      <div className="sandbox-layout">
-        {/* Input Form */}
-        <div className="card">
-          <div className="card-header">
-            <h4 className="card-title">Test Input</h4>
-          </div>
-          <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label className="form-label" htmlFor="base_score">
-                Base Score (1-99)
-              </label>
-              <input
-                type="number"
-                id="base_score"
-                name="base_score"
-                className="form-input"
-                value={formData.base_score}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    base_score: parseInt(e.target.value) || 50,
-                  }))
-                }
-                min="1"
-                max="99"
-              />
-              <small className="form-hint">
-                Initial risk score before rule evaluation
-              </small>
+      <div className="row g-4">
+        <div className="col-lg-5">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+              <h5 className="mb-0 small fw-bold text-uppercase tracking-wider">Test Input</h5>
+              <div className="btn-group btn-group-sm">
+                <button className={`btn ${inputMode === 'sliders' ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setInputMode('sliders')}>Sliders</button>
+                <button className={`btn ${inputMode === 'json' ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setInputMode('json')}>JSON</button>
+              </div>
             </div>
+            <div className="card-body p-4">
+              <form onSubmit={handleSubmit}>
+                <div className="mb-4">
+                  <label className="form-label small fw-bold">Base Score (Model Baseline)</label>
+                  <input type="range" className="form-range" min="1" max="99" value={formData.base_score} onChange={e => setFormData({...formData, base_score: parseInt(e.target.value)})} />
+                  <div className="text-center fw-bold h4 text-primary">{formData.base_score}</div>
+                </div>
 
-            <div className="form-group">
-              <div className="label-with-action">
-                <label className="form-label" htmlFor="features">
-                  Features (JSON)
-                </label>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={loadSampleFeatures}
-                >
-                  Load Sample
+                {inputMode === 'sliders' ? (
+                  <div className="space-y-3">
+                    <SliderInput label="Transaction Amount" value={sliderFeatures.amount} min={0} max={10000} step={10} onChange={v => updateSlider('amount', v)} />
+                    <SliderInput label="24h Velocity" value={sliderFeatures.velocity_24h} min={0} max={50} step={1} onChange={v => updateSlider('velocity_24h', v)} />
+                    <SliderInput label="Amount/Avg Ratio" value={sliderFeatures.amount_to_avg_ratio_30d} min={0} max={10} step={0.1} onChange={v => updateSlider('amount_to_avg_ratio_30d', v)} />
+                    <SliderInput label="Merchant Risk" value={sliderFeatures.merchant_risk_score} min={0} max={100} step={1} onChange={v => updateSlider('merchant_risk_score', v)} />
+                    <div className="form-check form-switch mt-3">
+                      <input className="form-check-input" type="checkbox" checked={sliderFeatures.has_history} onChange={e => updateSlider('has_history', e.target.checked)} id="hasHistory" />
+                      <label className="form-check-label small fw-bold" htmlFor="hasHistory">User Has History</label>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mb-3">
+                    <textarea 
+                      className={`form-control font-monospace small ${jsonError ? 'is-invalid' : ''}`}
+                      rows={12} value={featuresJson} onChange={e => setFeaturesJson(e.target.value)}
+                    />
+                    {jsonError && <div className="invalid-feedback">{jsonError}</div>}
+                  </div>
+                )}
+
+                <button type="submit" className="btn btn-primary w-100 mt-4 py-2 fw-bold" disabled={evaluateMutation.isPending}>
+                  {evaluateMutation.isPending ? 'Evaluating...' : 'Evaluate Rules'}
                 </button>
-              </div>
-              <textarea
-                id="features"
-                name="features"
-                className="form-input json-input"
-                value={featuresJson}
-                onChange={(e) => setFeaturesJson(e.target.value)}
-                rows={10}
-              />
-              {jsonError && (
-                <small className="form-error">{jsonError}</small>
-              )}
+              </form>
             </div>
-
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={evaluateMutation.isPending}
-            >
-              {evaluateMutation.isPending ? 'Evaluating...' : 'Evaluate Rules'}
-            </button>
-
-            {evaluateMutation.isError && (
-              <div className="alert alert-error" style={{ marginTop: '1rem' }}>
-                Evaluation failed: {evaluateMutation.error?.message}
-              </div>
-            )}
-          </form>
+          </div>
         </div>
 
-        {/* Results */}
-        {result && (
-          <div className="card">
-            <div className="card-header">
-              <h4 className="card-title">Evaluation Result</h4>
-            </div>
-
-            {/* Final Score */}
-            <div className="score-comparison">
-              <div className="score-item">
-                <div className="score-label">Base Score</div>
-                <div className="score-value score-medium">
-                  {formData.base_score}
+        <div className="col-lg-7">
+          {result ? (
+            <div className="card shadow-sm border-0 h-100">
+              <div className="card-header bg-white py-3">
+                <h5 className="mb-0 small fw-bold text-uppercase tracking-wider">Evaluation Results</h5>
+              </div>
+              <div className="card-body p-4">
+                <div className="d-flex justify-content-around align-items-center mb-5 p-4 bg-light rounded-3">
+                  <div className="text-center">
+                    <div className="text-muted small text-uppercase mb-1">Baseline</div>
+                    <div className="h3 mb-0 fw-bold">{formData.base_score}</div>
+                  </div>
+                  <ArrowRight className="text-muted" />
+                  <div className="text-center">
+                    <div className="text-muted small text-uppercase mb-1">Final Score</div>
+                    <div className={`h1 mb-0 fw-bold ${result.final_score >= 80 ? 'text-danger' : result.final_score >= 30 ? 'text-warning' : 'text-success'}`}>
+                      {result.final_score}
+                    </div>
+                    <span className="badge rounded-pill bg-light text-dark border mt-1">{result.risk_label}</span>
+                  </div>
                 </div>
-              </div>
-              <div className="score-arrow">→</div>
-              <div className="score-item">
-                <div className="score-label">Final Score</div>
-                <div
-                  className={`score-value ${
-                    result.final_score < 30
-                      ? 'score-low'
-                      : result.final_score < 70
-                      ? 'score-medium'
-                      : 'score-high'
-                  }`}
-                >
-                  {result.final_score}
-                </div>
+
+                <h6 className="fw-bold mb-3 small text-uppercase text-muted">Matched Rules ({result.matched_rules.length})</h6>
+                {result.matched_rules.length > 0 ? (
+                  <div className="list-group list-group-flush border rounded overflow-hidden">
+                    {result.matched_rules.map((r, i) => (
+                      <div key={i} className="list-group-item d-flex justify-content-between align-items-center p-3">
+                        <div>
+                          <div className="fw-bold">{r.name}</div>
+                          <div className="small text-muted">{r.reason}</div>
+                        </div>
+                        <div className="text-end">
+                          <span className="badge bg-primary mb-1 d-block">{r.action}</span>
+                          {r.score_adjustment && <div className="small fw-bold text-danger">+{r.score_adjustment}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : <div className="alert alert-info py-2 small">No active rules matched these inputs.</div>}
+
+                {result.shadow_matched_rules.length > 0 && (
+                  <div className="mt-4">
+                    <h6 className="fw-bold mb-3 small text-uppercase text-muted">Shadow Rules ({result.shadow_matched_rules.length})</h6>
+                    <div className="list-group list-group-flush border rounded overflow-hidden opacity-75">
+                      {result.shadow_matched_rules.map((r, i) => (
+                        <div key={i} className="list-group-item d-flex justify-content-between align-items-center p-2 bg-light">
+                          <span className="small fw-medium">{r.name}</span>
+                          <span className="badge bg-secondary small">shadow</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-
-            {/* Matched Rules */}
-            {result.matched_rules.length > 0 ? (
-              <div className="matched-rules">
-                <h4>Matched Rules</h4>
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Rule</th>
-                      <th>Action</th>
-                      <th>Adjustment</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {result.matched_rules.map((rule, index) => (
-                      <tr key={index}>
-                        <td>{rule.name}</td>
-                        <td>
-                          <span className="status-badge status-published">
-                            {rule.action}
-                          </span>
-                        </td>
-                        <td>
-                          {rule.score_adjustment !== undefined
-                            ? (rule.score_adjustment > 0 ? '+' : '') +
-                              rule.score_adjustment
-                            : '-'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          ) : (
+            <div className="card shadow-sm border-0 border-dashed h-100 d-flex align-items-center justify-content-center text-muted py-5">
+              <div className="text-center">
+                <Send size={48} className="mb-3 opacity-25" />
+                <p>Submit inputs to see rule evaluation results.</p>
               </div>
-            ) : (
-              <div className="alert alert-info">No rules matched</div>
-            )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
-            {/* Shadow Matched Rules */}
-            {result.shadow_matched_rules.length > 0 && (
-              <div className="shadow-rules">
-                <h4>Shadow Rules (Would Match)</h4>
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Rule</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {result.shadow_matched_rules.map((rule, index) => (
-                      <tr key={index}>
-                        <td>{rule.name}</td>
-                        <td>
-                          <span className="status-badge status-draft">
-                            {rule.action}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
+function SliderInput({ label, value, min, max, step, onChange }: { label: string, value: number, min: number, max: number, step: number, onChange: (v: number) => void }) {
+  return (
+    <div className="mb-3">
+      <div className="d-flex justify-content-between mb-1">
+        <label className="form-label small fw-bold mb-0">{label}</label>
+        <span className="small font-monospace fw-bold text-primary">{value}</span>
+      </div>
+      <input type="range" className="form-range" min={min} max={max} step={step} value={value} onChange={e => onChange(parseFloat(e.target.value))} />
+    </div>
+  );
+}
                 </table>
               </div>
             )}
