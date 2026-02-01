@@ -1221,7 +1221,10 @@ async def get_heuristic_suggestions(
             if fp_resp:
                 import hashlib
                 # Create a simple hash from counts and timestamps
-                s = f"{fp_resp.generated_records.count}-{fp_resp.feature_snapshots.count}"
+                s = (
+                    f"{fp_resp.generated_records.count}-"
+                    f"{fp_resp.feature_snapshots.count}"
+                )
                 fingerprint = hashlib.sha256(s.encode()).hexdigest()
         except Exception:
             # Swallow errors for fingerprinting to avoid failing main request
@@ -2517,6 +2520,9 @@ async def publish_rule(
     # Get readiness report
     end_date = datetime.now(timezone.utc)
     start_date = end_date - timedelta(days=7)
+
+    from api.metrics import get_metrics_collector
+
     collector = get_metrics_collector()
     metrics = collector.get_rule_metrics(rule_id, start_date, end_date)
     total_requests = 1000  # TODO: Real total
@@ -2524,10 +2530,11 @@ async def publish_rule(
     report = evaluator.evaluate(rule, metrics, total_requests)
 
     if report.overall_status == CheckStatus.FAIL:
+        fail_reasons = [c.message for c in report.checks if c.status == CheckStatus.FAIL]
         raise HTTPException(
             status_code=400,
             detail=f"Rule {rule_id} failed readiness checks and cannot be published. "
-            f"Reasons: {[c.message for c in report.checks if c.status == CheckStatus.FAIL]}",
+            f"Reasons: {fail_reasons}",
         )
 
     # Transition to active

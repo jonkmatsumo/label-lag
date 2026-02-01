@@ -19,25 +19,33 @@ class ParityHarness:
 
     def compare_inference(self, payload: dict[str, Any], tolerance: float = 1e-5):
         """Compare inference results from both services."""
-        api_resp = requests.post(f"{self.api_base}/evaluate/signal", json=payload)
+        api_resp = requests.post(
+            f"{self.api_base}/evaluate/signal", json=payload
+        )
         api_resp.raise_for_status()
         api_data = api_resp.json()
 
         # Gateway uses same path as API
-        gateway_resp = requests.post(f"{self.gateway_base}/evaluate/signal", json=payload)
+        gateway_resp = requests.post(
+            f"{self.gateway_base}/evaluate/signal", json=payload
+        )
         gateway_resp.raise_for_status()
         gateway_data = gateway_resp.json()
 
         self._assert_parity(api_data, gateway_data, tolerance)
 
-    def _assert_parity(self, api: dict[str, Any], gateway: dict[str, Any], tolerance: float):
+    def _assert_parity(
+        self, api: dict[str, Any], gateway: dict[str, Any], tolerance: float
+    ):
         """Assert semantic parity with tolerance and normalization."""
         # Compare core fields
         assert abs(api["score"] - gateway["score"]) <= tolerance
 
         # Normalize and compare matched rules
         api_rules = sorted(api.get("matched_rules", []), key=lambda x: x["rule_id"])
-        gateway_rules = sorted(gateway.get("matched_rules", []), key=lambda x: x["rule_id"])
+        gateway_rules = sorted(
+            gateway.get("matched_rules", []), key=lambda x: x["rule_id"]
+        )
 
         assert len(api_rules) == len(gateway_rules)
         for a, g in zip(api_rules, gateway_rules):
