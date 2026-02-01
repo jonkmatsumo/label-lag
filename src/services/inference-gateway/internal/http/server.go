@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func NewServer(addr string, logger *slog.Logger, handler *Handler) *http.Server {
+func NewServer(addr string, logger *slog.Logger, handler *Handler, readTimeout, writeTimeout, idleTimeout time.Duration) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", healthHandler)
 	if handler != nil {
@@ -18,6 +18,9 @@ func NewServer(addr string, logger *slog.Logger, handler *Handler) *http.Server 
 	return &http.Server{
 		Addr:              addr,
 		Handler:           h,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 }

@@ -85,7 +85,11 @@ func main() {
 	}
 
 	handler := httpserver.NewHandler(logger, inferenceClient, rulesProvider, maxBodyBytes)
-	srv := httpserver.NewServer("0.0.0.0:"+port, logger, handler)
+	readTimeout := parseDurationEnv(logger, "INFERENCE_GATEWAY_READ_TIMEOUT", 10*time.Second)
+	writeTimeout := parseDurationEnv(logger, "INFERENCE_GATEWAY_WRITE_TIMEOUT", 30*time.Second)
+	idleTimeout := parseDurationEnv(logger, "INFERENCE_GATEWAY_IDLE_TIMEOUT", 60*time.Second)
+
+	srv := httpserver.NewServer("0.0.0.0:"+port, logger, handler, readTimeout, writeTimeout, idleTimeout)
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -147,4 +151,17 @@ func initTracer(ctx context.Context) (*sdktrace.TracerProvider, error) {
 	otel.SetTracerProvider(tracerProvider)
 
 	return tracerProvider, nil
+}
+
+func parseDurationEnv(logger *slog.Logger, key string, fallback time.Duration) time.Duration {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := time.ParseDuration(value)
+	if err != nil || parsed <= 0 {
+		logger.Warn("invalid duration env var", "key", key, "value", value)
+		return fallback
+	}
+	return parsed
 }
