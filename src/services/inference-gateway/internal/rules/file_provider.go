@@ -65,6 +65,8 @@ func (p *FileProvider) GetRules(_ context.Context) (RuleSet, error) {
 		})
 	}
 
+	rules, _ = FilterValidRules(rules)
+
 	return RuleSet{
 		Version: payload.Version,
 		Rules:   rules,

@@ -291,3 +291,65 @@ func isNumber(value any) bool {
 	_, ok := toFloat(value)
 	return ok
 }
+
+func ValidateRule(rule Rule) error {
+	if rule.ID == "" {
+		return errors.New("rule id is required")
+	}
+	if rule.Field == "" {
+		return errors.New("rule field is required")
+	}
+	if rule.Value == nil {
+		return errors.New("rule value is required")
+	}
+	switch rule.Op {
+	case ">", ">=", "<", "<=":
+		if _, ok := toFloat(rule.Value); !ok {
+			return fmt.Errorf("rule value must be numeric for op %s", rule.Op)
+		}
+	case "==":
+		// Any value is allowed.
+	case "in", "not_in":
+		val := reflect.ValueOf(rule.Value)
+		if val.Kind() != reflect.Slice && val.Kind() != reflect.Array {
+			return fmt.Errorf("rule value must be a list for op %s", rule.Op)
+		}
+	default:
+		return fmt.Errorf("invalid rule op %s", rule.Op)
+	}
+
+	switch rule.Action {
+	case "reject":
+	case "override_score", "clamp_min", "clamp_max":
+		if rule.Score == nil {
+			return fmt.Errorf("rule action %s requires score", rule.Action)
+		}
+		if *rule.Score < 1 || *rule.Score > 99 {
+			return fmt.Errorf("rule score must be between 1 and 99")
+		}
+	default:
+		return fmt.Errorf("invalid rule action %s", rule.Action)
+	}
+
+	switch rule.Status {
+	case RuleStatusActive, RuleStatusShadow, RuleStatusDraft, RuleStatusPendingReview, RuleStatusApproved,
+		RuleStatusDisabled, RuleStatusArchived:
+	default:
+		return fmt.Errorf("invalid rule status %s", rule.Status)
+	}
+
+	return nil
+}
+
+func FilterValidRules(rules []Rule) ([]Rule, []error) {
+	valid := make([]Rule, 0, len(rules))
+	var errs []error
+	for _, rule := range rules {
+		if err := ValidateRule(rule); err != nil {
+			errs = append(errs, fmt.Errorf("rule %s: %w", rule.ID, err))
+			continue
+		}
+		valid = append(valid, rule)
+	}
+	return valid, errs
+}

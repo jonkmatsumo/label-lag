@@ -158,6 +158,8 @@ func (p *APIProvider) fetchRules(ctx context.Context) (RuleSet, error) {
 		})
 	}
 
+	rules, _ = FilterValidRules(rules)
+
 	return RuleSet{
 		Version: payload.Version,
 		Rules:   rules,
