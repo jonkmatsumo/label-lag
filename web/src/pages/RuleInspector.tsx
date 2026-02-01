@@ -170,104 +170,48 @@ export function RuleManagement() {
   );
 }
 
+import { 
+  AlertTriangle, CheckCircle, Info, Shield, 
+  ChevronRight, ChevronDown, User, FileText, Send,
+  History, BarChart2, Diff, ArrowRight
+} from 'lucide-react';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  Cell, ComposedChart, Line
+} from 'recharts';
+
+// ... (keep ruleTabs, RuleInspector, RuleManagement as updated in 5.1)
+
 function RuleDetail({ rule, onPublished }: { rule: DraftRule, onPublished: () => void }) {
+  const [activeTab, setActiveTab] = useState<'overview' | 'history' | 'impact'>('overview');
   const [showPublishModal, setShowPublishModal] = useState(false);
 
-  const readinessQuery = useQuery({
-    queryKey: ['rules', rule.id, 'readiness'],
-    queryFn: () => rulesApi.getReadiness(rule.id),
-    enabled: !!rule.id
-  });
-
-  const signalsQuery = useQuery({
-    queryKey: ['rules', rule.id, 'signals'],
-    queryFn: () => rulesApi.getApprovalSignals(rule.id),
-    enabled: !!rule.id && rule.status === 'pending_approval'
-  });
-
-  const isReady = readinessQuery.data?.overall_status !== 'fail';
-
   return (
-    <div className="row g-4">
-      {/* Promotion Readiness */}
-      <div className="col-md-6">
-        <h6 className="fw-bold mb-3 d-flex align-items-center">
-          <Shield size={16} className="me-2 text-primary" />
-          Promotion Readiness
-        </h6>
-        {readinessQuery.isLoading ? (
-          <div className="spinner-border spinner-border-sm text-muted" />
-        ) : readinessQuery.data ? (
-          <div className="space-y-2">
-            <div className={`alert ${readinessQuery.data.overall_status === 'pass' ? 'alert-success' : readinessQuery.data.overall_status === 'warn' ? 'alert-warning' : 'alert-danger'} py-2 small`}>
-              <div className="d-flex align-items-center fw-bold text-uppercase">
-                {readinessQuery.data.overall_status === 'pass' ? <CheckCircle size={14} className="me-2" /> : <AlertTriangle size={14} className="me-2" />}
-                {readinessQuery.data.overall_status} Readiness
-              </div>
-            </div>
-            <ul className="list-group list-group-flush border rounded overflow-hidden">
-              {readinessQuery.data.checks.map((check, i) => (
-                <li key={i} className="list-group-item d-flex justify-content-between align-items-center py-2 px-3 small">
-                  <span>{check.name}</span>
-                  <div className="d-flex align-items-center">
-                    <span className="text-muted me-2">{check.message}</span>
-                    <StatusDot status={check.status} />
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : <div className="text-muted small">Readiness data unavailable</div>}
+    <div>
+      <div className="d-flex border-bottom mb-4">
+        <button 
+          className={`btn btn-sm px-3 py-2 rounded-0 border-bottom border-3 ${activeTab === 'overview' ? 'border-primary fw-bold text-primary' : 'border-transparent text-muted'}`}
+          onClick={() => setActiveTab('overview')}
+        >
+          Overview
+        </button>
+        <button 
+          className={`btn btn-sm px-3 py-2 rounded-0 border-bottom border-3 ${activeTab === 'history' ? 'border-primary fw-bold text-primary' : 'border-transparent text-muted'}`}
+          onClick={() => setActiveTab('history')}
+        >
+          <History size={14} className="me-1" /> Version History
+        </button>
+        <button 
+          className={`btn btn-sm px-3 py-2 rounded-0 border-bottom border-3 ${activeTab === 'impact' ? 'border-primary fw-bold text-primary' : 'border-transparent text-muted'}`}
+          onClick={() => setActiveTab('impact')}
+        >
+          <BarChart2 size={14} className="me-1" /> Impact Analysis
+        </button>
       </div>
 
-      {/* Approval Signals */}
-      <div className="col-md-6 border-start">
-        <h6 className="fw-bold mb-3 d-flex align-items-center">
-          <Info size={16} className="me-2 text-primary" />
-          Approval Signals
-        </h6>
-        {rule.status !== 'pending_approval' ? (
-          <div className="text-muted small italic">Signals are collected during review phase.</div>
-        ) : signalsQuery.isLoading ? (
-          <div className="spinner-border spinner-border-sm text-muted" />
-        ) : signalsQuery.data ? (
-          <div>
-            {signalsQuery.data.signals.map((s, i) => (
-              <div key={i} className={`d-flex mb-2 p-2 rounded small ${s.severity === 'risk' ? 'bg-danger bg-opacity-10 border-start border-danger' : s.severity === 'warning' ? 'bg-warning bg-opacity-10 border-start border-warning' : 'bg-light'}`}>
-                <div className="me-2 mt-1">
-                  {s.severity === 'risk' ? <AlertTriangle size={14} className="text-danger" /> : s.severity === 'warning' ? <AlertTriangle size={14} className="text-warning" /> : <Info size={14} className="text-info" />}
-                </div>
-                <div>
-                  <div className="fw-bold">{s.label}</div>
-                  <div className="text-muted" style={{ fontSize: '0.85em' }}>{s.description}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : <div className="text-muted small">No signals available.</div>}
-      </div>
-
-      {/* Actions */}
-      <div className="col-12 mt-4 pt-3 border-top d-flex justify-content-end gap-2">
-        {rule.status === 'approved' && (
-          <>
-            {!isReady && (
-              <div className="me-auto text-danger small d-flex align-items-center">
-                <AlertTriangle size={14} className="me-1" />
-                Publication blocked: Readiness checks failed.
-              </div>
-            )}
-            <button 
-              className="btn btn-primary d-flex align-items-center"
-              onClick={() => setShowPublishModal(true)}
-              disabled={!isReady}
-            >
-              <Send size={16} className="me-2" />
-              Publish to Production
-            </button>
-          </>
-        )}
-      </div>
+      {activeTab === 'overview' && <RuleOverviewTab rule={rule} onShowPublish={() => setShowPublishModal(true)} />}
+      {activeTab === 'history' && <RuleHistoryTab ruleId={rule.id} />}
+      {activeTab === 'impact' && <RuleImpactTab ruleId={rule.id} />}
 
       {showPublishModal && (
         <PublishModal 
@@ -279,6 +223,275 @@ function RuleDetail({ rule, onPublished }: { rule: DraftRule, onPublished: () =>
     </div>
   );
 }
+
+function RuleOverviewTab({ rule, onShowPublish }: { rule: DraftRule, onShowPublish: () => void }) {
+  const readinessQuery = useQuery({
+    queryKey: ['rules', rule.id, 'readiness'],
+    queryFn: () => rulesApi.getReadiness(rule.id),
+    enabled: !!rule.id
+  });
+
+  const signalsQuery = useQuery({
+    queryKey: ['rules', rule.id, 'signals'],
+    queryFn: () => rulesApi.getApprovalSignals(rule.id),
+    enabled: !!rule.id && (rule.status === 'pending_approval' || rule.status === 'approved')
+  });
+
+  const isReady = readinessQuery.data?.overall_status !== 'fail';
+
+  return (
+    <div className="row g-4">
+      <div className="col-md-6">
+        <h6 className="fw-bold mb-3 d-flex align-items-center small text-uppercase tracking-wider text-muted">
+          <Shield size={14} className="me-2" /> Promotion Readiness
+        </h6>
+        {readinessQuery.isLoading ? (
+          <div className="spinner-border spinner-border-sm text-muted" />
+        ) : readinessQuery.data ? (
+          <div className="space-y-2">
+            <div className={`alert ${readinessQuery.data.overall_status === 'pass' ? 'alert-success' : readinessQuery.data.overall_status === 'warn' ? 'alert-warning' : 'alert-danger'} py-2 small border-0`}>
+              <div className="d-flex align-items-center fw-bold text-uppercase">
+                {readinessQuery.data.overall_status === 'pass' ? <CheckCircle size={14} className="me-2" /> : <AlertTriangle size={14} className="me-2" />}
+                {readinessQuery.data.overall_status}
+              </div>
+            </div>
+            <ul className="list-group list-group-flush border rounded overflow-hidden">
+              {readinessQuery.data.checks.map((check, i) => (
+                <li key={i} className="list-group-item d-flex justify-content-between align-items-center py-2 px-3 small">
+                  <span className="fw-medium">{check.name}</span>
+                  <div className="d-flex align-items-center">
+                    <span className="text-muted me-2" style={{fontSize: '0.9em'}}>{check.message}</span>
+                    <StatusDot status={check.status} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : <div className="text-muted small italic">Readiness data unavailable</div>}
+      </div>
+
+      <div className="col-md-6 border-start">
+        <h6 className="fw-bold mb-3 d-flex align-items-center small text-uppercase tracking-wider text-muted">
+          <Info size={14} className="me-2" /> Approval Signals
+        </h6>
+        {signalsQuery.isLoading ? (
+          <div className="spinner-border spinner-border-sm text-muted" />
+        ) : signalsQuery.data ? (
+          <div className="space-y-2">
+            {signalsQuery.data.signals.map((s, i) => (
+              <div key={i} className={`d-flex p-2 rounded small border-start border-3 ${s.severity === 'risk' ? 'bg-danger bg-opacity-10 border-danger' : s.severity === 'warning' ? 'bg-warning bg-opacity-10 border-warning' : 'bg-light border-secondary'}`}>
+                <div className="me-2 mt-1">
+                  {s.severity === 'risk' ? <AlertTriangle size={14} className="text-danger" /> : s.severity === 'warning' ? <AlertTriangle size={14} className="text-warning" /> : <Info size={14} className="text-info" />}
+                </div>
+                <div>
+                  <div className="fw-bold">{s.label}</div>
+                  <div className="text-muted" style={{ fontSize: '0.85em' }}>{s.description}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : <div className="text-muted small italic">No signals collected yet.</div>}
+      </div>
+
+      <div className="col-12 mt-3 pt-3 border-top d-flex justify-content-end align-items-center gap-3">
+        {rule.status === 'approved' && (
+          <>
+            {!isReady && (
+              <div className="text-danger small d-flex align-items-center fw-bold">
+                <AlertTriangle size={14} className="me-1" />
+                Publication Blocked
+              </div>
+            )}
+            <button 
+              className="btn btn-primary btn-sm d-flex align-items-center px-3"
+              onClick={onShowPublish}
+              disabled={!isReady}
+            >
+              <Send size={14} className="me-2" /> Publish to Production
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RuleHistoryTab({ ruleId }: { ruleId: string }) {
+  const [selectedVersions, setSelectedVersions] = useState<string[]>([]);
+
+  const versionsQuery = useQuery({
+    queryKey: ['rules', ruleId, 'versions'],
+    queryFn: () => rulesApi.getVersions(ruleId)
+  });
+
+  const diffQuery = useQuery({
+    queryKey: ['rules', ruleId, 'diff', selectedVersions],
+    queryFn: () => rulesApi.getDiff(ruleId, selectedVersions[0], selectedVersions[1]),
+    enabled: selectedVersions.length === 2
+  });
+
+  const handleToggleVersion = (id: string) => {
+    if (selectedVersions.includes(id)) {
+      setSelectedVersions(selectedVersions.filter(v => v !== id));
+    } else if (selectedVersions.length < 2) {
+      setSelectedVersions([...selectedVersions, id]);
+    } else {
+      setSelectedVersions([selectedVersions[1], id]);
+    }
+  };
+
+  if (versionsQuery.isLoading) return <div className="spinner-border spinner-border-sm text-primary" />;
+
+  const versions = versionsQuery.data?.versions || [];
+
+  return (
+    <div className="row g-4">
+      <div className="col-md-5">
+        <h6 className="fw-bold mb-3 small text-uppercase tracking-wider text-muted">Version History</h6>
+        <div className="list-group list-group-flush border rounded overflow-hidden shadow-sm">
+          {versions.map(v => (
+            <button 
+              key={v.version_id}
+              className={`list-group-item list-group-item-action py-3 px-3 border-bottom d-flex justify-content-between align-items-start ${selectedVersions.includes(v.version_id) ? 'bg-primary bg-opacity-10 border-start border-4 border-primary' : ''}`}
+              onClick={() => handleToggleVersion(v.version_id)}
+            >
+              <div className="flex-grow-1">
+                <div className="d-flex justify-content-between mb-1">
+                  <span className="font-monospace small fw-bold">v{v.version_id.substring(0, 8)}</span>
+                  <span className="badge bg-light text-dark border small">{v.rule.status}</span>
+                </div>
+                <div className="small text-muted mb-1">{new Date(v.timestamp).toLocaleString()}</div>
+                <div className="small fw-medium text-truncate" style={{maxWidth: '200px'}}>{v.reason || 'No reason provided'}</div>
+              </div>
+              <div className="ms-2">
+                {selectedVersions.includes(v.version_id) && <CheckCircle size={16} className="text-primary" />}
+              </div>
+            </button>
+          ))}
+        </div>
+        <div className="mt-3 text-muted small italic">Select two versions to compare.</div>
+      </div>
+
+      <div className="col-md-7 border-start">
+        <h6 className="fw-bold mb-3 small text-uppercase tracking-wider text-muted d-flex justify-content-between">
+          <span><Diff size={14} className="me-2" /> Comparison</span>
+          {selectedVersions.length === 2 && <span className="badge bg-light text-primary border">Diffing...</span>}
+        </h6>
+        
+        {selectedVersions.length < 2 ? (
+          <div className="text-center py-5 bg-light rounded text-muted">
+            <Diff size={48} className="mb-3 opacity-25" />
+            <p>Select two versions from the list to see changes.</p>
+          </div>
+        ) : diffQuery.isLoading ? (
+          <div className="text-center py-5"><div className="spinner-border text-primary" /></div>
+        ) : diffQuery.data ? (
+          <div className="space-y-3">
+            {diffQuery.data.is_breaking && (
+              <div className="alert alert-warning py-2 small d-flex align-items-center border-0">
+                <AlertTriangle size={14} className="me-2" />
+                Breaking changes detected (behavioral shift).
+              </div>
+            )}
+            <table className="table table-sm small">
+              <thead className="table-light">
+                <tr>
+                  <th>Field</th>
+                  <th>Old Value</th>
+                  <th></th>
+                  <th>New Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {diffQuery.data.changes.map((c, i) => (
+                  <tr key={i} className={c.change_type === 'modified' ? 'table-warning bg-opacity-10' : ''}>
+                    <td className="fw-bold text-muted">{c.field_name}</td>
+                    <td className="text-decoration-line-through text-muted">{JSON.stringify(c.old_value)}</td>
+                    <td className="text-center"><ArrowRight size={12} className="text-muted" /></td>
+                    <td className="fw-bold">{JSON.stringify(c.new_value)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : <div className="alert alert-danger small">Failed to compute diff.</div>}
+      </div>
+    </div>
+  );
+}
+
+function RuleImpactTab({ ruleId }: { ruleId: string }) {
+  const attributionQuery = useQuery({
+    queryKey: ['analytics', 'attribution', ruleId],
+    queryFn: () => analyticsApi.getAttribution(ruleId)
+  });
+
+  if (attributionQuery.isLoading) return <div className="text-center py-5"><div className="spinner-border text-primary" /></div>;
+  if (!attributionQuery.data) return <div className="alert alert-info">No attribution data available for this rule.</div>;
+
+  const data = attributionQuery.data;
+  
+  // Waterfall data: Base -> Impact -> Final
+  const waterfallData = [
+    { name: 'Model Base', value: data.mean_model_score, fill: '#8884d8' },
+    { name: 'Rule Impact', value: data.net_impact, fill: data.net_impact > 0 ? '#ff7300' : '#82ca9d' },
+    { name: 'Final Score', value: data.mean_final_score, fill: '#413ea0' }
+  ];
+
+  return (
+    <div className="row g-4">
+      <div className="col-md-12">
+        <h6 className="fw-bold mb-4 small text-uppercase tracking-wider text-muted">Rule Score Attribution (7d Avg)</h6>
+        <div style={{ height: 300, width: '100%' }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={waterfallData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="name" />
+              <YAxis domain={[0, 100]} />
+              <Tooltip formatter={(value: number) => [value.toFixed(1), 'Score']} />
+              <Bar dataKey="value" barSize={60}>
+                {waterfallData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.fill} />
+                ))}
+              </Bar>
+              <Line type="monotone" dataKey="value" stroke="#ccc" strokeDasharray="5 5" />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="mt-4 row text-center g-3">
+          <div className="col-3">
+            <div className="p-3 border rounded bg-light">
+              <div className="small text-muted text-uppercase mb-1">Matches</div>
+              <div className="h4 mb-0 fw-bold">{data.total_matches.toLocaleString()}</div>
+            </div>
+          </div>
+          <div className="col-3">
+            <div className="p-3 border rounded bg-light">
+              <div className="small text-muted text-uppercase mb-1">Mean Base</div>
+              <div className="h4 mb-0 fw-bold">{data.mean_model_score.toFixed(1)}</div>
+            </div>
+          </div>
+          <div className="col-3">
+            <div className="p-3 border rounded bg-light">
+              <div className="small text-muted text-uppercase mb-1">Net Impact</div>
+              <div className={`h4 mb-0 fw-bold ${data.net_impact > 0 ? 'text-danger' : 'text-success'}`}>
+                {data.net_impact > 0 ? '+' : ''}{data.net_impact.toFixed(1)}
+              </div>
+            </div>
+          </div>
+          <div className="col-3">
+            <div className="p-3 border rounded bg-light border-primary bg-primary bg-opacity-10">
+              <div className="small text-primary text-uppercase mb-1">Final Avg</div>
+              <div className="h4 mb-0 fw-bold text-primary">{data.mean_final_score.toFixed(1)}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ... (keep RuleSandbox, RuleShadow, RuleBacktests, RuleSuggestions, PublishModal, StatusDot)
 
 function PublishModal({ rule, onClose, onSuccess }: { rule: DraftRule, onClose: () => void, onSuccess: () => void }) {
   const [actor, setActor] = useState('');
