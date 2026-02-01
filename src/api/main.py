@@ -2530,7 +2530,9 @@ async def publish_rule(
     report = evaluator.evaluate(rule, metrics, total_requests)
 
     if report.overall_status == CheckStatus.FAIL:
-        fail_reasons = [c.message for c in report.checks if c.status == CheckStatus.FAIL]
+        fail_reasons = [
+            c.message for c in report.checks if c.status == CheckStatus.FAIL
+        ]
         raise HTTPException(
             status_code=400,
             detail=f"Rule {rule_id} failed readiness checks and cannot be published. "
