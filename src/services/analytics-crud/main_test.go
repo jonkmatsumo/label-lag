@@ -9,10 +9,12 @@ import (
 	pb "github.com/jonkmatsumo/label-lag/src/services/analytics-crud/proto/crud/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
 func TestGetDailyStats(t *testing.T) {
-	db, mock, err := sqlmock.New()
+	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
 	}
@@ -36,7 +38,7 @@ func TestGetDailyStats(t *testing.T) {
 }
 
 func TestGetOverviewMetrics(t *testing.T) {
-	db, mock, err := sqlmock.New()
+	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
 	}
@@ -98,4 +100,36 @@ func TestGetFeatureSample_Stratified(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	assert.Len(t, resp.Samples, 2)
+}
+
+func TestUpdateHealthStatusServing(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectPing()
+	healthServer := health.NewServer()
+
+	err = updateHealthStatus(context.Background(), db, healthServer, nil)
+	require.NoError(t, err)
+
+	resp, err := healthServer.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{})
+	require.NoError(t, err)
+	assert.Equal(t, grpc_health_v1.HealthCheckResponse_SERVING, resp.Status)
+}
+
+func TestUpdateHealthStatusNotServing(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectPing().WillReturnError(assert.AnError)
+	healthServer := health.NewServer()
+
+	err = updateHealthStatus(context.Background(), db, healthServer, nil)
+	require.Error(t, err)
+
+	resp, err := healthServer.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{})
+	require.NoError(t, err)
+	assert.Equal(t, grpc_health_v1.HealthCheckResponse_NOT_SERVING, resp.Status)
 }

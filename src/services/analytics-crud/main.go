@@ -787,7 +787,7 @@ func main() {
 	// Register health service
 	healthServer := health.NewServer()
 	grpc_health_v1.RegisterHealthServer(s, healthServer)
-	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
+	updateHealthStatus(context.Background(), db, healthServer, logger)
 
 	// Register reflection service on gRPC server.
 	reflection.Register(s)
@@ -805,7 +805,34 @@ func main() {
 		}
 	}()
 
+	healthCtx, healthCancel := context.WithCancel(context.Background())
+	healthTicker := time.NewTicker(10 * time.Second)
+	go func() {
+		defer healthTicker.Stop()
+		for {
+			select {
+			case <-healthCtx.Done():
+				return
+			case <-healthTicker.C:
+				updateHealthStatus(context.Background(), db, healthServer, logger)
+			}
+		}
+	}()
+
 	<-stop
+	healthCancel()
 	slog.Info("shutting down gRPC server...")
 	s.GracefulStop()
+}
+
+func updateHealthStatus(ctx context.Context, db *sql.DB, healthServer *health.Server, logger *slog.Logger) error {
+	if err := db.PingContext(ctx); err != nil {
+		if logger != nil {
+			logger.Warn("database health check failed", "error", err)
+		}
+		healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
+		return err
+	}
+	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
+	return nil
 }
