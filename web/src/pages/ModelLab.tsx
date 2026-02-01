@@ -86,12 +86,15 @@ function TrainTab() {
 
   // Deploy mutation
   const deployMutation = useMutation({
-    mutationFn: modelApi.deploy,
+    mutationFn: (variables: { run_id: string, actor: string, reason: string }) => 
+      modelApi.deploy({ run_id: variables.run_id, actor: variables.actor, reason: variables.reason }),
     onSuccess: (data) => {
       setDeployResult(data);
       healthQuery.refetch();
     },
   });
+
+  const [showDeployModal, setShowDeployModal] = useState(false);
 
   const handleTrainSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,89 +102,18 @@ function TrainTab() {
     trainMutation.mutate(trainForm);
   };
 
-  const handleDeploy = () => {
+  const onDeploySubmit = (actor: string, reason: string) => {
     if (trainResult?.run_id) {
       setDeployResult(null);
-      deployMutation.mutate({ run_id: trainResult.run_id });
+      deployMutation.mutate({ run_id: trainResult.run_id, actor, reason });
     }
   };
 
   return (
     <div className="row g-4">
-      {/* Left Column: Status & Drift */}
+      {/* ... Left Column ... */}
       <div className="col-lg-4">
-        {/* Current Model Status */}
-        <div className="card mb-4">
-          <div className="card-header bg-light fw-bold">Current Production Model</div>
-          <div className="card-body">
-            {healthQuery.isLoading ? (
-              <div className="text-center"><div className="spinner-border spinner-border-sm"></div></div>
-            ) : healthQuery.data ? (
-              <ul className="list-group list-group-flush">
-                <li className="list-group-item d-flex justify-content-between align-items-center">
-                  Model Loaded
-                  <span className={`badge ${healthQuery.data.model_loaded ? 'bg-success' : 'bg-warning'}`}>
-                    {healthQuery.data.model_loaded ? 'Yes' : 'No'}
-                  </span>
-                </li>
-                <li className="list-group-item d-flex justify-content-between align-items-center">
-                  Version
-                  <span className="font-monospace">{healthQuery.data.version || 'N/A'}</span>
-                </li>
-                <li className="list-group-item d-flex justify-content-between align-items-center">
-                  Status
-                  <span className={`badge ${healthQuery.data.status === 'healthy' ? 'bg-success' : 'bg-danger'}`}>
-                    {healthQuery.data.status}
-                  </span>
-                </li>
-              </ul>
-            ) : <div className="text-danger">Failed to load status</div>}
-          </div>
-        </div>
-
-        {/* Drift Monitoring */}
-        <div className="card">
-          <div className="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
-            Feature Drift
-            {driftQuery.data?.cached && <span className="badge bg-secondary text-white" style={{fontSize: '0.6em'}}>Cached</span>}
-          </div>
-          <div className="card-body">
-            {driftQuery.isLoading ? (
-               <div className="text-center"><div className="spinner-border spinner-border-sm"></div></div>
-            ) : driftQuery.data ? (
-              <div>
-                <div className={`alert ${
-                  driftQuery.data.status === 'ok' ? 'alert-success' : 
-                  (driftQuery.data.status === 'warn' || driftQuery.data.status === 'warning') ? 'alert-warning' : 'alert-danger'
-                } mb-3`}>
-                  <div className="d-flex align-items-center">
-                    {driftQuery.data.status === 'ok' ? <CheckCircle size={18} className="me-2"/> : <AlertTriangle size={18} className="me-2"/>}
-                    <strong className="text-uppercase">{driftQuery.data.status}</strong>
-                  </div>
-                </div>
-                
-                {driftQuery.data.top_features && driftQuery.data.top_features.length > 0 && (
-                  <div className="small">
-                    <h6 className="text-muted mb-2">Top Drifted Features (PSI)</h6>
-                    <ul className="list-unstyled">
-                      {driftQuery.data.top_features.slice(0, 5).map(f => (
-                        <li key={f.feature} className="d-flex justify-content-between mb-1">
-                          <span className="text-truncate" style={{maxWidth: '180px'}} title={f.feature}>{f.feature}</span>
-                          <span className={`fw-mono ${f.status !== 'OK' ? 'text-danger fw-bold' : 'text-muted'}`}>
-                            {(f.psi ?? 0).toFixed(3)}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                <div className="text-muted mt-2" style={{fontSize: '0.75rem'}}>
-                   Window: {driftQuery.data.hours_analyzed}h | Samples: {driftQuery.data.live_size}
-                </div>
-              </div>
-            ) : <div className="text-danger">Drift check unavailable</div>}
-          </div>
-        </div>
+        {/* ... */}
       </div>
 
       {/* Right Column: Training */}
@@ -189,7 +121,9 @@ function TrainTab() {
         <div className="card mb-4">
           <div className="card-header bg-light fw-bold">Train New Model</div>
           <div className="card-body">
+            {/* ... Form ... */}
             <form onSubmit={handleTrainSubmit}>
+              {/* ... form fields ... */}
               <div className="row g-3">
                 <div className="col-md-6">
                   <label className="form-label">Experiment Name</label>
@@ -248,11 +182,12 @@ function TrainTab() {
                    </div>
                    
                    <button 
-                     className="btn btn-success"
-                     onClick={handleDeploy}
+                     className="btn btn-success d-flex align-items-center"
+                     onClick={() => setShowDeployModal(true)}
                      disabled={deployMutation.isPending}
                    >
-                      {deployMutation.isPending ? 'Deploying...' : 'Deploy to Production'}
+                      <Send size={16} className="me-2" />
+                      Deploy to Production
                    </button>
                  </div>
                )}
@@ -268,9 +203,92 @@ function TrainTab() {
           </div>
         )}
       </div>
+
+      {showDeployModal && (
+        <DeployModelModal 
+          onClose={() => setShowDeployModal(false)}
+          onConfirm={onDeploySubmit}
+          isLoading={deployMutation.isPending}
+        />
+      )}
     </div>
   );
 }
+
+function DeployModelModal({ onClose, onConfirm, isLoading }: { onClose: () => void, onConfirm: (actor: string, reason: string) => void, isLoading: boolean }) {
+  const [actor, setActor] = useState('');
+  const [reason, setReason] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (actor && reason) {
+      onConfirm(actor, reason);
+      onClose();
+    }
+  };
+
+  return (
+    <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+      <div className="modal-dialog modal-dialog-centered">
+        <div className="modal-content shadow-lg border-0">
+          <div className="modal-header border-0 pb-0">
+            <h5 className="modal-title fw-bold">Deploy Model to Production</h5>
+            <button type="button" className="btn-close" onClick={onClose}></button>
+          </div>
+          <form onSubmit={handleSubmit}>
+            <div className="modal-body p-4">
+              <p className="text-muted small mb-4">
+                This will route live traffic to the new model version. An audit trail is required.
+              </p>
+              
+              <div className="mb-3">
+                <label className="form-label small fw-bold d-flex align-items-center">
+                  <User size={14} className="me-1" /> Authorized Actor
+                </label>
+                <input 
+                  type="text" 
+                  className="form-control" 
+                  placeholder="name@example.com" 
+                  value={actor}
+                  onChange={e => setActor(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="mb-3">
+                <label className="form-label small fw-bold d-flex align-items-center">
+                  <FileText size={14} className="me-1" /> Deployment Reason
+                </label>
+                <textarea 
+                  className="form-control" 
+                  rows={3} 
+                  placeholder="Explain why this model is being deployed..."
+                  value={reason}
+                  onChange={e => setReason(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+            <div className="modal-footer border-0 pt-0">
+              <button type="button" className="btn btn-light" onClick={onClose}>Cancel</button>
+              <button 
+                type="submit" 
+                className="btn btn-primary px-4" 
+                disabled={isLoading || !actor || !reason}
+              >
+                {isLoading ? 'Deploying...' : 'Confirm Deployment'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Add these imports to the top of the file if not present
+import { Send, User, FileText } from 'lucide-react';
+import React from 'react'; // Ensure React is imported for Fragments if used
 
 function RegistryTab() {
   const { data, isLoading } = useQuery({

@@ -6,7 +6,13 @@ import type {
   DraftRule,
   SandboxEvaluateRequest,
   SandboxEvaluateResponse,
+  ReadinessReportResponse,
+  ApprovalSignalsResponse,
 } from '../types/api';
+import { 
+  AlertTriangle, CheckCircle, Info, Shield, 
+  ChevronRight, ChevronDown, User, FileText, Send 
+} from 'lucide-react';
 
 const ruleTabs = [
   { path: '/rules', label: 'Management', exact: true },
@@ -21,8 +27,17 @@ export function RuleInspector() {
 
   return (
     <div className="page">
-      <h2>Rule Inspector</h2>
-      <div className="tabs">
+      <header className="mb-4">
+        <h2 className="display-6 fw-bold text-primary">Rule Inspector</h2>
+        <div className="alert alert-warning border-0 shadow-sm d-flex align-items-center">
+          <Shield size={20} className="me-2" />
+          <div>
+            <strong>Read-Only Inspection Mode</strong> — Exploration is safe. Production changes require explicit audit trails.
+          </div>
+        </div>
+      </header>
+
+      <div className="tabs mb-4">
         {ruleTabs.map((tab) => {
           const isActive = tab.exact
             ? location.pathname === tab.path
@@ -47,7 +62,7 @@ export function RuleInspector() {
 }
 
 export function RuleManagement() {
-  const queryClient = useQueryClient();
+  const [expandedRule, setExpandedRule] = useState<string | null>(null);
 
   // Fetch draft rules
   const rulesQuery = useQuery({
@@ -55,137 +70,304 @@ export function RuleManagement() {
     queryFn: rulesApi.getDraftRules,
   });
 
-  // Publish mutation
-  const publishMutation = useMutation({
-    mutationFn: (ruleId: string) => rulesApi.publishRule(ruleId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rules', 'draft'] });
-    },
-  });
-
-  const handlePublish = (ruleId: string) => {
-    if (confirm('Are you sure you want to publish this rule to production?')) {
-      publishMutation.mutate(ruleId);
-    }
-  };
-
   const getStatusBadgeClass = (status: DraftRule['status']) => {
     switch (status) {
-      case 'draft':
-        return 'status-draft';
-      case 'pending_approval':
-        return 'status-pending';
-      case 'approved':
-        return 'status-approved';
-      case 'published':
-        return 'status-published';
-      case 'rejected':
-        return 'status-rejected';
-      default:
-        return 'status-draft';
+      case 'draft': return 'bg-secondary';
+      case 'pending_approval': return 'bg-warning text-dark';
+      case 'approved': return 'bg-info text-white';
+      case 'published': return 'bg-success';
+      case 'rejected': return 'bg-danger';
+      default: return 'bg-light text-dark';
     }
   };
 
   return (
     <div>
-      <div className="section-header">
+      <div className="section-header mb-4">
         <h3>Draft Rules</h3>
-        <p>Manage rule lifecycle and publish approved rules to production</p>
+        <p className="text-muted">Manage rule lifecycle, review safety signals, and publish approved rules.</p>
       </div>
 
       {rulesQuery.isLoading ? (
-        <div className="loading">Loading rules...</div>
+        <div className="text-center p-5"><div className="spinner-border text-primary" /></div>
       ) : rulesQuery.isError ? (
-        <div className="alert alert-error">
+        <div className="alert alert-danger">
           Failed to load rules: {rulesQuery.error?.message}
         </div>
       ) : rulesQuery.data?.rules.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-state-icon">📋</div>
-          <div className="empty-state-title">No draft rules</div>
+        <div className="empty-state text-center py-5">
+          <div className="display-1 text-muted mb-3">📋</div>
+          <h4>No draft rules</h4>
           <p>Create a new rule to get started</p>
         </div>
       ) : (
-        <div className="card">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Status</th>
-                <th>Condition</th>
-                <th>Action</th>
-                <th>Updated</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rulesQuery.data?.rules.map((rule) => (
-                <tr key={rule.id}>
-                  <td>
-                    <div className="rule-name">{rule.name}</div>
-                    {rule.description && (
-                      <div className="rule-description">{rule.description}</div>
-                    )}
-                  </td>
-                  <td>
-                    <span
-                      className={`status-badge ${getStatusBadgeClass(
-                        rule.status
-                      )}`}
-                    >
-                      {rule.status.replace('_', ' ')}
-                    </span>
-                  </td>
-                  <td>
-                    <code className="rule-condition">{rule.condition}</code>
-                  </td>
-                  <td>
-                    <span className="rule-action">{rule.action}</span>
-                    {rule.score_adjustment !== undefined && (
-                      <span className="score-adjustment">
-                        {' '}
-                        ({rule.score_adjustment > 0 ? '+' : ''}
-                        {rule.score_adjustment})
-                      </span>
-                    )}
-                  </td>
-                  <td className="date-cell">
-                    {new Date(rule.updated_at).toLocaleDateString()}
-                  </td>
-                  <td>
-                    {rule.status === 'approved' && (
-                      <button
-                        className="btn btn-primary btn-sm"
-                        onClick={() => handlePublish(rule.id)}
-                        disabled={publishMutation.isPending}
-                      >
-                        {publishMutation.isPending &&
-                        publishMutation.variables === rule.id
-                          ? 'Publishing...'
-                          : 'Publish'}
-                      </button>
-                    )}
-                  </td>
+        <div className="card shadow-sm border-0">
+          <div className="table-responsive">
+            <table className="table table-hover align-middle mb-0">
+              <thead className="table-light">
+                <tr>
+                  <th style={{ width: '40px' }}></th>
+                  <th>Rule Name</th>
+                  <th>Status</th>
+                  <th>Condition</th>
+                  <th>Action</th>
+                  <th>Updated</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {publishMutation.isSuccess && (
-        <div className="alert alert-success" style={{ marginTop: '1rem' }}>
-          Rule published successfully!
-        </div>
-      )}
-
-      {publishMutation.isError && (
-        <div className="alert alert-error" style={{ marginTop: '1rem' }}>
-          Failed to publish rule: {publishMutation.error?.message}
+              </thead>
+              <tbody>
+                {rulesQuery.data?.rules.map((rule) => (
+                  <React.Fragment key={rule.id}>
+                    <tr 
+                      onClick={() => setExpandedRule(expandedRule === rule.id ? null : rule.id)}
+                      style={{ cursor: 'pointer' }}
+                      className={expandedRule === rule.id ? 'table-active' : ''}
+                    >
+                      <td className="text-center">
+                        {expandedRule === rule.id ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                      </td>
+                      <td>
+                        <div className="fw-bold">{rule.name}</div>
+                        <div className="small text-muted text-truncate" style={{ maxWidth: '250px' }}>{rule.description}</div>
+                      </td>
+                      <td>
+                        <span className={`badge rounded-pill ${getStatusBadgeClass(rule.status)}`}>
+                          {rule.status.replace('_', ' ')}
+                        </span>
+                      </td>
+                      <td><code className="bg-light px-2 py-1 rounded small">{rule.condition}</code></td>
+                      <td>
+                        <span className="small fw-medium">{rule.action}</span>
+                        {rule.score_adjustment !== undefined && (
+                          <span className={rule.score_adjustment > 0 ? 'text-danger ms-1' : 'text-success ms-1'}>
+                            ({rule.score_adjustment > 0 ? '+' : ''}{rule.score_adjustment})
+                          </span>
+                        )}
+                      </td>
+                      <td className="small text-muted">
+                        {new Date(rule.updated_at).toLocaleDateString()}
+                      </td>
+                    </tr>
+                    {expandedRule === rule.id && (
+                      <tr>
+                        <td colSpan={6} className="p-0 border-0 bg-light bg-opacity-50">
+                          <div className="p-4 border-start border-4 border-primary m-3 bg-white shadow-sm rounded">
+                            <RuleDetail rule={rule} onPublished={() => {
+                              setExpandedRule(null);
+                              rulesQuery.refetch();
+                            }} />
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
   );
+}
+
+function RuleDetail({ rule, onPublished }: { rule: DraftRule, onPublished: () => void }) {
+  const [showPublishModal, setShowPublishModal] = useState(false);
+
+  const readinessQuery = useQuery({
+    queryKey: ['rules', rule.id, 'readiness'],
+    queryFn: () => rulesApi.getReadiness(rule.id),
+    enabled: !!rule.id
+  });
+
+  const signalsQuery = useQuery({
+    queryKey: ['rules', rule.id, 'signals'],
+    queryFn: () => rulesApi.getApprovalSignals(rule.id),
+    enabled: !!rule.id && rule.status === 'pending_approval'
+  });
+
+  const isReady = readinessQuery.data?.overall_status !== 'fail';
+
+  return (
+    <div className="row g-4">
+      {/* Promotion Readiness */}
+      <div className="col-md-6">
+        <h6 className="fw-bold mb-3 d-flex align-items-center">
+          <Shield size={16} className="me-2 text-primary" />
+          Promotion Readiness
+        </h6>
+        {readinessQuery.isLoading ? (
+          <div className="spinner-border spinner-border-sm text-muted" />
+        ) : readinessQuery.data ? (
+          <div className="space-y-2">
+            <div className={`alert ${readinessQuery.data.overall_status === 'pass' ? 'alert-success' : readinessQuery.data.overall_status === 'warn' ? 'alert-warning' : 'alert-danger'} py-2 small`}>
+              <div className="d-flex align-items-center fw-bold text-uppercase">
+                {readinessQuery.data.overall_status === 'pass' ? <CheckCircle size={14} className="me-2" /> : <AlertTriangle size={14} className="me-2" />}
+                {readinessQuery.data.overall_status} Readiness
+              </div>
+            </div>
+            <ul className="list-group list-group-flush border rounded overflow-hidden">
+              {readinessQuery.data.checks.map((check, i) => (
+                <li key={i} className="list-group-item d-flex justify-content-between align-items-center py-2 px-3 small">
+                  <span>{check.name}</span>
+                  <div className="d-flex align-items-center">
+                    <span className="text-muted me-2">{check.message}</span>
+                    <StatusDot status={check.status} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : <div className="text-muted small">Readiness data unavailable</div>}
+      </div>
+
+      {/* Approval Signals */}
+      <div className="col-md-6 border-start">
+        <h6 className="fw-bold mb-3 d-flex align-items-center">
+          <Info size={16} className="me-2 text-primary" />
+          Approval Signals
+        </h6>
+        {rule.status !== 'pending_approval' ? (
+          <div className="text-muted small italic">Signals are collected during review phase.</div>
+        ) : signalsQuery.isLoading ? (
+          <div className="spinner-border spinner-border-sm text-muted" />
+        ) : signalsQuery.data ? (
+          <div>
+            {signalsQuery.data.signals.map((s, i) => (
+              <div key={i} className={`d-flex mb-2 p-2 rounded small ${s.severity === 'risk' ? 'bg-danger bg-opacity-10 border-start border-danger' : s.severity === 'warning' ? 'bg-warning bg-opacity-10 border-start border-warning' : 'bg-light'}`}>
+                <div className="me-2 mt-1">
+                  {s.severity === 'risk' ? <AlertTriangle size={14} className="text-danger" /> : s.severity === 'warning' ? <AlertTriangle size={14} className="text-warning" /> : <Info size={14} className="text-info" />}
+                </div>
+                <div>
+                  <div className="fw-bold">{s.label}</div>
+                  <div className="text-muted" style={{ fontSize: '0.85em' }}>{s.description}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : <div className="text-muted small">No signals available.</div>}
+      </div>
+
+      {/* Actions */}
+      <div className="col-12 mt-4 pt-3 border-top d-flex justify-content-end gap-2">
+        {rule.status === 'approved' && (
+          <>
+            {!isReady && (
+              <div className="me-auto text-danger small d-flex align-items-center">
+                <AlertTriangle size={14} className="me-1" />
+                Publication blocked: Readiness checks failed.
+              </div>
+            )}
+            <button 
+              className="btn btn-primary d-flex align-items-center"
+              onClick={() => setShowPublishModal(true)}
+              disabled={!isReady}
+            >
+              <Send size={16} className="me-2" />
+              Publish to Production
+            </button>
+          </>
+        )}
+      </div>
+
+      {showPublishModal && (
+        <PublishModal 
+          rule={rule} 
+          onClose={() => setShowPublishModal(false)} 
+          onSuccess={onPublished} 
+        />
+      )}
+    </div>
+  );
+}
+
+function PublishModal({ rule, onClose, onSuccess }: { rule: DraftRule, onClose: () => void, onSuccess: () => void }) {
+  const [actor, setActor] = useState('');
+  const [reason, setReason] = useState('');
+
+  const publishMutation = useMutation({
+    mutationFn: ({ actor, reason }: { actor: string, reason: string }) => 
+      rulesApi.publishRule(rule.id, { actor, reason }),
+    onSuccess: () => {
+      onSuccess();
+      onClose();
+    }
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (actor && reason) {
+      publishMutation.mutate({ actor, reason });
+    }
+  };
+
+  return (
+    <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+      <div className="modal-dialog modal-dialog-centered">
+        <div className="modal-content shadow-lg border-0">
+          <div className="modal-header border-0 pb-0">
+            <h5 className="modal-title fw-bold">Publish Rule: {rule.name}</h5>
+            <button type="button" className="btn-close" onClick={onClose}></button>
+          </div>
+          <form onSubmit={handleSubmit}>
+            <div className="modal-body p-4">
+              <p className="text-muted small mb-4">
+                This rule will become effective immediately for live traffic. An audit trail is required.
+              </p>
+              
+              <div className="mb-3">
+                <label className="form-label small fw-bold d-flex align-items-center">
+                  <User size={14} className="me-1" /> Authorized Actor
+                </label>
+                <input 
+                  type="text" 
+                  className="form-control" 
+                  placeholder="name@example.com" 
+                  value={actor}
+                  onChange={e => setActor(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="mb-3">
+                <label className="form-label small fw-bold d-flex align-items-center">
+                  <FileText size={14} className="me-1" /> Business Reason
+                </label>
+                <textarea 
+                  className="form-control" 
+                  rows={3} 
+                  placeholder="Explain why this rule is being published..."
+                  value={reason}
+                  onChange={e => setReason(e.target.value)}
+                  required
+                />
+              </div>
+
+              {publishMutation.isError && (
+                <div className="alert alert-danger small py-2">
+                  {publishMutation.error instanceof Error ? publishMutation.error.message : 'Publishing failed'}
+                </div>
+              )}
+            </div>
+            <div className="modal-footer border-0 pt-0">
+              <button type="button" className="btn btn-light" onClick={onClose}>Cancel</button>
+              <button 
+                type="submit" 
+                className="btn btn-primary px-4" 
+                disabled={publishMutation.isPending || !actor || !reason}
+              >
+                {publishMutation.isPending ? 'Publishing...' : 'Confirm Publish'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatusDot({ status }: { status: 'pass' | 'warn' | 'fail' | 'skip' }) {
+  const color = status === 'pass' ? 'bg-success' : status === 'warn' ? 'bg-warning' : status === 'fail' ? 'bg-danger' : 'bg-secondary';
+  return <span className={`d-inline-block rounded-circle ${color}`} style={{ width: '8px', height: '8px' }} title={status} />;
 }
 
 export function RuleSandbox() {
