@@ -72,6 +72,7 @@ class SignalEvaluator:
             SignalResponse with score and risk components.
         """
         import time
+
         from api.model_manager import get_model_manager
 
         start_time = time.time()
