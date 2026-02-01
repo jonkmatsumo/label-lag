@@ -232,116 +232,88 @@ function ModelStatus({ health }: { health: HealthResponse }) {
 }
 
 function RiskResult({ result }: { result: SignalResponse }) {
+  const [showRaw, setShowRaw] = useState(false);
+
   return (
-    <div>
-      {/* Main Score */}
-      <div className="score-display">
-        <div className="score-label">Risk Score</div>
-        <div className={`score-value ${getScoreClass(result.score)}`}>
+    <div className="space-y-4">
+      {/* Risk Gauge and Core Info */}
+      <div className="text-center py-4 bg-light rounded-3 mb-4">
+        <div className={`display-1 fw-bold mb-0 ${result.score >= 80 ? 'text-danger' : result.score >= 30 ? 'text-warning' : 'text-success'}`}>
           {result.score}
         </div>
-      </div>
-
-      {/* Metadata */}
-      <div className="result-metadata">
-        <div className="metadata-item">
-          <span className="metadata-label">Request ID:</span>
-          <code>{result.request_id}</code>
+        <div className="text-muted small text-uppercase fw-bold tracking-wider mb-2">Risk Score</div>
+        <div className={`badge rounded-pill px-3 py-2 ${result.risk_label === 'HIGH' ? 'bg-danger' : result.risk_label === 'MEDIUM' ? 'bg-warning text-dark' : 'bg-success'}`}>
+          {result.risk_label} RISK
         </div>
-        <div className="metadata-item">
-          <span className="metadata-label">Model Version:</span>
-          <code>{result.model_version}</code>
+        
+        <div className="mt-3 d-flex justify-content-center gap-4 text-muted small">
+          <div className="d-flex align-items-center">
+            <Clock size={14} className="me-1" /> {result.latency_ms.toFixed(1)}ms
+          </div>
+          <div className="d-flex align-items-center">
+            <Cpu size={14} className="me-1" /> {result.model_version}
+          </div>
         </div>
       </div>
 
       {/* Risk Components */}
       {result.risk_components.length > 0 && (
-        <div className="risk-components">
-          <h4>Risk Components</h4>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Component</th>
-                <th>Score</th>
-                <th>Weight</th>
-              </tr>
-            </thead>
-            <tbody>
-              {result.risk_components.map((component, index) => (
-                <tr key={index}>
-                  <td>{component.name}</td>
-                  <td>{component.score.toFixed(2)}</td>
-                  <td>{(component.weight * 100).toFixed(0)}%</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="risk-components mb-4">
+          <h6 className="fw-bold mb-3 small text-uppercase text-muted d-flex align-items-center">
+            <AlertTriangle size={14} className="me-2" /> Risk Factors
+          </h6>
+          <div className="list-group list-group-flush border rounded overflow-hidden">
+            {result.risk_components.map((component, index) => (
+              <div key={index} className="list-group-item d-flex justify-content-between align-items-center p-2 small">
+                <span className="fw-medium">{component.name}</span>
+                <span className="badge bg-light text-dark border">{(component.weight * 100).toFixed(0)}% weight</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
       {/* Matched Rules */}
       {result.matched_rules.length > 0 && (
-        <div className="matched-rules">
-          <h4>Matched Rules</h4>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Rule</th>
-                <th>Action</th>
-                <th>Adjustment</th>
-              </tr>
-            </thead>
-            <tbody>
-              {result.matched_rules.map((rule, index) => (
-                <tr key={index}>
-                  <td>{rule.name}</td>
-                  <td>
-                    <span className="status-badge status-pending">
-                      {rule.action}
-                    </span>
-                  </td>
-                  <td>
-                    {rule.score_adjustment !== undefined
-                      ? (rule.score_adjustment > 0 ? '+' : '') +
-                        rule.score_adjustment
-                      : '-'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="matched-rules mb-4">
+          <h6 className="fw-bold mb-3 small text-uppercase text-muted d-flex align-items-center">
+            <Shield size={14} className="me-2" /> Decision Rules
+          </h6>
+          <div className="space-y-2">
+            {result.matched_rules.map((rule, index) => (
+              <div key={index} className="p-2 border rounded small bg-white shadow-sm border-start border-4 border-primary">
+                <div className="d-flex justify-content-between align-items-start mb-1">
+                  <span className="fw-bold">{rule.name}</span>
+                  <span className="badge bg-primary opacity-75">{rule.action}</span>
+                </div>
+                <div className="text-muted" style={{fontSize: '0.9em'}}>{rule.reason}</div>
+                {rule.explanation && <div className="mt-1 p-1 bg-light rounded x-small italic text-muted">{rule.explanation}</div>}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* Shadow Matched Rules */}
-      {result.shadow_matched_rules && result.shadow_matched_rules.length > 0 && (
-        <div className="shadow-rules">
-          <h4>Shadow Rules (Testing)</h4>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Rule</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {result.shadow_matched_rules.map((rule, index) => (
-                <tr key={index}>
-                  <td>{rule.name}</td>
-                  <td>
-                    <span className="status-badge status-draft">
-                      {rule.action}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* Debug Section */}
+      <div className="pt-3 border-top">
+        <button 
+          className="btn btn-link btn-sm p-0 text-decoration-none text-muted d-flex align-items-center"
+          onClick={() => setShowRaw(!showRaw)}
+        >
+          {showRaw ? <ChevronDown size={14} className="me-1" /> : <ChevronRight size={14} className="me-1" />}
+          View Raw API Response
+        </button>
+        {showRaw && (
+          <pre className="mt-2 p-3 bg-dark text-success rounded small overflow-auto" style={{ maxHeight: '300px', fontSize: '0.8em' }}>
+            {JSON.stringify(result, null, 2)}
+          </pre>
+        )}
+      </div>
     </div>
   );
 }
+
+import { Clock, Cpu, AlertTriangle, Shield, ChevronDown, ChevronRight } from 'lucide-react';
 
 function formatUptime(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
