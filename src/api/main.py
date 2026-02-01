@@ -1220,6 +1220,7 @@ async def get_heuristic_suggestions(
             fp_resp = client.get_dataset_fingerprint()
             if fp_resp:
                 import hashlib
+
                 # Create a simple hash from counts and timestamps
                 s = (
                     f"{fp_resp.generated_records.count}-"
