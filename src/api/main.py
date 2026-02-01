@@ -1213,6 +1213,20 @@ async def get_heuristic_suggestions(
         engine = SuggestionEngine(min_confidence=min_confidence)
         suggestions = engine.generate_suggestions(field=field, min_samples=min_samples)
 
+        # Compute fingerprint from dataset state
+        fingerprint = None
+        try:
+            client = get_crud_client()
+            fp_resp = client.get_dataset_fingerprint()
+            if fp_resp:
+                import hashlib
+                # Create a simple hash from counts and timestamps
+                s = f"{fp_resp.generated_records.count}-{fp_resp.feature_snapshots.count}"
+                fingerprint = hashlib.sha256(s.encode()).hexdigest()
+        except Exception:
+            # Swallow errors for fingerprinting to avoid failing main request
+            pass
+
         # Convert to response (limit to 50)
         response_suggestions = []
         for s in suggestions[:50]:
@@ -1233,6 +1247,7 @@ async def get_heuristic_suggestions(
                         sample_count=evidence.get("sample_count", 0),
                     ),
                     reason=s.reason,
+                    dataset_fingerprint=fingerprint,
                 )
             )
 
@@ -4050,8 +4065,14 @@ async def check_rule_readiness(
     collector = get_metrics_collector()
     metrics = collector.get_rule_metrics(rule_id, start_date, end_date)
 
-    # Get total requests (placeholder logic, same as analytics)
-    total_requests = 1000  # TODO: Real total
+    # Get total requests
+    try:
+        crud = get_crud_client()
+        overview = crud.get_overview_metrics()
+        total_requests = overview.total_transactions
+    except Exception as e:
+        logger.warning(f"Failed to fetch total requests: {e}")
+        total_requests = 1000  # Fallback
 
     audit_logger = get_audit_logger()
     evaluator = ReadinessEvaluator(audit_logger=audit_logger)
