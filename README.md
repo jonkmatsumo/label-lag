@@ -129,6 +129,8 @@ The React UI now supports:
 
 The system includes a Go-based `inference-gateway` designed to replace the FastAPI `/evaluate/signal` endpoint for high-throughput inference.
 
+The gateway exposes `GET /ready` to verify rules loading and inference backend connectivity.
+
 ### Switching Inference Modes
 
 The BFF supports toggling between FastAPI and Go Gateway via environment variable:
@@ -257,6 +259,21 @@ BFF_INFERENCE_MODE=fastapi  # or 'gateway' to use inference-gateway
 BFF_GATEWAY_BASE_URL=http://inference-gateway:8081
 BFF_REQUEST_TIMEOUT=30000
 BFF_LOG_LEVEL=info
+```
+
+### Inference Gateway (Go)
+
+```
+INFERENCE_GATEWAY_MAX_BODY_BYTES=1048576
+INFERENCE_GATEWAY_READ_TIMEOUT=10s
+INFERENCE_GATEWAY_WRITE_TIMEOUT=30s
+INFERENCE_GATEWAY_IDLE_TIMEOUT=60s
+```
+
+### Analytics CRUD (Go)
+
+```
+ANALYTICS_CRUD_ALLOW_INSECURE_DEFAULTS=false
 ```
 
 ### MLflow / MinIO

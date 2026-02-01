@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"sync"
 	"time"
@@ -17,63 +18,124 @@ type APIProvider struct {
 	mu           sync.RWMutex
 	cachedRules  RuleSet
 	lastFetched  time.Time
+	lastAttempt  time.Time
+	nextAttempt  time.Time
+	backoff      time.Duration
+	baseBackoff  time.Duration
+	maxBackoff   time.Duration
+	jitterFn     func(time.Duration) time.Duration
+	fetching     bool
+	cond         *sync.Cond
+	lastErr      error
 }
 
 func NewAPIProvider(apiURL string, ttl time.Duration) *APIProvider {
-	return &APIProvider{
+	provider := &APIProvider{
 		apiURL:     apiURL,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 		ttl:        ttl,
+		baseBackoff: 500 * time.Millisecond,
+		maxBackoff:  30 * time.Second,
+		jitterFn:    defaultJitter,
 	}
+	provider.cond = sync.NewCond(&provider.mu)
+	return provider
 }
 
 func (p *APIProvider) GetRules(ctx context.Context) (RuleSet, error) {
-	p.mu.RLock()
-	if time.Since(p.lastFetched) < p.ttl && p.cachedRules.Version != "" {
-		rules := p.cachedRules
-		p.mu.RUnlock()
-		return rules, nil
-	}
-	p.mu.RUnlock()
+	for {
+		p.mu.Lock()
+		if time.Since(p.lastFetched) < p.ttl && p.cachedRules.Version != "" {
+			rules := p.cachedRules
+			p.mu.Unlock()
+			return rules, nil
+		}
+		if !p.nextAttempt.IsZero() && time.Now().Before(p.nextAttempt) {
+			cached := p.cachedRules
+			nextAttempt := p.nextAttempt
+			p.mu.Unlock()
+			if cached.Version != "" {
+				return cached, nil
+			}
+			return RuleSet{}, fmt.Errorf("rules provider in backoff until %s", nextAttempt.Format(time.RFC3339))
+		}
+		if p.fetching {
+			for p.fetching {
+				p.cond.Wait()
+			}
+			cached := p.cachedRules
+			lastErr := p.lastErr
+			p.mu.Unlock()
+			if cached.Version != "" {
+				return cached, nil
+			}
+			if lastErr != nil {
+				return RuleSet{}, lastErr
+			}
+			return RuleSet{}, fmt.Errorf("rules unavailable")
+		}
+		p.fetching = true
+		p.mu.Unlock()
 
-	return p.fetchAndCache(ctx)
+		rules, err := p.fetchAndCache(ctx)
+
+		p.mu.Lock()
+		p.fetching = false
+		p.cond.Broadcast()
+		p.mu.Unlock()
+
+		return rules, err
+	}
 }
 
 func (p *APIProvider) fetchAndCache(ctx context.Context) (RuleSet, error) {
+	now := time.Now()
 	p.mu.Lock()
-	defer p.mu.Unlock()
+	p.lastAttempt = now
+	p.mu.Unlock()
 
-	// Double check if another goroutine fetched while we were waiting for lock
-	if time.Since(p.lastFetched) < p.ttl && p.cachedRules.Version != "" {
-		return p.cachedRules, nil
+	rules, err := p.fetchRules(ctx)
+	if err != nil {
+		p.mu.Lock()
+		p.noteFailure(now)
+		p.lastErr = err
+		cached := p.cachedRules
+		p.mu.Unlock()
+		if cached.Version != "" {
+			return cached, nil
+		}
+		return RuleSet{}, err
 	}
 
+	p.mu.Lock()
+	p.cachedRules = rules
+	p.lastFetched = time.Now()
+	p.backoff = 0
+	p.nextAttempt = time.Time{}
+	p.lastErr = nil
+	p.mu.Unlock()
+
+	return rules, nil
+}
+
+func (p *APIProvider) fetchRules(ctx context.Context) (RuleSet, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.apiURL, nil)
 	if err != nil {
-		return p.cachedRules, fmt.Errorf("create request: %w", err)
+		return RuleSet{}, fmt.Errorf("create request: %w", err)
 	}
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
-		if p.cachedRules.Version != "" {
-			return p.cachedRules, nil // Fallback to stale cache
-		}
 		return RuleSet{}, fmt.Errorf("fetch rules from API: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		if p.cachedRules.Version != "" {
-			return p.cachedRules, nil // Fallback to stale cache
-		}
 		return RuleSet{}, fmt.Errorf("API returned status %d", resp.StatusCode)
 	}
 
 	var payload ruleSetJSON
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		if p.cachedRules.Version != "" {
-			return p.cachedRules, nil // Fallback to stale cache
-		}
 		return RuleSet{}, fmt.Errorf("decode API response: %w", err)
 	}
 
@@ -96,11 +158,29 @@ func (p *APIProvider) fetchAndCache(ctx context.Context) (RuleSet, error) {
 		})
 	}
 
-	p.cachedRules = RuleSet{
+	rules, _ = FilterValidRules(rules)
+
+	return RuleSet{
 		Version: payload.Version,
 		Rules:   rules,
-	}
-	p.lastFetched = time.Now()
+	}, nil
+}
 
-	return p.cachedRules, nil
+func (p *APIProvider) noteFailure(now time.Time) {
+	if p.backoff <= 0 {
+		p.backoff = p.baseBackoff
+	} else {
+		p.backoff *= 2
+		if p.backoff > p.maxBackoff {
+			p.backoff = p.maxBackoff
+		}
+	}
+	p.nextAttempt = now.Add(p.backoff + p.jitterFn(p.backoff))
+}
+
+func defaultJitter(backoff time.Duration) time.Duration {
+	if backoff <= 0 {
+		return 0
+	}
+	return time.Duration(rand.Int63n(int64(backoff/2) + 1))
 }

@@ -10,7 +10,8 @@ interface TrainBody {
   name?: string;
   test_size?: number;
   random_seed?: number;
-  selected_columns?: string[];
+  selected_feature_columns?: string[];
+  training_window_days?: number;
   max_depth?: number;
   learning_rate?: number;
   n_estimators?: number;
@@ -49,7 +50,8 @@ export async function modelRoutes(
             name: { type: 'string' },
             test_size: { type: 'number' },
             random_seed: { type: 'number' },
-            selected_columns: { type: 'array', items: { type: 'string' } },
+            selected_feature_columns: { type: 'array', items: { type: 'string' } },
+            training_window_days: { type: 'number', minimum: 7, maximum: 90 },
             max_depth: { type: 'number' },
             learning_rate: { type: 'number' },
             n_estimators: { type: 'number' },

@@ -35,17 +35,14 @@ export interface SignalRequest {
 }
 
 export interface RiskComponent {
-  name: string;
-  score: number;
-  weight: number;
+  key: string;
+  label: string;
 }
 
 export interface MatchedRule {
   rule_id: string;
-  name: string;
-  action: string;
-  score_adjustment?: number;
-  reason?: string;
+  severity: string;
+  reason: string;
   explanation?: string;
 }
 
@@ -74,7 +71,8 @@ export interface TrainRequest {
   name?: string;
   test_size?: number;
   random_seed?: number;
-  selected_columns?: string[];
+  selected_feature_columns?: string[];
+  training_window_days?: number;
   max_depth?: number;
   learning_rate?: number;
   n_estimators?: number;

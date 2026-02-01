@@ -252,42 +252,46 @@ function RiskResult({ result }: { result: SignalResponse }) {
       </div>
 
       {/* Risk Components */}
-      {result.risk_components.length > 0 && (
-        <div className="risk-components mb-4">
-          <h6 className="fw-bold mb-3 small text-uppercase text-muted d-flex align-items-center">
-            <AlertTriangle size={14} className="me-2" /> Risk Factors
-          </h6>
+      <div className="risk-components mb-4">
+        <h6 className="fw-bold mb-3 small text-uppercase text-muted d-flex align-items-center">
+          <AlertTriangle size={14} className="me-2" /> Risk Factors
+        </h6>
+        {result.risk_components && result.risk_components.length > 0 ? (
           <div className="list-group list-group-flush border rounded overflow-hidden">
             {result.risk_components.map((component, index) => (
               <div key={index} className="list-group-item d-flex justify-content-between align-items-center p-2 small">
-                <span className="fw-medium">{component.name}</span>
-                <span className="badge bg-light text-dark border">{(component.weight * 100).toFixed(0)}% weight</span>
+                <span className="fw-medium">{component.label}</span>
+                <span className="text-muted" style={{fontSize: '0.8em'}}>{component.key}</span>
               </div>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="text-muted small italic p-2 border rounded bg-light">No risk components returned.</div>
+        )}
+      </div>
 
       {/* Matched Rules */}
-      {result.matched_rules.length > 0 && (
-        <div className="matched-rules mb-4">
-          <h6 className="fw-bold mb-3 small text-uppercase text-muted d-flex align-items-center">
-            <Shield size={14} className="me-2" /> Decision Rules
-          </h6>
+      <div className="matched-rules mb-4">
+        <h6 className="fw-bold mb-3 small text-uppercase text-muted d-flex align-items-center">
+          <Shield size={14} className="me-2" /> Decision Rules
+        </h6>
+        {result.matched_rules && result.matched_rules.length > 0 ? (
           <div className="space-y-2">
             {result.matched_rules.map((rule, index) => (
               <div key={index} className="p-2 border rounded small bg-white shadow-sm border-start border-4 border-primary">
                 <div className="d-flex justify-content-between align-items-start mb-1">
-                  <span className="fw-bold">{rule.name}</span>
-                  <span className="badge bg-primary opacity-75">{rule.action}</span>
+                  <span className="fw-bold">{rule.rule_id}</span>
+                  <span className="badge bg-primary opacity-75">{rule.severity}</span>
                 </div>
                 <div className="text-muted" style={{fontSize: '0.9em'}}>{rule.reason}</div>
                 {rule.explanation && <div className="mt-1 p-1 bg-light rounded x-small italic text-muted">{rule.explanation}</div>}
               </div>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="text-muted small italic p-2 border rounded bg-light">No rules matched.</div>
+        )}
+      </div>
 
       {/* Debug Section */}
       <div className="pt-3 border-top">

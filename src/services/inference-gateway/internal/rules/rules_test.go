@@ -70,6 +70,46 @@ func TestEvaluateRules_ShadowRulesDoNotAffectScore(t *testing.T) {
 	}
 }
 
+func TestFilterValidRulesSkipsInvalid(t *testing.T) {
+	score := 10
+	rules := []Rule{
+		{
+			ID:     "valid",
+			Field:  "velocity_24h",
+			Op:     ">",
+			Value:  1,
+			Action: "clamp_min",
+			Score:  &score,
+			Status: RuleStatusActive,
+		},
+		{
+			ID:     "missing-field",
+			Field:  "",
+			Op:     ">",
+			Value:  1,
+			Action: "clamp_min",
+			Score:  &score,
+			Status: RuleStatusActive,
+		},
+		{
+			ID:     "bad-op",
+			Field:  "velocity_24h",
+			Op:     "???",
+			Value:  1,
+			Action: "reject",
+			Status: RuleStatusActive,
+		},
+	}
+
+	valid, errs := FilterValidRules(rules)
+	if len(valid) != 1 {
+		t.Fatalf("expected 1 valid rule, got %d", len(valid))
+	}
+	if len(errs) != 2 {
+		t.Fatalf("expected 2 validation errors, got %d", len(errs))
+	}
+}
+
 func intPtr(v int) *int {
 	return &v
 }

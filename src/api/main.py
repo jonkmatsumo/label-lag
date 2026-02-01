@@ -48,6 +48,7 @@ from api.schemas import (
     ConflictResponse,
     DailyStatsResponse,
     DatasetFingerprintResponse,
+    DatasetRelationshipsResponse,
     DeployModelRequest,
     DeployModelResponse,
     DisableRuleRequest,
@@ -75,6 +76,7 @@ from api.schemas import (
     RedundancyResponse,
     RejectRuleRequest,
     RejectRuleResponse,
+    RelationshipMetric,
     RollbackRuleRequest,
     RollbackRuleResponse,
     RuleAnalyticsResponse,
@@ -4307,6 +4309,136 @@ async def get_schema_summary(
         )
     except Exception as e:
         logger.error(f"Failed to get schema summary from CRUD service: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get(
+    "/analytics/relationships",
+    response_model=DatasetRelationshipsResponse,
+    tags=["Analytics"],
+    summary="Get dataset feature relationships",
+)
+async def get_dataset_relationships(
+    sample_size: int = Query(default=500, ge=10, le=2000),
+    target_column: str = Query(default="is_fraudulent"),
+) -> DatasetRelationshipsResponse:
+    """Compute feature relationships (correlation, Cramér's V, etc.) on sampled data."""
+    import numpy as np
+    import pandas as pd
+    from scipy import stats
+
+    client = get_crud_client()
+    try:
+        # Get a larger sample for better statistics
+        resp = client.get_feature_sample(sample_size=sample_size, stratify=True)
+        samples = MessageToDict(
+            resp,
+            preserving_proto_field_name=True,
+            always_print_fields_with_no_presence=True,
+            use_integers_for_enums=True,
+        ).get("samples", [])
+
+        if not samples:
+            return DatasetRelationshipsResponse(
+                relationships=[], target_column=target_column
+            )
+
+        df = pd.DataFrame(samples)
+
+        # Identity features to exclude
+        exclude = ["record_id", "user_id", "snapshot_id"]
+        features = [c for c in df.columns if c not in exclude]
+
+        relationships = []
+
+        # Target correlation
+        if target_column in df.columns:
+            for col in features:
+                if col == target_column:
+                    continue
+
+                # Check types
+                is_col_num = pd.api.types.is_numeric_dtype(df[col])
+                is_target_num = pd.api.types.is_numeric_dtype(df[target_column])
+
+                if is_col_num and is_target_num:
+                    # Pearson
+                    corr, _ = stats.pearsonr(
+                        df[col].fillna(0), df[target_column].fillna(0)
+                    )
+                    relationships.append(
+                        RelationshipMetric(
+                            feature_a=col,
+                            feature_b=target_column,
+                            metric_type="pearson",
+                            value=float(corr) if not np.isnan(corr) else 0.0,
+                        )
+                    )
+                elif not is_col_num and not is_target_num:
+                    # Categorical-Categorical: Cramér's V (simplified)
+                    confusion_matrix = pd.crosstab(df[col], df[target_column])
+                    chi2 = stats.chi2_contingency(confusion_matrix)[0]
+                    n = confusion_matrix.sum().sum()
+                    if n > 1:
+                        phi2 = chi2 / n
+                        r, k = confusion_matrix.shape
+                        phi2corr = max(0, phi2 - ((k - 1) * (r - 1)) / (n - 1))
+                        rcorr = r - ((r - 1) ** 2) / (n - 1)
+                        kcorr = k - ((k - 1) ** 2) / (n - 1)
+                        denom = min((kcorr - 1), (rcorr - 1))
+                        if denom <= 0:
+                            v = 0.0
+                        else:
+                            v = np.sqrt(phi2corr / denom)
+                        relationships.append(
+                            RelationshipMetric(
+                                feature_a=col,
+                                feature_b=target_column,
+                                metric_type="cramers_v",
+                                value=float(v) if not np.isnan(v) else 0.0,
+                            )
+                        )
+                else:
+                    # Categorical-Numeric: Correlation Ratio (eta)
+                    cat_col = col if not is_col_num else target_column
+                    num_col = target_column if not is_col_num else col
+
+                    groups = [
+                        group[num_col].dropna().values
+                        for _, group in df.groupby(cat_col)
+                    ]
+                    groups = [g for g in groups if len(g) > 0]
+
+                    if len(groups) > 1:
+                        f_val, _ = stats.f_oneway(*groups)
+                        # η² = (df_between * F) / (df_between * F + df_within)
+                        # simplified as it's just for ranking
+                        n = len(df)
+                        k = len(groups)
+                        denom = f_val * (k - 1) + (n - k)
+                        if denom <= 0:
+                            eta2 = 0.0
+                        else:
+                            eta2 = (f_val * (k - 1)) / denom
+                        eta = np.sqrt(max(0, eta2))
+                        relationships.append(
+                            RelationshipMetric(
+                                feature_a=col,
+                                feature_b=target_column,
+                                metric_type="eta",
+                                value=float(eta) if not np.isnan(eta) else 0.0,
+                            )
+                        )
+
+        # Sort by absolute value descending
+        relationships.sort(key=lambda x: abs(x.value), reverse=True)
+
+        return DatasetRelationshipsResponse(
+            relationships=relationships[:20],  # Top 20
+            target_column=target_column,
+        )
+    except Exception as e:
+        logger.error(f"Failed to compute dataset relationships: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

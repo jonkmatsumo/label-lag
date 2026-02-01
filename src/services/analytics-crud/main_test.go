@@ -9,10 +9,14 @@ import (
 	pb "github.com/jonkmatsumo/label-lag/src/services/analytics-crud/proto/crud/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/status"
 )
 
 func TestGetDailyStats(t *testing.T) {
-	db, mock, err := sqlmock.New()
+	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
 	}
@@ -36,7 +40,7 @@ func TestGetDailyStats(t *testing.T) {
 }
 
 func TestGetOverviewMetrics(t *testing.T) {
-	db, mock, err := sqlmock.New()
+	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
 	}
@@ -98,4 +102,118 @@ func TestGetFeatureSample_Stratified(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	assert.Len(t, resp.Samples, 2)
+}
+
+func TestUpdateHealthStatusServing(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectPing()
+	healthServer := health.NewServer()
+
+	err = updateHealthStatus(context.Background(), db, healthServer, nil)
+	require.NoError(t, err)
+
+	resp, err := healthServer.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{})
+	require.NoError(t, err)
+	assert.Equal(t, grpc_health_v1.HealthCheckResponse_SERVING, resp.Status)
+}
+
+func TestUpdateHealthStatusNotServing(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectPing().WillReturnError(assert.AnError)
+	healthServer := health.NewServer()
+
+	err = updateHealthStatus(context.Background(), db, healthServer, nil)
+	require.Error(t, err)
+
+	resp, err := healthServer.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{})
+	require.NoError(t, err)
+	assert.Equal(t, grpc_health_v1.HealthCheckResponse_NOT_SERVING, resp.Status)
+}
+
+func TestGetDailyStatsRejectsInvalidDays(t *testing.T) {
+	db, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := &server{db: db}
+	_, err = s.GetDailyStats(context.Background(), &pb.GetDailyStatsRequest{Days: -1})
+	require.Error(t, err)
+
+	st, _ := status.FromError(err)
+	assert.Equal(t, codes.InvalidArgument, st.Code())
+}
+
+func TestGetTransactionDetailsRejectsInvalidLimit(t *testing.T) {
+	db, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := &server{db: db}
+	_, err = s.GetTransactionDetails(context.Background(), &pb.GetTransactionDetailsRequest{
+		Days:  1,
+		Limit: maxTransactionLimit + 1,
+	})
+	require.Error(t, err)
+
+	st, _ := status.FromError(err)
+	assert.Equal(t, codes.InvalidArgument, st.Code())
+}
+
+func TestGetRecentAlertsRejectsInvalidLimit(t *testing.T) {
+	db, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := &server{db: db}
+	_, err = s.GetRecentAlerts(context.Background(), &pb.GetRecentAlertsRequest{Limit: maxAlertLimit + 1})
+	require.Error(t, err)
+
+	st, _ := status.FromError(err)
+	assert.Equal(t, codes.InvalidArgument, st.Code())
+}
+
+func TestGetFeatureSampleRejectsInvalidSampleSize(t *testing.T) {
+	db, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := &server{db: db}
+	_, err = s.GetFeatureSample(context.Background(), &pb.GetFeatureSampleRequest{SampleSize: maxSampleSizeLimit + 1})
+	require.Error(t, err)
+
+	st, _ := status.FromError(err)
+	assert.Equal(t, codes.InvalidArgument, st.Code())
+}
+
+func TestResolveDatabaseURLUsesEnv(t *testing.T) {
+	value, err := resolveDatabaseURL(func(key string) string {
+		if key == "DATABASE_URL" {
+			return "postgresql://user:pass@localhost:5432/db"
+		}
+		return ""
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "postgresql://user:pass@localhost:5432/db", value)
+}
+
+func TestResolveDatabaseURLAllowsDefaultsWhenEnabled(t *testing.T) {
+	value, err := resolveDatabaseURL(func(key string) string {
+		if key == "ANALYTICS_CRUD_ALLOW_INSECURE_DEFAULTS" {
+			return "true"
+		}
+		return ""
+	})
+	require.NoError(t, err)
+	assert.Equal(t, defaultDatabaseURL, value)
+}
+
+func TestResolveDatabaseURLRequiresExplicitValue(t *testing.T) {
+	_, err := resolveDatabaseURL(func(string) string { return "" })
+	require.Error(t, err)
 }

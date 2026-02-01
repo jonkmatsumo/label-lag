@@ -1,6 +1,8 @@
 package httpserver
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -20,22 +22,80 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-type Handler struct {
-	logger          *slog.Logger
-	inferenceClient *grpcclient.InferenceClient
-	rulesProvider   rules.Provider
+type InferenceClient interface {
+	Score(ctx context.Context, req *inferencev1.ScoreRequest) (*inferencev1.ScoreResponse, error)
+	Ready(ctx context.Context) error
 }
 
-func NewHandler(logger *slog.Logger, client *grpcclient.InferenceClient, provider rules.Provider) *Handler {
+type Handler struct {
+	logger          *slog.Logger
+	inferenceClient InferenceClient
+	rulesProvider   rules.Provider
+	maxBodyBytes    int64
+}
+
+func NewHandler(logger *slog.Logger, client InferenceClient, provider rules.Provider, maxBodyBytes int64) *Handler {
+	if maxBodyBytes <= 0 {
+		maxBodyBytes = 1 << 20
+	}
 	return &Handler{
 		logger:          logger,
 		inferenceClient: client,
 		rulesProvider:   provider,
+		maxBodyBytes:    maxBodyBytes,
 	}
 }
 
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/evaluate/signal", h.handleEvaluateSignal)
+	mux.HandleFunc("/ready", h.handleReady)
+}
+
+func (h *Handler) handleReady(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+
+	components := map[string]string{}
+	ready := true
+
+	if h.rulesProvider == nil {
+		components["rules"] = "unavailable"
+		ready = false
+	} else if _, err := h.rulesProvider.GetRules(ctx); err != nil {
+		components["rules"] = "error"
+		ready = false
+	} else {
+		components["rules"] = "ok"
+	}
+
+	if h.inferenceClient == nil {
+		components["inference"] = "unavailable"
+		ready = false
+	} else if err := h.inferenceClient.Ready(ctx); err != nil {
+		components["inference"] = "error"
+		ready = false
+	} else {
+		components["inference"] = "ok"
+	}
+
+	status := "ready"
+	code := http.StatusOK
+	if !ready {
+		status = "not_ready"
+		code = http.StatusServiceUnavailable
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"status":     status,
+		"components": components,
+	})
 }
 
 func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
@@ -47,15 +107,21 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 	span := trace.SpanFromContext(r.Context())
 
+	r.Body = http.MaxBytesReader(w, r.Body, h.maxBodyBytes)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		}
 		writeJSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	defer r.Body.Close()
 
 	var req gatewayv1.SignalRequest
-	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(body, &req); err != nil {
+	if err := (protojson.UnmarshalOptions{}).Unmarshal(body, &req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
 		return
 	}

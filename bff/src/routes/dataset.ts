@@ -138,4 +138,36 @@ export async function datasetRoutes(
       }
     }
   );
+
+  // GET /bff/v1/dataset/relationships
+  fastify.get(
+    '/bff/v1/dataset/relationships',
+    {
+      schema: {
+        querystring: {
+          type: 'object',
+          properties: {
+            sample_size: { type: 'integer', default: 500 },
+            target_column: { type: 'string', default: 'is_fraudulent' }
+          }
+        }
+      }
+    },
+    async (request: FastifyRequest<{ Querystring: { sample_size: number; target_column: string } }>, reply: FastifyReply) => {
+      try {
+        const response = await httpClient.request({
+          method: 'GET',
+          path: '/analytics/relationships',
+          query: request.query as Record<string, string | number | boolean>,
+          requestId: request.requestId,
+        });
+        return reply.status(response.statusCode).send(response.data);
+      } catch (error) {
+        if (error instanceof UpstreamError) {
+          return reply.status(error.statusCode).send(error.toResponse());
+        }
+        throw error;
+      }
+    }
+  );
 }

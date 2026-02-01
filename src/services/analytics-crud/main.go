@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"log/slog"
 	"net"
 	"os"
@@ -37,10 +36,23 @@ type server struct {
 	db *sql.DB
 }
 
+const (
+	maxDaysLimit         = 365
+	maxTransactionLimit  = 5000
+	maxAlertLimit        = 1000
+	maxSampleSizeLimit   = 5000
+	defaultDailyStatsDay = 30
+	defaultTxnDays       = 7
+	defaultTxnLimit      = 1000
+	defaultAlertLimit    = 50
+	defaultSampleSize    = 100
+	defaultDatabaseURL   = "postgresql://synthetic:synthetic_dev_password@localhost:5542/synthetic_data?sslmode=disable"
+)
+
 func (s *server) GetDailyStats(ctx context.Context, req *pb.GetDailyStatsRequest) (*pb.GetDailyStatsResponse, error) {
-	days := req.Days
-	if days == 0 {
-		days = 30
+	days, err := normalizeDays(req.Days, defaultDailyStatsDay, maxDaysLimit)
+	if err != nil {
+		return nil, err
 	}
 	cutoffDate := time.Now().AddDate(0, 0, -int(days))
 
@@ -92,13 +104,13 @@ func (s *server) GetDailyStats(ctx context.Context, req *pb.GetDailyStatsRequest
 }
 
 func (s *server) GetTransactionDetails(ctx context.Context, req *pb.GetTransactionDetailsRequest) (*pb.GetTransactionDetailsResponse, error) {
-	days := req.Days
-	if days == 0 {
-		days = 7
+	days, err := normalizeDays(req.Days, defaultTxnDays, maxDaysLimit)
+	if err != nil {
+		return nil, err
 	}
-	limit := req.Limit
-	if limit == 0 {
-		limit = 1000
+	limit, err := normalizeLimit(req.Limit, defaultTxnLimit, maxTransactionLimit, "limit")
+	if err != nil {
+		return nil, err
 	}
 	cutoffDate := time.Now().AddDate(0, 0, -int(days))
 
@@ -161,9 +173,9 @@ func (s *server) GetTransactionDetails(ctx context.Context, req *pb.GetTransacti
 }
 
 func (s *server) GetRecentAlerts(ctx context.Context, req *pb.GetRecentAlertsRequest) (*pb.GetRecentAlertsResponse, error) {
-	limit := req.Limit
-	if limit == 0 {
-		limit = 50
+	limit, err := normalizeLimit(req.Limit, defaultAlertLimit, maxAlertLimit, "limit")
+	if err != nil {
+		return nil, err
 	}
 
 	// Constants taken from data_service.py
@@ -506,9 +518,9 @@ func (s *server) GetSchemaSummary(ctx context.Context, req *pb.GetSchemaSummaryR
 }
 
 func (s *server) GetFeatureSample(ctx context.Context, req *pb.GetFeatureSampleRequest) (*pb.GetFeatureSampleResponse, error) {
-	sampleSize := req.SampleSize
-	if sampleSize <= 0 {
-		sampleSize = 100
+	sampleSize, err := normalizeLimit(req.SampleSize, defaultSampleSize, maxSampleSizeLimit, "sample_size")
+	if err != nil {
+		return nil, err
 	}
 
 	pgVersion, _ := getPostgresVersion(ctx, s.db)
@@ -645,6 +657,26 @@ func (s *server) executeQuery(ctx context.Context, query string) ([]*pb.FeatureS
 	return samples, nil
 }
 
+func normalizeDays(value, fallback, max int32) (int32, error) {
+	if value == 0 {
+		value = fallback
+	}
+	if value < 1 || value > max {
+		return 0, status.Errorf(codes.InvalidArgument, "days must be between 1 and %d", max)
+	}
+	return value, nil
+}
+
+func normalizeLimit(value, fallback, max int32, field string) (int32, error) {
+	if value == 0 {
+		value = fallback
+	}
+	if value < 1 || value > max {
+		return 0, status.Errorf(codes.InvalidArgument, "%s must be between 1 and %d", field, max)
+	}
+	return value, nil
+}
+
 // loggingInterceptor logs the details of each gRPC request and response.
 func loggingInterceptor(
 	ctx context.Context,
@@ -750,14 +782,16 @@ func main() {
 		port = "50051"
 	}
 
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		dbURL = "postgresql://synthetic:synthetic_dev_password@localhost:5542/synthetic_data?sslmode=disable"
+	dbURL, err := resolveDatabaseURL(os.Getenv)
+	if err != nil {
+		slog.Error("failed to resolve database url", "error", err)
+		os.Exit(1)
 	}
 
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
+		slog.Error("failed to connect to database", "error", err)
+		os.Exit(1)
 	}
 	defer db.Close()
 
@@ -787,7 +821,7 @@ func main() {
 	// Register health service
 	healthServer := health.NewServer()
 	grpc_health_v1.RegisterHealthServer(s, healthServer)
-	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
+	updateHealthStatus(context.Background(), db, healthServer, logger)
 
 	// Register reflection service on gRPC server.
 	reflection.Register(s)
@@ -805,7 +839,46 @@ func main() {
 		}
 	}()
 
+	healthCtx, healthCancel := context.WithCancel(context.Background())
+	healthTicker := time.NewTicker(10 * time.Second)
+	go func() {
+		defer healthTicker.Stop()
+		for {
+			select {
+			case <-healthCtx.Done():
+				return
+			case <-healthTicker.C:
+				updateHealthStatus(context.Background(), db, healthServer, logger)
+			}
+		}
+	}()
+
 	<-stop
+	healthCancel()
 	slog.Info("shutting down gRPC server...")
 	s.GracefulStop()
+}
+
+func updateHealthStatus(ctx context.Context, db *sql.DB, healthServer *health.Server, logger *slog.Logger) error {
+	if err := db.PingContext(ctx); err != nil {
+		if logger != nil {
+			logger.Warn("database health check failed", "error", err)
+		}
+		healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
+		return err
+	}
+	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
+	return nil
+}
+
+func resolveDatabaseURL(getenv func(string) string) (string, error) {
+	if value := strings.TrimSpace(getenv("DATABASE_URL")); value != "" {
+		return value, nil
+	}
+	allowDefaults := strings.EqualFold(getenv("ANALYTICS_CRUD_ALLOW_INSECURE_DEFAULTS"), "true") ||
+		strings.EqualFold(getenv("ANALYTICS_CRUD_ALLOW_INSECURE_DEFAULTS"), "1")
+	if allowDefaults {
+		return defaultDatabaseURL, nil
+	}
+	return "", fmt.Errorf("DATABASE_URL is required")
 }

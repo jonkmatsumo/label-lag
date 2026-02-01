@@ -49,6 +49,18 @@ export const modelApi = {
     apiClient.post<DeployResponse>('/bff/v1/models/deploy', request),
 };
 
+export const datasetApi = {
+  getOverview: () => apiClient.get<AnalyticsOverviewResponse>('/bff/v1/dataset/overview'),
+  getSchema: () => apiClient.get<{ columns: string[]; types: Record<string, string> }>('/bff/v1/dataset/schema'),
+  getSample: (params?: { sample_size?: number; stratify?: boolean }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.sample_size) searchParams.set('sample_size', String(params.sample_size));
+    if (params?.stratify !== undefined) searchParams.set('stratify', String(params.stratify));
+    const query = searchParams.toString();
+    return apiClient.get<FeatureSampleResponse>(`/bff/v1/dataset/sample${query ? `?${query}` : ''}`);
+  },
+};
+
 // Rules management
 export const rulesApi = {
   getDraftRules: () =>

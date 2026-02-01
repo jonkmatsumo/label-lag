@@ -43,4 +43,7 @@ export const datasetApi = {
   
   getFeatureSample: (sampleSize: number = 1000, stratify: boolean = true) =>
     apiClient.get<{ samples: FeatureSample[] }>(`/bff/v1/dataset/sample?sample_size=${sampleSize}&stratify=${stratify}`),
+
+  getRelationships: (sampleSize: number = 500, targetColumn: string = 'is_fraudulent') =>
+    apiClient.get<{ relationships: any[], target_column: string }>(`/bff/v1/dataset/relationships?sample_size=${sampleSize}&target_column=${targetColumn}`),
 };
