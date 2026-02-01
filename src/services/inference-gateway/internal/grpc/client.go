@@ -10,6 +10,7 @@ import (
 	"github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/requestid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 )
@@ -52,6 +53,24 @@ func (c *InferenceClient) Close() error {
 		return nil
 	}
 	return c.conn.Close()
+}
+
+func (c *InferenceClient) Ready(ctx context.Context) error {
+	if c == nil || c.conn == nil {
+		return fmt.Errorf("inference client not initialized")
+	}
+
+	state := c.conn.GetState()
+	if state != connectivity.Ready {
+		c.conn.Connect()
+		if !c.conn.WaitForStateChange(ctx, state) {
+			return fmt.Errorf("inference backend not ready")
+		}
+		if c.conn.GetState() != connectivity.Ready {
+			return fmt.Errorf("inference backend not ready")
+		}
+	}
+	return nil
 }
 
 func (c *InferenceClient) Score(ctx context.Context, req *inferencev1.ScoreRequest) (*inferencev1.ScoreResponse, error) {
