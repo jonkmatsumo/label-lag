@@ -190,3 +190,30 @@ func TestGetFeatureSampleRejectsInvalidSampleSize(t *testing.T) {
 	st, _ := status.FromError(err)
 	assert.Equal(t, codes.InvalidArgument, st.Code())
 }
+
+func TestResolveDatabaseURLUsesEnv(t *testing.T) {
+	value, err := resolveDatabaseURL(func(key string) string {
+		if key == "DATABASE_URL" {
+			return "postgresql://user:pass@localhost:5432/db"
+		}
+		return ""
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "postgresql://user:pass@localhost:5432/db", value)
+}
+
+func TestResolveDatabaseURLAllowsDefaultsWhenEnabled(t *testing.T) {
+	value, err := resolveDatabaseURL(func(key string) string {
+		if key == "ANALYTICS_CRUD_ALLOW_INSECURE_DEFAULTS" {
+			return "true"
+		}
+		return ""
+	})
+	require.NoError(t, err)
+	assert.Equal(t, defaultDatabaseURL, value)
+}
+
+func TestResolveDatabaseURLRequiresExplicitValue(t *testing.T) {
+	_, err := resolveDatabaseURL(func(string) string { return "" })
+	require.Error(t, err)
+}

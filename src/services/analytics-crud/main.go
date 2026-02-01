@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"log/slog"
 	"net"
 	"os"
@@ -47,6 +46,7 @@ const (
 	defaultTxnLimit      = 1000
 	defaultAlertLimit    = 50
 	defaultSampleSize    = 100
+	defaultDatabaseURL   = "postgresql://synthetic:synthetic_dev_password@localhost:5542/synthetic_data?sslmode=disable"
 )
 
 func (s *server) GetDailyStats(ctx context.Context, req *pb.GetDailyStatsRequest) (*pb.GetDailyStatsResponse, error) {
@@ -782,14 +782,16 @@ func main() {
 		port = "50051"
 	}
 
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		dbURL = "postgresql://synthetic:synthetic_dev_password@localhost:5542/synthetic_data?sslmode=disable"
+	dbURL, err := resolveDatabaseURL(os.Getenv)
+	if err != nil {
+		slog.Error("failed to resolve database url", "error", err)
+		os.Exit(1)
 	}
 
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
+		slog.Error("failed to connect to database", "error", err)
+		os.Exit(1)
 	}
 	defer db.Close()
 
@@ -867,4 +869,16 @@ func updateHealthStatus(ctx context.Context, db *sql.DB, healthServer *health.Se
 	}
 	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
 	return nil
+}
+
+func resolveDatabaseURL(getenv func(string) string) (string, error) {
+	if value := strings.TrimSpace(getenv("DATABASE_URL")); value != "" {
+		return value, nil
+	}
+	allowDefaults := strings.EqualFold(getenv("ANALYTICS_CRUD_ALLOW_INSECURE_DEFAULTS"), "true") ||
+		strings.EqualFold(getenv("ANALYTICS_CRUD_ALLOW_INSECURE_DEFAULTS"), "1")
+	if allowDefaults {
+		return defaultDatabaseURL, nil
+	}
+	return "", fmt.Errorf("DATABASE_URL is required")
 }
