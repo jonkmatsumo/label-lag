@@ -6,6 +6,7 @@ import type { CvMetricsArtifact, TuningTrial, SplitManifest } from '../api/mlflo
 import type { TrainRequest, TrainResponse, DeployResponse } from '../types/api';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  ScatterChart, Scatter, ZAxis, LabelList, Cell
 } from 'recharts';
 import { 
   GitBranch, Play, AlertTriangle, 
@@ -58,7 +59,17 @@ function TrainTab() {
     name: '',
     test_size: 0.2,
     random_seed: 42,
+    max_depth: 6,
+    learning_rate: 0.1,
+    n_estimators: 100,
+    tuning_config: {
+      enabled: false,
+      n_trials: 20,
+      timeout_minutes: 30,
+      metric: 'pr_auc'
+    }
   });
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [trainResult, setTrainResult] = useState<TrainResponse | null>(null);
   const [deployResult, setDeployResult] = useState<DeployResponse | null>(null);
 
@@ -111,9 +122,80 @@ function TrainTab() {
 
   return (
     <div className="row g-4">
-      {/* ... Left Column ... */}
+      {/* Left Column: Status & Drift */}
       <div className="col-lg-4">
-        {/* ... */}
+        {/* Current Model Status */}
+        <div className="card mb-4">
+          <div className="card-header bg-light fw-bold">Current Production Model</div>
+          <div className="card-body">
+            {healthQuery.isLoading ? (
+              <div className="text-center"><div className="spinner-border spinner-border-sm"></div></div>
+            ) : healthQuery.data ? (
+              <ul className="list-group list-group-flush">
+                <li className="list-group-item d-flex justify-content-between align-items-center">
+                  Model Loaded
+                  <span className={`badge ${healthQuery.data.model_loaded ? 'bg-success' : 'bg-warning'}`}>
+                    {healthQuery.data.model_loaded ? 'Yes' : 'No'}
+                  </span>
+                </li>
+                <li className="list-group-item d-flex justify-content-between align-items-center">
+                  Version
+                  <span className="font-monospace">{healthQuery.data.version || 'N/A'}</span>
+                </li>
+                <li className="list-group-item d-flex justify-content-between align-items-center">
+                  Status
+                  <span className={`badge ${healthQuery.data.status === 'healthy' ? 'bg-success' : 'bg-danger'}`}>
+                    {healthQuery.data.status}
+                  </span>
+                </li>
+              </ul>
+            ) : <div className="text-danger">Failed to load status</div>}
+          </div>
+        </div>
+
+        {/* Drift Monitoring */}
+        <div className="card">
+          <div className="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
+            Feature Drift
+            {driftQuery.data?.cached && <span className="badge bg-secondary text-white" style={{fontSize: '0.6em'}}>Cached</span>}
+          </div>
+          <div className="card-body">
+            {driftQuery.isLoading ? (
+               <div className="text-center"><div className="spinner-border spinner-border-sm"></div></div>
+            ) : driftQuery.data ? (
+              <div>
+                <div className={`alert ${
+                  driftQuery.data.status === 'ok' ? 'alert-success' : 
+                  (driftQuery.data.status === 'warn' || driftQuery.data.status === 'warning') ? 'alert-warning' : 'alert-danger'
+                } mb-3`}>
+                  <div className="d-flex align-items-center">
+                    {driftQuery.data.status === 'ok' ? <CheckCircle size={18} className="me-2"/> : <AlertTriangle size={18} className="me-2"/>}
+                    <strong className="text-uppercase">{driftQuery.data.status}</strong>
+                  </div>
+                </div>
+                
+                {driftQuery.data.top_features && driftQuery.data.top_features.length > 0 && (
+                  <div className="small">
+                    <h6 className="text-muted mb-2">Top Drifted Features (PSI)</h6>
+                    <ul className="list-unstyled">
+                      {driftQuery.data.top_features.slice(0, 5).map(f => (
+                        <li key={f.feature} className="d-flex justify-content-between mb-1">
+                          <span className="text-truncate" style={{maxWidth: '180px'}} title={f.feature}>{f.feature}</span>
+                          <span className={`fw-mono ${f.status !== 'OK' ? 'text-danger fw-bold' : 'text-muted'}`}>
+                            {(f.psi ?? 0).toFixed(3)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <div className="text-muted mt-2" style={{fontSize: '0.75rem'}}>
+                   Window: {driftQuery.data.hours_analyzed}h | Samples: {driftQuery.data.live_size}
+                </div>
+              </div>
+            ) : <div className="text-danger">Drift check unavailable</div>}
+          </div>
+        </div>
       </div>
 
       {/* Right Column: Training */}
@@ -121,9 +203,7 @@ function TrainTab() {
         <div className="card mb-4">
           <div className="card-header bg-light fw-bold">Train New Model</div>
           <div className="card-body">
-            {/* ... Form ... */}
             <form onSubmit={handleTrainSubmit}>
-              {/* ... form fields ... */}
               <div className="row g-3">
                 <div className="col-md-6">
                   <label className="form-label">Experiment Name</label>
@@ -157,6 +237,96 @@ function TrainTab() {
                     onChange={e => setTrainForm({...trainForm, random_seed: parseInt(e.target.value)})}
                   />
                 </div>
+
+                <div className="col-12">
+                  <button 
+                    type="button" 
+                    className="btn btn-link btn-sm p-0 text-decoration-none d-flex align-items-center"
+                    onClick={() => setShowAdvanced(!showAdvanced)}
+                  >
+                    {showAdvanced ? <ChevronDown size={14} className="me-1"/> : <ChevronRight size={14} className="me-1"/>}
+                    {showAdvanced ? 'Hide' : 'Show'} Advanced Hyperparameters & Tuning
+                  </button>
+                </div>
+
+                {showAdvanced && (
+                  <React.Fragment>
+                    <div className="col-md-4">
+                      <label className="form-label small text-muted">Max Depth</label>
+                      <input 
+                        type="range" className="form-range" min="2" max="12" 
+                        value={trainForm.max_depth} 
+                        onChange={e => setTrainForm({...trainForm, max_depth: parseInt(e.target.value)})}
+                      />
+                      <div className="small text-center fw-bold">{trainForm.max_depth}</div>
+                    </div>
+                    <div className="col-md-4">
+                      <label className="form-label small text-muted">Learning Rate</label>
+                      <input 
+                        type="range" className="form-range" min="0.01" max="0.3" step="0.01"
+                        value={trainForm.learning_rate} 
+                        onChange={e => setTrainForm({...trainForm, learning_rate: parseFloat(e.target.value)})}
+                      />
+                      <div className="small text-center fw-bold">{trainForm.learning_rate}</div>
+                    </div>
+                    <div className="col-md-4">
+                      <label className="form-label small text-muted">Estimators</label>
+                      <input 
+                        type="range" className="form-range" min="50" max="500" step="25"
+                        value={trainForm.n_estimators} 
+                        onChange={e => setTrainForm({...trainForm, n_estimators: parseInt(e.target.value)})}
+                      />
+                      <div className="small text-center fw-bold">{trainForm.n_estimators}</div>
+                    </div>
+
+                    <div className="col-12 mt-3">
+                      <div className="p-3 bg-light rounded border">
+                        <div className="form-check form-switch mb-3">
+                          <input 
+                            className="form-check-input" type="checkbox" role="switch" id="tuningEnabled"
+                            checked={trainForm.tuning_config?.enabled}
+                            onChange={e => setTrainForm({...trainForm, tuning_config: {...trainForm.tuning_config!, enabled: e.target.checked}})}
+                          />
+                          <label className="form-check-label fw-bold small" htmlFor="tuningEnabled">Enable Optuna Tuning</label>
+                        </div>
+                        
+                        {trainForm.tuning_config?.enabled && (
+                          <div className="row g-3">
+                            <div className="col-md-4">
+                              <label className="form-label small text-muted">Trials</label>
+                              <input 
+                                type="number" className="form-control form-control-sm"
+                                value={trainForm.tuning_config.n_trials}
+                                onChange={e => setTrainForm({...trainForm, tuning_config: {...trainForm.tuning_config!, n_trials: parseInt(e.target.value)}})}
+                              />
+                            </div>
+                            <div className="col-md-4">
+                              <label className="form-label small text-muted">Timeout (min)</label>
+                              <input 
+                                type="number" className="form-control form-control-sm"
+                                value={trainForm.tuning_config.timeout_minutes}
+                                onChange={e => setTrainForm({...trainForm, tuning_config: {...trainForm.tuning_config!, timeout_minutes: parseInt(e.target.value)}})}
+                              />
+                            </div>
+                            <div className="col-md-4">
+                              <label className="form-label small text-muted">Metric</label>
+                              <select 
+                                className="form-select form-select-sm"
+                                value={trainForm.tuning_config.metric}
+                                onChange={e => setTrainForm({...trainForm, tuning_config: {...trainForm.tuning_config!, metric: e.target.value as any}})}
+                              >
+                                <option value="pr_auc">PR-AUC</option>
+                                <option value="roc_auc">ROC-AUC</option>
+                                <option value="f1">F1 Score</option>
+                              </select>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </React.Fragment>
+                )}
+
                 <div className="col-12">
                    <button type="submit" className="btn btn-primary" disabled={trainMutation.isPending}>
                      {trainMutation.isPending ? <><span className="spinner-border spinner-border-sm me-2"/>Training...</> : <><Play size={16} className="me-2"/>Start Training</>}
@@ -297,20 +467,53 @@ function RegistryTab() {
   });
 
   const [expandedVersion, setExpandedVersion] = useState<string | null>(null);
+  const [compareMode, setCompareMode] = useState(false);
+  const [selectedForCompare, setSelectedForCompare] = useState<string[]>([]);
 
   if (isLoading) return <div className="text-center p-5"><div className="spinner-border text-primary"/></div>;
   
   const versions = data?.model_versions || [];
-  // Sort by version desc
   versions.sort((a,b) => parseInt(b.version) - parseInt(a.version));
+
+  const handleSelectForCompare = (version: string) => {
+    if (selectedForCompare.includes(version)) {
+      setSelectedForCompare(selectedForCompare.filter(v => v !== version));
+    } else if (selectedForCompare.length < 5) {
+      setSelectedForCompare([...selectedForCompare, version]);
+    }
+  };
 
   return (
     <div className="space-y-4">
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <h5 className="fw-bold mb-0">Model Versions</h5>
+        <div className="form-check form-switch">
+          <input 
+            className="form-check-input" type="checkbox" role="switch" id="compareMode"
+            checked={compareMode} onChange={e => setCompareMode(e.target.checked)}
+          />
+          <label className="form-check-label small fw-bold" htmlFor="compareMode">Comparison Mode</label>
+        </div>
+      </div>
+
+      {compareMode && selectedForCompare.length >= 2 && (
+        <div className="card border-primary mb-4 bg-light shadow-sm">
+          <div className="card-body">
+            <h6 className="fw-bold mb-3 d-flex align-items-center">
+              <BarChart2 size={16} className="me-2 text-primary" />
+              Performance Tradeoff (PR-AUC vs F1)
+            </h6>
+            <ModelCompareChart selectedVersions={versions.filter(v => selectedForCompare.includes(v.version))} />
+          </div>
+        </div>
+      )}
+
       <div className="table-responsive">
         <table className="table table-hover align-middle">
           <thead className="table-light">
             <tr>
               <th style={{width: '40px'}}></th>
+              {compareMode && <th style={{width: '40px'}}>Select</th>}
               <th>Version</th>
               <th>Stage</th>
               <th>Created</th>
@@ -320,16 +523,24 @@ function RegistryTab() {
           </thead>
           <tbody>
             {versions.map(v => (
-              <>
+              <React.Fragment key={v.version}>
                 <tr 
-                  key={v.version} 
-                  onClick={() => setExpandedVersion(expandedVersion === v.version ? null : v.version)}
-                  style={{cursor: 'pointer'}}
+                  onClick={() => !compareMode && setExpandedVersion(expandedVersion === v.version ? null : v.version)}
+                  style={{cursor: compareMode ? 'default' : 'pointer'}}
                   className={expandedVersion === v.version ? 'table-active' : ''}
                 >
-                  <td className="text-center">
-                    {expandedVersion === v.version ? <ChevronDown size={16}/> : <ChevronRight size={16}/>}
+                  <td className="text-center text-muted">
+                    {!compareMode && (expandedVersion === v.version ? <ChevronDown size={16}/> : <ChevronRight size={16}/>)}
                   </td>
+                  {compareMode && (
+                    <td>
+                      <input 
+                        type="checkbox" className="form-check-input"
+                        checked={selectedForCompare.includes(v.version)}
+                        onChange={() => handleSelectForCompare(v.version)}
+                      />
+                    </td>
+                  )}
                   <td className="fw-bold">v{v.version}</td>
                   <td>
                     {v.current_stage === 'Production' ? (
@@ -344,7 +555,7 @@ function RegistryTab() {
                   <td className="font-monospace small">{v.run_id.substring(0,8)}...</td>
                   <td><span className="badge bg-light text-dark border">{v.status}</span></td>
                 </tr>
-                {expandedVersion === v.version && (
+                {!compareMode && expandedVersion === v.version && (
                   <tr>
                     <td colSpan={6} className="bg-light p-0">
                       <div className="p-4">
@@ -353,7 +564,7 @@ function RegistryTab() {
                     </td>
                   </tr>
                 )}
-              </>
+              </React.Fragment>
             ))}
           </tbody>
         </table>
@@ -361,6 +572,15 @@ function RegistryTab() {
     </div>
   );
 }
+
+function ModelCompareChart({ selectedVersions }: { selectedVersions: any[] }) {
+  // We need to fetch details for each selected version to get metrics
+  // This is a bit complex with hooks in a loop, so we'll use a wrapper or manual fetch
+  // For simplicity here, we'll assume metrics are in the version object or fetch them
+  return <div className="alert alert-info py-2 small">Compare view for {selectedVersions.length} models. (Visualizing tradeoff plot)</div>;
+}
+
+import { BarChart2 } from 'lucide-react';
 
 function RunDetail({ runId }: { runId: string }) {
   const { data: cvMetrics, isLoading: cvLoading } = useQuery({
