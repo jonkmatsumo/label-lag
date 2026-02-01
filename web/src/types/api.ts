@@ -45,6 +45,7 @@ export interface MatchedRule {
   name: string;
   action: string;
   score_adjustment?: number;
+  reason?: string;
   explanation?: string;
 }
 
@@ -119,6 +120,31 @@ export interface DraftRule {
   created_at: string;
   updated_at: string;
   created_by?: string;
+}
+
+export interface ApprovalSignalItem {
+  signal_id: string;
+  category: string;
+  severity: 'info' | 'warning' | 'risk';
+  value: unknown;
+  label: string;
+  description: string;
+}
+
+export interface ApprovalSignalsSummary {
+  risk_count: number;
+  warning_count: number;
+  info_count: number;
+  has_blockers: boolean;
+}
+
+export interface ApprovalSignalsResponse {
+  rule_id: string;
+  computed_at: string;
+  signals: ApprovalSignalItem[];
+  summary: ApprovalSignalsSummary;
+  partial: boolean;
+  unavailable_signals: string[];
 }
 
 export interface DraftRulesResponse {

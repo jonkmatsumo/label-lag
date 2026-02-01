@@ -274,15 +274,12 @@ interface MetricsDisplayProps {
     flagged_transactions: number;
     true_positives: number;
     false_positives: number;
+    match_rate: number;
+    rejected_count: number;
   };
 }
 
 function MetricsDisplay({ metrics }: MetricsDisplayProps) {
-  const flaggedRate =
-    metrics.total_transactions > 0
-      ? (metrics.flagged_transactions / metrics.total_transactions) * 100
-      : 0;
-
   return (
     <div className="metrics-list">
       <div className="metric-row">
@@ -302,10 +299,14 @@ function MetricsDisplay({ metrics }: MetricsDisplayProps) {
         <span className="metric-val">{metrics.total_transactions.toLocaleString()}</span>
       </div>
       <div className="metric-row">
-        <span className="metric-name">Flagged Transactions</span>
+        <span className="metric-name">Flagged</span>
         <span className="metric-val">
-          {metrics.flagged_transactions.toLocaleString()} ({flaggedRate.toFixed(2)}%)
+          {metrics.flagged_transactions.toLocaleString()} ({(metrics.match_rate * 100).toFixed(2)}%)
         </span>
+      </div>
+      <div className="metric-row text-danger">
+        <span className="metric-name">Rejected</span>
+        <span className="metric-val">{metrics.rejected_count.toLocaleString()}</span>
       </div>
       <div className="metric-row">
         <span className="metric-name">True Positives</span>

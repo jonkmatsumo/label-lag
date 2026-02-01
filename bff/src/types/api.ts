@@ -142,7 +142,7 @@ export interface ApprovalSignalsResponse {
   unavailable_signals: string[];
 }
 
-export interface DraftRuleResponse {
+export interface DraftRulesResponse {
   rules: DraftRule[];
   total: number;
 }

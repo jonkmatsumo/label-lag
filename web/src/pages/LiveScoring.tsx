@@ -2,12 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { signalApi, healthApi } from '../api';
 import type { SignalRequest, SignalResponse, HealthResponse } from '../types/api';
-
-function getScoreClass(score: number): string {
-  if (score < 30) return 'score-low';
-  if (score < 70) return 'score-medium';
-  return 'score-high';
-}
+import { Clock, Cpu, AlertTriangle, Shield, ChevronDown, ChevronRight } from 'lucide-react';
 
 export function LiveScoring() {
   const [formData, setFormData] = useState<SignalRequest>({
@@ -312,8 +307,6 @@ function RiskResult({ result }: { result: SignalResponse }) {
     </div>
   );
 }
-
-import { Clock, Cpu, AlertTriangle, Shield, ChevronDown, ChevronRight } from 'lucide-react';
 
 function formatUptime(seconds: number): string {
   const hours = Math.floor(seconds / 3600);

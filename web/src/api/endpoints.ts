@@ -16,15 +16,18 @@ import type {
   SandboxEvaluateResponse,
   BacktestCompareRequest,
   BacktestCompareResponse,
-  OverviewMetrics,
+  AnalyticsOverviewResponse,
   DailyStatsResponse,
-  AlertsResponse,
+  RecentAlertsResponse,
   DriftStatusResponse,
   ShadowComparisonResponse,
   BacktestResultsListResponse,
   RuleAnalyticsResponse,
   ReadinessReportResponse,
   RuleVersionListResponse,
+  RuleDiffResponse,
+  RuleAttributionResponse,
+  ApprovalSignalsResponse,
 } from '../types/api';
 
 // Health endpoints
@@ -50,13 +53,21 @@ export const modelApi = {
 export const rulesApi = {
   getDraftRules: () =>
     apiClient.get<DraftRulesResponse>('/bff/v1/rules/draft'),
-  publishRule: (ruleId: string) =>
-    apiClient.post<PublishRuleResponse>(`/bff/v1/rules/${ruleId}/publish`),
+  publishRule: (ruleId: string, data: { actor: string; reason: string }) =>
+    apiClient.post<PublishRuleResponse>(`/bff/v1/rules/${ruleId}/publish`, data),
   sandboxEvaluate: (request: SandboxEvaluateRequest) =>
     apiClient.post<SandboxEvaluateResponse>(
       '/bff/v1/rules/sandbox/evaluate',
       request
     ),
+  getReadiness: (ruleId: string) =>
+    apiClient.get<ReadinessReportResponse>(`/bff/v1/rules/${encodeURIComponent(ruleId)}/readiness`),
+  getApprovalSignals: (ruleId: string) =>
+    apiClient.get<ApprovalSignalsResponse>(`/bff/v1/rules/draft/${encodeURIComponent(ruleId)}/signals`),
+  getVersions: (ruleId: string) =>
+    apiClient.get<RuleVersionListResponse>(`/bff/v1/rules/${encodeURIComponent(ruleId)}/versions`),
+  getDiff: (ruleId: string, versionA: string, versionB: string) =>
+    apiClient.get<RuleDiffResponse>(`/bff/v1/rules/${encodeURIComponent(ruleId)}/diff?version_a=${versionA}&version_b=${versionB}`),
 };
 
 export const suggestionsApi = {
@@ -87,13 +98,15 @@ export const backtestApi = {
 // Analytics endpoints
 export const analyticsApi = {
   getOverview: () =>
-    apiClient.get<OverviewMetrics>('/bff/v1/analytics/overview'),
+    apiClient.get<AnalyticsOverviewResponse>('/bff/v1/analytics/overview'),
   getDailyStats: (days = 30) =>
     apiClient.get<DailyStatsResponse>(`/bff/v1/analytics/daily-stats?days=${days}`),
   getRecentAlerts: (limit = 50) =>
-    apiClient.get<AlertsResponse>(`/bff/v1/analytics/recent-alerts?limit=${limit}`),
+    apiClient.get<RecentAlertsResponse>(`/bff/v1/analytics/recent-alerts?limit=${limit}`),
   getRuleAnalytics: (ruleId: string, days = 7) =>
     apiClient.get<RuleAnalyticsResponse>(`/bff/v1/analytics/rules/${encodeURIComponent(ruleId)}?days=${days}`),
+  getAttribution: (ruleId: string, days = 7) =>
+    apiClient.get<RuleAttributionResponse>(`/bff/v1/analytics/attribution?rule_id=${encodeURIComponent(ruleId)}&days=${days}`),
 };
 
 // Monitoring endpoints

@@ -1,18 +1,22 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { rulesApi, monitoringApi, backtestApi, suggestionsApi } from '../api';
+import { rulesApi, monitoringApi, backtestApi, suggestionsApi, analyticsApi } from '../api';
 import type {
   DraftRule,
   SandboxEvaluateRequest,
   SandboxEvaluateResponse,
-  ReadinessReportResponse,
-  ApprovalSignalsResponse,
+  ApprovalSignalItem,
 } from '../types/api';
 import { 
   AlertTriangle, CheckCircle, Info, Shield, 
-  ChevronRight, ChevronDown, User, FileText, Send 
+  ChevronRight, ChevronDown, User, FileText, Send,
+  History, BarChart2, Diff, ArrowRight
 } from 'lucide-react';
+import { 
+  Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  Cell, ComposedChart, Line
+} from 'recharts';
 
 const ruleTabs = [
   { path: '/rules', label: 'Management', exact: true },
@@ -170,18 +174,6 @@ export function RuleManagement() {
   );
 }
 
-import { 
-  AlertTriangle, CheckCircle, Info, Shield, 
-  ChevronRight, ChevronDown, User, FileText, Send,
-  History, BarChart2, Diff, ArrowRight
-} from 'lucide-react';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  Cell, ComposedChart, Line
-} from 'recharts';
-
-// ... (keep ruleTabs, RuleInspector, RuleManagement as updated in 5.1)
-
 function RuleDetail({ rule, onPublished }: { rule: DraftRule, onPublished: () => void }) {
   const [activeTab, setActiveTab] = useState<'overview' | 'history' | 'impact'>('overview');
   const [showPublishModal, setShowPublishModal] = useState(false);
@@ -278,7 +270,7 @@ function RuleOverviewTab({ rule, onShowPublish }: { rule: DraftRule, onShowPubli
           <div className="spinner-border spinner-border-sm text-muted" />
         ) : signalsQuery.data ? (
           <div className="space-y-2">
-            {signalsQuery.data.signals.map((s, i) => (
+            {signalsQuery.data.signals.map((s: ApprovalSignalItem, i: number) => (
               <div key={i} className={`d-flex p-2 rounded small border-start border-3 ${s.severity === 'risk' ? 'bg-danger bg-opacity-10 border-danger' : s.severity === 'warning' ? 'bg-warning bg-opacity-10 border-warning' : 'bg-light border-secondary'}`}>
                 <div className="me-2 mt-1">
                   {s.severity === 'risk' ? <AlertTriangle size={14} className="text-danger" /> : s.severity === 'warning' ? <AlertTriangle size={14} className="text-warning" /> : <Info size={14} className="text-info" />}
@@ -448,7 +440,7 @@ function RuleImpactTab({ ruleId }: { ruleId: string }) {
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="name" />
               <YAxis domain={[0, 100]} />
-              <Tooltip formatter={(value: number) => [value.toFixed(1), 'Score']} />
+              <Tooltip formatter={(value: number | undefined) => value ? [value.toFixed(1), 'Score'] : ['0.0', 'Score']} />
               <Bar dataKey="value" barSize={60}>
                 {waterfallData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.fill} />
@@ -766,15 +758,6 @@ function SliderInput({ label, value, min, max, step, onChange }: { label: string
     </div>
   );
 }
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 export function RuleShadow() {
   const [dateRange, setDateRange] = useState(() => {
@@ -982,8 +965,8 @@ export function RuleBacktests() {
               </thead>
               <tbody>
                 {paginatedResults.map((result) => (
-                  <tr key={result.id}>
-                    <td><code>{result.id.slice(0, 8)}</code></td>
+                  <tr key={result.job_id}>
+                    <td><code>{result.job_id.slice(0, 8)}</code></td>
                     <td><code>{result.rule_id}</code></td>
                     <td>
                       <span className={`status-badge ${getStatusBadgeClass(result.status)}`}>
