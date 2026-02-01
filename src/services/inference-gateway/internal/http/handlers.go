@@ -66,7 +66,7 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	var req gatewayv1.SignalRequest
-	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(body, &req); err != nil {
+	if err := (protojson.UnmarshalOptions{}).Unmarshal(body, &req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
 		return
 	}

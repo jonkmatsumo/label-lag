@@ -25,3 +25,18 @@ func TestHandleEvaluateSignal_RejectsLargeBody(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusRequestEntityTooLarge, rec.Code)
 	}
 }
+
+func TestHandleEvaluateSignal_RejectsUnknownFields(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	handler := NewHandler(logger, nil, rules.NewEmptyProvider(), 1024)
+
+	payload := `{"user_id":"u1","amount":12.3,"currency":"USD","client_transaction_id":"t1","unknown":"x"}`
+	req := httptest.NewRequest(http.MethodPost, "/evaluate/signal", strings.NewReader(payload))
+	rec := httptest.NewRecorder()
+
+	handler.handleEvaluateSignal(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
