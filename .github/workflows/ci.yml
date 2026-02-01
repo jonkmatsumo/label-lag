@@ -47,3 +47,26 @@ jobs:
 
       - name: Run ruff
         run: uv run ruff check --output-format=github src tests
+
+  go-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - src/services/inference-gateway
+          - src/services/analytics-crud
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ matrix.module }}/go.mod
+          cache: true
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+
+      - name: Run Go tests
+        working-directory: ${{ matrix.module }}
+        run: go test ./...
