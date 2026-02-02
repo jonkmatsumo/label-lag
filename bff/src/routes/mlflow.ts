@@ -165,4 +165,29 @@ export async function mlflowRoutes(
       }
     }
   );
+
+  // GET /bff/v1/mlflow/runs/:run_id
+  fastify.get(
+    '/bff/v1/mlflow/runs/:run_id',
+    async (
+      request: FastifyRequest<{ Params: { run_id: string } }>,
+      reply: FastifyReply
+    ) => {
+      try {
+        const { run_id } = request.params;
+        const response = await mlflowClient.request({
+          method: 'GET',
+          path: '/api/2.0/mlflow/runs/get',
+          query: { run_id },
+          requestId: request.requestId,
+        });
+        return reply.status(response.statusCode).send(response.data);
+      } catch (error) {
+        if (error instanceof UpstreamError) {
+          return reply.status(error.statusCode).send(error.toResponse());
+        }
+        throw error;
+      }
+    }
+  );
 }

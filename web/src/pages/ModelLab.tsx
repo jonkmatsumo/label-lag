@@ -1,8 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
 import { modelApi, healthApi, monitoringApi, datasetApi } from '../api';
 import { mlflowApi } from '../api/mlflow';
-import type { CvMetricsArtifact, TuningTrial, SplitManifest } from '../api/mlflow';
+import type { CvMetricsArtifact, TuningTrial, SplitManifest, MlflowModelVersion } from '../api/mlflow';
 import type { TrainRequest, TrainResponse, DeployResponse } from '../types/api';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
@@ -677,11 +677,50 @@ function RegistryTab() {
   );
 }
 
-function ModelCompareChart({ selectedVersions }: { selectedVersions: any[] }) {
-  // We need to fetch details for each selected version to get metrics
-  // This is a bit complex with hooks in a loop, so we'll use a wrapper or manual fetch
-  // For simplicity here, we'll assume metrics are in the version object or fetch them
-  return <div className="alert alert-info py-2 small">Compare view for {selectedVersions.length} models. (Visualizing tradeoff plot)</div>;
+function ModelCompareChart({ selectedVersions }: { selectedVersions: MlflowModelVersion[] }) {
+  const runQueries = useQueries({
+    queries: selectedVersions.map(v => ({
+      queryKey: ['run', v.run_id],
+      queryFn: () => mlflowApi.getRun(v.run_id),
+      staleTime: 300000
+    }))
+  });
+
+  const isLoading = runQueries.some(q => q.isLoading);
+  if (isLoading) return <div className="text-center p-5"><div className="spinner-border text-primary"/></div>;
+
+  const data = selectedVersions.map((v, i) => {
+    const run = runQueries[i].data?.run;
+    const metrics = run?.data.metrics || {};
+    return {
+      name: `v${v.version}`,
+      pr_auc: metrics['pr_auc'] || 0,
+      roc_auc: metrics['roc_auc'] || 0,
+      f1: metrics['f1'] || 0,
+      recall: metrics['recall'] || 0,
+      precision: metrics['precision'] || 0
+    };
+  });
+
+  return (
+    <div style={{height: 350}}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+          <XAxis dataKey="name" />
+          <YAxis domain={[0, 1]} />
+          <Tooltip />
+          <Legend />
+          <Bar dataKey="pr_auc" fill="#8884d8" name="PR-AUC" />
+          <Bar dataKey="roc_auc" fill="#82ca9d" name="ROC-AUC" />
+          <Bar dataKey="f1" fill="#ffc658" name="F1 Score" />
+        </BarChart>
+      </ResponsiveContainer>
+      <div className="text-center text-muted small mt-2">
+        Comparison of key scalar metrics. For curves, inspect individual run artifacts.
+      </div>
+    </div>
+  );
 }
 
 import { BarChart2 } from 'lucide-react';
