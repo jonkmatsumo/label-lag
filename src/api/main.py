@@ -46,7 +46,9 @@ from api.schemas import (
     ClearDataResponse,
     CompareRulesetsRequest,
     ConflictResponse,
+    CorrelationPair,
     DailyStatsResponse,
+    DatasetCorrelationsResponse,
     DatasetFingerprintResponse,
     DatasetRelationshipsResponse,
     DeployModelRequest,
@@ -102,6 +104,8 @@ from api.schemas import (
     TrainRequest,
     TrainResponse,
     TransactionDetailsResponse,
+    TransactionSearchRequest,
+    TransactionSearchResponse,
     ValidationResult,
 )
 from api.services import get_evaluator
@@ -4439,6 +4443,136 @@ async def get_dataset_relationships(
         )
     except Exception as e:
         logger.error(f"Failed to compute dataset relationships: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get(
+    "/analytics/correlations",
+    response_model=DatasetCorrelationsResponse,
+    tags=["Analytics"],
+    summary="Get dataset feature correlations (N×N)",
+)
+async def get_dataset_correlations(
+    sample_size: int = Query(default=1000, ge=100, le=5000),
+) -> DatasetCorrelationsResponse:
+    """Compute N×N correlation matrices for numeric and categorical features."""
+    import numpy as np
+    import pandas as pd
+    from scipy import stats
+
+    client = get_crud_client()
+    try:
+        resp = client.get_feature_sample(sample_size=sample_size, stratify=True)
+        samples = MessageToDict(
+            resp,
+            preserving_proto_field_name=True,
+            always_print_fields_with_no_presence=True,
+            use_integers_for_enums=True,
+        ).get("samples", [])
+
+        if not samples:
+            return DatasetCorrelationsResponse(
+                pearson=[],
+                spearman=[],
+                cramers_v=[],
+                numeric_columns=[],
+                categorical_columns=[],
+            )
+
+        df = pd.DataFrame(samples)
+        exclude = ["record_id", "user_id", "snapshot_id"]
+
+        # Identify columns
+        numeric_cols = []
+        categorical_cols = []
+
+        for col in df.columns:
+            if col in exclude:
+                continue
+            if pd.api.types.is_numeric_dtype(df[col]):
+                numeric_cols.append(col)
+            else:
+                categorical_cols.append(col)
+
+        pearson_pairs = []
+        spearman_pairs = []
+        cramers_pairs = []
+
+        # Numeric correlations
+        if len(numeric_cols) >= 2:
+            # Pearson
+            p_corr = df[numeric_cols].corr(method="pearson")
+            for i in range(len(numeric_cols)):
+                for j in range(len(numeric_cols)):
+                    val = p_corr.iloc[i, j]
+                    if not np.isnan(val):
+                        pearson_pairs.append(
+                            CorrelationPair(
+                                feature_a=numeric_cols[i],
+                                feature_b=numeric_cols[j],
+                                value=float(val),
+                            )
+                        )
+
+            # Spearman
+            s_corr = df[numeric_cols].corr(method="spearman")
+            for i in range(len(numeric_cols)):
+                for j in range(len(numeric_cols)):
+                    val = s_corr.iloc[i, j]
+                    if not np.isnan(val):
+                        spearman_pairs.append(
+                            CorrelationPair(
+                                feature_a=numeric_cols[i],
+                                feature_b=numeric_cols[j],
+                                value=float(val),
+                            )
+                        )
+
+        # Categorical associations (Cramér's V)
+        if len(categorical_cols) >= 2:
+            for col_a in categorical_cols:
+                for col_b in categorical_cols:
+                    if col_a == col_b:
+                        cramers_pairs.append(
+                            CorrelationPair(
+                                feature_a=col_a, feature_b=col_b, value=1.0
+                            )
+                        )
+                        continue
+
+                    # Compute Cramer's V
+                    confusion_matrix = pd.crosstab(df[col_a], df[col_b])
+                    chi2 = stats.chi2_contingency(confusion_matrix)[0]
+                    n = confusion_matrix.sum().sum()
+                    if n > 1:
+                        phi2 = chi2 / n
+                        r, k = confusion_matrix.shape
+                        phi2corr = max(0, phi2 - ((k - 1) * (r - 1)) / (n - 1))
+                        rcorr = r - ((r - 1) ** 2) / (n - 1)
+                        kcorr = k - ((k - 1) ** 2) / (n - 1)
+                        denom = min((kcorr - 1), (rcorr - 1))
+                        v = 0.0
+                        if denom > 0:
+                            v = np.sqrt(phi2corr / denom)
+
+                        cramers_pairs.append(
+                            CorrelationPair(
+                                feature_a=col_a,
+                                feature_b=col_b,
+                                value=float(v) if not np.isnan(v) else 0.0,
+                            )
+                        )
+
+        return DatasetCorrelationsResponse(
+            pearson=pearson_pairs,
+            spearman=spearman_pairs,
+            cramers_v=cramers_pairs,
+            numeric_columns=numeric_cols,
+            categorical_columns=categorical_cols,
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to compute dataset correlations: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
