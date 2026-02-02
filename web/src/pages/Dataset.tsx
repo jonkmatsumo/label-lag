@@ -511,23 +511,100 @@ function DiagnosticsTab() {
 }
 
 function RelationshipsTab({ featureColumns }: { featureColumns: string[] }) {
+  const [activeSubTab, setActiveSubTab] = useState<'target' | 'numeric' | 'categorical'>('target');
   const [targetColumn, setTargetColumn] = useState('is_fraudulent');
-  const { data, isLoading } = useQuery({
+
+  const targetQuery = useQuery({
     queryKey: ['dataset', 'relationships', targetColumn],
     queryFn: () => datasetApi.getRelationships(1000, targetColumn),
+    enabled: activeSubTab === 'target'
   });
 
-  if (isLoading) return <div className="text-center p-5"><div className="spinner-border text-primary" /></div>;
+  const matrixQuery = useQuery({
+    queryKey: ['dataset', 'correlations'],
+    queryFn: () => datasetApi.getCorrelations(1000),
+    enabled: activeSubTab !== 'target',
+    staleTime: 300000 // 5 minutes cache
+  });
 
   return (
     <div className="card border-0 shadow-sm">
-      <div className="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom">
-        <h6 className="fw-bold mb-0">Feature Relationships with {targetColumn}</h6>
+      <div className="card-header bg-white py-3 border-bottom">
+        <ul className="nav nav-tabs card-header-tabs">
+          <li className="nav-item">
+            <button 
+              className={`nav-link ${activeSubTab === 'target' ? 'active' : ''}`} 
+              onClick={() => setActiveSubTab('target')}
+            >
+              Feature vs Target
+            </button>
+          </li>
+          <li className="nav-item">
+            <button 
+              className={`nav-link ${activeSubTab === 'numeric' ? 'active' : ''}`} 
+              onClick={() => setActiveSubTab('numeric')}
+            >
+              Numeric Heatmap (Pearson)
+            </button>
+          </li>
+          <li className="nav-item">
+            <button 
+              className={`nav-link ${activeSubTab === 'categorical' ? 'active' : ''}`} 
+              onClick={() => setActiveSubTab('categorical')}
+            >
+              Categorical Heatmap (Cramér's V)
+            </button>
+          </li>
+        </ul>
+      </div>
+      
+      <div className="card-body p-4">
+        {activeSubTab === 'target' && (
+           <TargetRelationshipsTable 
+             data={targetQuery.data} 
+             isLoading={targetQuery.isLoading} 
+             targetColumn={targetColumn} 
+             setTargetColumn={setTargetColumn} 
+             featureColumns={featureColumns} 
+           />
+        )}
+        
+        {activeSubTab === 'numeric' && (
+           <CorrelationHeatmap 
+             title="Pearson Correlation Matrix" 
+             data={matrixQuery.data?.pearson} 
+             columns={matrixQuery.data?.numeric_columns} 
+             isLoading={matrixQuery.isLoading}
+             baseColor="25, 135, 84" // Green-ish
+           />
+        )}
+
+        {activeSubTab === 'categorical' && (
+           <CorrelationHeatmap 
+             title="Cramér's V Association Matrix" 
+             data={matrixQuery.data?.cramers_v} 
+             columns={matrixQuery.data?.categorical_columns} 
+             isLoading={matrixQuery.isLoading}
+             baseColor="255, 193, 7" // Orange-ish
+           />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TargetRelationshipsTable({ data, isLoading, targetColumn, setTargetColumn, featureColumns }: any) {
+  if (isLoading) return <div className="text-center p-5"><div className="spinner-border text-primary" /></div>;
+
+  return (
+    <div>
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h6 className="fw-bold mb-0">Correlations with {targetColumn}</h6>
         <div className="d-flex align-items-center gap-2">
-          <span className="small text-muted">Target Column:</span>
+          <span className="small text-muted">Target:</span>
           <select className="form-select form-select-sm shadow-none border" style={{width: '180px'}} value={targetColumn} onChange={e => setTargetColumn(e.target.value)}>
              <option value="is_fraudulent">is_fraudulent</option>
-             {featureColumns.map(c => <option key={c} value={c}>{c}</option>)}
+             {featureColumns.map((c: string) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
       </div>
@@ -543,7 +620,7 @@ function RelationshipsTab({ featureColumns }: { featureColumns: string[] }) {
           </thead>
           <tbody>
             {data?.relationships && data.relationships.length > 0 ? (
-              data.relationships.map((rel, idx) => (
+              data.relationships.map((rel: any, idx: number) => (
                 <tr key={idx}>
                   <td className="fw-medium">{rel.feature_a}</td>
                   <td>
@@ -573,6 +650,61 @@ function RelationshipsTab({ featureColumns }: { featureColumns: string[] }) {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function CorrelationHeatmap({ title, data, columns, isLoading, baseColor = "13, 110, 253" }: any) {
+  if (isLoading) return <div className="text-center p-5"><div className="spinner-border text-primary" /></div>;
+  if (!data || !columns || columns.length === 0) return <div className="text-muted text-center p-5 bg-light rounded border border-dashed">No numeric data available for correlation analysis.</div>;
+
+  // Limit columns to avoid clutter (e.g. top 20)
+  const displayCols = columns.slice(0, 20);
+  
+  // Create matrix map
+  const matrix: Record<string, number> = {};
+  data.forEach((d: any) => {
+    matrix[`${d.feature_a}:${d.feature_b}`] = d.value;
+  });
+
+  return (
+    <div className="overflow-auto">
+      <h6 className="fw-bold mb-3">{title}</h6>
+      <div className="table-responsive">
+        <table className="table table-bordered table-sm small text-center" style={{tableLayout: 'fixed', width: 'max-content'}}>
+          <thead>
+            <tr>
+              <th style={{width: '140px', backgroundColor: '#f8f9fa'}} className="text-start ps-3">Feature</th>
+              {displayCols.map((c: string) => (
+                <th key={c} className="text-truncate" style={{width: '80px', maxWidth: '80px', fontSize: '0.75rem', transform: 'rotate(-45deg)', height: '80px', verticalAlign: 'bottom'}} title={c}>
+                  {c}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {displayCols.map((row: string) => (
+              <tr key={row}>
+                <th className="text-end pe-3 text-truncate" style={{maxWidth: '140px', backgroundColor: '#f8f9fa'}} title={row}>{row}</th>
+                {displayCols.map((col: string) => {
+                  const val = matrix[`${row}:${col}`] || 0;
+                  // Use absolute value for opacity
+                  const opacity = Math.max(0.05, Math.abs(val));
+                  const bg = `rgba(${baseColor}, ${opacity})`;
+                  const textColor = opacity > 0.6 ? '#fff' : '#000';
+                  
+                  return (
+                    <td key={col} style={{backgroundColor: bg, color: textColor, transition: 'all 0.2s'}}>
+                      {val.toFixed(2)}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {columns.length > 20 && <div className="text-muted small italic mt-2">* Showing top 20 columns only.</div>}
     </div>
   );
 }
