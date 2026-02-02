@@ -256,16 +256,44 @@ export interface DailyStatsResponse {
 }
 
 export interface TransactionDetail {
-  id: string;
+  id: string; // record_id alias
+  record_id: string;
   user_id: string;
   amount: number;
-  timestamp: string;
-  is_fraud: boolean;
+  timestamp: string; // created_at alias
+  created_at: string;
+  is_fraud: boolean; // is_fraudulent alias
+  is_fraudulent: boolean;
   score?: number;
   merchant_category?: string;
+  merchant_risk_score?: number;
+  fraud_type?: string;
+  velocity_24h?: number;
+  amount_to_avg_ratio_30d?: number;
+  balance_volatility_z_score?: number;
+  is_off_hours_txn?: boolean;
 }
 
 export interface TransactionDetailsResponse {
+  transactions: TransactionDetail[];
+  total: number;
+}
+
+export interface TransactionSearchRequest {
+  user_id?: string;
+  transaction_id?: string;
+  min_amount?: number;
+  max_amount?: number;
+  start_date?: string;
+  end_date?: string;
+  is_fraudulent?: boolean;
+  min_score?: number;
+  max_score?: number;
+  limit?: number;
+  offset?: number;
+}
+
+export interface TransactionSearchResponse {
   transactions: TransactionDetail[];
   total: number;
 }
@@ -306,6 +334,32 @@ export interface FeatureSampleResponse {
   samples: FeatureSample[];
   total_sampled: number;
   stratified: boolean;
+}
+
+export interface RelationshipMetric {
+  feature_a: string;
+  feature_b: string;
+  metric_type: string;
+  value: number;
+}
+
+export interface DatasetRelationshipsResponse {
+  relationships: RelationshipMetric[];
+  target_column: string;
+}
+
+export interface CorrelationPair {
+  feature_a: string;
+  feature_b: string;
+  value: number;
+}
+
+export interface DatasetCorrelationsResponse {
+  pearson: CorrelationPair[];
+  spearman: CorrelationPair[];
+  cramers_v: CorrelationPair[];
+  numeric_columns: string[];
+  categorical_columns: string[];
 }
 
 export interface RuleHealthMetrics {

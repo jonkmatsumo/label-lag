@@ -170,4 +170,38 @@ export async function datasetRoutes(
       }
     }
   );
+
+  // GET /bff/v1/dataset/correlations
+  fastify.get(
+    '/bff/v1/dataset/correlations',
+    {
+      schema: {
+        querystring: {
+          type: 'object',
+          properties: {
+            sample_size: { type: 'integer', default: 1000 },
+          },
+        },
+      },
+    },
+    async (
+      request: FastifyRequest<{ Querystring: { sample_size: number } }>,
+      reply: FastifyReply
+    ) => {
+      try {
+        const response = await httpClient.request({
+          method: 'GET',
+          path: '/analytics/correlations',
+          query: request.query as Record<string, string | number | boolean>,
+          requestId: request.requestId,
+        });
+        return reply.status(response.statusCode).send(response.data);
+      } catch (error) {
+        if (error instanceof UpstreamError) {
+          return reply.status(error.statusCode).send(error.toResponse());
+        }
+        throw error;
+      }
+    }
+  );
 }
