@@ -4576,6 +4576,91 @@ async def get_dataset_correlations(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post(
+    "/analytics/transactions/search",
+    response_model=TransactionSearchResponse,
+    tags=["Analytics"],
+    summary="Search transactions with filters",
+)
+async def search_transactions(
+    request: TransactionSearchRequest,
+) -> TransactionSearchResponse:
+    """Search transactions with advanced filtering."""
+    from sqlalchemy import and_, desc, func, select
+    from synthetic_pipeline.db.models import GeneratedRecordDB
+    from synthetic_pipeline.db.session import DatabaseSession
+
+    from api.schemas import TransactionDetail
+
+    db = DatabaseSession()
+
+    with db.get_session() as session:
+        query = select(GeneratedRecordDB)
+        filters = []
+
+        if request.user_id:
+            filters.append(GeneratedRecordDB.user_id == request.user_id)
+        if request.transaction_id:
+            filters.append(GeneratedRecordDB.record_id == request.transaction_id)
+        if request.min_amount is not None:
+            filters.append(GeneratedRecordDB.amount >= request.min_amount)
+        if request.max_amount is not None:
+            filters.append(GeneratedRecordDB.amount <= request.max_amount)
+        if request.start_date:
+            try:
+                start_dt = datetime.fromisoformat(
+                    request.start_date.replace("Z", "+00:00")
+                )
+                filters.append(GeneratedRecordDB.transaction_timestamp >= start_dt)
+            except ValueError:
+                pass
+        if request.end_date:
+            try:
+                end_dt = datetime.fromisoformat(
+                    request.end_date.replace("Z", "+00:00")
+                )
+                filters.append(GeneratedRecordDB.transaction_timestamp <= end_dt)
+            except ValueError:
+                pass
+        if request.is_fraudulent is not None:
+            filters.append(GeneratedRecordDB.is_fraudulent == request.is_fraudulent)
+
+        if filters:
+            query = query.where(and_(*filters))
+
+        # Count total
+        count_query = select(func.count()).select_from(query.subquery())
+        total = session.execute(count_query).scalar() or 0
+
+        # Pagination
+        query = query.order_by(desc(GeneratedRecordDB.transaction_timestamp))
+        query = query.offset(request.offset).limit(request.limit)
+
+        results = session.execute(query).scalars().all()
+
+        transactions = []
+        for r in results:
+            transactions.append(
+                TransactionDetail(
+                    record_id=r.record_id,
+                    user_id=r.user_id,
+                    created_at=r.transaction_timestamp,
+                    is_train_eligible=True,
+                    is_pre_fraud=True,
+                    amount=float(r.amount),
+                    is_fraudulent=r.is_fraudulent,
+                    fraud_type=r.fraud_type,
+                    is_off_hours_txn=r.is_off_hours_txn,
+                    merchant_risk_score=r.merchant_risk_score,
+                    velocity_24h=0,  # Not in DB model
+                    amount_to_avg_ratio_30d=r.amount_to_avg_ratio,
+                    balance_volatility_z_score=r.balance_volatility_z_score,
+                )
+            )
+
+        return TransactionSearchResponse(transactions=transactions, total=total)
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc: Exception) -> JSONResponse:
     """Handle unexpected exceptions."""
