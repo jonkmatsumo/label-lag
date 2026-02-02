@@ -4587,10 +4587,10 @@ async def search_transactions(
 ) -> TransactionSearchResponse:
     """Search transactions with advanced filtering."""
     from sqlalchemy import and_, desc, func, select
-    from synthetic_pipeline.db.models import GeneratedRecordDB
-    from synthetic_pipeline.db.session import DatabaseSession
 
     from api.schemas import TransactionDetail
+    from synthetic_pipeline.db.models import GeneratedRecordDB
+    from synthetic_pipeline.db.session import DatabaseSession
 
     db = DatabaseSession()
 

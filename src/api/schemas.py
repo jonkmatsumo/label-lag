@@ -1224,7 +1224,7 @@ class TransactionDetail(BaseModel):
     is_pre_fraud: bool
     amount: float
     is_fraudulent: bool
-    fraud_type: str
+    fraud_type: str | None = None
     is_off_hours_txn: bool
     merchant_risk_score: int
     velocity_24h: int
