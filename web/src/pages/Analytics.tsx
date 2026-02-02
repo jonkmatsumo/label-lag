@@ -127,9 +127,8 @@ export function Analytics() {
             <div className="card-header bg-white border-bottom py-3">
                <h3 className="card-title h6 fw-bold mb-0">Amount Distribution</h3>
             </div>
-            <div className="card-body d-flex flex-column justify-content-center align-items-center text-muted text-center p-4">
-              <div className="display-4 opacity-25 mb-3">📊</div>
-              <p className="small mb-0">Visualization of transaction amounts by fraud status (Restoring MVP parity)</p>
+            <div className="card-body" style={{ height: 350 }}>
+              <AmountDistributionChart />
             </div>
           </div>
         </div>
@@ -206,6 +205,62 @@ export function Analytics() {
 
       <TransactionExplorer />
     </div>
+  );
+}
+
+function AmountDistributionChart() {
+  const distQuery = useQuery({
+    queryKey: ['analytics', 'dist'],
+    queryFn: () => analyticsApi.searchTransactions({ limit: 1000 }),
+    staleTime: 300000
+  });
+
+  const chartData = useMemo(() => {
+    if (!distQuery.data?.transactions || distQuery.data.transactions.length === 0) return [];
+    
+    const txns = distQuery.data.transactions;
+    const amounts = txns.map(t => t.amount);
+    const min = Math.min(...amounts);
+    const max = Math.max(...amounts);
+    
+    if (min === max) return [];
+
+    const bins = 20;
+    const binSize = (max - min) / bins;
+    
+    const binData = Array.from({ length: bins }, (_, i) => ({
+      range: `${(min + i * binSize).toFixed(0)}-${(min + (i + 1) * binSize).toFixed(0)}`,
+      min: min + i * binSize,
+      fraud: 0,
+      legit: 0
+    }));
+
+    txns.forEach(t => {
+      const binIdx = Math.min(Math.floor((t.amount - min) / binSize), bins - 1);
+      if (binIdx >= 0) {
+        if (t.is_fraudulent || t.is_fraud) binData[binIdx].fraud++;
+        else binData[binIdx].legit++;
+      }
+    });
+    
+    return binData;
+  }, [distQuery.data]);
+
+  if (distQuery.isLoading) return <div className="text-center p-5"><div className="spinner-border text-primary"/></div>;
+  if (chartData.length === 0) return <div className="text-center p-5 text-muted">No data available</div>;
+
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={chartData}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+        <XAxis dataKey="range" fontSize={10} tickFormatter={(val) => val.split('-')[0]} />
+        <YAxis fontSize={10} />
+        <Tooltip />
+        <Legend wrapperStyle={{fontSize: '10px'}} />
+        <Bar dataKey="legit" name="Legitimate" stackId="a" fill="#4caf50" />
+        <Bar dataKey="fraud" name="Fraudulent" stackId="a" fill="#f44336" />
+      </BarChart>
+    </ResponsiveContainer>
   );
 }
 
