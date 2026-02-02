@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { analyticsApi } from '../api';
-import type { RecentAlert } from '../types/api';
+import type { RecentAlert, TransactionSearchRequest, TransactionDetail } from '../types/api';
 import { 
   Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart 
 } from 'recharts';
 import { exportToCsv } from '../utils';
-import { Download } from 'lucide-react';
+import { Download, Search, Filter, ChevronDown, ChevronRight, AlertTriangle, CheckCircle } from 'lucide-react';
 
 export function Analytics() {
   const [daysFilter, setDaysFilter] = useState(30);
@@ -27,7 +27,7 @@ export function Analytics() {
   const chartData = dailyStatsQuery.data?.stats ? 
     [...dailyStatsQuery.data.stats].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()) : [];
 
-  // Fetch recent alerts
+  // Fetch recent alerts for metric only
   const alertsQuery = useQuery({
     queryKey: ['analytics', 'alerts'],
     queryFn: () => analyticsApi.getRecentAlerts(20),
@@ -204,66 +204,238 @@ export function Analytics() {
         )}
       </div>
 
-      {/* Recent Alerts */}
-      <div className="card shadow-sm border-0 mt-4 mb-5">
-        <div className="card-header bg-white border-bottom py-3">
-          <h3 className="card-title h6 fw-bold mb-0">Recent High-Risk Alerts</h3>
-        </div>
-        {alertsQuery.isLoading ? (
-          <div className="loading p-4">Loading alerts...</div>
-        ) : alertsQuery.isError ? (
-          <div className="alert alert-danger m-4">
-            Failed to load alerts: {alertsQuery.error?.message}
-          </div>
-        ) : alertsQuery.data?.alerts && alertsQuery.data.alerts.length > 0 ? (
-          <div className="table-responsive">
-            <table className="table table-hover align-middle mb-0">
-              <thead className="table-light">
-                <tr>
-                  <th className="ps-4">Time</th>
-                  <th>User</th>
-                  <th className="text-end">Amount</th>
-                  <th className="text-center">Score</th>
-                  <th className="pe-4">Matched Rules</th>
-                </tr>
-              </thead>
-              <tbody>
-                {alertsQuery.data.alerts.map((alert: RecentAlert) => (
-                  <tr key={alert.id}>
-                    <td className="ps-4 small text-muted">{new Date(alert.created_at).toLocaleString()}</td>
-                    <td className="small"><code>{alert.user_id}</code></td>
-                    <td className="text-end small font-monospace">${alert.amount.toFixed(2)}</td>
-                    <td className="text-center">
-                      <span className={`badge rounded-pill px-3 ${alert.score >= 80 ? 'bg-danger' : alert.score >= 50 ? 'bg-warning text-dark' : 'bg-success'}`}>
-                        {alert.score}
-                      </span>
-                    </td>
-                    <td className="pe-4">
-                      {alert.matched_rules.length > 0 ? (
-                        <div className="d-flex flex-wrap gap-1">
-                          {alert.matched_rules.slice(0, 3).map((rule: string, i: number) => (
-                            <span key={i} className="badge bg-light text-primary border small">{rule}</span>
-                          ))}
-                          {alert.matched_rules.length > 3 && (
-                            <span className="badge bg-light text-muted border small">+{alert.matched_rules.length - 3}</span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-muted small italic">-</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      <TransactionExplorer />
+    </div>
+  );
+}
+
+function TransactionExplorer() {
+  const [filters, setFilters] = useState<TransactionSearchRequest>({
+    limit: 20,
+    offset: 0
+  });
+  
+  const searchQuery = useQuery({
+    queryKey: ['analytics', 'search', filters],
+    queryFn: () => analyticsApi.searchTransactions(filters),
+    keepPreviousData: true
+  });
+
+  const handlePageChange = (newOffset: number) => {
+    setFilters(prev => ({ ...prev, offset: newOffset }));
+  };
+
+  return (
+    <div className="card shadow-sm border-0 mt-4 mb-5">
+      <div className="card-header bg-white border-bottom py-3">
+        <h3 className="card-title h6 fw-bold mb-0">Transaction Explorer</h3>
+      </div>
+      <div className="card-body">
+        <TransactionFilters filters={filters} onChange={setFilters} />
+        
+        {searchQuery.isLoading && !searchQuery.isPlaceholderData ? (
+          <div className="text-center p-5"><div className="spinner-border text-primary"/></div>
+        ) : searchQuery.isError ? (
+          <div className="alert alert-danger">Error: {(searchQuery.error as Error).message}</div>
         ) : (
-          <div className="empty-state text-center py-5 opacity-50">
-            <div className="display-4">🔔</div>
-            <p className="mt-2">No recent alerts detected</p>
-          </div>
+          <>
+            <TransactionTable data={searchQuery.data?.transactions || []} />
+            
+            {/* Pagination Controls */}
+            <div className="d-flex justify-content-between align-items-center mt-3">
+              <div className="small text-muted">
+                Showing {filters.offset! + 1} to {Math.min(filters.offset! + (searchQuery.data?.transactions.length || 0), searchQuery.data?.total || 0)} of {searchQuery.data?.total || 0}
+              </div>
+              <div className="btn-group btn-group-sm">
+                <button 
+                  className="btn btn-outline-secondary" 
+                  disabled={filters.offset === 0}
+                  onClick={() => handlePageChange(Math.max(0, filters.offset! - filters.limit!))}
+                >
+                  Previous
+                </button>
+                <button 
+                  className="btn btn-outline-secondary"
+                  disabled={(filters.offset! + filters.limit!) >= (searchQuery.data?.total || 0)}
+                  onClick={() => handlePageChange(filters.offset! + filters.limit!)}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </>
         )}
       </div>
+    </div>
+  );
+}
+
+function TransactionFilters({ filters, onChange }: { filters: TransactionSearchRequest, onChange: (f: TransactionSearchRequest) => void }) {
+  const [localFilters, setLocalFilters] = useState(filters);
+  const [expanded, setExpanded] = useState(false);
+
+  const applyFilters = (e: React.FormEvent) => {
+    e.preventDefault();
+    onChange({ ...localFilters, offset: 0 }); // Reset page on filter
+  };
+
+  return (
+    <form onSubmit={applyFilters} className="mb-4 p-3 bg-light rounded border">
+      <div className="row g-3">
+        <div className="col-md-3">
+          <label className="form-label small fw-bold">User ID</label>
+          <input 
+            type="text" className="form-control form-control-sm" 
+            value={localFilters.user_id || ''} 
+            onChange={e => setLocalFilters({...localFilters, user_id: e.target.value || undefined})}
+            placeholder="Search User..." 
+          />
+        </div>
+        <div className="col-md-3">
+          <label className="form-label small fw-bold">Transaction ID</label>
+          <input 
+            type="text" className="form-control form-control-sm" 
+            value={localFilters.transaction_id || ''} 
+            onChange={e => setLocalFilters({...localFilters, transaction_id: e.target.value || undefined})}
+            placeholder="Search Txn..." 
+          />
+        </div>
+        <div className="col-md-2">
+          <label className="form-label small fw-bold">Status</label>
+          <select 
+            className="form-select form-select-sm"
+            value={localFilters.is_fraudulent === undefined ? '' : String(localFilters.is_fraudulent)}
+            onChange={e => {
+              const val = e.target.value;
+              setLocalFilters({...localFilters, is_fraudulent: val === '' ? undefined : val === 'true'});
+            }}
+          >
+            <option value="">All</option>
+            <option value="true">Fraud</option>
+            <option value="false">Legitimate</option>
+          </select>
+        </div>
+        <div className="col-md-2 d-flex align-items-end">
+          <button type="submit" className="btn btn-primary btn-sm w-100 fw-bold">
+            <Search size={14} className="me-1" /> Search
+          </button>
+        </div>
+        <div className="col-md-2 d-flex align-items-end">
+          <button type="button" className="btn btn-link btn-sm text-decoration-none" onClick={() => setExpanded(!expanded)}>
+            {expanded ? <ChevronDown size={14}/> : <ChevronRight size={14}/>} Advanced
+          </button>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="row g-3 mt-2 pt-2 border-top">
+          <div className="col-md-3">
+            <label className="form-label small text-muted">Min Amount</label>
+            <input type="number" className="form-control form-control-sm" value={localFilters.min_amount || ''} onChange={e => setLocalFilters({...localFilters, min_amount: e.target.value ? parseFloat(e.target.value) : undefined})} />
+          </div>
+          <div className="col-md-3">
+            <label className="form-label small text-muted">Max Amount</label>
+            <input type="number" className="form-control form-control-sm" value={localFilters.max_amount || ''} onChange={e => setLocalFilters({...localFilters, max_amount: e.target.value ? parseFloat(e.target.value) : undefined})} />
+          </div>
+          <div className="col-md-3">
+            <label className="form-label small text-muted">Start Date</label>
+            <input type="date" className="form-control form-control-sm" value={localFilters.start_date || ''} onChange={e => setLocalFilters({...localFilters, start_date: e.target.value || undefined})} />
+          </div>
+          <div className="col-md-3">
+            <label className="form-label small text-muted">End Date</label>
+            <input type="date" className="form-control form-control-sm" value={localFilters.end_date || ''} onChange={e => setLocalFilters({...localFilters, end_date: e.target.value || undefined})} />
+          </div>
+        </div>
+      )}
+    </form>
+  );
+}
+
+function TransactionTable({ data }: { data: TransactionDetail[] }) {
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
+
+  if (data.length === 0) return <div className="text-center p-5 text-muted">No transactions found matching criteria.</div>;
+
+  return (
+    <div className="table-responsive">
+      <table className="table table-hover align-middle mb-0 small">
+        <thead className="table-light">
+          <tr>
+            <th style={{width: '30px'}}></th>
+            <th>Time</th>
+            <th>Transaction ID</th>
+            <th>User</th>
+            <th className="text-end">Amount</th>
+            <th className="text-center">Status</th>
+            <th className="text-center">Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map(txn => (
+            <React.Fragment key={txn.record_id || txn.id}>
+              <tr 
+                onClick={() => setExpandedRow(expandedRow === (txn.record_id || txn.id) ? null : (txn.record_id || txn.id))}
+                className={expandedRow === (txn.record_id || txn.id) ? 'table-active' : ''}
+                style={{cursor: 'pointer'}}
+              >
+                <td className="text-center text-muted">
+                  {expandedRow === (txn.record_id || txn.id) ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}
+                </td>
+                <td className="text-muted">{new Date(txn.created_at || txn.timestamp).toLocaleString()}</td>
+                <td className="font-monospace">{txn.record_id || txn.id}</td>
+                <td>{txn.user_id}</td>
+                <td className="text-end font-monospace">${txn.amount.toFixed(2)}</td>
+                <td className="text-center">
+                  {txn.is_fraudulent || txn.is_fraud ? (
+                    <span className="badge bg-danger rounded-pill"><AlertTriangle size={10} className="me-1"/>Fraud</span>
+                  ) : (
+                    <span className="badge bg-light text-success border rounded-pill"><CheckCircle size={10} className="me-1"/>OK</span>
+                  )}
+                </td>
+                <td className="text-center">
+                  {txn.merchant_risk_score !== undefined ? (
+                    <span className={`badge ${txn.merchant_risk_score > 50 ? 'bg-warning text-dark' : 'bg-light text-dark border'}`}>
+                      {txn.merchant_risk_score}
+                    </span>
+                  ) : '-'}
+                </td>
+              </tr>
+              {expandedRow === (txn.record_id || txn.id) && (
+                <tr>
+                  <td colSpan={7} className="p-0">
+                    <div className="p-3 bg-light border-bottom">
+                      <div className="row g-3">
+                        <div className="col-md-4">
+                          <h6 className="fw-bold mb-2 text-muted text-uppercase x-small">Risk Factors</h6>
+                          <ul className="list-unstyled mb-0">
+                            <li><strong>Velocity (24h):</strong> {txn.velocity_24h ?? 'N/A'}</li>
+                            <li><strong>Amt/Avg (30d):</strong> {txn.amount_to_avg_ratio_30d?.toFixed(2) ?? 'N/A'}</li>
+                            <li><strong>Balance Volatility:</strong> {txn.balance_volatility_z_score?.toFixed(2) ?? 'N/A'}</li>
+                          </ul>
+                        </div>
+                        <div className="col-md-4">
+                          <h6 className="fw-bold mb-2 text-muted text-uppercase x-small">Context</h6>
+                          <ul className="list-unstyled mb-0">
+                            <li><strong>Fraud Type:</strong> {txn.fraud_type || 'None'}</li>
+                            <li><strong>Off Hours:</strong> {txn.is_off_hours_txn ? 'Yes' : 'No'}</li>
+                            <li><strong>Merchant Score:</strong> {txn.merchant_risk_score ?? 'N/A'}</li>
+                          </ul>
+                        </div>
+                        <div className="col-md-4">
+                          <h6 className="fw-bold mb-2 text-muted text-uppercase x-small">Raw Data</h6>
+                          <pre className="mb-0 bg-white p-2 border rounded" style={{fontSize: '0.7em', maxHeight: '100px', overflowY: 'auto'}}>
+                            {JSON.stringify(txn, null, 2)}
+                          </pre>
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </React.Fragment>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

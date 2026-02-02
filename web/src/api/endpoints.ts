@@ -28,6 +28,8 @@ import type {
   RuleDiffResponse,
   RuleAttributionResponse,
   ApprovalSignalsResponse,
+  TransactionSearchRequest,
+  TransactionSearchResponse,
 } from '../types/api';
 
 // Health endpoints
@@ -119,6 +121,8 @@ export const analyticsApi = {
     apiClient.get<RuleAnalyticsResponse>(`/bff/v1/analytics/rules/${encodeURIComponent(ruleId)}?days=${days}`),
   getAttribution: (ruleId: string, days = 7) =>
     apiClient.get<RuleAttributionResponse>(`/bff/v1/analytics/attribution?rule_id=${encodeURIComponent(ruleId)}&days=${days}`),
+  searchTransactions: (request: TransactionSearchRequest) =>
+    apiClient.post<TransactionSearchResponse>('/bff/v1/analytics/transactions/search', request),
 };
 
 // Monitoring endpoints
