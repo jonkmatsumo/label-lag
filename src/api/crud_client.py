@@ -25,6 +25,38 @@ class AnalyticsCRUDClient:
         request = analytics_pb2.GetRecentAlertsRequest(limit=limit)
         return self.stub.GetRecentAlerts(request)
 
+    def search_transactions(
+        self,
+        user_id: str = "",
+        transaction_id: str = "",
+        min_amount: float = None,
+        max_amount: float = None,
+        start_date: str = "",
+        end_date: str = "",
+        is_fraudulent: bool = None,
+        limit: int = 100,
+        offset: int = 0,
+    ):
+        request = analytics_pb2.SearchTransactionsRequest(
+            user_id=user_id,
+            transaction_id=transaction_id,
+            min_amount=min_amount,
+            max_amount=max_amount,
+            start_date=start_date,
+            end_date=end_date,
+            is_fraudulent=is_fraudulent,
+            limit=limit,
+            offset=offset,
+        )
+        return self.stub.SearchTransactions(request)
+
+    def get_features(self, user_id: str):
+        """Fetch latest features for a user via SearchTransactions."""
+        response = self.search_transactions(user_id=user_id, limit=1)
+        if response.transactions:
+            return response.transactions[0]
+        return None
+
     def get_overview_metrics(self):
         request = analytics_pb2.GetOverviewMetricsRequest()
         return self.stub.GetOverviewMetrics(request)
