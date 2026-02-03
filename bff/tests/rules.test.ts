@@ -77,6 +77,7 @@ describe('Rules Routes', () => {
       const response = await ctx.app.inject({
         method: 'POST',
         url: '/bff/v1/rules/rule_1/publish',
+        payload: { actor: 'test-user', reason: 'unit test' },
       });
 
       expect(response.statusCode).toBe(200);
@@ -93,6 +94,7 @@ describe('Rules Routes', () => {
       const response = await ctx.app.inject({
         method: 'POST',
         url: '/bff/v1/rules/nonexistent/publish',
+        payload: { actor: 'test-user', reason: 'unit test' },
       });
 
       expect(response.statusCode).toBe(404);
@@ -106,6 +108,7 @@ describe('Rules Routes', () => {
       const response = await ctx.app.inject({
         method: 'POST',
         url: '/bff/v1/rules/rule_2/publish',
+        payload: { actor: 'test-user', reason: 'unit test' },
       });
 
       expect(response.statusCode).toBe(400);
