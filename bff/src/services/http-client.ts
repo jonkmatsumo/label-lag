@@ -60,8 +60,8 @@ export class HttpClient {
         return await this.executeRequest<T>(options, attempt);
       } catch (error) {
         lastError = error;
-        const isRetryable = 
-          (error instanceof UpstreamError && error.statusCode >= 500) ||
+        const isRetryable =
+          (error instanceof UpstreamError && (error.statusCode === 503 || error.statusCode === 504)) ||
           (error instanceof Error && error.name === 'TimeoutError');
           
         if (attempt < maxRetries && isRetryable) {
@@ -194,10 +194,16 @@ export class HttpClient {
   private createUpstreamError(statusCode: number, body: unknown, requestId: string): UpstreamError {
     // Try to extract error details from upstream response
     let apiError: ApiError;
+    const rawBody = body;
 
     if (typeof body === 'object' && body !== null) {
       const errorBody = body as Record<string, unknown>;
-      if ('error' in errorBody && typeof errorBody.error === 'object') {
+      if ('error' in errorBody && typeof errorBody.error === 'string') {
+        apiError = {
+          code: String(errorBody.error),
+          message: String(errorBody.error),
+        };
+      } else if ('error' in errorBody && typeof errorBody.error === 'object') {
         const innerError = errorBody.error as Record<string, unknown>;
         apiError = {
           code: String(innerError.code ?? 'UPSTREAM_ERROR'),
@@ -235,7 +241,7 @@ export class HttpClient {
       apiError.code = 'UPSTREAM_AUTH_ERROR';
     }
 
-    return new UpstreamError(statusCode, apiError, requestId);
+    return new UpstreamError(statusCode, apiError, requestId, rawBody);
   }
 }
 
@@ -243,16 +249,24 @@ export class UpstreamError extends Error {
   public readonly statusCode: number;
   public readonly apiError: ApiError;
   public readonly requestId: string;
+  public readonly rawBody?: unknown;
 
-  constructor(statusCode: number, apiError: ApiError, requestId: string) {
+  constructor(statusCode: number, apiError: ApiError, requestId: string, rawBody?: unknown) {
     super(apiError.message);
     this.name = 'UpstreamError';
     this.statusCode = statusCode;
     this.apiError = apiError;
     this.requestId = requestId;
+    this.rawBody = rawBody;
   }
 
-  toResponse(): ErrorResponse {
+  toResponse(): ErrorResponse | Record<string, unknown> {
+    if (this.statusCode === 501 && this.rawBody && typeof this.rawBody === 'object') {
+      const body = this.rawBody as Record<string, unknown>;
+      if (typeof body.error === 'string') {
+        return body;
+      }
+    }
     return {
       error: {
         ...this.apiError,
