@@ -3,6 +3,7 @@ module github.com/jonkmatsumo/label-lag/src/services/inference-gateway
 go 1.25.5
 
 require (
+	github.com/jonkmatsumo/label-lag/src/services/analytics-crud v0.0.0-00010101000000-000000000000
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.64.0
 	go.opentelemetry.io/otel v1.39.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.39.0
@@ -11,6 +12,8 @@ require (
 	google.golang.org/grpc v1.78.0
 	google.golang.org/protobuf v1.36.11
 )
+
+replace github.com/jonkmatsumo/label-lag/src/services/analytics-crud => ../analytics-crud
 
 require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
