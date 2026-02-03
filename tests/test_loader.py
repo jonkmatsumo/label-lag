@@ -1,7 +1,12 @@
-"""Tests for DataLoader with temporal splitting and label maturity."""
+"""Tests for DataLoader with analytics-backed data loading.
+
+Tests focus on feature column selection, split logic, and manifest generation.
+The actual temporal splitting and label maturity logic is delegated to the
+Analytics service.
+"""
 
 from datetime import datetime
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
@@ -71,185 +76,135 @@ class TestTrainTestSplit:
 class TestDataLoaderInit:
     """Tests for DataLoader initialization."""
 
-    def test_init_with_url(self):
+    def test_init_accepts_database_url(self):
+        """Test DataLoader accepts database_url (ignored in compute-only mode)."""
         loader = DataLoader(database_url="postgresql://test:test@localhost/test")
-        assert loader.db_session.database_url == "postgresql://test:test@localhost/test"
+        assert loader is not None
 
     def test_feature_columns_defined(self):
+        """Test that FEATURE_COLUMNS constant is defined."""
         assert "velocity_24h" in DataLoader.FEATURE_COLUMNS
         assert "amount_to_avg_ratio_30d" in DataLoader.FEATURE_COLUMNS
         assert "balance_volatility_z_score" in DataLoader.FEATURE_COLUMNS
+
+
+def _make_mock_record(
+    record_id: str,
+    user_id: str,
+    velocity_24h: int,
+    amount_to_avg_ratio_30d: float,
+    balance_volatility_z_score: float,
+    is_fraudulent: bool,
+    created_at: datetime,
+) -> MagicMock:
+    """Create a mock proto record."""
+    record = MagicMock()
+    record.record_id = record_id
+    record.user_id = user_id
+    record.velocity_24h = velocity_24h
+    record.amount_to_avg_ratio_30d = amount_to_avg_ratio_30d
+    record.balance_volatility_z_score = balance_volatility_z_score
+    record.is_fraudulent = is_fraudulent
+    record.created_at = MagicMock()
+    record.created_at.ToDatetime.return_value = created_at
+    return record
 
 
 class TestFeatureColumnOverride:
     """Tests for feature column override behavior."""
 
     @pytest.fixture
-    def mock_session(self):
-        """Create a mock database session."""
-        session = MagicMock()
-        return session
-
-    @pytest.fixture
     def loader(self):
         """Create a DataLoader instance."""
-        return DataLoader(database_url="postgresql://test:test@localhost/test")
+        return DataLoader()
 
-    def test_load_uses_default_columns_when_none_provided(self, loader, mock_session):
+    def test_load_uses_default_columns_when_none_provided(self, loader, monkeypatch):
         """Verify default behavior when feature_columns is None."""
-        cutoff = datetime(2024, 4, 1)
+        from api import crud_client
 
-        mock_result = MagicMock()
-        # Return sample data with all default columns
-        mock_result.fetchall.return_value = [
-            (
-                "rec1",
-                "user1",
-                5,
-                1.5,
-                0.2,
-                None,
-                True,
-                None,
-                False,
-                datetime(2024, 3, 1),
-                0,
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.train_records = [
+            _make_mock_record(
+                "rec1", "user1", 5, 1.5, 0.2, False, datetime(2024, 3, 1)
             )
         ]
-        mock_result.keys.return_value = [
-            "record_id",
-            "user_id",
-            "velocity_24h",
-            "amount_to_avg_ratio_30d",
-            "balance_volatility_z_score",
-            "experimental_signals",
-            "is_train_eligible",
-            "fraud_confirmed_at",
-            "is_fraudulent",
-            "transaction_timestamp",
-            "label",
+        mock_response.test_records = [
+            _make_mock_record(
+                "rec2", "user2", 10, 2.5, 0.5, True, datetime(2024, 5, 1)
+            )
         ]
-        mock_session.execute.return_value = mock_result
+        mock_client.get_training_data.return_value = mock_response
+        monkeypatch.setattr(crud_client, "_client", mock_client)
 
-        split = loader.load_train_test_split(cutoff, session=mock_session)
+        split = loader.load_train_test_split(datetime(2024, 4, 1))
 
         # Should use default FEATURE_COLUMNS
         assert list(split.X_train.columns) == DataLoader.FEATURE_COLUMNS
         assert list(split.X_test.columns) == DataLoader.FEATURE_COLUMNS
 
-    def test_load_uses_override_list_when_provided(self, loader, mock_session):
+    def test_load_uses_override_list_when_provided(self, loader, monkeypatch):
         """Verify custom feature list is used when provided."""
-        cutoff = datetime(2024, 4, 1)
-        custom_columns = ["velocity_24h", "amount_to_avg_ratio_30d"]
+        from api import crud_client
 
-        mock_result = MagicMock()
-        mock_result.fetchall.return_value = [
-            (
-                "rec1",
-                "user1",
-                5,
-                1.5,
-                0.2,
-                None,
-                True,
-                None,
-                False,
-                datetime(2024, 3, 1),
-                0,
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.train_records = [
+            _make_mock_record(
+                "rec1", "user1", 5, 1.5, 0.2, False, datetime(2024, 3, 1)
             )
         ]
-        mock_result.keys.return_value = [
-            "record_id",
-            "user_id",
-            "velocity_24h",
-            "amount_to_avg_ratio_30d",
-            "balance_volatility_z_score",
-            "experimental_signals",
-            "is_train_eligible",
-            "fraud_confirmed_at",
-            "is_fraudulent",
-            "transaction_timestamp",
-            "label",
-        ]
-        mock_session.execute.return_value = mock_result
+        mock_response.test_records = []
+        mock_client.get_training_data.return_value = mock_response
+        monkeypatch.setattr(crud_client, "_client", mock_client)
 
+        custom_columns = ["velocity_24h", "amount_to_avg_ratio_30d"]
         split = loader.load_train_test_split(
-            cutoff, session=mock_session, feature_columns=custom_columns
+            datetime(2024, 4, 1), feature_columns=custom_columns
         )
 
         # Should use custom columns
         assert list(split.X_train.columns) == custom_columns
-        assert list(split.X_test.columns) == custom_columns
 
-    def test_load_raises_on_missing_columns(self, loader, mock_session):
+    def test_load_raises_on_missing_columns(self, loader, monkeypatch):
         """Verify ValueError is raised when requested columns are missing."""
-        cutoff = datetime(2024, 4, 1)
-        missing_columns = ["velocity_24h", "nonexistent_column"]
+        from api import crud_client
 
-        mock_result = MagicMock()
-        mock_result.fetchall.return_value = [
-            (
-                "rec1",
-                "user1",
-                5,
-                1.5,
-                0.2,
-                None,
-                True,
-                None,
-                False,
-                datetime(2024, 3, 1),
-                0,
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.train_records = [
+            _make_mock_record(
+                "rec1", "user1", 5, 1.5, 0.2, False, datetime(2024, 3, 1)
             )
         ]
-        mock_result.keys.return_value = [
-            "record_id",
-            "user_id",
-            "velocity_24h",
-            "amount_to_avg_ratio_30d",
-            "balance_volatility_z_score",
-            "experimental_signals",
-            "is_train_eligible",
-            "fraud_confirmed_at",
-            "is_fraudulent",
-            "transaction_timestamp",
-            "label",
-        ]
-        mock_session.execute.return_value = mock_result
+        mock_response.test_records = []
+        mock_client.get_training_data.return_value = mock_response
+        monkeypatch.setattr(crud_client, "_client", mock_client)
+
+        missing_columns = ["velocity_24h", "nonexistent_column"]
 
         with pytest.raises(ValueError) as exc_info:
             loader.load_train_test_split(
-                cutoff, session=mock_session, feature_columns=missing_columns
+                datetime(2024, 4, 1), feature_columns=missing_columns
             )
 
         assert "nonexistent_column" in str(exc_info.value)
         assert "Requested feature columns not found" in str(exc_info.value)
 
-    def test_load_handles_empty_override_list(self, loader, mock_session):
-        """Verify error when empty feature list is provided."""
-        cutoff = datetime(2024, 4, 1)
+    def test_load_handles_empty_override_list(self, loader, monkeypatch):
+        """Verify empty feature list creates empty DataFrame columns."""
+        from api import crud_client
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.train_records = []
+        mock_response.test_records = []
+        mock_client.get_training_data.return_value = mock_response
+        monkeypatch.setattr(crud_client, "_client", mock_client)
+
         empty_columns = []
-
-        mock_result = MagicMock()
-        mock_result.fetchall.return_value = []
-        mock_result.keys.return_value = [
-            "record_id",
-            "user_id",
-            "velocity_24h",
-            "amount_to_avg_ratio_30d",
-            "balance_volatility_z_score",
-            "experimental_signals",
-            "is_train_eligible",
-            "fraud_confirmed_at",
-            "is_fraudulent",
-            "transaction_timestamp",
-            "label",
-        ]
-        mock_session.execute.return_value = mock_result
-
-        # Empty list should work (creates empty DataFrame with specified columns)
         split = loader.load_train_test_split(
-            cutoff, session=mock_session, feature_columns=empty_columns
+            datetime(2024, 4, 1), feature_columns=empty_columns
         )
 
         assert list(split.X_train.columns) == empty_columns
@@ -257,382 +212,255 @@ class TestFeatureColumnOverride:
 
 
 class TestDataLoaderTemporalSplit:
-    """Tests for temporal splitting logic."""
-
-    @pytest.fixture
-    def mock_session(self):
-        """Create a mock database session."""
-        session = MagicMock()
-        return session
+    """Tests for temporal splitting behavior."""
 
     @pytest.fixture
     def loader(self):
-        """Create a DataLoader instance."""
-        return DataLoader(database_url="postgresql://test:test@localhost/test")
+        return DataLoader()
 
-    def test_cutoff_date_string_parsing(self, loader, mock_session):
+    def test_cutoff_date_string_parsing(self, loader, monkeypatch):
         """Test that string dates are parsed correctly."""
-        cutoff = "2024-04-01"
+        from api import crud_client
 
-        # Mock empty results
-        mock_result = MagicMock()
-        mock_result.fetchall.return_value = []
-        mock_result.keys.return_value = [
-            "record_id",
-            "user_id",
-            "velocity_24h",
-            "amount_to_avg_ratio_30d",
-            "balance_volatility_z_score",
-            "experimental_signals",
-            "is_train_eligible",
-            "fraud_confirmed_at",
-            "is_fraudulent",
-            "created_at",
-            "label",
-        ]
-        mock_session.execute.return_value = mock_result
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.train_records = []
+        mock_response.test_records = []
+        mock_client.get_training_data.return_value = mock_response
+        monkeypatch.setattr(crud_client, "_client", mock_client)
 
-        split = loader.load_train_test_split(cutoff, session=mock_session)
+        split = loader.load_train_test_split("2024-04-01")
         assert isinstance(split, TrainTestSplit)
 
-    def test_cutoff_date_datetime_accepted(self, loader, mock_session):
+        # Verify cutoff was passed to client
+        mock_client.get_training_data.assert_called_once()
+
+    def test_cutoff_date_datetime_accepted(self, loader, monkeypatch):
         """Test that datetime objects are accepted."""
-        cutoff = datetime(2024, 4, 1)
+        from api import crud_client
 
-        mock_result = MagicMock()
-        mock_result.fetchall.return_value = []
-        mock_result.keys.return_value = [
-            "record_id",
-            "user_id",
-            "velocity_24h",
-            "amount_to_avg_ratio_30d",
-            "balance_volatility_z_score",
-            "experimental_signals",
-            "is_train_eligible",
-            "fraud_confirmed_at",
-            "is_fraudulent",
-            "created_at",
-            "label",
-        ]
-        mock_session.execute.return_value = mock_result
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.train_records = []
+        mock_response.test_records = []
+        mock_client.get_training_data.return_value = mock_response
+        monkeypatch.setattr(crud_client, "_client", mock_client)
 
-        split = loader.load_train_test_split(cutoff, session=mock_session)
+        split = loader.load_train_test_split(datetime(2024, 4, 1))
         assert isinstance(split, TrainTestSplit)
 
-    def test_train_query_filters_by_cutoff_and_eligibility(self, loader, mock_session):
-        """Test that train query uses correct WHERE clauses."""
-        cutoff = datetime(2024, 4, 1)
+    def test_train_records_are_from_train_set(self, loader, monkeypatch):
+        """Test that train records are correctly processed."""
+        from api import crud_client
 
-        mock_result = MagicMock()
-        mock_result.fetchall.return_value = []
-        mock_result.keys.return_value = [
-            "record_id",
-            "user_id",
-            "velocity_24h",
-            "amount_to_avg_ratio_30d",
-            "balance_volatility_z_score",
-            "experimental_signals",
-            "is_train_eligible",
-            "fraud_confirmed_at",
-            "is_fraudulent",
-            "created_at",
-            "label",
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.train_records = [
+            _make_mock_record(
+                "rec1", "user1", 5, 1.5, 0.2, False, datetime(2024, 3, 1)
+            ),
+            _make_mock_record(
+                "rec2", "user2", 10, 2.5, -0.5, True, datetime(2024, 3, 15)
+            ),
         ]
-        mock_session.execute.return_value = mock_result
+        mock_response.test_records = []
+        mock_client.get_training_data.return_value = mock_response
+        monkeypatch.setattr(crud_client, "_client", mock_client)
 
-        loader._load_train_set(mock_session, cutoff)
+        split = loader.load_train_test_split(datetime(2024, 4, 1))
 
-        # Verify execute was called
-        mock_session.execute.assert_called_once()
-        call_args = mock_session.execute.call_args
-        query_text = str(call_args[0][0])
+        assert split.train_size == 2
+        assert split.test_size == 0
 
-        # Check for correct filtering conditions
-        assert "transaction_timestamp < :cutoff" in query_text
-        assert "is_train_eligible = TRUE" in query_text
+    def test_test_records_are_from_test_set(self, loader, monkeypatch):
+        """Test that test records are correctly processed."""
+        from api import crud_client
 
-    def test_test_query_filters_by_cutoff(self, loader, mock_session):
-        """Test that test query uses correct WHERE clause."""
-        cutoff = datetime(2024, 4, 1)
-
-        mock_result = MagicMock()
-        mock_result.fetchall.return_value = []
-        mock_result.keys.return_value = [
-            "record_id",
-            "user_id",
-            "velocity_24h",
-            "amount_to_avg_ratio_30d",
-            "balance_volatility_z_score",
-            "experimental_signals",
-            "is_train_eligible",
-            "fraud_confirmed_at",
-            "is_fraudulent",
-            "created_at",
-            "label",
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.train_records = []
+        mock_response.test_records = [
+            _make_mock_record(
+                "rec3", "user3", 15, 3.5, 1.0, True, datetime(2024, 5, 1)
+            ),
         ]
-        mock_session.execute.return_value = mock_result
+        mock_client.get_training_data.return_value = mock_response
+        monkeypatch.setattr(crud_client, "_client", mock_client)
 
-        loader._load_test_set(mock_session, cutoff)
+        split = loader.load_train_test_split(datetime(2024, 4, 1))
 
-        mock_session.execute.assert_called_once()
-        call_args = mock_session.execute.call_args
-        query_text = str(call_args[0][0])
-
-        assert "transaction_timestamp >= :cutoff" in query_text
+        assert split.train_size == 0
+        assert split.test_size == 1
 
 
-class TestDataLoaderLabelMaturity:
-    """Tests for label maturity (knowledge horizon) logic."""
-
-    @pytest.fixture
-    def mock_session(self):
-        return MagicMock()
+class TestDataLoaderLabels:
+    """Tests for label handling."""
 
     @pytest.fixture
     def loader(self):
-        return DataLoader(database_url="postgresql://test:test@localhost/test")
+        return DataLoader()
 
-    def test_train_label_checks_fraud_confirmed_at(self, loader, mock_session):
-        """Train set should only label fraud if confirmed before cutoff."""
-        cutoff = datetime(2024, 4, 1)
+    def test_fraudulent_records_labeled_as_1(self, loader, monkeypatch):
+        """Test that fraudulent records have label=1."""
+        from api import crud_client
 
-        mock_result = MagicMock()
-        mock_result.fetchall.return_value = []
-        mock_result.keys.return_value = [
-            "record_id",
-            "user_id",
-            "velocity_24h",
-            "amount_to_avg_ratio_30d",
-            "balance_volatility_z_score",
-            "experimental_signals",
-            "is_train_eligible",
-            "fraud_confirmed_at",
-            "is_fraudulent",
-            "created_at",
-            "label",
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.train_records = [
+            _make_mock_record(
+                "rec1", "user1", 5, 1.5, 0.2, True, datetime(2024, 3, 1)
+            ),
         ]
-        mock_session.execute.return_value = mock_result
+        mock_response.test_records = []
+        mock_client.get_training_data.return_value = mock_response
+        monkeypatch.setattr(crud_client, "_client", mock_client)
 
-        loader._load_train_set(mock_session, cutoff)
+        split = loader.load_train_test_split(datetime(2024, 4, 1))
 
-        call_args = mock_session.execute.call_args
-        query_text = str(call_args[0][0])
+        assert split.y_train.iloc[0] == 1
 
-        # Verify knowledge horizon is enforced
-        assert "fraud_confirmed_at <= :cutoff" in query_text
-        assert "is_fraudulent = TRUE" in query_text
+    def test_non_fraudulent_records_labeled_as_0(self, loader, monkeypatch):
+        """Test that non-fraudulent records have label=0."""
+        from api import crud_client
 
-    def test_test_label_uses_actual_fraud(self, loader, mock_session):
-        """Test set should use actual fraud label without horizon check."""
-        cutoff = datetime(2024, 4, 1)
-
-        mock_result = MagicMock()
-        mock_result.fetchall.return_value = []
-        mock_result.keys.return_value = [
-            "record_id",
-            "user_id",
-            "velocity_24h",
-            "amount_to_avg_ratio_30d",
-            "balance_volatility_z_score",
-            "experimental_signals",
-            "is_train_eligible",
-            "fraud_confirmed_at",
-            "is_fraudulent",
-            "created_at",
-            "label",
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.train_records = [
+            _make_mock_record(
+                "rec1", "user1", 5, 1.5, 0.2, False, datetime(2024, 3, 1)
+            ),
         ]
-        mock_session.execute.return_value = mock_result
+        mock_response.test_records = []
+        mock_client.get_training_data.return_value = mock_response
+        monkeypatch.setattr(crud_client, "_client", mock_client)
 
-        loader._load_test_set(mock_session, cutoff)
+        split = loader.load_train_test_split(datetime(2024, 4, 1))
 
-        call_args = mock_session.execute.call_args
-        query_text = str(call_args[0][0])
-
-        # Verify test uses actual label
-        expected_label = "CASE WHEN gr.is_fraudulent = TRUE THEN 1 ELSE 0 END"
-        assert expected_label in query_text
-
-
-class TestDataLoaderJoinLogic:
-    """Tests for join logic between tables."""
-
-    @pytest.fixture
-    def mock_session(self):
-        return MagicMock()
-
-    @pytest.fixture
-    def loader(self):
-        return DataLoader(database_url="postgresql://test:test@localhost/test")
-
-    def test_joins_feature_snapshots_and_evaluation_metadata(
-        self, loader, mock_session
-    ):
-        """Test that feature_snapshots is joined with evaluation_metadata."""
-        cutoff = datetime(2024, 4, 1)
-
-        mock_result = MagicMock()
-        mock_result.fetchall.return_value = []
-        mock_result.keys.return_value = [
-            "record_id",
-            "user_id",
-            "velocity_24h",
-            "amount_to_avg_ratio_30d",
-            "balance_volatility_z_score",
-            "experimental_signals",
-            "is_train_eligible",
-            "fraud_confirmed_at",
-            "is_fraudulent",
-            "created_at",
-            "label",
-        ]
-        mock_session.execute.return_value = mock_result
-
-        loader._load_train_set(mock_session, cutoff)
-
-        call_args = mock_session.execute.call_args
-        query_text = str(call_args[0][0])
-
-        assert "feature_snapshots fs" in query_text
-        assert "evaluation_metadata em" in query_text
-        assert "fs.record_id = em.record_id" in query_text
-
-    def test_joins_generated_records_for_labels(self, loader, mock_session):
-        """Test that generated_records is joined for fraud labels."""
-        cutoff = datetime(2024, 4, 1)
-
-        mock_result = MagicMock()
-        mock_result.fetchall.return_value = []
-        mock_result.keys.return_value = [
-            "record_id",
-            "user_id",
-            "velocity_24h",
-            "amount_to_avg_ratio_30d",
-            "balance_volatility_z_score",
-            "experimental_signals",
-            "is_train_eligible",
-            "fraud_confirmed_at",
-            "is_fraudulent",
-            "created_at",
-            "label",
-        ]
-        mock_session.execute.return_value = mock_result
-
-        loader._load_train_set(mock_session, cutoff)
-
-        call_args = mock_session.execute.call_args
-        query_text = str(call_args[0][0])
-
-        assert "generated_records gr" in query_text
-        assert "fs.record_id = gr.record_id" in query_text
+        assert split.y_train.iloc[0] == 0
 
 
 class TestSplitConfig:
     """Tests for split_config and manifest."""
 
-    def test_loader_accepts_split_config(self):
+    def test_loader_accepts_split_config(self, monkeypatch):
         """With split_config, split_manifest is populated."""
-        loader = DataLoader(database_url="postgresql://test:test@localhost/test")
-        session = MagicMock()
-        mock_result = MagicMock()
-        mock_result.fetchall.return_value = [
-            (
-                "rec1",
-                "u1",
-                1,
-                1.0,
-                0.0,
-                None,
-                True,
-                None,
-                False,
-                datetime(2024, 3, 1),
-                0,
+        from api import crud_client
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.train_records = [
+            _make_mock_record(
+                "rec1", "user1", 5, 1.5, 0.2, False, datetime(2024, 3, 1)
             ),
         ]
-        mock_result.keys.return_value = [
-            "record_id",
-            "user_id",
-            "velocity_24h",
-            "amount_to_avg_ratio_30d",
-            "balance_volatility_z_score",
-            "experimental_signals",
-            "is_train_eligible",
-            "fraud_confirmed_at",
-            "is_fraudulent",
-            "transaction_timestamp",
-            "label",
-        ]
-        session.execute.return_value = mock_result
+        mock_response.test_records = []
+        mock_client.get_training_data.return_value = mock_response
+        monkeypatch.setattr(crud_client, "_client", mock_client)
+
+        loader = DataLoader()
         config = SplitConfig(seed=42)
         split = loader.load_train_test_split(
             datetime(2024, 4, 1),
-            session=session,
             feature_columns=["velocity_24h", "amount_to_avg_ratio_30d"],
             split_config=config,
         )
+
         assert split.split_manifest is not None
         assert split.split_manifest["seed"] == 42
         assert "train_record_ids" in split.split_manifest
 
-    def test_loader_default_config_unchanged(self):
-        """Without split_config, behavior unchanged and split_manifest is None."""
-        loader = DataLoader(database_url="postgresql://test:test@localhost/test")
-        session = MagicMock()
-        mock_result = MagicMock()
-        mock_result.fetchall.return_value = []
-        mock_result.keys.return_value = [
-            "record_id",
-            "user_id",
-            "velocity_24h",
-            "amount_to_avg_ratio_30d",
-            "balance_volatility_z_score",
-            "experimental_signals",
-            "is_train_eligible",
-            "fraud_confirmed_at",
-            "is_fraudulent",
-            "transaction_timestamp",
-            "label",
-        ]
-        session.execute.return_value = mock_result
-        split = loader.load_train_test_split(datetime(2024, 4, 1), session=session)
+    def test_loader_default_config_unchanged(self, monkeypatch):
+        """Without split_config, split_manifest is None."""
+        from api import crud_client
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.train_records = []
+        mock_response.test_records = []
+        mock_client.get_training_data.return_value = mock_response
+        monkeypatch.setattr(crud_client, "_client", mock_client)
+
+        loader = DataLoader()
+        split = loader.load_train_test_split(datetime(2024, 4, 1))
+
         assert split.split_manifest is None
 
+    def test_manifest_has_record_ids(self, monkeypatch):
+        """Test that manifest contains train and test record IDs."""
+        from api import crud_client
 
-class TestGetSplitSummary:
-    """Tests for get_split_summary method."""
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.train_records = [
+            _make_mock_record(
+                "train_rec1", "user1", 5, 1.5, 0.2, False, datetime(2024, 3, 1)
+            ),
+        ]
+        mock_response.test_records = [
+            _make_mock_record(
+                "test_rec1", "user2", 10, 2.5, 0.5, True, datetime(2024, 5, 1)
+            ),
+        ]
+        mock_client.get_training_data.return_value = mock_response
+        monkeypatch.setattr(crud_client, "_client", mock_client)
 
-    def test_summary_contains_all_fields(self):
-        loader = DataLoader(database_url="postgresql://test:test@localhost/test")
-        split = TrainTestSplit(
-            X_train=pd.DataFrame({"a": [1, 2, 3]}),
-            y_train=pd.Series([0, 1, 0]),
-            X_test=pd.DataFrame({"a": [4, 5]}),
-            y_test=pd.Series([1, 1]),
+        loader = DataLoader()
+        config = SplitConfig(seed=42)
+        split = loader.load_train_test_split(
+            datetime(2024, 4, 1), split_config=config
         )
 
-        summary = loader.get_split_summary(split)
+        assert "train_rec1" in split.split_manifest["train_record_ids"]
+        assert "test_rec1" in split.split_manifest["test_record_ids"]
 
-        assert "train_size" in summary
-        assert "test_size" in summary
-        assert "train_fraud_rate" in summary
-        assert "test_fraud_rate" in summary
-        assert "train_fraud_count" in summary
-        assert "test_fraud_count" in summary
+    def test_manifest_has_unique_user_counts(self, monkeypatch):
+        """Test that manifest contains unique user counts."""
+        from api import crud_client
 
-    def test_summary_values_correct(self):
-        loader = DataLoader(database_url="postgresql://test:test@localhost/test")
-        split = TrainTestSplit(
-            X_train=pd.DataFrame({"a": [1, 2, 3, 4]}),
-            y_train=pd.Series([0, 1, 1, 0]),
-            X_test=pd.DataFrame({"a": [5, 6, 7]}),
-            y_test=pd.Series([1, 0, 1]),
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.train_records = [
+            _make_mock_record(
+                "rec1", "user1", 5, 1.5, 0.2, False, datetime(2024, 3, 1)
+            ),
+            _make_mock_record(
+                "rec2", "user1", 6, 1.6, 0.3, False, datetime(2024, 3, 2)
+            ),
+            _make_mock_record(
+                "rec3", "user2", 7, 1.7, 0.4, False, datetime(2024, 3, 3)
+            ),
+        ]
+        mock_response.test_records = []
+        mock_client.get_training_data.return_value = mock_response
+        monkeypatch.setattr(crud_client, "_client", mock_client)
+
+        loader = DataLoader()
+        config = SplitConfig(seed=42)
+        split = loader.load_train_test_split(
+            datetime(2024, 4, 1), split_config=config
         )
 
-        summary = loader.get_split_summary(split)
+        assert split.split_manifest["train_unique_users"] == 2
 
-        assert summary["train_size"] == 4
-        assert summary["test_size"] == 3
-        assert summary["train_fraud_rate"] == 0.5
-        assert abs(summary["test_fraud_rate"] - 2 / 3) < 0.01
-        assert summary["train_fraud_count"] == 2
-        assert summary["test_fraud_count"] == 2
+    def test_manifest_has_hash(self, monkeypatch):
+        """Test that manifest contains a hash."""
+        from api import crud_client
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.train_records = [
+            _make_mock_record(
+                "rec1", "user1", 5, 1.5, 0.2, False, datetime(2024, 3, 1)
+            ),
+        ]
+        mock_response.test_records = []
+        mock_client.get_training_data.return_value = mock_response
+        monkeypatch.setattr(crud_client, "_client", mock_client)
+
+        loader = DataLoader()
+        config = SplitConfig(seed=42)
+        split = loader.load_train_test_split(
+            datetime(2024, 4, 1), split_config=config
+        )
+
+        assert split.split_manifest["manifest_hash"].startswith("sha256:")
