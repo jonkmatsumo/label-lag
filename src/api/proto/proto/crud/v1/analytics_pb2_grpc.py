@@ -79,6 +79,31 @@ class AnalyticsServiceStub(object):
                 request_serializer=crud_dot_v1_dot_analytics__pb2.GetTrainingDataRequest.SerializeToString,
                 response_deserializer=crud_dot_v1_dot_analytics__pb2.GetTrainingDataResponse.FromString,
                 _registered_method=True)
+        self.GetBacktestFeatures = channel.unary_unary(
+                '/crud.v1.AnalyticsService/GetBacktestFeatures',
+                request_serializer=crud_dot_v1_dot_analytics__pb2.GetBacktestFeaturesRequest.SerializeToString,
+                response_deserializer=crud_dot_v1_dot_analytics__pb2.GetBacktestFeaturesResponse.FromString,
+                _registered_method=True)
+        self.SaveBacktestResult = channel.unary_unary(
+                '/crud.v1.AnalyticsService/SaveBacktestResult',
+                request_serializer=crud_dot_v1_dot_analytics__pb2.SaveBacktestResultRequest.SerializeToString,
+                response_deserializer=crud_dot_v1_dot_analytics__pb2.SaveBacktestResultResponse.FromString,
+                _registered_method=True)
+        self.ListBacktestResults = channel.unary_unary(
+                '/crud.v1.AnalyticsService/ListBacktestResults',
+                request_serializer=crud_dot_v1_dot_analytics__pb2.ListBacktestResultsRequest.SerializeToString,
+                response_deserializer=crud_dot_v1_dot_analytics__pb2.ListBacktestResultsResponse.FromString,
+                _registered_method=True)
+        self.GetBacktestResult = channel.unary_unary(
+                '/crud.v1.AnalyticsService/GetBacktestResult',
+                request_serializer=crud_dot_v1_dot_analytics__pb2.GetBacktestResultRequest.SerializeToString,
+                response_deserializer=crud_dot_v1_dot_analytics__pb2.GetBacktestResultResponse.FromString,
+                _registered_method=True)
+        self.GetDriftWindow = channel.unary_unary(
+                '/crud.v1.AnalyticsService/GetDriftWindow',
+                request_serializer=crud_dot_v1_dot_analytics__pb2.GetDriftWindowRequest.SerializeToString,
+                response_deserializer=crud_dot_v1_dot_analytics__pb2.GetDriftWindowResponse.FromString,
+                _registered_method=True)
 
 
 class AnalyticsServiceServicer(object):
@@ -138,6 +163,36 @@ class AnalyticsServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetBacktestFeatures(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SaveBacktestResult(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListBacktestResults(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetBacktestResult(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetDriftWindow(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_AnalyticsServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -185,6 +240,31 @@ def add_AnalyticsServiceServicer_to_server(servicer, server):
                     servicer.GetTrainingData,
                     request_deserializer=crud_dot_v1_dot_analytics__pb2.GetTrainingDataRequest.FromString,
                     response_serializer=crud_dot_v1_dot_analytics__pb2.GetTrainingDataResponse.SerializeToString,
+            ),
+            'GetBacktestFeatures': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetBacktestFeatures,
+                    request_deserializer=crud_dot_v1_dot_analytics__pb2.GetBacktestFeaturesRequest.FromString,
+                    response_serializer=crud_dot_v1_dot_analytics__pb2.GetBacktestFeaturesResponse.SerializeToString,
+            ),
+            'SaveBacktestResult': grpc.unary_unary_rpc_method_handler(
+                    servicer.SaveBacktestResult,
+                    request_deserializer=crud_dot_v1_dot_analytics__pb2.SaveBacktestResultRequest.FromString,
+                    response_serializer=crud_dot_v1_dot_analytics__pb2.SaveBacktestResultResponse.SerializeToString,
+            ),
+            'ListBacktestResults': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListBacktestResults,
+                    request_deserializer=crud_dot_v1_dot_analytics__pb2.ListBacktestResultsRequest.FromString,
+                    response_serializer=crud_dot_v1_dot_analytics__pb2.ListBacktestResultsResponse.SerializeToString,
+            ),
+            'GetBacktestResult': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetBacktestResult,
+                    request_deserializer=crud_dot_v1_dot_analytics__pb2.GetBacktestResultRequest.FromString,
+                    response_serializer=crud_dot_v1_dot_analytics__pb2.GetBacktestResultResponse.SerializeToString,
+            ),
+            'GetDriftWindow': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetDriftWindow,
+                    request_deserializer=crud_dot_v1_dot_analytics__pb2.GetDriftWindowRequest.FromString,
+                    response_serializer=crud_dot_v1_dot_analytics__pb2.GetDriftWindowResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -430,6 +510,141 @@ class AnalyticsService(object):
             '/crud.v1.AnalyticsService/GetTrainingData',
             crud_dot_v1_dot_analytics__pb2.GetTrainingDataRequest.SerializeToString,
             crud_dot_v1_dot_analytics__pb2.GetTrainingDataResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetBacktestFeatures(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/crud.v1.AnalyticsService/GetBacktestFeatures',
+            crud_dot_v1_dot_analytics__pb2.GetBacktestFeaturesRequest.SerializeToString,
+            crud_dot_v1_dot_analytics__pb2.GetBacktestFeaturesResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SaveBacktestResult(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/crud.v1.AnalyticsService/SaveBacktestResult',
+            crud_dot_v1_dot_analytics__pb2.SaveBacktestResultRequest.SerializeToString,
+            crud_dot_v1_dot_analytics__pb2.SaveBacktestResultResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListBacktestResults(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/crud.v1.AnalyticsService/ListBacktestResults',
+            crud_dot_v1_dot_analytics__pb2.ListBacktestResultsRequest.SerializeToString,
+            crud_dot_v1_dot_analytics__pb2.ListBacktestResultsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetBacktestResult(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/crud.v1.AnalyticsService/GetBacktestResult',
+            crud_dot_v1_dot_analytics__pb2.GetBacktestResultRequest.SerializeToString,
+            crud_dot_v1_dot_analytics__pb2.GetBacktestResultResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetDriftWindow(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/crud.v1.AnalyticsService/GetDriftWindow',
+            crud_dot_v1_dot_analytics__pb2.GetDriftWindowRequest.SerializeToString,
+            crud_dot_v1_dot_analytics__pb2.GetDriftWindowResponse.FromString,
             options,
             channel_credentials,
             insecure,

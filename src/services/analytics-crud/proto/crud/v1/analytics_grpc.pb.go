@@ -28,6 +28,11 @@ const (
 	AnalyticsService_GetFeatureSample_FullMethodName      = "/crud.v1.AnalyticsService/GetFeatureSample"
 	AnalyticsService_GetSchemaSummary_FullMethodName      = "/crud.v1.AnalyticsService/GetSchemaSummary"
 	AnalyticsService_GetTrainingData_FullMethodName       = "/crud.v1.AnalyticsService/GetTrainingData"
+	AnalyticsService_GetBacktestFeatures_FullMethodName   = "/crud.v1.AnalyticsService/GetBacktestFeatures"
+	AnalyticsService_SaveBacktestResult_FullMethodName    = "/crud.v1.AnalyticsService/SaveBacktestResult"
+	AnalyticsService_ListBacktestResults_FullMethodName   = "/crud.v1.AnalyticsService/ListBacktestResults"
+	AnalyticsService_GetBacktestResult_FullMethodName     = "/crud.v1.AnalyticsService/GetBacktestResult"
+	AnalyticsService_GetDriftWindow_FullMethodName        = "/crud.v1.AnalyticsService/GetDriftWindow"
 )
 
 // AnalyticsServiceClient is the client API for AnalyticsService service.
@@ -43,6 +48,11 @@ type AnalyticsServiceClient interface {
 	GetFeatureSample(ctx context.Context, in *GetFeatureSampleRequest, opts ...grpc.CallOption) (*GetFeatureSampleResponse, error)
 	GetSchemaSummary(ctx context.Context, in *GetSchemaSummaryRequest, opts ...grpc.CallOption) (*GetSchemaSummaryResponse, error)
 	GetTrainingData(ctx context.Context, in *GetTrainingDataRequest, opts ...grpc.CallOption) (*GetTrainingDataResponse, error)
+	GetBacktestFeatures(ctx context.Context, in *GetBacktestFeaturesRequest, opts ...grpc.CallOption) (*GetBacktestFeaturesResponse, error)
+	SaveBacktestResult(ctx context.Context, in *SaveBacktestResultRequest, opts ...grpc.CallOption) (*SaveBacktestResultResponse, error)
+	ListBacktestResults(ctx context.Context, in *ListBacktestResultsRequest, opts ...grpc.CallOption) (*ListBacktestResultsResponse, error)
+	GetBacktestResult(ctx context.Context, in *GetBacktestResultRequest, opts ...grpc.CallOption) (*GetBacktestResultResponse, error)
+	GetDriftWindow(ctx context.Context, in *GetDriftWindowRequest, opts ...grpc.CallOption) (*GetDriftWindowResponse, error)
 }
 
 type analyticsServiceClient struct {
@@ -143,6 +153,56 @@ func (c *analyticsServiceClient) GetTrainingData(ctx context.Context, in *GetTra
 	return out, nil
 }
 
+func (c *analyticsServiceClient) GetBacktestFeatures(ctx context.Context, in *GetBacktestFeaturesRequest, opts ...grpc.CallOption) (*GetBacktestFeaturesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetBacktestFeaturesResponse)
+	err := c.cc.Invoke(ctx, AnalyticsService_GetBacktestFeatures_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *analyticsServiceClient) SaveBacktestResult(ctx context.Context, in *SaveBacktestResultRequest, opts ...grpc.CallOption) (*SaveBacktestResultResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SaveBacktestResultResponse)
+	err := c.cc.Invoke(ctx, AnalyticsService_SaveBacktestResult_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *analyticsServiceClient) ListBacktestResults(ctx context.Context, in *ListBacktestResultsRequest, opts ...grpc.CallOption) (*ListBacktestResultsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListBacktestResultsResponse)
+	err := c.cc.Invoke(ctx, AnalyticsService_ListBacktestResults_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *analyticsServiceClient) GetBacktestResult(ctx context.Context, in *GetBacktestResultRequest, opts ...grpc.CallOption) (*GetBacktestResultResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetBacktestResultResponse)
+	err := c.cc.Invoke(ctx, AnalyticsService_GetBacktestResult_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *analyticsServiceClient) GetDriftWindow(ctx context.Context, in *GetDriftWindowRequest, opts ...grpc.CallOption) (*GetDriftWindowResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetDriftWindowResponse)
+	err := c.cc.Invoke(ctx, AnalyticsService_GetDriftWindow_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AnalyticsServiceServer is the server API for AnalyticsService service.
 // All implementations must embed UnimplementedAnalyticsServiceServer
 // for forward compatibility.
@@ -156,6 +216,11 @@ type AnalyticsServiceServer interface {
 	GetFeatureSample(context.Context, *GetFeatureSampleRequest) (*GetFeatureSampleResponse, error)
 	GetSchemaSummary(context.Context, *GetSchemaSummaryRequest) (*GetSchemaSummaryResponse, error)
 	GetTrainingData(context.Context, *GetTrainingDataRequest) (*GetTrainingDataResponse, error)
+	GetBacktestFeatures(context.Context, *GetBacktestFeaturesRequest) (*GetBacktestFeaturesResponse, error)
+	SaveBacktestResult(context.Context, *SaveBacktestResultRequest) (*SaveBacktestResultResponse, error)
+	ListBacktestResults(context.Context, *ListBacktestResultsRequest) (*ListBacktestResultsResponse, error)
+	GetBacktestResult(context.Context, *GetBacktestResultRequest) (*GetBacktestResultResponse, error)
+	GetDriftWindow(context.Context, *GetDriftWindowRequest) (*GetDriftWindowResponse, error)
 	mustEmbedUnimplementedAnalyticsServiceServer()
 }
 
@@ -192,6 +257,21 @@ func (UnimplementedAnalyticsServiceServer) GetSchemaSummary(context.Context, *Ge
 }
 func (UnimplementedAnalyticsServiceServer) GetTrainingData(context.Context, *GetTrainingDataRequest) (*GetTrainingDataResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetTrainingData not implemented")
+}
+func (UnimplementedAnalyticsServiceServer) GetBacktestFeatures(context.Context, *GetBacktestFeaturesRequest) (*GetBacktestFeaturesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetBacktestFeatures not implemented")
+}
+func (UnimplementedAnalyticsServiceServer) SaveBacktestResult(context.Context, *SaveBacktestResultRequest) (*SaveBacktestResultResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaveBacktestResult not implemented")
+}
+func (UnimplementedAnalyticsServiceServer) ListBacktestResults(context.Context, *ListBacktestResultsRequest) (*ListBacktestResultsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListBacktestResults not implemented")
+}
+func (UnimplementedAnalyticsServiceServer) GetBacktestResult(context.Context, *GetBacktestResultRequest) (*GetBacktestResultResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetBacktestResult not implemented")
+}
+func (UnimplementedAnalyticsServiceServer) GetDriftWindow(context.Context, *GetDriftWindowRequest) (*GetDriftWindowResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetDriftWindow not implemented")
 }
 func (UnimplementedAnalyticsServiceServer) mustEmbedUnimplementedAnalyticsServiceServer() {}
 func (UnimplementedAnalyticsServiceServer) testEmbeddedByValue()                          {}
@@ -376,6 +456,96 @@ func _AnalyticsService_GetTrainingData_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AnalyticsService_GetBacktestFeatures_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBacktestFeaturesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AnalyticsServiceServer).GetBacktestFeatures(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AnalyticsService_GetBacktestFeatures_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AnalyticsServiceServer).GetBacktestFeatures(ctx, req.(*GetBacktestFeaturesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AnalyticsService_SaveBacktestResult_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveBacktestResultRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AnalyticsServiceServer).SaveBacktestResult(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AnalyticsService_SaveBacktestResult_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AnalyticsServiceServer).SaveBacktestResult(ctx, req.(*SaveBacktestResultRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AnalyticsService_ListBacktestResults_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListBacktestResultsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AnalyticsServiceServer).ListBacktestResults(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AnalyticsService_ListBacktestResults_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AnalyticsServiceServer).ListBacktestResults(ctx, req.(*ListBacktestResultsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AnalyticsService_GetBacktestResult_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBacktestResultRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AnalyticsServiceServer).GetBacktestResult(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AnalyticsService_GetBacktestResult_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AnalyticsServiceServer).GetBacktestResult(ctx, req.(*GetBacktestResultRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AnalyticsService_GetDriftWindow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetDriftWindowRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AnalyticsServiceServer).GetDriftWindow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AnalyticsService_GetDriftWindow_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AnalyticsServiceServer).GetDriftWindow(ctx, req.(*GetDriftWindowRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AnalyticsService_ServiceDesc is the grpc.ServiceDesc for AnalyticsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -418,6 +588,26 @@ var AnalyticsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTrainingData",
 			Handler:    _AnalyticsService_GetTrainingData_Handler,
+		},
+		{
+			MethodName: "GetBacktestFeatures",
+			Handler:    _AnalyticsService_GetBacktestFeatures_Handler,
+		},
+		{
+			MethodName: "SaveBacktestResult",
+			Handler:    _AnalyticsService_SaveBacktestResult_Handler,
+		},
+		{
+			MethodName: "ListBacktestResults",
+			Handler:    _AnalyticsService_ListBacktestResults_Handler,
+		},
+		{
+			MethodName: "GetBacktestResult",
+			Handler:    _AnalyticsService_GetBacktestResult_Handler,
+		},
+		{
+			MethodName: "GetDriftWindow",
+			Handler:    _AnalyticsService_GetDriftWindow_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

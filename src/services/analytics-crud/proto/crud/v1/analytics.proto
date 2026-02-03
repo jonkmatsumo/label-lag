@@ -16,6 +16,11 @@ service AnalyticsService {
   rpc GetFeatureSample(GetFeatureSampleRequest) returns (GetFeatureSampleResponse);
   rpc GetSchemaSummary(GetSchemaSummaryRequest) returns (GetSchemaSummaryResponse);
   rpc GetTrainingData(GetTrainingDataRequest) returns (GetTrainingDataResponse);
+  rpc GetBacktestFeatures(GetBacktestFeaturesRequest) returns (GetBacktestFeaturesResponse);
+  rpc SaveBacktestResult(SaveBacktestResultRequest) returns (SaveBacktestResultResponse);
+  rpc ListBacktestResults(ListBacktestResultsRequest) returns (ListBacktestResultsResponse);
+  rpc GetBacktestResult(GetBacktestResultRequest) returns (GetBacktestResultResponse);
+  rpc GetDriftWindow(GetDriftWindowRequest) returns (GetDriftWindowResponse);
 }
 
 message GetDailyStatsRequest {
@@ -30,9 +35,6 @@ message DailyStat {
   double total_amount = 5;
   double avg_z_score = 6;
 }
-
-// Re-evaluating Date: google.type.Date requires importing google/type/date.proto which might not be in standard path.
-// I'll use string "YYYY-MM-DD" for simplicity or a Timestamp. The UI uses date objects.
 
 message GetDailyStatsResponse {
   repeated DailyStat stats = 1;
@@ -173,4 +175,79 @@ message GetTrainingDataRequest {
 message GetTrainingDataResponse {
   repeated TransactionDetail train_records = 1;
   repeated TransactionDetail test_records = 2;
+}
+
+message GetBacktestFeaturesRequest {
+  google.protobuf.Timestamp start_date = 1;
+  google.protobuf.Timestamp end_date = 2;
+}
+
+message BacktestFeatureVector {
+  string record_id = 1;
+  int32 velocity_24h = 2;
+  double amount_to_avg_ratio_30d = 3;
+  double balance_volatility_z_score = 4;
+  string experimental_signals_json = 5;
+}
+
+message GetBacktestFeaturesResponse {
+  repeated BacktestFeatureVector features = 1;
+}
+
+message BacktestMetrics {
+  int64 total_records = 1;
+  int64 matched_count = 2;
+  double match_rate = 3;
+  map<string, int32> score_distribution = 4;
+  double score_mean = 5;
+  double score_std = 6;
+  int32 score_min = 7;
+  int32 score_max = 8;
+  int64 rejected_count = 9;
+  double rejected_rate = 10;
+}
+
+message BacktestResult {
+  string job_id = 1;
+  string rule_id = 2;
+  string ruleset_version = 3;
+  google.protobuf.Timestamp start_date = 4;
+  google.protobuf.Timestamp end_date = 5;
+  BacktestMetrics metrics = 6;
+  google.protobuf.Timestamp completed_at = 7;
+  string error = 8;
+}
+
+message SaveBacktestResultRequest {
+  BacktestResult result = 1;
+}
+
+message SaveBacktestResultResponse {
+  bool success = 1;
+}
+
+message ListBacktestResultsRequest {
+  string rule_id = 1;
+  google.protobuf.Timestamp start_date = 2;
+  google.protobuf.Timestamp end_date = 3;
+}
+
+message ListBacktestResultsResponse {
+  repeated BacktestResult results = 1;
+}
+
+message GetBacktestResultRequest {
+  string job_id = 1;
+}
+
+message GetBacktestResultResponse {
+  BacktestResult result = 1;
+}
+
+message GetDriftWindowRequest {
+  int32 hours = 1;
+}
+
+message GetDriftWindowResponse {
+  repeated TransactionDetail transactions = 1;
 }

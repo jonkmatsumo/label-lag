@@ -907,6 +907,52 @@ func (s *server) GetBacktestResult(ctx context.Context, req *pb.GetBacktestResul
 	return &pb.GetBacktestResultResponse{Result: &res}, nil
 }
 
+func (s *server) GetDriftWindow(ctx context.Context, req *pb.GetDriftWindowRequest) (*pb.GetDriftWindowResponse, error) {
+	if req == nil || req.Hours <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "hours > 0 required")
+	}
+	cutoff := time.Now().Add(-time.Duration(req.Hours) * time.Hour)
+
+	query := `
+		SELECT
+			record_id,
+			user_id,
+			created_at,
+			velocity_24h,
+			amount_to_avg_ratio_30d,
+			balance_volatility_z_score
+		FROM feature_snapshots
+		WHERE computed_at >= $1
+		ORDER BY computed_at DESC
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, cutoff)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query drift window: %v", err)
+	}
+	defer rows.Close()
+
+	var txs []*pb.TransactionDetail
+	for rows.Next() {
+		var tx pb.TransactionDetail
+		var createdAt time.Time
+		if err := rows.Scan(
+			&tx.RecordId,
+			&tx.UserId,
+			&createdAt,
+			&tx.Velocity_24H,
+			&tx.AmountToAvgRatio_30D,
+			&tx.BalanceVolatilityZScore,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan drift window record: %v", err)
+		}
+		tx.CreatedAt = timestamppb.New(createdAt)
+		txs = append(txs, &tx)
+	}
+
+	return &pb.GetDriftWindowResponse{Transactions: txs}, nil
+}
+
 func (s *server) GetFeatureSample(ctx context.Context, req *pb.GetFeatureSampleRequest) (*pb.GetFeatureSampleResponse, error) {
 
 	sampleSize, err := normalizeLimit(req.SampleSize, defaultSampleSize, maxSampleSizeLimit, "sample_size")
