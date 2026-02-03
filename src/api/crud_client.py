@@ -107,3 +107,15 @@ def get_crud_client():
     if _client is None:
         _client = AnalyticsCRUDClient()
     return _client
+
+
+def reset_crud_client():
+    """Reset the singleton client (for testing)."""
+    global _client
+    _client = None
+
+
+def set_crud_client(client):
+    """Set a custom client (for testing)."""
+    global _client
+    _client = client
