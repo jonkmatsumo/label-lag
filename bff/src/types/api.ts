@@ -7,6 +7,8 @@ export interface ApiError {
   code: string;
   message: string;
   details?: Record<string, unknown>;
+  upstream_status?: number;
+  request_id?: string;
 }
 
 export interface ErrorResponse {

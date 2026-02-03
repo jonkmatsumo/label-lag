@@ -229,6 +229,12 @@ export class HttpClient {
       };
     }
 
+    // Intercept generic auth errors from upstream (likely MLflow or similar)
+    if (apiError.message.toLowerCase().includes('authentication required')) {
+      apiError.message = 'Upstream service rejected the request (auth/config). Check MLflow/API service configuration or ensure containers are running.';
+      apiError.code = 'UPSTREAM_AUTH_ERROR';
+    }
+
     return new UpstreamError(statusCode, apiError, requestId);
   }
 }
@@ -248,7 +254,11 @@ export class UpstreamError extends Error {
 
   toResponse(): ErrorResponse {
     return {
-      error: this.apiError,
+      error: {
+        ...this.apiError,
+        upstream_status: this.statusCode,
+        request_id: this.requestId,
+      },
     };
   }
 }

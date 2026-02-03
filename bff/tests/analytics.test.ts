@@ -40,6 +40,27 @@ describe('Analytics Routes', () => {
       expect(data.total_users).toBe(1000);
       expect(data.fraud_rate).toBe(0.02);
     });
+
+    it('handles upstream authentication required error', async () => {
+      ctx.mockPool.intercept({
+        path: '/analytics/overview',
+        method: 'GET',
+      }).reply(500, {
+        message: 'Authentication required',
+      }).times(2);
+
+      const response = await ctx.app.inject({
+        method: 'GET',
+        url: '/bff/v1/analytics/overview',
+      });
+
+      expect(response.statusCode).toBe(500);
+      const body = response.json();
+      expect(body.error.code).toBe('UPSTREAM_AUTH_ERROR');
+      expect(body.error.message).toContain('Upstream service rejected the request');
+      expect(body.error.upstream_status).toBe(500);
+      expect(body.error.request_id).toBeDefined();
+    });
   });
 
   describe('GET /bff/v1/analytics/daily-stats', () => {
