@@ -46,6 +46,8 @@ const (
 	defaultTxnLimit      = 1000
 	defaultAlertLimit    = 50
 	defaultSampleSize    = 100
+	defaultSearchLimit   = 100
+	maxSearchLimit       = 1000
 	defaultDatabaseURL   = "postgresql://synthetic:synthetic_dev_password@localhost:5542/synthetic_data?sslmode=disable"
 )
 
@@ -170,6 +172,117 @@ func (s *server) GetTransactionDetails(ctx context.Context, req *pb.GetTransacti
 	}
 
 	return &pb.GetTransactionDetailsResponse{Transactions: txs}, nil
+}
+
+func (s *server) SearchTransactions(ctx context.Context, req *pb.SearchTransactionsRequest) (*pb.SearchTransactionsResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "request required")
+	}
+
+	limit, err := normalizeLimit(req.Limit, defaultSearchLimit, maxSearchLimit, "limit")
+	if err != nil {
+		return nil, err
+	}
+	offset, err := normalizeOffset(req.Offset)
+	if err != nil {
+		return nil, err
+	}
+
+	conditions := make([]string, 0)
+	args := make([]any, 0)
+
+	if req.UserId != "" {
+		conditions = append(conditions, fmt.Sprintf("user_id = $%d", len(args)+1))
+		args = append(args, req.UserId)
+	}
+	if req.TransactionId != "" {
+		conditions = append(conditions, fmt.Sprintf("record_id = $%d", len(args)+1))
+		args = append(args, req.TransactionId)
+	}
+	if req.MinAmount != nil {
+		conditions = append(conditions, fmt.Sprintf("amount >= $%d", len(args)+1))
+		args = append(args, req.GetMinAmount())
+	}
+	if req.MaxAmount != nil {
+		conditions = append(conditions, fmt.Sprintf("amount <= $%d", len(args)+1))
+		args = append(args, req.GetMaxAmount())
+	}
+	if req.StartDate != "" {
+		if parsed, ok := parseISODate(req.StartDate); ok {
+			conditions = append(conditions, fmt.Sprintf("transaction_timestamp >= $%d", len(args)+1))
+			args = append(args, parsed)
+		}
+	}
+	if req.EndDate != "" {
+		if parsed, ok := parseISODate(req.EndDate); ok {
+			conditions = append(conditions, fmt.Sprintf("transaction_timestamp <= $%d", len(args)+1))
+			args = append(args, parsed)
+		}
+	}
+	if req.IsFraudulent != nil {
+		conditions = append(conditions, fmt.Sprintf("is_fraudulent = $%d", len(args)+1))
+		args = append(args, req.GetIsFraudulent())
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = " WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := "SELECT COUNT(*) FROM generated_records" + whereClause
+	var total int64
+	if err := s.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, fmt.Errorf("failed to query transaction count: %v", err)
+	}
+
+	query := `
+		SELECT
+			record_id,
+			user_id,
+			transaction_timestamp,
+			amount,
+			is_fraudulent,
+			COALESCE(fraud_type, ''),
+			is_off_hours_txn,
+			merchant_risk_score,
+			amount_to_avg_ratio,
+			balance_volatility_z_score
+		FROM generated_records` + whereClause + fmt.Sprintf(" ORDER BY transaction_timestamp DESC OFFSET $%d LIMIT $%d", len(args)+1, len(args)+2)
+
+	args = append(args, offset, limit)
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query transactions: %v", err)
+	}
+	defer rows.Close()
+
+	var txs []*pb.TransactionDetail
+	for rows.Next() {
+		var tx pb.TransactionDetail
+		var createdAt time.Time
+		if err := rows.Scan(
+			&tx.RecordId,
+			&tx.UserId,
+			&createdAt,
+			&tx.Amount,
+			&tx.IsFraudulent,
+			&tx.FraudType,
+			&tx.IsOffHoursTxn,
+			&tx.MerchantRiskScore,
+			&tx.AmountToAvgRatio_30D,
+			&tx.BalanceVolatilityZScore,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan transaction: %v", err)
+		}
+
+		tx.CreatedAt = timestamppb.New(createdAt)
+		tx.IsTrainEligible = true
+		tx.IsPreFraud = true
+		tx.Velocity_24H = 0
+		txs = append(txs, &tx)
+	}
+
+	return &pb.SearchTransactionsResponse{Transactions: txs, Total: total}, nil
 }
 
 func (s *server) GetRecentAlerts(ctx context.Context, req *pb.GetRecentAlertsRequest) (*pb.GetRecentAlertsResponse, error) {
@@ -675,6 +788,29 @@ func normalizeLimit(value, fallback, max int32, field string) (int32, error) {
 		return 0, status.Errorf(codes.InvalidArgument, "%s must be between 1 and %d", field, max)
 	}
 	return value, nil
+}
+
+func normalizeOffset(value int32) (int32, error) {
+	if value < 0 {
+		return 0, status.Error(codes.InvalidArgument, "offset must be >= 0")
+	}
+	return value, nil
+}
+
+func parseISODate(value string) (time.Time, bool) {
+	layouts := []string{
+		time.RFC3339Nano,
+		time.RFC3339,
+		"2006-01-02T15:04:05.999999",
+		"2006-01-02T15:04:05",
+		"2006-01-02",
+	}
+	for _, layout := range layouts {
+		if parsed, err := time.Parse(layout, value); err == nil {
+			return parsed, true
+		}
+	}
+	return time.Time{}, false
 }
 
 // loggingInterceptor logs the details of each gRPC request and response.
