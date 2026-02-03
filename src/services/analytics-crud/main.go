@@ -579,15 +579,6 @@ func (s *server) GetSchemaSummary(ctx context.Context, req *pb.GetSchemaSummaryR
 		tableNames = []string{"generated_records", "feature_snapshots"}
 	}
 
-	// Prepare query: convert slice to postgres array string, e.g. '{t1,t2}'
-	// Or use ANY operator with pq.Array.
-	// Since we are using standard sql, we will build a param list or use pq.Array if imported.
-	// We imported lib/pq as _, so we can use pq.Array if we change import or just build the IN clause.
-	// Simpler to use ANY($1) with a literal string array format or multiple params.
-	// Let's use ANY($1) and format the array manually to avoid explicit pq dep dependency in main code if possible,
-	// but using lib/pq directly is cleaner. We only did _ import, so let's change that if needed.
-	// Actually, just formatting '{a,b}' works for text arrays in Postgres.
-
 	arrStr := "{" + strings.Join(tableNames, ",") + "}"
 
 	query := `
@@ -628,6 +619,117 @@ func (s *server) GetSchemaSummary(ctx context.Context, req *pb.GetSchemaSummaryR
 	}
 
 	return &pb.GetSchemaSummaryResponse{Columns: columns}, nil
+}
+
+func (s *server) GetTrainingData(ctx context.Context, req *pb.GetTrainingDataRequest) (*pb.GetTrainingDataResponse, error) {
+	if req == nil || req.CutoffDate == nil {
+		return nil, status.Error(codes.InvalidArgument, "cutoff_date required")
+	}
+	cutoff := req.CutoffDate.AsTime()
+
+	// Train set query: transaction_timestamp < cutoff AND is_train_eligible = True
+	// Knowledge Horizon: Only label fraud if confirmed before cutoff
+	trainQuery := `
+		SELECT
+			fs.record_id,
+			fs.user_id,
+			em.created_at,
+			em.is_train_eligible,
+			em.is_pre_fraud,
+			gr.amount,
+			gr.is_off_hours_txn,
+			gr.merchant_risk_score,
+			fs.velocity_24h,
+			fs.amount_to_avg_ratio_30d,
+			fs.balance_volatility_z_score,
+			CASE
+				WHEN gr.is_fraudulent = TRUE
+					 AND em.fraud_confirmed_at IS NOT NULL
+					 AND em.fraud_confirmed_at <= $1
+				THEN TRUE
+				ELSE FALSE
+			END AS is_fraudulent,
+			COALESCE(gr.fraud_type, '')
+		FROM feature_snapshots fs
+		INNER JOIN evaluation_metadata em ON fs.record_id = em.record_id
+		INNER JOIN generated_records gr ON fs.record_id = gr.record_id
+		WHERE gr.transaction_timestamp < $1
+		  AND em.is_train_eligible = TRUE
+		ORDER BY gr.transaction_timestamp
+	`
+
+	// Test set query: transaction_timestamp >= cutoff
+	testQuery := `
+		SELECT
+			fs.record_id,
+			fs.user_id,
+			em.created_at,
+			em.is_train_eligible,
+			em.is_pre_fraud,
+			gr.amount,
+			gr.is_off_hours_txn,
+			gr.merchant_risk_score,
+			fs.velocity_24h,
+			fs.amount_to_avg_ratio_30d,
+			fs.balance_volatility_z_score,
+			gr.is_fraudulent,
+			COALESCE(gr.fraud_type, '')
+		FROM feature_snapshots fs
+		INNER JOIN evaluation_metadata em ON fs.record_id = em.record_id
+		INNER JOIN generated_records gr ON fs.record_id = gr.record_id
+		WHERE gr.transaction_timestamp >= $1
+		ORDER BY gr.transaction_timestamp
+	`
+
+	trainRecords, err := s.queryTrainingRecords(ctx, trainQuery, cutoff)
+	if err != nil {
+		return nil, err
+	}
+
+	testRecords, err := s.queryTrainingRecords(ctx, testQuery, cutoff)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.GetTrainingDataResponse{
+		TrainRecords: trainRecords,
+		TestRecords:  testRecords,
+	}, nil
+}
+
+func (s *server) queryTrainingRecords(ctx context.Context, query string, cutoff time.Time) ([]*pb.TransactionDetail, error) {
+	rows, err := s.db.QueryContext(ctx, query, cutoff)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query training records: %v", err)
+	}
+	defer rows.Close()
+
+	var records []*pb.TransactionDetail
+	for rows.Next() {
+		var tx pb.TransactionDetail
+		var createdAt time.Time
+		err := rows.Scan(
+			&tx.RecordId,
+			&tx.UserId,
+			&createdAt,
+			&tx.IsTrainEligible,
+			&tx.IsPreFraud,
+			&tx.Amount,
+			&tx.IsOffHoursTxn,
+			&tx.MerchantRiskScore,
+			&tx.Velocity_24H,
+			&tx.AmountToAvgRatio_30D,
+			&tx.BalanceVolatilityZScore,
+			&tx.IsFraudulent,
+			&tx.FraudType,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan training record: %v", err)
+		}
+		tx.CreatedAt = timestamppb.New(createdAt)
+		records = append(records, &tx)
+	}
+	return records, nil
 }
 
 func (s *server) GetFeatureSample(ctx context.Context, req *pb.GetFeatureSampleRequest) (*pb.GetFeatureSampleResponse, error) {

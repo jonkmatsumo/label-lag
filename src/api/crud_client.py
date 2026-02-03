@@ -57,6 +57,11 @@ class AnalyticsCRUDClient:
             return response.transactions[0]
         return None
 
+    def get_training_data(self, cutoff_date):
+        """Fetch training and test data via GetTrainingData."""
+        request = analytics_pb2.GetTrainingDataRequest(cutoff_date=cutoff_date)
+        return self.stub.GetTrainingData(request)
+
     def get_overview_metrics(self):
         request = analytics_pb2.GetOverviewMetricsRequest()
         return self.stub.GetOverviewMetrics(request)

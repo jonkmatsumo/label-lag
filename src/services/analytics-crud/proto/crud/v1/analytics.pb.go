@@ -1462,6 +1462,102 @@ func (x *GetSchemaSummaryResponse) GetColumns() []*ColumnInfo {
 	return nil
 }
 
+type GetTrainingDataRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CutoffDate    *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=cutoff_date,json=cutoffDate,proto3" json:"cutoff_date,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetTrainingDataRequest) Reset() {
+	*x = GetTrainingDataRequest{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetTrainingDataRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetTrainingDataRequest) ProtoMessage() {}
+
+func (x *GetTrainingDataRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetTrainingDataRequest.ProtoReflect.Descriptor instead.
+func (*GetTrainingDataRequest) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *GetTrainingDataRequest) GetCutoffDate() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CutoffDate
+	}
+	return nil
+}
+
+type GetTrainingDataResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TrainRecords  []*TransactionDetail   `protobuf:"bytes,1,rep,name=train_records,json=trainRecords,proto3" json:"train_records,omitempty"`
+	TestRecords   []*TransactionDetail   `protobuf:"bytes,2,rep,name=test_records,json=testRecords,proto3" json:"test_records,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetTrainingDataResponse) Reset() {
+	*x = GetTrainingDataResponse{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetTrainingDataResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetTrainingDataResponse) ProtoMessage() {}
+
+func (x *GetTrainingDataResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetTrainingDataResponse.ProtoReflect.Descriptor instead.
+func (*GetTrainingDataResponse) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *GetTrainingDataResponse) GetTrainRecords() []*TransactionDetail {
+	if x != nil {
+		return x.TrainRecords
+	}
+	return nil
+}
+
+func (x *GetTrainingDataResponse) GetTestRecords() []*TransactionDetail {
+	if x != nil {
+		return x.TestRecords
+	}
+	return nil
+}
+
 var File_crud_v1_analytics_proto protoreflect.FileDescriptor
 
 const file_crud_v1_analytics_proto_rawDesc = "" +
@@ -1597,7 +1693,13 @@ const file_crud_v1_analytics_proto_rawDesc = "" +
 	"isNullable\x12)\n" +
 	"\x10ordinal_position\x18\x05 \x01(\x05R\x0fordinalPosition\"I\n" +
 	"\x18GetSchemaSummaryResponse\x12-\n" +
-	"\acolumns\x18\x01 \x03(\v2\x13.crud.v1.ColumnInfoR\acolumns2\xf8\x05\n" +
+	"\acolumns\x18\x01 \x03(\v2\x13.crud.v1.ColumnInfoR\acolumns\"U\n" +
+	"\x16GetTrainingDataRequest\x12;\n" +
+	"\vcutoff_date\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"cutoffDate\"\x99\x01\n" +
+	"\x17GetTrainingDataResponse\x12?\n" +
+	"\rtrain_records\x18\x01 \x03(\v2\x1a.crud.v1.TransactionDetailR\ftrainRecords\x12=\n" +
+	"\ftest_records\x18\x02 \x03(\v2\x1a.crud.v1.TransactionDetailR\vtestRecords2\xce\x06\n" +
 	"\x10AnalyticsService\x12N\n" +
 	"\rGetDailyStats\x12\x1d.crud.v1.GetDailyStatsRequest\x1a\x1e.crud.v1.GetDailyStatsResponse\x12f\n" +
 	"\x15GetTransactionDetails\x12%.crud.v1.GetTransactionDetailsRequest\x1a&.crud.v1.GetTransactionDetailsResponse\x12]\n" +
@@ -1606,7 +1708,8 @@ const file_crud_v1_analytics_proto_rawDesc = "" +
 	"\x12GetOverviewMetrics\x12\".crud.v1.GetOverviewMetricsRequest\x1a#.crud.v1.GetOverviewMetricsResponse\x12f\n" +
 	"\x15GetDatasetFingerprint\x12%.crud.v1.GetDatasetFingerprintRequest\x1a&.crud.v1.GetDatasetFingerprintResponse\x12W\n" +
 	"\x10GetFeatureSample\x12 .crud.v1.GetFeatureSampleRequest\x1a!.crud.v1.GetFeatureSampleResponse\x12W\n" +
-	"\x10GetSchemaSummary\x12 .crud.v1.GetSchemaSummaryRequest\x1a!.crud.v1.GetSchemaSummaryResponseBSZQgithub.com/jonkmatsumo/label-lag/src/services/analytics-crud/proto/crud/v1;crudv1b\x06proto3"
+	"\x10GetSchemaSummary\x12 .crud.v1.GetSchemaSummaryRequest\x1a!.crud.v1.GetSchemaSummaryResponse\x12T\n" +
+	"\x0fGetTrainingData\x12\x1f.crud.v1.GetTrainingDataRequest\x1a .crud.v1.GetTrainingDataResponseBSZQgithub.com/jonkmatsumo/label-lag/src/services/analytics-crud/proto/crud/v1;crudv1b\x06proto3"
 
 var (
 	file_crud_v1_analytics_proto_rawDescOnce sync.Once
@@ -1620,7 +1723,7 @@ func file_crud_v1_analytics_proto_rawDescGZIP() []byte {
 	return file_crud_v1_analytics_proto_rawDescData
 }
 
-var file_crud_v1_analytics_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
+var file_crud_v1_analytics_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_crud_v1_analytics_proto_goTypes = []any{
 	(*GetDailyStatsRequest)(nil),          // 0: crud.v1.GetDailyStatsRequest
 	(*DailyStat)(nil),                     // 1: crud.v1.DailyStat
@@ -1644,46 +1747,53 @@ var file_crud_v1_analytics_proto_goTypes = []any{
 	(*GetSchemaSummaryRequest)(nil),       // 19: crud.v1.GetSchemaSummaryRequest
 	(*ColumnInfo)(nil),                    // 20: crud.v1.ColumnInfo
 	(*GetSchemaSummaryResponse)(nil),      // 21: crud.v1.GetSchemaSummaryResponse
-	(*timestamppb.Timestamp)(nil),         // 22: google.protobuf.Timestamp
+	(*GetTrainingDataRequest)(nil),        // 22: crud.v1.GetTrainingDataRequest
+	(*GetTrainingDataResponse)(nil),       // 23: crud.v1.GetTrainingDataResponse
+	(*timestamppb.Timestamp)(nil),         // 24: google.protobuf.Timestamp
 }
 var file_crud_v1_analytics_proto_depIdxs = []int32{
 	1,  // 0: crud.v1.GetDailyStatsResponse.stats:type_name -> crud.v1.DailyStat
-	22, // 1: crud.v1.TransactionDetail.created_at:type_name -> google.protobuf.Timestamp
+	24, // 1: crud.v1.TransactionDetail.created_at:type_name -> google.protobuf.Timestamp
 	4,  // 2: crud.v1.GetTransactionDetailsResponse.transactions:type_name -> crud.v1.TransactionDetail
 	4,  // 3: crud.v1.SearchTransactionsResponse.transactions:type_name -> crud.v1.TransactionDetail
-	22, // 4: crud.v1.Alert.created_at:type_name -> google.protobuf.Timestamp
+	24, // 4: crud.v1.Alert.created_at:type_name -> google.protobuf.Timestamp
 	9,  // 5: crud.v1.GetRecentAlertsResponse.alerts:type_name -> crud.v1.Alert
-	22, // 6: crud.v1.GetOverviewMetricsResponse.min_transaction_timestamp:type_name -> google.protobuf.Timestamp
-	22, // 7: crud.v1.GetOverviewMetricsResponse.max_transaction_timestamp:type_name -> google.protobuf.Timestamp
-	22, // 8: crud.v1.GetOverviewMetricsResponse.min_created_at:type_name -> google.protobuf.Timestamp
-	22, // 9: crud.v1.GetOverviewMetricsResponse.max_created_at:type_name -> google.protobuf.Timestamp
-	22, // 10: crud.v1.TableFingerprint.max_created_at:type_name -> google.protobuf.Timestamp
-	22, // 11: crud.v1.TableFingerprint.max_timestamp:type_name -> google.protobuf.Timestamp
+	24, // 6: crud.v1.GetOverviewMetricsResponse.min_transaction_timestamp:type_name -> google.protobuf.Timestamp
+	24, // 7: crud.v1.GetOverviewMetricsResponse.max_transaction_timestamp:type_name -> google.protobuf.Timestamp
+	24, // 8: crud.v1.GetOverviewMetricsResponse.min_created_at:type_name -> google.protobuf.Timestamp
+	24, // 9: crud.v1.GetOverviewMetricsResponse.max_created_at:type_name -> google.protobuf.Timestamp
+	24, // 10: crud.v1.TableFingerprint.max_created_at:type_name -> google.protobuf.Timestamp
+	24, // 11: crud.v1.TableFingerprint.max_timestamp:type_name -> google.protobuf.Timestamp
 	14, // 12: crud.v1.GetDatasetFingerprintResponse.generated_records:type_name -> crud.v1.TableFingerprint
 	14, // 13: crud.v1.GetDatasetFingerprintResponse.feature_snapshots:type_name -> crud.v1.TableFingerprint
 	17, // 14: crud.v1.GetFeatureSampleResponse.samples:type_name -> crud.v1.FeatureSample
 	20, // 15: crud.v1.GetSchemaSummaryResponse.columns:type_name -> crud.v1.ColumnInfo
-	0,  // 16: crud.v1.AnalyticsService.GetDailyStats:input_type -> crud.v1.GetDailyStatsRequest
-	3,  // 17: crud.v1.AnalyticsService.GetTransactionDetails:input_type -> crud.v1.GetTransactionDetailsRequest
-	6,  // 18: crud.v1.AnalyticsService.SearchTransactions:input_type -> crud.v1.SearchTransactionsRequest
-	8,  // 19: crud.v1.AnalyticsService.GetRecentAlerts:input_type -> crud.v1.GetRecentAlertsRequest
-	11, // 20: crud.v1.AnalyticsService.GetOverviewMetrics:input_type -> crud.v1.GetOverviewMetricsRequest
-	13, // 21: crud.v1.AnalyticsService.GetDatasetFingerprint:input_type -> crud.v1.GetDatasetFingerprintRequest
-	16, // 22: crud.v1.AnalyticsService.GetFeatureSample:input_type -> crud.v1.GetFeatureSampleRequest
-	19, // 23: crud.v1.AnalyticsService.GetSchemaSummary:input_type -> crud.v1.GetSchemaSummaryRequest
-	2,  // 24: crud.v1.AnalyticsService.GetDailyStats:output_type -> crud.v1.GetDailyStatsResponse
-	5,  // 25: crud.v1.AnalyticsService.GetTransactionDetails:output_type -> crud.v1.GetTransactionDetailsResponse
-	7,  // 26: crud.v1.AnalyticsService.SearchTransactions:output_type -> crud.v1.SearchTransactionsResponse
-	10, // 27: crud.v1.AnalyticsService.GetRecentAlerts:output_type -> crud.v1.GetRecentAlertsResponse
-	12, // 28: crud.v1.AnalyticsService.GetOverviewMetrics:output_type -> crud.v1.GetOverviewMetricsResponse
-	15, // 29: crud.v1.AnalyticsService.GetDatasetFingerprint:output_type -> crud.v1.GetDatasetFingerprintResponse
-	18, // 30: crud.v1.AnalyticsService.GetFeatureSample:output_type -> crud.v1.GetFeatureSampleResponse
-	21, // 31: crud.v1.AnalyticsService.GetSchemaSummary:output_type -> crud.v1.GetSchemaSummaryResponse
-	24, // [24:32] is the sub-list for method output_type
-	16, // [16:24] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	24, // 16: crud.v1.GetTrainingDataRequest.cutoff_date:type_name -> google.protobuf.Timestamp
+	4,  // 17: crud.v1.GetTrainingDataResponse.train_records:type_name -> crud.v1.TransactionDetail
+	4,  // 18: crud.v1.GetTrainingDataResponse.test_records:type_name -> crud.v1.TransactionDetail
+	0,  // 19: crud.v1.AnalyticsService.GetDailyStats:input_type -> crud.v1.GetDailyStatsRequest
+	3,  // 20: crud.v1.AnalyticsService.GetTransactionDetails:input_type -> crud.v1.GetTransactionDetailsRequest
+	6,  // 21: crud.v1.AnalyticsService.SearchTransactions:input_type -> crud.v1.SearchTransactionsRequest
+	8,  // 22: crud.v1.AnalyticsService.GetRecentAlerts:input_type -> crud.v1.GetRecentAlertsRequest
+	11, // 23: crud.v1.AnalyticsService.GetOverviewMetrics:input_type -> crud.v1.GetOverviewMetricsRequest
+	13, // 24: crud.v1.AnalyticsService.GetDatasetFingerprint:input_type -> crud.v1.GetDatasetFingerprintRequest
+	16, // 25: crud.v1.AnalyticsService.GetFeatureSample:input_type -> crud.v1.GetFeatureSampleRequest
+	19, // 26: crud.v1.AnalyticsService.GetSchemaSummary:input_type -> crud.v1.GetSchemaSummaryRequest
+	22, // 27: crud.v1.AnalyticsService.GetTrainingData:input_type -> crud.v1.GetTrainingDataRequest
+	2,  // 28: crud.v1.AnalyticsService.GetDailyStats:output_type -> crud.v1.GetDailyStatsResponse
+	5,  // 29: crud.v1.AnalyticsService.GetTransactionDetails:output_type -> crud.v1.GetTransactionDetailsResponse
+	7,  // 30: crud.v1.AnalyticsService.SearchTransactions:output_type -> crud.v1.SearchTransactionsResponse
+	10, // 31: crud.v1.AnalyticsService.GetRecentAlerts:output_type -> crud.v1.GetRecentAlertsResponse
+	12, // 32: crud.v1.AnalyticsService.GetOverviewMetrics:output_type -> crud.v1.GetOverviewMetricsResponse
+	15, // 33: crud.v1.AnalyticsService.GetDatasetFingerprint:output_type -> crud.v1.GetDatasetFingerprintResponse
+	18, // 34: crud.v1.AnalyticsService.GetFeatureSample:output_type -> crud.v1.GetFeatureSampleResponse
+	21, // 35: crud.v1.AnalyticsService.GetSchemaSummary:output_type -> crud.v1.GetSchemaSummaryResponse
+	23, // 36: crud.v1.AnalyticsService.GetTrainingData:output_type -> crud.v1.GetTrainingDataResponse
+	28, // [28:37] is the sub-list for method output_type
+	19, // [19:28] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_crud_v1_analytics_proto_init() }
@@ -1698,7 +1808,7 @@ func file_crud_v1_analytics_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_crud_v1_analytics_proto_rawDesc), len(file_crud_v1_analytics_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   22,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
