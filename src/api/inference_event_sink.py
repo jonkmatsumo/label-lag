@@ -1,181 +1,70 @@
-"""Inference event sink abstraction for pluggable logging backends.
+"""Inference event sink for asynchronous event logging."""
 
-This module provides a protocol (interface) for inference event sinks,
-allowing the system to use different logging implementations (stdout,
-file, PostgreSQL) without changing the inference evaluation code.
-
-The default sink is determined by the INFERENCE_EVENT_SINK environment variable:
-- "jsonl" (default): JSONL file sink (existing behavior)
-- "stdout": Stdout sink (structured logging to console)
-- "postgres": PostgreSQL-backed sink (requires database configuration)
-- "none": No-op sink (disables inference logging)
-
-Usage:
-    from api.inference_event_sink import get_inference_event_sink
-
-    sink = get_inference_event_sink()
-    sink.log_event(event)
-"""
-
-import json
 import logging
 import os
-from pathlib import Path
+from abc import ABC, abstractmethod
 from threading import Lock
-from typing import Protocol
+from typing import Any
 
 from api.inference_log import InferenceEvent
 
 logger = logging.getLogger(__name__)
 
 
-class InferenceEventSink(Protocol):
-    """Protocol defining the inference event sink interface.
+class InferenceEventSink(ABC):
+    """Abstract base class for inference event sinks."""
 
-    Any event sink must implement the log_event method. Query capabilities
-    are optional and only implemented by sinks that support it.
-    """
-
+    @abstractmethod
     def log_event(self, event: InferenceEvent) -> None:
         """Log an inference event.
 
-        This method should be non-blocking and fail gracefully.
-        Errors should be logged but not raised.
-
         Args:
-            event: The inference event to log.
+            event: The event to log.
         """
-        ...
+        pass
+
+
+class NoOpSink(InferenceEventSink):
+    """Event sink that does nothing."""
+
+    def log_event(self, event: InferenceEvent) -> None:
+        pass
+
+
+class StdoutSink(InferenceEventSink):
+    """Event sink that logs to stdout (via logger)."""
+
+    def log_event(self, event: InferenceEvent) -> None:
+        logger.info(f"Inference event: {event.to_dict()}")
+
+
+class JsonlFileSink(InferenceEventSink):
+    """Event sink that logs to a JSONL file."""
+
+    def __init__(self, log_path: str = "data/inference_events.jsonl"):
+        from api.inference_log import InferenceLogger
+        self.logger = InferenceLogger(log_path=log_path)
+
+    def log_event(self, event: InferenceEvent) -> None:
+        self.logger.log_event(event)
 
 
 def get_inference_event_sink_backend() -> str:
     """Get the configured inference event sink backend.
 
     Returns:
-        The backend name from INFERENCE_EVENT_SINK env var, defaulting to "jsonl".
+        The backend name from INFERENCE_EVENT_SINK environment variable.
+        Defaults to "none" for compute-only operation.
     """
-    return os.getenv("INFERENCE_EVENT_SINK", "jsonl")
+    return os.getenv("INFERENCE_EVENT_SINK", "none")
 
 
-class NoOpSink:
-    """No-operation sink that discards all events.
-
-    Used when inference logging is disabled.
-    """
-
-    def log_event(self, event: InferenceEvent) -> None:
-        """Discard the event (no-op)."""
-        pass
-
-
-class StdoutSink:
-    """Sink that logs inference events to stdout as structured JSON.
-
-    Useful for development, debugging, and integration with log aggregators.
-    """
-
-    def __init__(self):
-        """Initialize stdout sink."""
-        self._logger = logging.getLogger("inference.events")
-        if not self._logger.handlers:
-            handler = logging.StreamHandler()
-            fmt = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-            handler.setFormatter(logging.Formatter(fmt))
-            self._logger.addHandler(handler)
-            self._logger.setLevel(logging.INFO)
-
-    def log_event(self, event: InferenceEvent) -> None:
-        """Log the event to stdout as JSON."""
-        try:
-            event_dict = {
-                "request_id": event.request_id,
-                "timestamp": event.timestamp.isoformat(),
-                "model_version": event.model_version,
-                "rules_version": event.rules_version,
-                "model_score": event.model_score,
-                "final_score": event.final_score,
-                "rule_impacts": [
-                    {
-                        "rule_id": ri.rule_id,
-                        "is_shadow": ri.is_shadow,
-                        "score_delta": ri.score_delta,
-                        "details": ri.details,
-                    }
-                    for ri in event.rule_impacts
-                ],
-            }
-            self._logger.info(f"InferenceEvent: {json.dumps(event_dict)}")
-        except Exception as e:
-            logger.warning(f"Failed to log inference event to stdout: {e}")
-
-
-class JsonlFileSink:
-    """Sink that logs inference events to a JSONL file.
-
-    This is the existing default behavior, preserving backward compatibility.
-    Thread-safe through locking.
-    """
-
-    def __init__(self, storage_path: str | Path | None = None):
-        """Initialize JSONL file sink.
-
-        Args:
-            storage_path: Path to the JSONL file. If None, uses
-                INFERENCE_LOG_PATH env var or defaults to
-                data/inference_events.jsonl.
-        """
-        if storage_path is None:
-            storage_path = os.getenv(
-                "INFERENCE_LOG_PATH", "data/inference_events.jsonl"
-            )
-        self.storage_path = Path(storage_path)
-        self._lock = Lock()
-
-        # Ensure directory exists
-        self.storage_path.parent.mkdir(parents=True, exist_ok=True)
-
-    def log_event(self, event: InferenceEvent) -> None:
-        """Log the event to JSONL file."""
-        try:
-            event_dict = {
-                "request_id": event.request_id,
-                "timestamp": event.timestamp.isoformat(),
-                "model_version": event.model_version,
-                "rules_version": event.rules_version,
-                "model_score": event.model_score,
-                "final_score": event.final_score,
-                "rule_impacts": [
-                    {
-                        "rule_id": ri.rule_id,
-                        "is_shadow": ri.is_shadow,
-                        "score_delta": ri.score_delta,
-                        "details": ri.details,
-                    }
-                    for ri in event.rule_impacts
-                ],
-            }
-
-            with self._lock:
-                with open(self.storage_path, "a") as f:
-                    f.write(json.dumps(event_dict) + "\n")
-
-        except Exception as e:
-            logger.warning(f"Failed to log inference event to file: {e}")
-
-
-# Global sink instance
 _global_sink: InferenceEventSink | None = None
 _sink_lock = Lock()
 
 
 def get_inference_event_sink() -> InferenceEventSink:
     """Get the global inference event sink instance.
-
-    The backend is selected based on INFERENCE_EVENT_SINK environment variable:
-    - "jsonl" (default): JSONL file sink
-    - "stdout": Stdout sink
-    - "postgres": PostgreSQL sink
-    - "none": No-op sink (disables logging)
 
     Returns:
         InferenceEventSink instance.
@@ -192,12 +81,20 @@ def get_inference_event_sink() -> InferenceEventSink:
                 elif backend == "stdout":
                     _global_sink = StdoutSink()
                     logger.info("Using stdout inference event sink")
-                    if sink_type == "postgres":
-                        from api.grpc_inference_sink import GrpcInferenceSink
+                elif backend == "jsonl":
+                    _global_sink = JsonlFileSink()
+                    logger.info("Using JSONL file inference event sink")
+                elif backend == "postgres":
+                    from api.grpc_inference_sink import GrpcInferenceSink
 
-                        _global_sink = GrpcInferenceSink()
-                        logger.info("Using gRPC inference sink (via Analytics service)")
-                    else:
+                    _global_sink = GrpcInferenceSink()
+                    logger.info("Using gRPC inference sink (via Analytics service)")
+                else:
+                    _global_sink = NoOpSink()
+                    logger.warning(
+                        f"Unknown inference event sink backend: {backend}. "
+                        "Defaulting to no-op."
+                    )
 
     return _global_sink
 

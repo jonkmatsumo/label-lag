@@ -127,14 +127,14 @@ class TestFeatureFlagsDefaultToLegacy:
         monkeypatch.delenv("RULE_STORE_BACKEND", raising=False)
         assert get_rule_store_backend() == "inmemory"
 
-    def test_inference_event_sink_defaults_to_jsonl(self, monkeypatch):
-        """INFERENCE_EVENT_SINK defaults to 'jsonl', not postgres or none."""
+    def test_inference_event_sink_defaults_to_none(self, monkeypatch):
+        """INFERENCE_EVENT_SINK defaults to 'none' (compute-only), not postgres."""
         monkeypatch.delenv("INFERENCE_EVENT_SINK", raising=False)
         reset_inference_event_sink()
-        from api.inference_event_sink import JsonlFileSink
+        from api.inference_event_sink import NoOpSink
 
         sink = get_inference_event_sink()
-        assert isinstance(sink, JsonlFileSink)
+        assert isinstance(sink, NoOpSink)
 
     def test_materialization_mode_defaults_to_legacy(self, monkeypatch):
         """FEATURE_MATERIALIZATION_MODE defaults to 'legacy', not cursor."""
