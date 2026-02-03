@@ -123,8 +123,8 @@ func (h *Handler) handleSearchTransactions(w http.ResponseWriter, r *http.Reques
 			FraudType:               tx.GetFraudType(),
 			IsOffHoursTxn:           tx.GetIsOffHoursTxn(),
 			MerchantRiskScore:       tx.GetMerchantRiskScore(),
-			Velocity24H:             tx.GetVelocity24H(),
-			AmountToAvgRatio30D:     tx.GetAmountToAvgRatio30D(),
+			Velocity24H:             tx.GetVelocity_24H(),
+			AmountToAvgRatio30D:     tx.GetAmountToAvgRatio_30D(),
 			BalanceVolatilityZScore: tx.GetBalanceVolatilityZScore(),
 		})
 	}
