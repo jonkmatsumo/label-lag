@@ -62,6 +62,21 @@ class AnalyticsCRUDClient:
         request = analytics_pb2.GetTrainingDataRequest(cutoff_date=cutoff_date)
         return self.stub.GetTrainingData(request)
 
+    def store_generated_data(self, records, metadata):
+        """Store generated records and metadata via StoreGeneratedData."""
+        request = analytics_pb2.StoreGeneratedDataRequest(records=records, metadata=metadata)
+        return self.stub.StoreGeneratedData(request)
+
+    def clear_all_data(self):
+        """Clear all data via ClearAllData."""
+        request = analytics_pb2.ClearAllDataRequest()
+        return self.stub.ClearAllData(request)
+
+    def materialize_features(self, batch_size: int = 1000):
+        """Materialize features via MaterializeFeatures."""
+        request = analytics_pb2.MaterializeFeaturesRequest(batch_size=batch_size)
+        return self.stub.MaterializeFeatures(request)
+
     def get_overview_metrics(self):
         request = analytics_pb2.GetOverviewMetricsRequest()
         return self.stub.GetOverviewMetrics(request)

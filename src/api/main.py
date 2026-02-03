@@ -111,57 +111,9 @@ from api.schemas import (
 from api.services import get_evaluator
 
 if TYPE_CHECKING:
-    from synthetic_pipeline.db.models import EvaluationMetadataDB, GeneratedRecordDB
     from synthetic_pipeline.models import EvaluationMetadata, GeneratedRecord
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-
-def _pydantic_to_db(record: "GeneratedRecord") -> "GeneratedRecordDB":
-    """Convert a Pydantic GeneratedRecord to SQLAlchemy model."""
-    from synthetic_pipeline.db.models import GeneratedRecordDB
-
-    return GeneratedRecordDB(
-        record_id=record.record_id,
-        user_id=record.user_id,
-        full_name=record.full_name,
-        email=record.email,
-        phone=record.phone,
-        transaction_timestamp=record.transaction_timestamp,
-        is_off_hours_txn=record.is_off_hours_txn,
-        available_balance=record.account.available_balance,
-        balance_to_transaction_ratio=record.account.balance_to_transaction_ratio,
-        avg_available_balance_30d=record.behavior.avg_available_balance_30d,
-        balance_volatility_z_score=record.behavior.balance_volatility_z_score,
-        bank_connections_count_24h=record.connection.bank_connections_count_24h,
-        bank_connections_count_7d=record.connection.bank_connections_count_7d,
-        bank_connections_avg_30d=record.connection.bank_connections_avg_30d,
-        amount=record.transaction.amount,
-        amount_to_avg_ratio=record.transaction.amount_to_avg_ratio,
-        merchant_risk_score=record.transaction.merchant_risk_score,
-        is_returned=record.transaction.is_returned,
-        email_changed_at=record.identity_changes.email_changed_at,
-        phone_changed_at=record.identity_changes.phone_changed_at,
-        is_fraudulent=record.is_fraudulent,
-        fraud_type=record.fraud_type,
-    )
-
-
-def _metadata_to_db(meta: "EvaluationMetadata") -> "EvaluationMetadataDB":
-    """Convert a Pydantic EvaluationMetadata to SQLAlchemy model."""
-    from synthetic_pipeline.db.models import EvaluationMetadataDB
-
-    return EvaluationMetadataDB(
-        user_id=meta.user_id,
-        record_id=meta.record_id,
-        sequence_number=meta.sequence_number,
-        fraud_confirmed_at=meta.fraud_confirmed_at,
-        is_pre_fraud=meta.is_pre_fraud,
-        days_to_fraud=meta.days_to_fraud,
-        is_train_eligible=meta.is_train_eligible,
-    )
 
 
 @asynccontextmanager
@@ -633,7 +585,7 @@ async def evaluate_signal(request: SignalRequest) -> SignalResponse:
     description="Generate synthetic transaction data with configurable fraud rate.",
 )
 async def generate_data(request: GenerateDataRequest) -> GenerateDataResponse:
-    """Generate synthetic transaction data.
+    """Generate synthetic transaction data via Analytics service.
 
     Args:
         request: Generation request with num_users, fraud_rate, and drop_existing.
@@ -642,11 +594,8 @@ async def generate_data(request: GenerateDataRequest) -> GenerateDataResponse:
         GenerateDataResponse with counts of generated records.
     """
     try:
-        from pipeline.materialize_features import FeatureMaterializer
-        from synthetic_pipeline.db.models import Base
-        from synthetic_pipeline.db.session import DatabaseSession
-
-        # Assuming DataGenerator is imported or defined elsewhere
+        from api.proto.proto.crud.v1 import analytics_pb2
+        from google.protobuf.timestamp_pb2 import Timestamp
         from synthetic_pipeline.generator import DataGenerator
 
         # Generate data
@@ -659,32 +608,84 @@ async def generate_data(request: GenerateDataRequest) -> GenerateDataResponse:
         # Count fraud records
         fraud_count = sum(1 for r in result.records if r.is_fraudulent)
 
-        # Connect to database
-        db_session = DatabaseSession()
+        client = get_crud_client()
 
-        with db_session.get_session() as session:
-            if request.drop_existing:
-                # Drop and recreate tables
-                Base.metadata.drop_all(db_session.engine)
-                Base.metadata.create_all(db_session.engine)
-            else:
-                # Just ensure tables exist
-                Base.metadata.create_all(db_session.engine)
+        if request.drop_existing:
+            client.clear_all_data()
 
-            # Convert and insert records
-            db_records = [_pydantic_to_db(record) for record in result.records]
-            session.bulk_save_objects(db_records)
+        # Convert to proto
+        proto_records = []
+        for r in result.records:
+            ts = Timestamp()
+            ts.FromDatetime(r.transaction_timestamp)
 
-            # Insert metadata
-            meta_records = [_metadata_to_db(meta) for meta in result.metadata]
-            session.bulk_save_objects(meta_records)
+            ec_ts = Timestamp()
+            if r.identity_changes.email_changed_at:
+                ec_ts.FromDatetime(r.identity_changes.email_changed_at)
 
-            session.commit()
+            pc_ts = Timestamp()
+            if r.identity_changes.phone_changed_at:
+                pc_ts.FromDatetime(r.identity_changes.phone_changed_at)
 
-        # Materialize features
-        materializer = FeatureMaterializer()
-        materialize_stats = materializer.materialize_all()
-        features_count = materialize_stats.get("total_processed", 0)
+            proto_records.append(
+                analytics_pb2.GeneratedRecord(
+                    record_id=r.record_id,
+                    user_id=r.user_id,
+                    full_name=r.full_name,
+                    email=r.email,
+                    phone=r.phone,
+                    transaction_timestamp=ts,
+                    is_off_hours_txn=r.is_off_hours_txn,
+                    available_balance=float(r.account.available_balance),
+                    balance_to_transaction_ratio=float(
+                        r.account.balance_to_transaction_ratio
+                    ),
+                    avg_available_balance_30d=float(
+                        r.behavior.avg_available_balance_30d
+                    ),
+                    balance_volatility_z_score=float(
+                        r.behavior.balance_volatility_z_score
+                    ),
+                    bank_connections_count_24h=r.connection.bank_connections_count_24h,
+                    bank_connections_count_7d=r.connection.bank_connections_count_7d,
+                    bank_connections_avg_30d=float(
+                        r.connection.bank_connections_avg_30d
+                    ),
+                    amount=float(r.transaction.amount),
+                    amount_to_avg_ratio=float(r.transaction.amount_to_avg_ratio),
+                    merchant_risk_score=r.transaction.merchant_risk_score,
+                    is_returned=r.transaction.is_returned,
+                    email_changed_at=ec_ts if r.identity_changes.email_changed_at else None,
+                    phone_changed_at=pc_ts if r.identity_changes.phone_changed_at else None,
+                    is_fraudulent=r.is_fraudulent,
+                    fraud_type=r.fraud_type or "",
+                )
+            )
+
+        proto_metadata = []
+        for m in result.metadata:
+            fc_ts = Timestamp()
+            if m.fraud_confirmed_at:
+                fc_ts.FromDatetime(m.fraud_confirmed_at)
+
+            proto_metadata.append(
+                analytics_pb2.EvaluationMetadata(
+                    user_id=m.user_id,
+                    record_id=m.record_id,
+                    sequence_number=m.sequence_number,
+                    fraud_confirmed_at=fc_ts if m.fraud_confirmed_at else None,
+                    is_pre_fraud=m.is_pre_fraud,
+                    days_to_fraud=m.days_to_fraud or 0,
+                    is_train_eligible=m.is_train_eligible,
+                )
+            )
+
+        # Store via Analytics service
+        client.store_generated_data(records=proto_records, metadata=proto_metadata)
+
+        # Materialize via Analytics service
+        mat_resp = client.materialize_features()
+        features_count = mat_resp.total_processed
 
         return GenerateDataResponse(
             success=True,
@@ -703,32 +704,20 @@ async def generate_data(request: GenerateDataRequest) -> GenerateDataResponse:
     response_model=ClearDataResponse,
     tags=["Data Management"],
     summary="Clear all data",
-    description="Delete all records from the database tables.",
+    description="Delete all records from the database tables via Analytics service.",
 )
 async def clear_data() -> ClearDataResponse:
-    """Clear all data from the database.
+    """Clear all data from the database via Analytics service.
 
     Returns:
         ClearDataResponse with list of cleared tables.
     """
     try:
-        from synthetic_pipeline.db.models import Base
-        from synthetic_pipeline.db.session import DatabaseSession
-
-        db_session = DatabaseSession()
-
-        # Get table names before dropping
-        table_names = [table.name for table in Base.metadata.sorted_tables]
-
-        # Drop all tables
-        Base.metadata.drop_all(db_session.engine)
-
-        # Recreate empty tables
-        Base.metadata.create_all(db_session.engine)
-
+        client = get_crud_client()
+        resp = client.clear_all_data()
         return ClearDataResponse(
-            success=True,
-            tables_cleared=table_names,
+            success=resp.success,
+            tables_cleared=list(resp.tables_cleared),
         )
 
     except Exception as e:

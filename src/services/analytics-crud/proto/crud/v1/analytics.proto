@@ -21,6 +21,18 @@ service AnalyticsService {
   rpc ListBacktestResults(ListBacktestResultsRequest) returns (ListBacktestResultsResponse);
   rpc GetBacktestResult(GetBacktestResultRequest) returns (GetBacktestResultResponse);
   rpc GetDriftWindow(GetDriftWindowRequest) returns (GetDriftWindowResponse);
+  rpc StoreGeneratedData(StoreGeneratedDataRequest) returns (StoreGeneratedDataResponse);
+  rpc ClearAllData(ClearAllDataRequest) returns (ClearAllDataResponse);
+  rpc MaterializeFeatures(MaterializeFeaturesRequest) returns (MaterializeFeaturesResponse);
+  
+  // Rule Management
+  rpc SaveRule(SaveRuleRequest) returns (SaveRuleResponse);
+  rpc GetRule(GetRuleRequest) returns (GetRuleResponse);
+  rpc ListRules(ListRulesRequest) returns (ListRulesResponse);
+  rpc DeleteRule(DeleteRuleRequest) returns (DeleteRuleResponse);
+  
+  // Inference Events
+  rpc LogInferenceEvent(LogInferenceEventRequest) returns (LogInferenceEventResponse);
 }
 
 message GetDailyStatsRequest {
@@ -250,4 +262,133 @@ message GetDriftWindowRequest {
 
 message GetDriftWindowResponse {
   repeated TransactionDetail transactions = 1;
+}
+
+message StoreGeneratedDataRequest {
+  repeated GeneratedRecord records = 1;
+  repeated EvaluationMetadata metadata = 2;
+}
+
+message GeneratedRecord {
+  string record_id = 1;
+  string user_id = 2;
+  string full_name = 3;
+  string email = 4;
+  string phone = 5;
+  google.protobuf.Timestamp transaction_timestamp = 6;
+  bool is_off_hours_txn = 7;
+  double available_balance = 8;
+  double balance_to_transaction_ratio = 9;
+  double avg_available_balance_30d = 10;
+  double balance_volatility_z_score = 11;
+  int32 bank_connections_count_24h = 12;
+  int32 bank_connections_count_7d = 13;
+  double bank_connections_avg_30d = 14;
+  double amount = 15;
+  double amount_to_avg_ratio = 16;
+  int32 merchant_risk_score = 17;
+  bool is_returned = 18;
+  google.protobuf.Timestamp email_changed_at = 19;
+  google.protobuf.Timestamp phone_changed_at = 20;
+  bool is_fraudulent = 21;
+  string fraud_type = 22;
+}
+
+message EvaluationMetadata {
+  string user_id = 1;
+  string record_id = 2;
+  int32 sequence_number = 3;
+  google.protobuf.Timestamp fraud_confirmed_at = 4;
+  bool is_pre_fraud = 5;
+  int32 days_to_fraud = 6;
+  bool is_train_eligible = 7;
+}
+
+message StoreGeneratedDataResponse {
+  bool success = 1;
+  int64 records_saved = 2;
+}
+
+message ClearAllDataRequest {}
+message ClearAllDataResponse {
+  bool success = 1;
+  repeated string tables_cleared = 2;
+}
+
+message MaterializeFeaturesRequest {
+  int32 batch_size = 1;
+}
+
+message MaterializeFeaturesResponse {
+  bool success = 1;
+  int64 total_processed = 2;
+}
+
+message Rule {
+  string id = 1;
+  string field = 2;
+  string op = 3;
+  string value_json = 4;
+  string action = 5;
+  int32 score = 6;
+  string severity = 7;
+  string reason = 8;
+  string status = 9;
+}
+
+message SaveRuleRequest {
+  Rule rule = 1;
+}
+
+message SaveRuleResponse {
+  bool success = 1;
+}
+
+message GetRuleRequest {
+  string rule_id = 1;
+}
+
+message GetRuleResponse {
+  Rule rule = 1;
+}
+
+message ListRulesRequest {
+  string status = 1;
+  bool include_archived = 2;
+}
+
+message ListRulesResponse {
+  repeated Rule rules = 1;
+}
+
+message DeleteRuleRequest {
+  string rule_id = 1;
+}
+
+message DeleteRuleResponse {
+  bool success = 1;
+}
+
+message RuleImpact {
+  string rule_id = 1;
+  bool is_shadow = 2;
+  double score_delta = 3;
+}
+
+message InferenceEvent {
+  string request_id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string model_version = 3;
+  string rules_version = 4;
+  int32 model_score = 5;
+  int32 final_score = 6;
+  repeated RuleImpact rule_impacts = 7;
+}
+
+message LogInferenceEventRequest {
+  InferenceEvent event = 1;
+}
+
+message LogInferenceEventResponse {
+  bool success = 1;
 }

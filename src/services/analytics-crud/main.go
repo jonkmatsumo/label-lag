@@ -953,8 +953,331 @@ func (s *server) GetDriftWindow(ctx context.Context, req *pb.GetDriftWindowReque
 	return &pb.GetDriftWindowResponse{Transactions: txs}, nil
 }
 
-func (s *server) GetFeatureSample(ctx context.Context, req *pb.GetFeatureSampleRequest) (*pb.GetFeatureSampleResponse, error) {
+func (s *server) StoreGeneratedData(ctx context.Context, req *pb.StoreGeneratedDataRequest) (*pb.StoreGeneratedDataResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "request required")
+	}
 
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback()
+
+	// Insert generated records
+	recordQuery := `
+		INSERT INTO generated_records (
+			record_id, user_id, full_name, email, phone, transaction_timestamp,
+			is_off_hours_txn, available_balance, balance_to_transaction_ratio,
+			avg_available_balance_30d, balance_volatility_z_score,
+			bank_connections_count_24h, bank_connections_count_7d,
+			bank_connections_avg_30d, amount, amount_to_avg_ratio,
+			merchant_risk_score, is_returned, email_changed_at, phone_changed_at,
+			is_fraudulent, fraud_type
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
+		)
+	`
+
+	for _, r := range req.Records {
+		_, err := tx.ExecContext(ctx, recordQuery,
+			r.RecordId, r.UserId, r.FullName, r.Email, r.Phone,
+			r.TransactionTimestamp.AsTime(), r.IsOffHoursTxn, r.AvailableBalance,
+			r.BalanceToTransactionRatio, r.AvgAvailableBalance_30D,
+			r.BalanceVolatilityZScore, r.BankConnectionsCount_24H,
+			r.BankConnectionsCount_7D, r.BankConnectionsAvg_30D,
+			r.Amount, r.AmountToAvgRatio, r.MerchantRiskScore, r.IsReturned,
+			r.EmailChangedAt.AsTime(), r.PhoneChangedAt.AsTime(),
+			r.IsFraudulent, r.FraudType,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to insert record %s: %v", r.RecordId, err)
+		}
+	}
+
+	// Insert evaluation metadata
+	metaQuery := `
+		INSERT INTO evaluation_metadata (
+			user_id, record_id, sequence_number, fraud_confirmed_at,
+			is_pre_fraud, days_to_fraud, is_train_eligible
+		) VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`
+
+	for _, m := range req.Metadata {
+		var fraudConfirmedAt interface{}
+		if m.FraudConfirmedAt != nil {
+			fraudConfirmedAt = m.FraudConfirmedAt.AsTime()
+		}
+
+		_, err := tx.ExecContext(ctx, metaQuery,
+			m.UserId, m.RecordId, m.SequenceNumber, fraudConfirmedAt,
+			m.IsPreFraud, m.DaysToFraud, m.IsTrainEligible,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to insert metadata for %s: %v", m.RecordId, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	return &pb.StoreGeneratedDataResponse{
+		Success:      true,
+		RecordsSaved: int64(len(req.Records)),
+	}, nil
+}
+
+func (s *server) ClearAllData(ctx context.Context, req *pb.ClearAllDataRequest) (*pb.ClearAllDataResponse, error) {
+	tables := []string{"feature_snapshots", "evaluation_metadata", "generated_records", "backtest_results"}
+
+	for _, t := range tables {
+		if _, err := s.db.ExecContext(ctx, fmt.Sprintf("TRUNCATE TABLE %s CASCADE", t)); err != nil {
+			return nil, fmt.Errorf("failed to clear table %s: %v", t, err)
+		}
+	}
+
+	return &pb.ClearAllDataResponse{
+		Success:       true,
+		TablesCleared: tables,
+	}, nil
+}
+
+func (s *server) MaterializeFeatures(ctx context.Context, req *pb.MaterializeFeaturesRequest) (*pb.MaterializeFeaturesResponse, error) {
+	// SQL taken from materialize_features.py
+	materializeSQL := `
+		INSERT INTO feature_snapshots (
+			record_id, user_id, velocity_24h, amount_to_avg_ratio_30d,
+			balance_volatility_z_score, experimental_signals, computed_at
+		)
+		SELECT
+			fc.record_id,
+			fc.user_id,
+			fc.velocity_24h::INTEGER,
+			fc.amount_to_avg_ratio_30d::FLOAT,
+			fc.balance_volatility_z_score::FLOAT,
+			fc.experimental_signals,
+			NOW()
+		FROM (
+			WITH feature_calculations AS (
+				SELECT
+					gr.record_id,
+					gr.user_id,
+					gr.transaction_timestamp,
+					gr.amount,
+					gr.available_balance,
+					COUNT(*) OVER (
+						PARTITION BY gr.user_id
+						ORDER BY gr.transaction_timestamp
+						RANGE BETWEEN INTERVAL '24 hours' PRECEDING AND CURRENT ROW
+					) AS velocity_24h,
+					CASE
+						WHEN AVG(gr.amount) OVER (
+							PARTITION BY gr.user_id
+							ORDER BY gr.transaction_timestamp
+							RANGE BETWEEN INTERVAL '30 days' PRECEDING AND CURRENT ROW
+						) > 0
+						THEN gr.amount / AVG(gr.amount) OVER (
+							PARTITION BY gr.user_id
+							ORDER BY gr.transaction_timestamp
+							RANGE BETWEEN INTERVAL '30 days' PRECEDING AND CURRENT ROW
+						)
+						ELSE 1.0
+					END AS amount_to_avg_ratio_30d,
+					CASE
+						WHEN COALESCE(STDDEV(gr.available_balance) OVER (
+							PARTITION BY gr.user_id
+							ORDER BY gr.transaction_timestamp
+							RANGE BETWEEN INTERVAL '30 days' PRECEDING AND CURRENT ROW
+						), 0) > 0
+						THEN (
+							gr.available_balance - AVG(gr.available_balance) OVER (
+								PARTITION BY gr.user_id
+								ORDER BY gr.transaction_timestamp
+								RANGE BETWEEN INTERVAL '30 days' PRECEDING AND CURRENT ROW
+							)
+						) / STDDEV(gr.available_balance) OVER (
+							PARTITION BY gr.user_id
+							ORDER BY gr.transaction_timestamp
+							RANGE BETWEEN INTERVAL '30 days' PRECEDING AND CURRENT ROW
+						)
+						ELSE 0.0
+					END AS balance_volatility_z_score,
+					COUNT(*) OVER (
+						PARTITION BY gr.user_id
+						ORDER BY gr.transaction_timestamp
+						RANGE BETWEEN INTERVAL '7 days' PRECEDING AND CURRENT ROW
+					) AS velocity_7d,
+					MAX(gr.amount) OVER (
+						PARTITION BY gr.user_id
+						ORDER BY gr.transaction_timestamp
+						RANGE BETWEEN INTERVAL '30 days' PRECEDING AND CURRENT ROW
+					) AS max_amount_30d,
+					SUM(CASE WHEN gr.is_off_hours_txn THEN 1 ELSE 0 END) OVER (
+						PARTITION BY gr.user_id
+						ORDER BY gr.transaction_timestamp
+						RANGE BETWEEN INTERVAL '7 days' PRECEDING AND CURRENT ROW
+					) AS off_hours_count_7d,
+					gr.bank_connections_count_24h,
+					gr.merchant_risk_score
+				FROM generated_records gr
+				WHERE gr.record_id NOT IN (SELECT record_id FROM feature_snapshots)
+			)
+			SELECT
+				record_id,
+				user_id,
+				velocity_24h,
+				amount_to_avg_ratio_30d,
+				balance_volatility_z_score,
+				jsonb_build_object(
+					'velocity_7d', velocity_7d,
+					'max_amount_30d', max_amount_30d::FLOAT,
+					'off_hours_count_7d', off_hours_count_7d,
+					'bank_connections_24h', bank_connections_count_24h,
+					'merchant_risk_score', merchant_risk_score
+				) AS experimental_signals
+			FROM feature_calculations
+		) fc
+		ON CONFLICT (record_id) DO UPDATE SET
+			velocity_24h = EXCLUDED.velocity_24h,
+			amount_to_avg_ratio_30d = EXCLUDED.amount_to_avg_ratio_30d,
+			balance_volatility_z_score = EXCLUDED.balance_volatility_z_score,
+			experimental_signals = EXCLUDED.experimental_signals,
+			computed_at = EXCLUDED.computed_at;
+	`
+
+	res, err := s.db.ExecContext(ctx, materializeSQL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to materialize features: %v", err)
+	}
+
+	rowsAffected, _ := res.RowsAffected()
+
+	return &pb.MaterializeFeaturesResponse{
+		Success:        true,
+		TotalProcessed: rowsAffected,
+	}, nil
+}
+
+func (s *server) SaveRule(ctx context.Context, req *pb.SaveRuleRequest) (*pb.SaveRuleResponse, error) {
+	if req == nil || req.Rule == nil {
+		return nil, status.Error(codes.InvalidArgument, "rule required")
+	}
+	r := req.Rule
+
+	query := `
+		INSERT INTO rules (
+			rule_id, field, op, value, action, score, severity, reason, status
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		ON CONFLICT (rule_id) DO UPDATE SET
+			field = EXCLUDED.field,
+			op = EXCLUDED.op,
+			value = EXCLUDED.value,
+			action = EXCLUDED.action,
+			score = EXCLUDED.score,
+			severity = EXCLUDED.severity,
+			reason = EXCLUDED.reason,
+			status = EXCLUDED.status
+	`
+
+	_, err := s.db.ExecContext(ctx, query,
+		r.Id, r.Field, r.Op, r.ValueJson, r.Action, r.Score, r.Severity, r.Reason, r.Status,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to save rule: %v", err)
+	}
+
+	return &pb.SaveRuleResponse{Success: true}, nil
+}
+
+func (s *server) GetRule(ctx context.Context, req *pb.GetRuleRequest) (*pb.GetRuleResponse, error) {
+	query := `SELECT rule_id, field, op, value, action, score, severity, reason, status FROM rules WHERE rule_id = $1`
+
+	var r pb.Rule
+	err := s.db.QueryRowContext(ctx, query, req.RuleId).Scan(
+		&r.Id, &r.Field, &r.Op, &r.ValueJson, &r.Action, &r.Score, &r.Severity, &r.Reason, &r.Status,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, status.Error(codes.NotFound, "rule not found")
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to get rule: %v", err)
+	}
+
+	return &pb.GetRuleResponse{Rule: &r}, nil
+}
+
+func (s *server) ListRules(ctx context.Context, req *pb.ListRulesRequest) (*pb.ListRulesResponse, error) {
+	query := `SELECT rule_id, field, op, value, action, score, severity, reason, status FROM rules WHERE 1=1`
+	args := []interface{}{}
+
+	if req.Status != "" {
+		args = append(args, req.Status)
+		query += fmt.Sprintf(" AND status = $%d", len(args))
+	} else if !req.IncludeArchived {
+		query += " AND status != 'archived'"
+	}
+
+	query += " ORDER BY rule_id"
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list rules: %v", err)
+	}
+	defer rows.Close()
+
+	var rules []*pb.Rule
+	for rows.Next() {
+		var r pb.Rule
+		if err := rows.Scan(
+			&r.Id, &r.Field, &r.Op, &r.ValueJson, &r.Action, &r.Score, &r.Severity, &r.Reason, &r.Status,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan rule: %v", err)
+		}
+		rules = append(rules, &r)
+	}
+
+	return &pb.ListRulesResponse{Rules: rules}, nil
+}
+
+func (s *server) DeleteRule(ctx context.Context, req *pb.DeleteRuleRequest) (*pb.DeleteRuleResponse, error) {
+	query := `UPDATE rules SET status = 'archived' WHERE rule_id = $1`
+	_, err := s.db.ExecContext(ctx, query, req.RuleId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to archive rule: %v", err)
+	}
+	return &pb.DeleteRuleResponse{Success: true}, nil
+}
+
+func (s *server) LogInferenceEvent(ctx context.Context, req *pb.LogInferenceEventRequest) (*pb.LogInferenceEventResponse, error) {
+	if req == nil || req.Event == nil {
+		return nil, status.Error(codes.InvalidArgument, "event required")
+	}
+	e := req.Event
+
+	impactsJSON, _ := json.Marshal(e.RuleImpacts)
+
+	query := `
+		INSERT INTO inference_events (
+			request_id, timestamp, model_version, rules_version,
+			model_score, final_score, rule_impacts
+		) VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`
+
+	_, err := s.db.ExecContext(ctx, query,
+		e.RequestId, e.Timestamp.AsTime(), e.ModelVersion, e.RulesVersion,
+		e.ModelScore, e.FinalScore, impactsJSON,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to log inference event: %v", err)
+	}
+
+	return &pb.LogInferenceEventResponse{Success: true}, nil
+}
+
+func (s *server) GetFeatureSample(ctx context.Context, req *pb.GetFeatureSampleRequest) (*pb.GetFeatureSampleResponse, error) {
 	sampleSize, err := normalizeLimit(req.SampleSize, defaultSampleSize, maxSampleSizeLimit, "sample_size")
 	if err != nil {
 		return nil, err
@@ -1348,8 +1671,30 @@ func initDB(db *sql.DB) error {
 			completed_at TIMESTAMP NOT NULL,
 			error TEXT
 		)`,
+		`CREATE TABLE IF NOT EXISTS rules (
+			rule_id TEXT PRIMARY KEY,
+			field TEXT NOT NULL,
+			op TEXT NOT NULL,
+			value TEXT NOT NULL,
+			action TEXT NOT NULL,
+			score INTEGER,
+			severity TEXT NOT NULL,
+			reason TEXT,
+			status TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS inference_events (
+			request_id TEXT PRIMARY KEY,
+			timestamp TIMESTAMP NOT NULL,
+			model_version TEXT NOT NULL,
+			rules_version TEXT NOT NULL,
+			model_score INTEGER NOT NULL,
+			final_score INTEGER NOT NULL,
+			rule_impacts JSONB NOT NULL
+		)`,
 		`CREATE INDEX IF NOT EXISTS idx_backtest_results_rule_id ON backtest_results(rule_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_backtest_results_completed_at ON backtest_results(completed_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_rules_status ON rules(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_inference_events_timestamp ON inference_events(timestamp)`,
 	}
 
 	for _, q := range queries {
@@ -1359,7 +1704,6 @@ func initDB(db *sql.DB) error {
 	}
 	return nil
 }
-
 func resolveDatabaseURL(getenv func(string) string) (string, error) {
 	if value := strings.TrimSpace(getenv("DATABASE_URL")); value != "" {
 		return value, nil

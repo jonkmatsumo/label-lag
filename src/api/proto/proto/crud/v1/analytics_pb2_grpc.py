@@ -104,6 +104,46 @@ class AnalyticsServiceStub(object):
                 request_serializer=crud_dot_v1_dot_analytics__pb2.GetDriftWindowRequest.SerializeToString,
                 response_deserializer=crud_dot_v1_dot_analytics__pb2.GetDriftWindowResponse.FromString,
                 _registered_method=True)
+        self.StoreGeneratedData = channel.unary_unary(
+                '/crud.v1.AnalyticsService/StoreGeneratedData',
+                request_serializer=crud_dot_v1_dot_analytics__pb2.StoreGeneratedDataRequest.SerializeToString,
+                response_deserializer=crud_dot_v1_dot_analytics__pb2.StoreGeneratedDataResponse.FromString,
+                _registered_method=True)
+        self.ClearAllData = channel.unary_unary(
+                '/crud.v1.AnalyticsService/ClearAllData',
+                request_serializer=crud_dot_v1_dot_analytics__pb2.ClearAllDataRequest.SerializeToString,
+                response_deserializer=crud_dot_v1_dot_analytics__pb2.ClearAllDataResponse.FromString,
+                _registered_method=True)
+        self.MaterializeFeatures = channel.unary_unary(
+                '/crud.v1.AnalyticsService/MaterializeFeatures',
+                request_serializer=crud_dot_v1_dot_analytics__pb2.MaterializeFeaturesRequest.SerializeToString,
+                response_deserializer=crud_dot_v1_dot_analytics__pb2.MaterializeFeaturesResponse.FromString,
+                _registered_method=True)
+        self.SaveRule = channel.unary_unary(
+                '/crud.v1.AnalyticsService/SaveRule',
+                request_serializer=crud_dot_v1_dot_analytics__pb2.SaveRuleRequest.SerializeToString,
+                response_deserializer=crud_dot_v1_dot_analytics__pb2.SaveRuleResponse.FromString,
+                _registered_method=True)
+        self.GetRule = channel.unary_unary(
+                '/crud.v1.AnalyticsService/GetRule',
+                request_serializer=crud_dot_v1_dot_analytics__pb2.GetRuleRequest.SerializeToString,
+                response_deserializer=crud_dot_v1_dot_analytics__pb2.GetRuleResponse.FromString,
+                _registered_method=True)
+        self.ListRules = channel.unary_unary(
+                '/crud.v1.AnalyticsService/ListRules',
+                request_serializer=crud_dot_v1_dot_analytics__pb2.ListRulesRequest.SerializeToString,
+                response_deserializer=crud_dot_v1_dot_analytics__pb2.ListRulesResponse.FromString,
+                _registered_method=True)
+        self.DeleteRule = channel.unary_unary(
+                '/crud.v1.AnalyticsService/DeleteRule',
+                request_serializer=crud_dot_v1_dot_analytics__pb2.DeleteRuleRequest.SerializeToString,
+                response_deserializer=crud_dot_v1_dot_analytics__pb2.DeleteRuleResponse.FromString,
+                _registered_method=True)
+        self.LogInferenceEvent = channel.unary_unary(
+                '/crud.v1.AnalyticsService/LogInferenceEvent',
+                request_serializer=crud_dot_v1_dot_analytics__pb2.LogInferenceEventRequest.SerializeToString,
+                response_deserializer=crud_dot_v1_dot_analytics__pb2.LogInferenceEventResponse.FromString,
+                _registered_method=True)
 
 
 class AnalyticsServiceServicer(object):
@@ -193,6 +233,56 @@ class AnalyticsServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def StoreGeneratedData(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ClearAllData(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def MaterializeFeatures(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SaveRule(self, request, context):
+        """Rule Management
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetRule(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListRules(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DeleteRule(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def LogInferenceEvent(self, request, context):
+        """Inference Events
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_AnalyticsServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -265,6 +355,46 @@ def add_AnalyticsServiceServicer_to_server(servicer, server):
                     servicer.GetDriftWindow,
                     request_deserializer=crud_dot_v1_dot_analytics__pb2.GetDriftWindowRequest.FromString,
                     response_serializer=crud_dot_v1_dot_analytics__pb2.GetDriftWindowResponse.SerializeToString,
+            ),
+            'StoreGeneratedData': grpc.unary_unary_rpc_method_handler(
+                    servicer.StoreGeneratedData,
+                    request_deserializer=crud_dot_v1_dot_analytics__pb2.StoreGeneratedDataRequest.FromString,
+                    response_serializer=crud_dot_v1_dot_analytics__pb2.StoreGeneratedDataResponse.SerializeToString,
+            ),
+            'ClearAllData': grpc.unary_unary_rpc_method_handler(
+                    servicer.ClearAllData,
+                    request_deserializer=crud_dot_v1_dot_analytics__pb2.ClearAllDataRequest.FromString,
+                    response_serializer=crud_dot_v1_dot_analytics__pb2.ClearAllDataResponse.SerializeToString,
+            ),
+            'MaterializeFeatures': grpc.unary_unary_rpc_method_handler(
+                    servicer.MaterializeFeatures,
+                    request_deserializer=crud_dot_v1_dot_analytics__pb2.MaterializeFeaturesRequest.FromString,
+                    response_serializer=crud_dot_v1_dot_analytics__pb2.MaterializeFeaturesResponse.SerializeToString,
+            ),
+            'SaveRule': grpc.unary_unary_rpc_method_handler(
+                    servicer.SaveRule,
+                    request_deserializer=crud_dot_v1_dot_analytics__pb2.SaveRuleRequest.FromString,
+                    response_serializer=crud_dot_v1_dot_analytics__pb2.SaveRuleResponse.SerializeToString,
+            ),
+            'GetRule': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetRule,
+                    request_deserializer=crud_dot_v1_dot_analytics__pb2.GetRuleRequest.FromString,
+                    response_serializer=crud_dot_v1_dot_analytics__pb2.GetRuleResponse.SerializeToString,
+            ),
+            'ListRules': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListRules,
+                    request_deserializer=crud_dot_v1_dot_analytics__pb2.ListRulesRequest.FromString,
+                    response_serializer=crud_dot_v1_dot_analytics__pb2.ListRulesResponse.SerializeToString,
+            ),
+            'DeleteRule': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeleteRule,
+                    request_deserializer=crud_dot_v1_dot_analytics__pb2.DeleteRuleRequest.FromString,
+                    response_serializer=crud_dot_v1_dot_analytics__pb2.DeleteRuleResponse.SerializeToString,
+            ),
+            'LogInferenceEvent': grpc.unary_unary_rpc_method_handler(
+                    servicer.LogInferenceEvent,
+                    request_deserializer=crud_dot_v1_dot_analytics__pb2.LogInferenceEventRequest.FromString,
+                    response_serializer=crud_dot_v1_dot_analytics__pb2.LogInferenceEventResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -645,6 +775,222 @@ class AnalyticsService(object):
             '/crud.v1.AnalyticsService/GetDriftWindow',
             crud_dot_v1_dot_analytics__pb2.GetDriftWindowRequest.SerializeToString,
             crud_dot_v1_dot_analytics__pb2.GetDriftWindowResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def StoreGeneratedData(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/crud.v1.AnalyticsService/StoreGeneratedData',
+            crud_dot_v1_dot_analytics__pb2.StoreGeneratedDataRequest.SerializeToString,
+            crud_dot_v1_dot_analytics__pb2.StoreGeneratedDataResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ClearAllData(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/crud.v1.AnalyticsService/ClearAllData',
+            crud_dot_v1_dot_analytics__pb2.ClearAllDataRequest.SerializeToString,
+            crud_dot_v1_dot_analytics__pb2.ClearAllDataResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def MaterializeFeatures(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/crud.v1.AnalyticsService/MaterializeFeatures',
+            crud_dot_v1_dot_analytics__pb2.MaterializeFeaturesRequest.SerializeToString,
+            crud_dot_v1_dot_analytics__pb2.MaterializeFeaturesResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SaveRule(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/crud.v1.AnalyticsService/SaveRule',
+            crud_dot_v1_dot_analytics__pb2.SaveRuleRequest.SerializeToString,
+            crud_dot_v1_dot_analytics__pb2.SaveRuleResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetRule(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/crud.v1.AnalyticsService/GetRule',
+            crud_dot_v1_dot_analytics__pb2.GetRuleRequest.SerializeToString,
+            crud_dot_v1_dot_analytics__pb2.GetRuleResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListRules(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/crud.v1.AnalyticsService/ListRules',
+            crud_dot_v1_dot_analytics__pb2.ListRulesRequest.SerializeToString,
+            crud_dot_v1_dot_analytics__pb2.ListRulesResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DeleteRule(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/crud.v1.AnalyticsService/DeleteRule',
+            crud_dot_v1_dot_analytics__pb2.DeleteRuleRequest.SerializeToString,
+            crud_dot_v1_dot_analytics__pb2.DeleteRuleResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def LogInferenceEvent(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/crud.v1.AnalyticsService/LogInferenceEvent',
+            crud_dot_v1_dot_analytics__pb2.LogInferenceEventRequest.SerializeToString,
+            crud_dot_v1_dot_analytics__pb2.LogInferenceEventResponse.FromString,
             options,
             channel_credentials,
             insecure,

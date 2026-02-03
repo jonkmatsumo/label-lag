@@ -192,23 +192,12 @@ def get_inference_event_sink() -> InferenceEventSink:
                 elif backend == "stdout":
                     _global_sink = StdoutSink()
                     logger.info("Using stdout inference event sink")
-                elif backend == "postgres":
-                    # Lazy import to avoid database dependencies in unit tests
-                    try:
-                        from api.postgres_inference_sink import PostgresInferenceSink
+                    if sink_type == "postgres":
+                        from api.grpc_inference_sink import GrpcInferenceSink
 
-                        _global_sink = PostgresInferenceSink()
-                        logger.info("Using PostgreSQL inference event sink")
-                    except Exception as e:
-                        logger.warning(
-                            f"Failed to initialize PostgreSQL sink, "
-                            f"falling back to JSONL: {e}"
-                        )
-                        _global_sink = JsonlFileSink()
-                else:
-                    # Default: JSONL file sink (existing behavior)
-                    _global_sink = JsonlFileSink()
-                    logger.info("Using JSONL file inference event sink")
+                        _global_sink = GrpcInferenceSink()
+                        logger.info("Using gRPC inference sink (via Analytics service)")
+                    else:
 
     return _global_sink
 

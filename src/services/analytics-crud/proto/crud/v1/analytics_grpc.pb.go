@@ -33,6 +33,14 @@ const (
 	AnalyticsService_ListBacktestResults_FullMethodName   = "/crud.v1.AnalyticsService/ListBacktestResults"
 	AnalyticsService_GetBacktestResult_FullMethodName     = "/crud.v1.AnalyticsService/GetBacktestResult"
 	AnalyticsService_GetDriftWindow_FullMethodName        = "/crud.v1.AnalyticsService/GetDriftWindow"
+	AnalyticsService_StoreGeneratedData_FullMethodName    = "/crud.v1.AnalyticsService/StoreGeneratedData"
+	AnalyticsService_ClearAllData_FullMethodName          = "/crud.v1.AnalyticsService/ClearAllData"
+	AnalyticsService_MaterializeFeatures_FullMethodName   = "/crud.v1.AnalyticsService/MaterializeFeatures"
+	AnalyticsService_SaveRule_FullMethodName              = "/crud.v1.AnalyticsService/SaveRule"
+	AnalyticsService_GetRule_FullMethodName               = "/crud.v1.AnalyticsService/GetRule"
+	AnalyticsService_ListRules_FullMethodName             = "/crud.v1.AnalyticsService/ListRules"
+	AnalyticsService_DeleteRule_FullMethodName            = "/crud.v1.AnalyticsService/DeleteRule"
+	AnalyticsService_LogInferenceEvent_FullMethodName     = "/crud.v1.AnalyticsService/LogInferenceEvent"
 )
 
 // AnalyticsServiceClient is the client API for AnalyticsService service.
@@ -53,6 +61,16 @@ type AnalyticsServiceClient interface {
 	ListBacktestResults(ctx context.Context, in *ListBacktestResultsRequest, opts ...grpc.CallOption) (*ListBacktestResultsResponse, error)
 	GetBacktestResult(ctx context.Context, in *GetBacktestResultRequest, opts ...grpc.CallOption) (*GetBacktestResultResponse, error)
 	GetDriftWindow(ctx context.Context, in *GetDriftWindowRequest, opts ...grpc.CallOption) (*GetDriftWindowResponse, error)
+	StoreGeneratedData(ctx context.Context, in *StoreGeneratedDataRequest, opts ...grpc.CallOption) (*StoreGeneratedDataResponse, error)
+	ClearAllData(ctx context.Context, in *ClearAllDataRequest, opts ...grpc.CallOption) (*ClearAllDataResponse, error)
+	MaterializeFeatures(ctx context.Context, in *MaterializeFeaturesRequest, opts ...grpc.CallOption) (*MaterializeFeaturesResponse, error)
+	// Rule Management
+	SaveRule(ctx context.Context, in *SaveRuleRequest, opts ...grpc.CallOption) (*SaveRuleResponse, error)
+	GetRule(ctx context.Context, in *GetRuleRequest, opts ...grpc.CallOption) (*GetRuleResponse, error)
+	ListRules(ctx context.Context, in *ListRulesRequest, opts ...grpc.CallOption) (*ListRulesResponse, error)
+	DeleteRule(ctx context.Context, in *DeleteRuleRequest, opts ...grpc.CallOption) (*DeleteRuleResponse, error)
+	// Inference Events
+	LogInferenceEvent(ctx context.Context, in *LogInferenceEventRequest, opts ...grpc.CallOption) (*LogInferenceEventResponse, error)
 }
 
 type analyticsServiceClient struct {
@@ -203,6 +221,86 @@ func (c *analyticsServiceClient) GetDriftWindow(ctx context.Context, in *GetDrif
 	return out, nil
 }
 
+func (c *analyticsServiceClient) StoreGeneratedData(ctx context.Context, in *StoreGeneratedDataRequest, opts ...grpc.CallOption) (*StoreGeneratedDataResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StoreGeneratedDataResponse)
+	err := c.cc.Invoke(ctx, AnalyticsService_StoreGeneratedData_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *analyticsServiceClient) ClearAllData(ctx context.Context, in *ClearAllDataRequest, opts ...grpc.CallOption) (*ClearAllDataResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClearAllDataResponse)
+	err := c.cc.Invoke(ctx, AnalyticsService_ClearAllData_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *analyticsServiceClient) MaterializeFeatures(ctx context.Context, in *MaterializeFeaturesRequest, opts ...grpc.CallOption) (*MaterializeFeaturesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MaterializeFeaturesResponse)
+	err := c.cc.Invoke(ctx, AnalyticsService_MaterializeFeatures_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *analyticsServiceClient) SaveRule(ctx context.Context, in *SaveRuleRequest, opts ...grpc.CallOption) (*SaveRuleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SaveRuleResponse)
+	err := c.cc.Invoke(ctx, AnalyticsService_SaveRule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *analyticsServiceClient) GetRule(ctx context.Context, in *GetRuleRequest, opts ...grpc.CallOption) (*GetRuleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRuleResponse)
+	err := c.cc.Invoke(ctx, AnalyticsService_GetRule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *analyticsServiceClient) ListRules(ctx context.Context, in *ListRulesRequest, opts ...grpc.CallOption) (*ListRulesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRulesResponse)
+	err := c.cc.Invoke(ctx, AnalyticsService_ListRules_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *analyticsServiceClient) DeleteRule(ctx context.Context, in *DeleteRuleRequest, opts ...grpc.CallOption) (*DeleteRuleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteRuleResponse)
+	err := c.cc.Invoke(ctx, AnalyticsService_DeleteRule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *analyticsServiceClient) LogInferenceEvent(ctx context.Context, in *LogInferenceEventRequest, opts ...grpc.CallOption) (*LogInferenceEventResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LogInferenceEventResponse)
+	err := c.cc.Invoke(ctx, AnalyticsService_LogInferenceEvent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AnalyticsServiceServer is the server API for AnalyticsService service.
 // All implementations must embed UnimplementedAnalyticsServiceServer
 // for forward compatibility.
@@ -221,6 +319,16 @@ type AnalyticsServiceServer interface {
 	ListBacktestResults(context.Context, *ListBacktestResultsRequest) (*ListBacktestResultsResponse, error)
 	GetBacktestResult(context.Context, *GetBacktestResultRequest) (*GetBacktestResultResponse, error)
 	GetDriftWindow(context.Context, *GetDriftWindowRequest) (*GetDriftWindowResponse, error)
+	StoreGeneratedData(context.Context, *StoreGeneratedDataRequest) (*StoreGeneratedDataResponse, error)
+	ClearAllData(context.Context, *ClearAllDataRequest) (*ClearAllDataResponse, error)
+	MaterializeFeatures(context.Context, *MaterializeFeaturesRequest) (*MaterializeFeaturesResponse, error)
+	// Rule Management
+	SaveRule(context.Context, *SaveRuleRequest) (*SaveRuleResponse, error)
+	GetRule(context.Context, *GetRuleRequest) (*GetRuleResponse, error)
+	ListRules(context.Context, *ListRulesRequest) (*ListRulesResponse, error)
+	DeleteRule(context.Context, *DeleteRuleRequest) (*DeleteRuleResponse, error)
+	// Inference Events
+	LogInferenceEvent(context.Context, *LogInferenceEventRequest) (*LogInferenceEventResponse, error)
 	mustEmbedUnimplementedAnalyticsServiceServer()
 }
 
@@ -272,6 +380,30 @@ func (UnimplementedAnalyticsServiceServer) GetBacktestResult(context.Context, *G
 }
 func (UnimplementedAnalyticsServiceServer) GetDriftWindow(context.Context, *GetDriftWindowRequest) (*GetDriftWindowResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetDriftWindow not implemented")
+}
+func (UnimplementedAnalyticsServiceServer) StoreGeneratedData(context.Context, *StoreGeneratedDataRequest) (*StoreGeneratedDataResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method StoreGeneratedData not implemented")
+}
+func (UnimplementedAnalyticsServiceServer) ClearAllData(context.Context, *ClearAllDataRequest) (*ClearAllDataResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClearAllData not implemented")
+}
+func (UnimplementedAnalyticsServiceServer) MaterializeFeatures(context.Context, *MaterializeFeaturesRequest) (*MaterializeFeaturesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method MaterializeFeatures not implemented")
+}
+func (UnimplementedAnalyticsServiceServer) SaveRule(context.Context, *SaveRuleRequest) (*SaveRuleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaveRule not implemented")
+}
+func (UnimplementedAnalyticsServiceServer) GetRule(context.Context, *GetRuleRequest) (*GetRuleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRule not implemented")
+}
+func (UnimplementedAnalyticsServiceServer) ListRules(context.Context, *ListRulesRequest) (*ListRulesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRules not implemented")
+}
+func (UnimplementedAnalyticsServiceServer) DeleteRule(context.Context, *DeleteRuleRequest) (*DeleteRuleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteRule not implemented")
+}
+func (UnimplementedAnalyticsServiceServer) LogInferenceEvent(context.Context, *LogInferenceEventRequest) (*LogInferenceEventResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LogInferenceEvent not implemented")
 }
 func (UnimplementedAnalyticsServiceServer) mustEmbedUnimplementedAnalyticsServiceServer() {}
 func (UnimplementedAnalyticsServiceServer) testEmbeddedByValue()                          {}
@@ -546,6 +678,150 @@ func _AnalyticsService_GetDriftWindow_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AnalyticsService_StoreGeneratedData_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StoreGeneratedDataRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AnalyticsServiceServer).StoreGeneratedData(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AnalyticsService_StoreGeneratedData_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AnalyticsServiceServer).StoreGeneratedData(ctx, req.(*StoreGeneratedDataRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AnalyticsService_ClearAllData_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClearAllDataRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AnalyticsServiceServer).ClearAllData(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AnalyticsService_ClearAllData_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AnalyticsServiceServer).ClearAllData(ctx, req.(*ClearAllDataRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AnalyticsService_MaterializeFeatures_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MaterializeFeaturesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AnalyticsServiceServer).MaterializeFeatures(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AnalyticsService_MaterializeFeatures_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AnalyticsServiceServer).MaterializeFeatures(ctx, req.(*MaterializeFeaturesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AnalyticsService_SaveRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveRuleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AnalyticsServiceServer).SaveRule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AnalyticsService_SaveRule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AnalyticsServiceServer).SaveRule(ctx, req.(*SaveRuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AnalyticsService_GetRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRuleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AnalyticsServiceServer).GetRule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AnalyticsService_GetRule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AnalyticsServiceServer).GetRule(ctx, req.(*GetRuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AnalyticsService_ListRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRulesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AnalyticsServiceServer).ListRules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AnalyticsService_ListRules_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AnalyticsServiceServer).ListRules(ctx, req.(*ListRulesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AnalyticsService_DeleteRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteRuleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AnalyticsServiceServer).DeleteRule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AnalyticsService_DeleteRule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AnalyticsServiceServer).DeleteRule(ctx, req.(*DeleteRuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AnalyticsService_LogInferenceEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LogInferenceEventRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AnalyticsServiceServer).LogInferenceEvent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AnalyticsService_LogInferenceEvent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AnalyticsServiceServer).LogInferenceEvent(ctx, req.(*LogInferenceEventRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AnalyticsService_ServiceDesc is the grpc.ServiceDesc for AnalyticsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -608,6 +884,38 @@ var AnalyticsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetDriftWindow",
 			Handler:    _AnalyticsService_GetDriftWindow_Handler,
+		},
+		{
+			MethodName: "StoreGeneratedData",
+			Handler:    _AnalyticsService_StoreGeneratedData_Handler,
+		},
+		{
+			MethodName: "ClearAllData",
+			Handler:    _AnalyticsService_ClearAllData_Handler,
+		},
+		{
+			MethodName: "MaterializeFeatures",
+			Handler:    _AnalyticsService_MaterializeFeatures_Handler,
+		},
+		{
+			MethodName: "SaveRule",
+			Handler:    _AnalyticsService_SaveRule_Handler,
+		},
+		{
+			MethodName: "GetRule",
+			Handler:    _AnalyticsService_GetRule_Handler,
+		},
+		{
+			MethodName: "ListRules",
+			Handler:    _AnalyticsService_ListRules_Handler,
+		},
+		{
+			MethodName: "DeleteRule",
+			Handler:    _AnalyticsService_DeleteRule_Handler,
+		},
+		{
+			MethodName: "LogInferenceEvent",
+			Handler:    _AnalyticsService_LogInferenceEvent_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

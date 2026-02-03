@@ -236,12 +236,12 @@ def get_draft_store() -> DraftRuleStore:
         backend = get_rule_store_backend()
 
         if backend == "postgres":
-            # Only import PostgresRuleStore when postgres backend is enabled
+            # Only import GrpcRuleStore when postgres backend is enabled
             # This avoids database dependencies in unit tests
-            from api.postgres_rule_store import PostgresRuleStore
+            from api.grpc_rule_store import GrpcRuleStore
 
-            _global_draft_store = PostgresRuleStore()  # type: ignore[assignment]
-            logger.info("Using PostgreSQL rule store backend")
+            _global_draft_store = GrpcRuleStore()  # type: ignore[assignment]
+            logger.info("Using gRPC rule store backend (via Analytics service)")
         else:
             # Default: in-memory with optional file persistence
             storage_path = os.getenv("DRAFT_STORAGE_PATH")
