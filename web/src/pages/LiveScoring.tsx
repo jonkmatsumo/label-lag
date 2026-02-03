@@ -3,6 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { signalApi, healthApi } from '../api';
 import type { SignalRequest, SignalResponse, HealthResponse } from '../types/api';
 import { Clock, Cpu, AlertTriangle, Shield, ChevronDown, ChevronRight } from 'lucide-react';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 export function LiveScoring() {
   const [formData, setFormData] = useState<SignalRequest>({
@@ -62,9 +63,7 @@ export function LiveScoring() {
         {healthQuery.isLoading ? (
           <div className="loading">Loading model status...</div>
         ) : healthQuery.isError ? (
-          <div className="alert alert-error">
-            Failed to fetch model status: {healthQuery.error?.message}
-          </div>
+          <ErrorBanner error={healthQuery.error} title="Failed to fetch model status" className="alert alert-danger m-3" />
         ) : healthQuery.data ? (
           <ModelStatus health={healthQuery.data} />
         ) : null}
@@ -163,8 +162,8 @@ export function LiveScoring() {
           </form>
 
           {evaluateMutation.isError && (
-            <div className="alert alert-error" style={{ marginTop: '1rem' }}>
-              Error: {evaluateMutation.error?.message}
+            <div style={{ marginTop: '1rem' }}>
+              <ErrorBanner error={evaluateMutation.error} title="Evaluation Error" />
             </div>
           )}
         </div>
@@ -229,24 +228,26 @@ function ModelStatus({ health }: { health: HealthResponse }) {
 function RiskResult({ result }: { result: SignalResponse }) {
   const [showRaw, setShowRaw] = useState(false);
 
+  if (!result) return null;
+
   return (
     <div className="space-y-4">
       {/* Risk Gauge and Core Info */}
       <div className="text-center py-4 bg-light rounded-3 mb-4">
         <div className={`display-1 fw-bold mb-0 ${result.score >= 80 ? 'text-danger' : result.score >= 30 ? 'text-warning' : 'text-success'}`}>
-          {result.score}
+          {result.score ?? 0}
         </div>
         <div className="text-muted small text-uppercase fw-bold tracking-wider mb-2">Risk Score</div>
         <div className={`badge rounded-pill px-3 py-2 ${result.risk_label === 'HIGH' ? 'bg-danger' : result.risk_label === 'MEDIUM' ? 'bg-warning text-dark' : 'bg-success'}`}>
-          {result.risk_label} RISK
+          {result.risk_label ?? 'UNKNOWN'} RISK
         </div>
         
         <div className="mt-3 d-flex justify-content-center gap-4 text-muted small">
           <div className="d-flex align-items-center">
-            <Clock size={14} className="me-1" /> {result.latency_ms.toFixed(1)}ms
+            <Clock size={14} className="me-1" /> {(result.latency_ms ?? 0).toFixed(1)}ms
           </div>
           <div className="d-flex align-items-center">
-            <Cpu size={14} className="me-1" /> {result.model_version}
+            <Cpu size={14} className="me-1" /> {result.model_version ?? 'unknown'}
           </div>
         </div>
       </div>
