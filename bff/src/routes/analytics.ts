@@ -370,6 +370,7 @@ export async function analyticsRoutes(
           method: 'POST',
           path: '/analytics/transactions/search',
           body: request.body,
+          target: 'gateway',
           requestId: request.requestId,
         });
         return reply.status(response.statusCode).send(response.data);
