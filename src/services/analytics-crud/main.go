@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net"
@@ -732,7 +733,182 @@ func (s *server) queryTrainingRecords(ctx context.Context, query string, cutoff 
 	return records, nil
 }
 
+func (s *server) GetBacktestFeatures(ctx context.Context, req *pb.GetBacktestFeaturesRequest) (*pb.GetBacktestFeaturesResponse, error) {
+	if req == nil || req.StartDate == nil || req.EndDate == nil {
+		return nil, status.Error(codes.InvalidArgument, "start_date and end_date required")
+	}
+	start := req.StartDate.AsTime()
+	end := req.EndDate.AsTime()
+
+	query := `
+		SELECT
+			record_id,
+			velocity_24h,
+			amount_to_avg_ratio_30d,
+			balance_volatility_z_score,
+			COALESCE(experimental_signals::text, '{}') as experimental_signals_json
+		FROM feature_snapshots
+		WHERE computed_at >= $1 AND computed_at <= $2
+		ORDER BY computed_at
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, start, end)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query backtest features: %v", err)
+	}
+	defer rows.Close()
+
+	var features []*pb.BacktestFeatureVector
+	for rows.Next() {
+		var f pb.BacktestFeatureVector
+		if err := rows.Scan(
+			&f.RecordId,
+			&f.Velocity_24H,
+			&f.AmountToAvgRatio_30D,
+			&f.BalanceVolatilityZScore,
+			&f.ExperimentalSignalsJson,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan backtest feature: %v", err)
+		}
+		features = append(features, &f)
+	}
+
+	return &pb.GetBacktestFeaturesResponse{Features: features}, nil
+}
+
+func (s *server) SaveBacktestResult(ctx context.Context, req *pb.SaveBacktestResultRequest) (*pb.SaveBacktestResultResponse, error) {
+	if req == nil || req.Result == nil {
+		return nil, status.Error(codes.InvalidArgument, "result required")
+	}
+	res := req.Result
+
+	metricsJSON, _ := json.Marshal(res.Metrics)
+
+	query := `
+		INSERT INTO backtest_results (
+			job_id, rule_id, ruleset_version, start_date, end_date,
+			metrics, completed_at, error
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		ON CONFLICT (job_id) DO UPDATE SET
+			metrics = EXCLUDED.metrics,
+			completed_at = EXCLUDED.completed_at,
+			error = EXCLUDED.error
+	`
+
+	_, err := s.db.ExecContext(ctx, query,
+		res.JobId, res.RuleId, res.RulesetVersion,
+		res.StartDate.AsTime(), res.EndDate.AsTime(),
+		metricsJSON, res.CompletedAt.AsTime(), res.Error,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to save backtest result: %v", err)
+	}
+
+	return &pb.SaveBacktestResultResponse{Success: true}, nil
+}
+
+func (s *server) ListBacktestResults(ctx context.Context, req *pb.ListBacktestResultsRequest) (*pb.ListBacktestResultsResponse, error) {
+	query := `
+		SELECT
+			job_id, rule_id, ruleset_version, start_date, end_date,
+			metrics, completed_at, error
+		FROM backtest_results
+		WHERE 1=1
+	`
+	args := []interface{}{}
+
+	if req.RuleId != "" {
+		args = append(args, req.RuleId)
+		query += fmt.Sprintf(" AND rule_id = $%d", len(args))
+	}
+	if req.StartDate != nil {
+		args = append(args, req.StartDate.AsTime())
+		query += fmt.Sprintf(" AND completed_at >= $%d", len(args))
+	}
+	if req.EndDate != nil {
+		args = append(args, req.EndDate.AsTime())
+		query += fmt.Sprintf(" AND completed_at <= $%d", len(args))
+	}
+
+	query += " ORDER BY completed_at DESC LIMIT 100"
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query backtest results: %v", err)
+	}
+	defer rows.Close()
+
+	var results []*pb.BacktestResult
+	for rows.Next() {
+		var res pb.BacktestResult
+		var start, end, completed time.Time
+		var metricsJSON []byte
+		var ruleID sql.NullString
+
+		if err := rows.Scan(
+			&res.JobId, &ruleID, &res.RulesetVersion, &start, &end,
+			&metricsJSON, &completed, &res.Error,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan backtest result: %v", err)
+		}
+
+		res.RuleId = ruleID.String
+		res.StartDate = timestamppb.New(start)
+		res.EndDate = timestamppb.New(end)
+		res.CompletedAt = timestamppb.New(completed)
+
+		var metrics pb.BacktestMetrics
+		if err := json.Unmarshal(metricsJSON, &metrics); err == nil {
+			res.Metrics = &metrics
+		}
+
+		results = append(results, &res)
+	}
+
+	return &pb.ListBacktestResultsResponse{Results: results}, nil
+}
+
+func (s *server) GetBacktestResult(ctx context.Context, req *pb.GetBacktestResultRequest) (*pb.GetBacktestResultResponse, error) {
+	query := `
+		SELECT
+			job_id, rule_id, ruleset_version, start_date, end_date,
+			metrics, completed_at, error
+		FROM backtest_results
+		WHERE job_id = $1
+	`
+
+	var res pb.BacktestResult
+	var start, end, completed time.Time
+	var metricsJSON []byte
+	var ruleID sql.NullString
+
+	err := s.db.QueryRowContext(ctx, query, req.JobId).Scan(
+		&res.JobId, &ruleID, &res.RulesetVersion, &start, &end,
+		&metricsJSON, &completed, &res.Error,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, status.Error(codes.NotFound, "backtest result not found")
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to query backtest result: %v", err)
+	}
+
+	res.RuleId = ruleID.String
+	res.StartDate = timestamppb.New(start)
+	res.EndDate = timestamppb.New(end)
+	res.CompletedAt = timestamppb.New(completed)
+
+	var metrics pb.BacktestMetrics
+	if err := json.Unmarshal(metricsJSON, &metrics); err == nil {
+		res.Metrics = &metrics
+	}
+
+	return &pb.GetBacktestResultResponse{Result: &res}, nil
+}
+
 func (s *server) GetFeatureSample(ctx context.Context, req *pb.GetFeatureSampleRequest) (*pb.GetFeatureSampleResponse, error) {
+
 	sampleSize, err := normalizeLimit(req.SampleSize, defaultSampleSize, maxSampleSizeLimit, "sample_size")
 	if err != nil {
 		return nil, err
@@ -1033,6 +1209,11 @@ func main() {
 	}
 	defer db.Close()
 
+	if err := initDB(db); err != nil {
+		slog.Error("failed to initialize database", "error", err)
+		os.Exit(1)
+	}
+
 	// Configure connection pool
 	db.SetMaxOpenConns(10)
 	db.SetMaxIdleConns(5)
@@ -1106,6 +1287,30 @@ func updateHealthStatus(ctx context.Context, db *sql.DB, healthServer *health.Se
 		return err
 	}
 	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
+	return nil
+}
+
+func initDB(db *sql.DB) error {
+	queries := []string{
+		`CREATE TABLE IF NOT EXISTS backtest_results (
+			job_id TEXT PRIMARY KEY,
+			rule_id TEXT,
+			ruleset_version TEXT NOT NULL,
+			start_date TIMESTAMP NOT NULL,
+			end_date TIMESTAMP NOT NULL,
+			metrics JSONB NOT NULL,
+			completed_at TIMESTAMP NOT NULL,
+			error TEXT
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_backtest_results_rule_id ON backtest_results(rule_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_backtest_results_completed_at ON backtest_results(completed_at)`,
+	}
+
+	for _, q := range queries {
+		if _, err := db.Exec(q); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
