@@ -4585,80 +4585,48 @@ async def get_dataset_correlations(
 async def search_transactions(
     request: TransactionSearchRequest,
 ) -> TransactionSearchResponse:
-    """Search transactions with advanced filtering."""
-    from sqlalchemy import and_, desc, func, select
-
+    """Search transactions with advanced filtering via Analytics service."""
     from api.schemas import TransactionDetail
-    from synthetic_pipeline.db.models import GeneratedRecordDB
-    from synthetic_pipeline.db.session import DatabaseSession
 
-    db = DatabaseSession()
-
-    with db.get_session() as session:
-        query = select(GeneratedRecordDB)
-        filters = []
-
-        if request.user_id:
-            filters.append(GeneratedRecordDB.user_id == request.user_id)
-        if request.transaction_id:
-            filters.append(GeneratedRecordDB.record_id == request.transaction_id)
-        if request.min_amount is not None:
-            filters.append(GeneratedRecordDB.amount >= request.min_amount)
-        if request.max_amount is not None:
-            filters.append(GeneratedRecordDB.amount <= request.max_amount)
-        if request.start_date:
-            try:
-                start_dt = datetime.fromisoformat(
-                    request.start_date.replace("Z", "+00:00")
-                )
-                filters.append(GeneratedRecordDB.transaction_timestamp >= start_dt)
-            except ValueError:
-                pass
-        if request.end_date:
-            try:
-                end_dt = datetime.fromisoformat(
-                    request.end_date.replace("Z", "+00:00")
-                )
-                filters.append(GeneratedRecordDB.transaction_timestamp <= end_dt)
-            except ValueError:
-                pass
-        if request.is_fraudulent is not None:
-            filters.append(GeneratedRecordDB.is_fraudulent == request.is_fraudulent)
-
-        if filters:
-            query = query.where(and_(*filters))
-
-        # Count total
-        count_query = select(func.count()).select_from(query.subquery())
-        total = session.execute(count_query).scalar() or 0
-
-        # Pagination
-        query = query.order_by(desc(GeneratedRecordDB.transaction_timestamp))
-        query = query.offset(request.offset).limit(request.limit)
-
-        results = session.execute(query).scalars().all()
+    client = get_crud_client()
+    try:
+        resp = client.search_transactions(
+            user_id=request.user_id or "",
+            transaction_id=request.transaction_id or "",
+            min_amount=request.min_amount,
+            max_amount=request.max_amount,
+            start_date=request.start_date or "",
+            end_date=request.end_date or "",
+            is_fraudulent=request.is_fraudulent,
+            limit=request.limit,
+            offset=request.offset,
+        )
 
         transactions = []
-        for r in results:
+        for r in resp.transactions:
             transactions.append(
                 TransactionDetail(
                     record_id=r.record_id,
                     user_id=r.user_id,
-                    created_at=r.transaction_timestamp,
-                    is_train_eligible=True,
-                    is_pre_fraud=True,
-                    amount=float(r.amount),
+                    created_at=r.created_at.ToDatetime(),
+                    is_train_eligible=r.is_train_eligible,
+                    is_pre_fraud=r.is_pre_fraud,
+                    amount=r.amount,
                     is_fraudulent=r.is_fraudulent,
                     fraud_type=r.fraud_type,
                     is_off_hours_txn=r.is_off_hours_txn,
                     merchant_risk_score=r.merchant_risk_score,
-                    velocity_24h=0,  # Not in DB model
-                    amount_to_avg_ratio_30d=r.amount_to_avg_ratio,
+                    velocity_24h=r.velocity_24h,
+                    amount_to_avg_ratio_30d=r.amount_to_avg_ratio_30d,
                     balance_volatility_z_score=r.balance_volatility_z_score,
                 )
             )
 
-        return TransactionSearchResponse(transactions=transactions, total=total)
+        return TransactionSearchResponse(transactions=transactions, total=resp.total)
+
+    except Exception as e:
+        logger.error(f"Failed to search transactions via CRUD service: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.exception_handler(Exception)
