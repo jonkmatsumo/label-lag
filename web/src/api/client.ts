@@ -40,8 +40,9 @@ export class ApiClient {
           response.status,
           errorData.error?.code ?? 'UNKNOWN_ERROR',
           errorData.error?.message ?? 'An unexpected error occurred',
-          requestId,
-          errorData.error?.details
+          errorData.error?.request_id ?? requestId,
+          errorData.error?.details,
+          errorData.error?.upstream_status
         );
       }
 
@@ -88,13 +89,15 @@ export class ApiError extends Error {
   public readonly code: string;
   public readonly requestId: string;
   public readonly details?: Record<string, unknown>;
+  public readonly upstreamStatus?: number;
 
   constructor(
     statusCode: number,
     code: string,
     message: string,
     requestId: string,
-    details?: Record<string, unknown>
+    details?: Record<string, unknown>,
+    upstreamStatus?: number
   ) {
     super(message);
     this.name = 'ApiError';
@@ -102,6 +105,7 @@ export class ApiError extends Error {
     this.code = code;
     this.requestId = requestId;
     this.details = details;
+    this.upstreamStatus = upstreamStatus;
   }
 }
 

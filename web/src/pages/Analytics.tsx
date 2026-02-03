@@ -7,6 +7,7 @@ import {
 } from 'recharts';
 import { exportToCsv } from '../utils';
 import { Download, Search, ChevronDown, ChevronRight, AlertTriangle, CheckCircle } from 'lucide-react';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 export function Analytics() {
   const [daysFilter, setDaysFilter] = useState(30);
@@ -54,9 +55,7 @@ export function Analytics() {
         {overviewQuery.isLoading ? (
           <div className="loading p-4">Loading overview metrics...</div>
         ) : overviewQuery.isError ? (
-          <div className="alert alert-danger m-4">
-            Failed to load overview: {overviewQuery.error?.message}
-          </div>
+          <ErrorBanner error={overviewQuery.error} title="Failed to load overview" className="m-4 alert alert-danger" />
         ) : overviewQuery.data ? (
           <div className="metrics-grid p-4">
             <div className="metric-card shadow-sm border-0">
@@ -163,9 +162,7 @@ export function Analytics() {
         {dailyStatsQuery.isLoading ? (
           <div className="loading p-4">Loading daily stats...</div>
         ) : dailyStatsQuery.isError ? (
-          <div className="alert alert-danger m-4">
-            Failed to load daily stats: {dailyStatsQuery.error?.message}
-          </div>
+          <ErrorBanner error={dailyStatsQuery.error} title="Failed to load daily stats" className="m-4 alert alert-danger" />
         ) : dailyStatsQuery.data?.stats && dailyStatsQuery.data.stats.length > 0 ? (
           <div className="table-responsive">
             <table className="table table-hover align-middle mb-0">
@@ -291,7 +288,7 @@ function TransactionExplorer() {
         {searchQuery.isLoading && !searchQuery.isPlaceholderData ? (
           <div className="text-center p-5"><div className="spinner-border text-primary"/></div>
         ) : searchQuery.isError ? (
-          <div className="alert alert-danger">Error: {(searchQuery.error as Error).message}</div>
+          <ErrorBanner error={searchQuery.error} title="Error loading transactions" className="alert alert-danger" />
         ) : (
           <>
             <TransactionTable data={searchQuery.data?.transactions || []} />

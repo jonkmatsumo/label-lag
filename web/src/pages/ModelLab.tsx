@@ -12,6 +12,7 @@ import {
   CheckCircle, ChevronDown, ChevronRight, Terminal,
   Filter, Calendar, Image as ImageIcon, FileText as FileIcon
 } from 'lucide-react';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 export function ModelLab() {
   const [activeTab, setActiveTab] = useState<'train' | 'registry'>('train');
@@ -157,7 +158,7 @@ function TrainTab() {
                   </span>
                 </li>
               </ul>
-            ) : <div className="text-danger">Failed to load status</div>}
+            ) : <ErrorBanner error={healthQuery.error} title="Status unavailable" className="alert alert-danger py-2" />}
           </div>
         </div>
 
@@ -201,7 +202,7 @@ function TrainTab() {
                    Window: {driftQuery.data.hours_analyzed}h | Samples: {driftQuery.data.live_size}
                 </div>
               </div>
-            ) : <div className="text-danger">Drift check unavailable</div>}
+            ) : <ErrorBanner error={driftQuery.error} title="Drift check unavailable" className="alert alert-danger py-2" />}
           </div>
         </div>
       </div>
@@ -687,7 +688,10 @@ function ModelCompareChart({ selectedVersions }: { selectedVersions: MlflowModel
   });
 
   const isLoading = runQueries.some(q => q.isLoading);
+  const isError = runQueries.some(q => q.isError);
+  
   if (isLoading) return <div className="text-center p-5"><div className="spinner-border text-primary"/></div>;
+  if (isError) return <ErrorBanner error={runQueries.find(q => q.isError)?.error} title="Failed to load run data" />;
 
   const data = selectedVersions.map((v, i) => {
     const run = runQueries[i].data?.run;

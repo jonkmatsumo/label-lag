@@ -7,6 +7,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 import { AlertCircle, CheckCircle, RefreshCw, Trash2, Database, Activity } from 'lucide-react';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 export function Dataset() {
   const [activeTab, setActiveTab] = useState<'overview' | 'generate' | 'diagnostics' | 'drift'>('overview');
@@ -82,7 +83,7 @@ function OverviewTab() {
   });
 
   if (isLoading) return <div className="text-center p-5"><div className="spinner-border text-primary" role="status"></div></div>;
-  if (error) return <div className="alert alert-danger">Error loading overview: {(error as Error).message}</div>;
+  if (error) return <ErrorBanner error={error} title="Error loading overview" className="alert alert-danger" />;
 
   return (
     <div className="space-y-4">
@@ -260,13 +261,7 @@ function GenerateTab() {
         )}
 
         {generateMutation.isError && (
-          <div className="alert alert-danger d-flex align-items-center">
-            <AlertCircle className="me-2" size={20} />
-            <div>
-              <strong>Generation Failed</strong>
-              <div className="small">{(generateMutation.error as Error).message}</div>
-            </div>
-          </div>
+          <ErrorBanner error={generateMutation.error} title="Generation Failed" className="alert alert-danger" />
         )}
       </div>
 
@@ -717,6 +712,7 @@ function DriftTab() {
   });
 
   if (driftQuery.isLoading) return <div className="text-center p-5"><div className="spinner-border text-primary" /></div>;
+  if (driftQuery.isError) return <ErrorBanner error={driftQuery.error} title="Error loading drift analysis" className="alert alert-danger" />;
 
   return (
     <div className="row g-4">

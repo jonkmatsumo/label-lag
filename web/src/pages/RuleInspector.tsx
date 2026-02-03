@@ -17,6 +17,7 @@ import {
   Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   Cell, ComposedChart, Line
 } from 'recharts';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 const ruleTabs = [
   { path: '/rules', label: 'Management', exact: true },
@@ -95,9 +96,7 @@ export function RuleManagement() {
       {rulesQuery.isLoading ? (
         <div className="text-center p-5"><div className="spinner-border text-primary" /></div>
       ) : rulesQuery.isError ? (
-        <div className="alert alert-danger">
-          Failed to load rules: {rulesQuery.error?.message}
-        </div>
+        <ErrorBanner error={rulesQuery.error} title="Failed to load rules" className="alert alert-danger mb-4" />
       ) : rulesQuery.data?.rules.length === 0 ? (
         <div className="empty-state text-center py-5">
           <div className="display-1 text-muted mb-3">📋</div>
@@ -406,7 +405,9 @@ function RuleHistoryTab({ ruleId }: { ruleId: string }) {
               </tbody>
             </table>
           </div>
-        ) : <div className="alert alert-danger small">Failed to compute diff.</div>}
+        ) : diffQuery.isError ? (
+          <ErrorBanner error={diffQuery.error} title="Failed to compute diff" className="alert alert-danger small" />
+        ) : null}
       </div>
     </div>
   );
@@ -548,9 +549,7 @@ function PublishModal({ rule, onClose, onSuccess }: { rule: DraftRule, onClose: 
               </div>
 
               {publishMutation.isError && (
-                <div className="alert alert-danger small py-2">
-                  {publishMutation.error instanceof Error ? publishMutation.error.message : 'Publishing failed'}
-                </div>
+                <ErrorBanner error={publishMutation.error} title="Publishing failed" className="alert alert-danger small py-2" />
               )}
             </div>
             <div className="modal-footer border-0 pt-0">
@@ -814,9 +813,7 @@ export function RuleShadow() {
       {shadowQuery.isLoading ? (
         <div className="loading">Loading shadow metrics...</div>
       ) : shadowQuery.isError ? (
-        <div className="alert alert-error">
-          Failed to load shadow metrics: {shadowQuery.error?.message}
-        </div>
+        <ErrorBanner error={shadowQuery.error} title="Failed to load shadow metrics" className="alert alert-danger" />
       ) : shadowQuery.data && shadowQuery.data.rule_metrics.length > 0 ? (
         <div className="card">
           <div className="card-header">
@@ -941,9 +938,7 @@ export function RuleBacktests() {
       {backtestsQuery.isLoading ? (
         <div className="loading">Loading backtest results...</div>
       ) : backtestsQuery.isError ? (
-        <div className="alert alert-error">
-          Failed to load backtests: {backtestsQuery.error?.message}
-        </div>
+        <ErrorBanner error={backtestsQuery.error} title="Failed to load backtests" className="alert alert-danger" />
       ) : results.length > 0 ? (
         <div className="card">
           <div className="card-header">
@@ -1068,7 +1063,7 @@ export function RuleSuggestions() {
       {suggestionsQuery.isLoading ? (
         <div className="loading">Analyzing patterns...</div>
       ) : suggestionsQuery.isError ? (
-         <div className="alert alert-error">Analysis failed: {suggestionsQuery.error?.message}</div>
+         <ErrorBanner error={suggestionsQuery.error} title="Analysis failed" className="alert alert-danger" />
       ) : suggestionsQuery.data && suggestionsQuery.data.suggestions.length > 0 ? (
         <div className="row">
            {suggestionsQuery.data.suggestions.map((s: any, idx: number) => (
