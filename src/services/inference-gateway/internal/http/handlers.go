@@ -49,6 +49,9 @@ func NewHandler(logger *slog.Logger, client InferenceClient, provider rules.Prov
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/evaluate/signal", h.handleEvaluateSignal)
 	mux.HandleFunc("/ready", h.handleReady)
+	for _, route := range notImplementedRoutes {
+		mux.HandleFunc(route, h.handleNotImplemented)
+	}
 }
 
 func (h *Handler) handleReady(w http.ResponseWriter, r *http.Request) {
