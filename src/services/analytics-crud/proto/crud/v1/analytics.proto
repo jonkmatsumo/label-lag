@@ -9,6 +9,7 @@ import "google/protobuf/timestamp.proto";
 service AnalyticsService {
   rpc GetDailyStats(GetDailyStatsRequest) returns (GetDailyStatsResponse);
   rpc GetTransactionDetails(GetTransactionDetailsRequest) returns (GetTransactionDetailsResponse);
+  rpc SearchTransactions(SearchTransactionsRequest) returns (SearchTransactionsResponse);
   rpc GetRecentAlerts(GetRecentAlertsRequest) returns (GetRecentAlertsResponse);
   rpc GetOverviewMetrics(GetOverviewMetricsRequest) returns (GetOverviewMetricsResponse);
   rpc GetDatasetFingerprint(GetDatasetFingerprintRequest) returns (GetDatasetFingerprintResponse);
@@ -59,6 +60,25 @@ message TransactionDetail {
 
 message GetTransactionDetailsResponse {
   repeated TransactionDetail transactions = 1;
+}
+
+message SearchTransactionsRequest {
+  string user_id = 1;
+  string transaction_id = 2;
+  optional double min_amount = 3;
+  optional double max_amount = 4;
+  string start_date = 5;
+  string end_date = 6;
+  optional bool is_fraudulent = 7;
+  optional int32 min_score = 8;
+  optional int32 max_score = 9;
+  int32 limit = 10;
+  int32 offset = 11;
+}
+
+message SearchTransactionsResponse {
+  repeated TransactionDetail transactions = 1;
+  int64 total = 2;
 }
 
 message GetRecentAlertsRequest {

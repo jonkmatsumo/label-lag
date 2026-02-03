@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.0
 // - protoc             v6.33.4
-// source: proto/crud/v1/analytics.proto
+// source: crud/v1/analytics.proto
 
 package crudv1
 
@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	AnalyticsService_GetDailyStats_FullMethodName         = "/crud.v1.AnalyticsService/GetDailyStats"
 	AnalyticsService_GetTransactionDetails_FullMethodName = "/crud.v1.AnalyticsService/GetTransactionDetails"
+	AnalyticsService_SearchTransactions_FullMethodName    = "/crud.v1.AnalyticsService/SearchTransactions"
 	AnalyticsService_GetRecentAlerts_FullMethodName       = "/crud.v1.AnalyticsService/GetRecentAlerts"
 	AnalyticsService_GetOverviewMetrics_FullMethodName    = "/crud.v1.AnalyticsService/GetOverviewMetrics"
 	AnalyticsService_GetDatasetFingerprint_FullMethodName = "/crud.v1.AnalyticsService/GetDatasetFingerprint"
@@ -34,6 +35,7 @@ const (
 type AnalyticsServiceClient interface {
 	GetDailyStats(ctx context.Context, in *GetDailyStatsRequest, opts ...grpc.CallOption) (*GetDailyStatsResponse, error)
 	GetTransactionDetails(ctx context.Context, in *GetTransactionDetailsRequest, opts ...grpc.CallOption) (*GetTransactionDetailsResponse, error)
+	SearchTransactions(ctx context.Context, in *SearchTransactionsRequest, opts ...grpc.CallOption) (*SearchTransactionsResponse, error)
 	GetRecentAlerts(ctx context.Context, in *GetRecentAlertsRequest, opts ...grpc.CallOption) (*GetRecentAlertsResponse, error)
 	GetOverviewMetrics(ctx context.Context, in *GetOverviewMetricsRequest, opts ...grpc.CallOption) (*GetOverviewMetricsResponse, error)
 	GetDatasetFingerprint(ctx context.Context, in *GetDatasetFingerprintRequest, opts ...grpc.CallOption) (*GetDatasetFingerprintResponse, error)
@@ -63,6 +65,16 @@ func (c *analyticsServiceClient) GetTransactionDetails(ctx context.Context, in *
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetTransactionDetailsResponse)
 	err := c.cc.Invoke(ctx, AnalyticsService_GetTransactionDetails_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *analyticsServiceClient) SearchTransactions(ctx context.Context, in *SearchTransactionsRequest, opts ...grpc.CallOption) (*SearchTransactionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SearchTransactionsResponse)
+	err := c.cc.Invoke(ctx, AnalyticsService_SearchTransactions_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -125,6 +137,7 @@ func (c *analyticsServiceClient) GetSchemaSummary(ctx context.Context, in *GetSc
 type AnalyticsServiceServer interface {
 	GetDailyStats(context.Context, *GetDailyStatsRequest) (*GetDailyStatsResponse, error)
 	GetTransactionDetails(context.Context, *GetTransactionDetailsRequest) (*GetTransactionDetailsResponse, error)
+	SearchTransactions(context.Context, *SearchTransactionsRequest) (*SearchTransactionsResponse, error)
 	GetRecentAlerts(context.Context, *GetRecentAlertsRequest) (*GetRecentAlertsResponse, error)
 	GetOverviewMetrics(context.Context, *GetOverviewMetricsRequest) (*GetOverviewMetricsResponse, error)
 	GetDatasetFingerprint(context.Context, *GetDatasetFingerprintRequest) (*GetDatasetFingerprintResponse, error)
@@ -145,6 +158,9 @@ func (UnimplementedAnalyticsServiceServer) GetDailyStats(context.Context, *GetDa
 }
 func (UnimplementedAnalyticsServiceServer) GetTransactionDetails(context.Context, *GetTransactionDetailsRequest) (*GetTransactionDetailsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetTransactionDetails not implemented")
+}
+func (UnimplementedAnalyticsServiceServer) SearchTransactions(context.Context, *SearchTransactionsRequest) (*SearchTransactionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SearchTransactions not implemented")
 }
 func (UnimplementedAnalyticsServiceServer) GetRecentAlerts(context.Context, *GetRecentAlertsRequest) (*GetRecentAlertsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetRecentAlerts not implemented")
@@ -214,6 +230,24 @@ func _AnalyticsService_GetTransactionDetails_Handler(srv interface{}, ctx contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AnalyticsServiceServer).GetTransactionDetails(ctx, req.(*GetTransactionDetailsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AnalyticsService_SearchTransactions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SearchTransactionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AnalyticsServiceServer).SearchTransactions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AnalyticsService_SearchTransactions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AnalyticsServiceServer).SearchTransactions(ctx, req.(*SearchTransactionsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -324,6 +358,10 @@ var AnalyticsService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _AnalyticsService_GetTransactionDetails_Handler,
 		},
 		{
+			MethodName: "SearchTransactions",
+			Handler:    _AnalyticsService_SearchTransactions_Handler,
+		},
+		{
 			MethodName: "GetRecentAlerts",
 			Handler:    _AnalyticsService_GetRecentAlerts_Handler,
 		},
@@ -345,5 +383,5 @@ var AnalyticsService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "proto/crud/v1/analytics.proto",
+	Metadata: "crud/v1/analytics.proto",
 }
