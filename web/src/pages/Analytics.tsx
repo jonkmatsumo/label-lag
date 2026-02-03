@@ -6,7 +6,7 @@ import {
   Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart 
 } from 'recharts';
 import { exportToCsv } from '../utils';
-import { Download, Search, Filter, ChevronDown, ChevronRight, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Download, Search, ChevronDown, ChevronRight, AlertTriangle, CheckCircle } from 'lucide-react';
 
 export function Analytics() {
   const [daysFilter, setDaysFilter] = useState(30);

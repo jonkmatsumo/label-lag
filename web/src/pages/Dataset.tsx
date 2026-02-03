@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { datasetApi } from '../api/dataset';
 import { monitoringApi } from '../api';
+import type { RelationshipMetric, CorrelationPair } from '../types/api';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
@@ -593,7 +594,7 @@ function RelationshipsTab({ featureColumns }: { featureColumns: string[] }) {
   );
 }
 
-function TargetRelationshipsTable({ data, isLoading, targetColumn, setTargetColumn, featureColumns }: any) {
+function TargetRelationshipsTable({ data, isLoading, targetColumn, setTargetColumn, featureColumns }: { data?: { relationships: RelationshipMetric[] }, isLoading: boolean, targetColumn: string, setTargetColumn: (v: string) => void, featureColumns: string[] }) {
   if (isLoading) return <div className="text-center p-5"><div className="spinner-border text-primary" /></div>;
 
   return (
@@ -620,7 +621,7 @@ function TargetRelationshipsTable({ data, isLoading, targetColumn, setTargetColu
           </thead>
           <tbody>
             {data?.relationships && data.relationships.length > 0 ? (
-              data.relationships.map((rel: any, idx: number) => (
+              data.relationships.map((rel: RelationshipMetric, idx: number) => (
                 <tr key={idx}>
                   <td className="fw-medium">{rel.feature_a}</td>
                   <td>
@@ -654,7 +655,7 @@ function TargetRelationshipsTable({ data, isLoading, targetColumn, setTargetColu
   );
 }
 
-function CorrelationHeatmap({ title, data, columns, isLoading, baseColor = "13, 110, 253" }: any) {
+function CorrelationHeatmap({ title, data, columns, isLoading, baseColor = "13, 110, 253" }: { title: string, data?: CorrelationPair[], columns?: string[], isLoading: boolean, baseColor?: string }) {
   if (isLoading) return <div className="text-center p-5"><div className="spinner-border text-primary" /></div>;
   if (!data || !columns || columns.length === 0) return <div className="text-muted text-center p-5 bg-light rounded border border-dashed">No numeric data available for correlation analysis.</div>;
 
@@ -663,7 +664,7 @@ function CorrelationHeatmap({ title, data, columns, isLoading, baseColor = "13, 
   
   // Create matrix map
   const matrix: Record<string, number> = {};
-  data.forEach((d: any) => {
+  data.forEach((d: CorrelationPair) => {
     matrix[`${d.feature_a}:${d.feature_b}`] = d.value;
   });
 

@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { DatasetCorrelationsResponse } from '../types/api';
+import type { DatasetCorrelationsResponse, RelationshipMetric } from '../types/api';
 
 export interface DatasetOverview {
   total_records: number;
@@ -46,7 +46,7 @@ export const datasetApi = {
     apiClient.get<{ samples: FeatureSample[] }>(`/bff/v1/dataset/sample?sample_size=${sampleSize}&stratify=${stratify}`),
 
   getRelationships: (sampleSize: number = 500, targetColumn: string = 'is_fraudulent') =>
-    apiClient.get<{ relationships: any[], target_column: string }>(`/bff/v1/dataset/relationships?sample_size=${sampleSize}&target_column=${targetColumn}`),
+    apiClient.get<{ relationships: RelationshipMetric[], target_column: string }>(`/bff/v1/dataset/relationships?sample_size=${sampleSize}&target_column=${targetColumn}`),
 
   getCorrelations: (sampleSize: number = 1000) =>
     apiClient.get<DatasetCorrelationsResponse>(`/bff/v1/dataset/correlations?sample_size=${sampleSize}`),
