@@ -136,6 +136,13 @@ class SuggestionEngine:
                     ))
         return suggestions
 
+    def create_ruleset_from_suggestions(
+        self, suggestions: list[RuleSuggestion], version: str = "suggested_v1"
+    ) -> RuleSet:
+        """Convert suggestions to a RuleSet in draft status."""
+        rules = [s.to_rule() for s in suggestions]
+        return RuleSet(version=version, rules=rules)
+
 
 class ModelAssistedSuggestionEngine:
     """Generates rule suggestions using model insights."""
@@ -194,6 +201,13 @@ class ModelAssistedSuggestionEngine:
             ))
         return suggestions
 
+    def create_ruleset_from_suggestions(
+        self, suggestions: list[RuleSuggestion], version: str = "suggested_v1"
+    ) -> RuleSet:
+        """Convert suggestions to a RuleSet in draft status."""
+        rules = [s.to_rule() for s in suggestions]
+        return RuleSet(version=version, rules=rules)
+
 
 _global_suggestion_engine = None
 
@@ -202,3 +216,9 @@ def get_suggestion_engine() -> SuggestionEngine:
     if _global_suggestion_engine is None:
         _global_suggestion_engine = SuggestionEngine()
     return _global_suggestion_engine
+
+
+def set_suggestion_engine(engine: SuggestionEngine) -> None:
+    """Set the global suggestion engine instance (for testing)."""
+    global _global_suggestion_engine
+    _global_suggestion_engine = engine

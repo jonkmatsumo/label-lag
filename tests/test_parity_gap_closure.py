@@ -67,35 +67,40 @@ class TestDatasetCorrelations:
             assert assoc["value"] > 0.9
 
 class TestTransactionSearch:
-    @patch("synthetic_pipeline.db.session.DatabaseSession")
-    def test_search_transactions_filters(self, mock_db_cls, client):
-        mock_db = MagicMock()
-        mock_db_cls.return_value = mock_db
-        mock_session = MagicMock()
-        mock_db.get_session.return_value.__enter__.return_value = mock_session
-        
-        # Mock results
-        mock_record = MagicMock()
-        mock_record.record_id = "txn_1"
-        mock_record.user_id = "user_1"
-        mock_record.amount = 100.0
-        mock_record.is_fraudulent = False
-        mock_record.fraud_type = None # This handles the None case
-        mock_record.transaction_timestamp = "2024-01-01T00:00:00" # ISO string for simplicity or datetime object if mocked properly
-        mock_record.is_off_hours_txn = False
-        mock_record.merchant_risk_score = 10
-        mock_record.bank_connections_count_24h = 1
-        mock_record.amount_to_avg_ratio = 1.0
-        mock_record.balance_volatility_z_score = 0.5
-        
-        mock_session.execute.return_value.scalars.return_value.all.return_value = [mock_record]
-        mock_session.execute.return_value.scalar.return_value = 1 # count
-        
+    @patch("api.main.get_crud_client")
+    def test_search_transactions_filters(self, mock_get_client, client):
+        from datetime import datetime, timezone
+
+        mock_client = MagicMock()
+        mock_get_client.return_value = mock_client
+
+        # Mock proto response
+        mock_txn = MagicMock()
+        mock_txn.record_id = "txn_1"
+        mock_txn.user_id = "user_1"
+        mock_txn.amount = 100.0
+        mock_txn.is_fraudulent = False
+        mock_txn.fraud_type = ""
+        mock_txn.is_off_hours_txn = False
+        mock_txn.merchant_risk_score = 10
+        mock_txn.velocity_24h = 1
+        mock_txn.amount_to_avg_ratio_30d = 1.0
+        mock_txn.balance_volatility_z_score = 0.5
+        mock_txn.created_at = MagicMock()
+        mock_txn.created_at.ToDatetime.return_value = datetime(2024, 1, 1, tzinfo=timezone.utc)
+        mock_txn.is_train_eligible = True
+        mock_txn.is_pre_fraud = False
+
+        mock_response = MagicMock()
+        mock_response.transactions = [mock_txn]
+        mock_response.total = 1
+        mock_client.search_transactions.return_value = mock_response
+
         response = client.post(
             "/analytics/transactions/search",
             json={"user_id": "user_1", "limit": 10}
         )
-        
+
         assert response.status_code == 200
         data = response.json()
         assert len(data["transactions"]) == 1

@@ -259,23 +259,36 @@ class TestModelAssistedSuggestionEngine:
         return manager
 
     @pytest.fixture
-    def mock_db_session(self):
-        """Create a mock database session."""
-        session = MagicMock()
-        mock_rows = [(10.0,), (5.0,), (15.0,), (8.0,), (20.0,)] * 20  # 100 samples
-        session.get_session.return_value.__enter__.return_value.execute.return_value = (
-            iter(mock_rows)
-        )
-        return session
+    def mock_analytics_client(self, monkeypatch):
+        """Create a mock analytics client."""
+        from api import crud_client
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        # Return samples with feature values
+        mock_client.get_feature_sample.return_value = mock_response
+        monkeypatch.setattr(crud_client, "_client", mock_client)
+        return mock_client
 
     @patch("api.suggestions.get_model_manager")
+    @patch("api.suggestions.MessageToDict")
     def test_generate_suggestions_from_model(
-        self, mock_get_manager, mock_model_manager, mock_db_session
+        self, mock_to_dict, mock_get_manager, mock_model_manager, mock_analytics_client
     ):
         """Test generating suggestions from model feature importance."""
         mock_get_manager.return_value = mock_model_manager
+        # Return sample feature data
+        mock_to_dict.return_value = {
+            "samples": [
+                {"velocity_24h": 10.0, "amount_to_avg_ratio_30d": 2.0, "balance_volatility_z_score": 0.5},
+                {"velocity_24h": 5.0, "amount_to_avg_ratio_30d": 1.5, "balance_volatility_z_score": 0.3},
+                {"velocity_24h": 15.0, "amount_to_avg_ratio_30d": 3.0, "balance_volatility_z_score": 0.8},
+                {"velocity_24h": 8.0, "amount_to_avg_ratio_30d": 2.5, "balance_volatility_z_score": 0.6},
+                {"velocity_24h": 20.0, "amount_to_avg_ratio_30d": 4.0, "balance_volatility_z_score": 1.0},
+            ] * 20  # 100 samples
+        }
 
-        engine = ModelAssistedSuggestionEngine(db_session=mock_db_session)
+        engine = ModelAssistedSuggestionEngine()
 
         suggestions = engine.generate_suggestions_from_model(sample_size=100)
 
@@ -284,15 +297,19 @@ class TestModelAssistedSuggestionEngine:
         assert all("feature_importance" in s.evidence for s in suggestions)
 
     @patch("api.suggestions.get_model_manager")
+    @patch("api.suggestions.MessageToDict")
     def test_suggestions_filtered_by_importance(
-        self, mock_get_manager, mock_model_manager, mock_db_session
+        self, mock_to_dict, mock_get_manager, mock_model_manager, mock_analytics_client
     ):
         """Test that suggestions are filtered by minimum importance."""
         mock_get_manager.return_value = mock_model_manager
+        mock_to_dict.return_value = {
+            "samples": [
+                {"velocity_24h": 10.0, "amount_to_avg_ratio_30d": 2.0, "balance_volatility_z_score": 0.5},
+            ] * 100
+        }
 
-        engine = ModelAssistedSuggestionEngine(
-            db_session=mock_db_session, min_importance=0.3
-        )
+        engine = ModelAssistedSuggestionEngine(min_importance=0.3)
 
         suggestions = engine.generate_suggestions_from_model()
 
@@ -300,23 +317,21 @@ class TestModelAssistedSuggestionEngine:
         assert all(s.evidence.get("feature_importance", 0) >= 0.3 for s in suggestions)
 
     @patch("api.suggestions.get_model_manager")
-    def test_no_suggestions_when_model_not_loaded(
-        self, mock_get_manager, mock_db_session
-    ):
+    def test_no_suggestions_when_model_not_loaded(self, mock_get_manager):
         """Test that no suggestions are generated when model is not loaded."""
         mock_manager = MagicMock()
         mock_manager.model_loaded = False
         mock_get_manager.return_value = mock_manager
 
-        engine = ModelAssistedSuggestionEngine(db_session=mock_db_session)
+        engine = ModelAssistedSuggestionEngine()
 
         suggestions = engine.generate_suggestions_from_model()
 
         assert len(suggestions) == 0
 
-    def test_create_ruleset_from_model_suggestions(self, mock_db_session):
+    def test_create_ruleset_from_model_suggestions(self):
         """Test creating a ruleset from model-assisted suggestions."""
-        engine = ModelAssistedSuggestionEngine(db_session=mock_db_session)
+        engine = ModelAssistedSuggestionEngine()
 
         suggestions = [
             RuleSuggestion(
