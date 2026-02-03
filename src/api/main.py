@@ -114,6 +114,7 @@ if TYPE_CHECKING:
     from synthetic_pipeline.models import EvaluationMetadata, GeneratedRecord
 
 # Configure logging
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
