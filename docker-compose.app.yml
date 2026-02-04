@@ -79,27 +79,6 @@ services:
     ports:
       - "${INFERENCE_GATEWAY_PORT:-8081}:8081"
 
-  dashboard:
-    build:
-      context: src/ui
-      dockerfile: Dockerfile
-    container_name: synthetic-data-dashboard
-    profiles: ["streamlit"]
-    environment:
-      - API_BASE_URL=http://api:8000
-      - MLFLOW_TRACKING_URI=http://mlflow:5000
-      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
-      - AWS_ACCESS_KEY_ID=minioadmin
-      - AWS_SECRET_ACCESS_KEY=minioadmin
-    networks:
-      - labellag_net
-    ports:
-      - "${DASHBOARD_PORT:-8501}:8501"
-    restart: unless-stopped
-    depends_on:
-      api:
-        condition: service_healthy
-
   generator:
     build:
       context: .

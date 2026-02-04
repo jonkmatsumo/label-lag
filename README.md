@@ -150,19 +150,6 @@ export BFF_GATEWAY_BASE_URL=http://localhost:8181
 cd bff && npm test tests/parity.test.ts
 ```
 
-### UI Modes
-
-You can control which UIs are started using Docker Compose profiles:
-
-- `UI_MODE=streamlit` (Starts only Streamlit)
-- `UI_MODE=react` (Starts React + BFF)
-- `UI_MODE=both` (Starts all - default if unset)
-
-Example:
-```bash
-COMPOSE_PROFILES=react docker compose ... up -d
-```
-
 ## Repository / File Structure
 
 The repo is organized around data flow and runtime boundaries so services can evolve independently while sharing a common domain model.
@@ -174,8 +161,7 @@ src/
 ├── monitor/             # Feature distribution monitoring and drift reporting
 ├── pipeline/            # Point-in-time feature materialization (SQL window functions)
 ├── generator/           # Stateful fraud profile simulation
-├── synthetic_pipeline/  # Core data generation, DB models
-└── ui/                  # Streamlit dashboard
+└── synthetic_pipeline/  # Core data generation, DB models
 bff/                     # Node.js BFF (Backend for Frontend) for React UI
 web/                     # React + TypeScript frontend
 ```
@@ -185,17 +171,12 @@ Key folders:
 - **`model/`**: Training workflows, evaluation metrics, and registry interactions.
 - **`pipeline/`**: Feature materialization and data correctness safeguards.
 - **`generator/`** and **`synthetic_pipeline/`**: Synthetic data creation, fraud patterns, and persistence.
-- **`ui/`**: Operator-facing workflows for training, evaluation, and rule management.
 
 ## Service-Level Breakdown
 
 ### API Service
 
 Responsible for live scoring, training triggers, rule lifecycle actions, and model deployment. It exposes evaluation and lifecycle endpoints (`/evaluate/signal`, `/train`, `/rules/{id}/publish`, `/models/deploy`) and serves Swagger docs at `/docs`. The API is compute-only and relies on the Go Analytics CRUD service for data access.
-
-### Dashboard (Streamlit)
-
-The UI consolidates operational workflows: live scoring, historical analytics, dataset exploration, model training and registry promotion, and rule authoring. It is the primary entry point for rule publishing, model deployment, and sandbox evaluation.
 
 ### Model Training & Registry (MLflow)
 
@@ -211,7 +192,7 @@ Provides the gRPC data access layer for compute-only services. The Python API, m
 
 ### Synthetic Data Generator
 
-Generates labeled transaction streams with controlled fraud patterns and label delay to support realistic training and backtesting. It can create data via the dashboard or CLI entrypoints.
+Generates labeled transaction streams with controlled fraud patterns and label delay to support realistic training and backtesting. It can create data via CLI entrypoints.
 
 Fraud patterns used by the generator:
 
@@ -242,7 +223,6 @@ DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5542/$
 DB_PORT=5542
 API_PORT=8100
 INFERENCE_GATEWAY_PORT=8181
-DASHBOARD_PORT=8601
 WEB_PORT=5180
 BFF_PORT=3210
 MLFLOW_PORT=5005

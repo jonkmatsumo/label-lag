@@ -4,14 +4,10 @@
 This document records evidence for legacy UI removal (Streamlit) and FastAPI
 endpoint pruning so cleanup stays safe and reversible.
 
-## Streamlit inventory (where it exists today)
-- Source: `src/ui/` (Streamlit app + Dockerfile)
-- Python deps: `pyproject.toml` includes `streamlit>=1.32.0`
-- Docker compose: `docker-compose.app.yml` uses Streamlit via profile `streamlit`
-- Docs:
-  - `README.md` sections mention Streamlit UI and ports
-  - `docs/parity/streamlit_readiness.md` parity checklist
-  - `CLAUDE.md` references `DASHBOARD_PORT`
+## Streamlit inventory (removed in Phase 6.3)
+- Source app removed (`src/ui/`)
+- Dependency removed from `pyproject.toml`
+- Compose profile and docs references cleaned up
 
 ## FastAPI endpoints still in use (as of Phase 5)
 Gateway:
