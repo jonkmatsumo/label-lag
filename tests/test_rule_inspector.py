@@ -27,13 +27,17 @@ def mock_gateway_client(monkeypatch):
 
     mock_client = MagicMock()
 
-    def side_effect(features, base_score, ruleset=None, request_id=None, shadow_mode=False):
+    def side_effect(
+        features, base_score, ruleset=None, request_id=None, shadow_mode=False
+    ):
         if ruleset:
             rules_obj = []
             for r in ruleset["rules"]:
                 # Real gateway would return 400 for invalid rule
                 if r["op"] not in [">", ">=", "<", "<=", "==", "in", "not_in"]:
-                    raise ValueError(f"invalid rules: [rule {r['id']}: invalid rule op {r['op']}]")
+                    raise ValueError(
+                        f"invalid rules: [rule {r['id']}: invalid rule op {r['op']}]"
+                    )
                 rules_obj.append(Rule(**r))
             rs = RuleSet(version=ruleset["version"], rules=rules_obj)
         else:
@@ -88,23 +92,30 @@ def mock_gateway_client(monkeypatch):
 
         return resp
 
-    def diff_side_effect(features, base_score, ruleset_a=None, ruleset_b=None, request_id=None, shadow_mode=False):
+    def diff_side_effect(
+        features,
+        base_score,
+        ruleset_a=None,
+        ruleset_b=None,
+        request_id=None,
+        shadow_mode=False,
+    ):
         resp_a = side_effect(features, base_score, ruleset_a, request_id, shadow_mode)
         resp_b = side_effect(features, base_score, ruleset_b, request_id, shadow_mode)
-        
+
         diff = {
             "score_delta": resp_b["final_score"] - resp_a["final_score"],
-            "matched_rules_added": [r for r in resp_b["matched_rules"] if r not in resp_a["matched_rules"]],
-            "matched_rules_removed": [r for r in resp_a["matched_rules"] if r not in resp_b["matched_rules"]],
+            "matched_rules_added": [
+                r for r in resp_b["matched_rules"] if r not in resp_a["matched_rules"]
+            ],
+            "matched_rules_removed": [
+                r for r in resp_a["matched_rules"] if r not in resp_b["matched_rules"]
+            ],
         }
         if shadow_mode:
             diff["score_delta"] = resp_b["shadow_score"] - resp_a["shadow_score"]
-            
-        return {
-            "a": resp_a,
-            "b": resp_b,
-            "diff": diff
-        }
+
+        return {"a": resp_a, "b": resp_b, "diff": diff}
 
     mock_client.evaluate_rules.side_effect = side_effect
     mock_client.diff_rules.side_effect = diff_side_effect

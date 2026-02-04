@@ -80,8 +80,12 @@ class SignalForecaster:
         else:
             fallback_mode = os.getenv("FORECASTER_FALLBACK_MODE", "probability")
             if fallback_mode == "error":
-                reason = "model not loaded" if not manager.model_loaded else "no history"
-                raise RuntimeError(f"Forecaster fallback triggered (mode=error): {reason}")
+                reason = (
+                    "model not loaded" if not manager.model_loaded else "no history"
+                )
+                raise RuntimeError(
+                    f"Forecaster fallback triggered (mode=error): {reason}"
+                )
 
             fallback_used = True
             if os.getenv("DISABLE_HEURISTIC_FALLBACK") == "true":

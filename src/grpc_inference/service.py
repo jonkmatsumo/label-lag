@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 class InferenceService(inference_pb2_grpc.InferenceServiceServicer):
     """gRPC service for fraud signal forecasting."""
+
     def __init__(self, config: GRPCInferenceConfig):
         self._config = config
         self._forecaster = SignalForecaster()
@@ -44,7 +45,7 @@ class InferenceService(inference_pb2_grpc.InferenceServiceServicer):
                 "client_transaction_id is required",
             )
 
-        request_id = request.request_id or _generate_request_id()
+        request.request_id or _generate_request_id()
         currency = request.currency or "USD"
 
         try:

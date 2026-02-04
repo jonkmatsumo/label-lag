@@ -85,7 +85,6 @@ class BacktestRunner:
         rule_id: str | None = None,
     ) -> BacktestResult:
         """Run a backtest on historical data."""
-        import os
         from dataclasses import asdict
 
         from api.gateway_client import get_gateway_client

@@ -555,8 +555,12 @@ class RulesDiffSummary(BaseModel):
 class SandboxDiffResponse(BaseModel):
     """Response schema for sandbox ruleset comparison."""
 
-    a: SandboxEvaluateResponse = Field(..., description="Evaluation result for ruleset A")
-    b: SandboxEvaluateResponse = Field(..., description="Evaluation result for ruleset B")
+    a: SandboxEvaluateResponse = Field(
+        ..., description="Evaluation result for ruleset A"
+    )
+    b: SandboxEvaluateResponse = Field(
+        ..., description="Evaluation result for ruleset B"
+    )
     diff: RulesDiffSummary = Field(..., description="Summary of differences")
 
 

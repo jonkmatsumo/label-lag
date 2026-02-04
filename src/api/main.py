@@ -96,7 +96,6 @@ from api.schemas import (
     ShadowRuleRequest,
     ShadowRuleResponse,
     SignalRequest,
-    SignalResponse,
     SuggestionEvidence,
     SuggestionsListResponse,
     TrainRequest,
@@ -155,7 +154,9 @@ async def health_check() -> HealthResponse:
     forecaster = get_forecaster()
 
     # Use model manager version if available, otherwise fall back to forecaster
-    version = manager.model_version if manager.model_loaded else forecaster.model_version
+    version = (
+        manager.model_version if manager.model_loaded else forecaster.model_version
+    )
 
     return HealthResponse(
         status="healthy",
