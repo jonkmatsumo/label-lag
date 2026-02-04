@@ -87,7 +87,7 @@ class SignalEvaluator:
         else:
             # Fall back to rule-based scoring
             if os.getenv("DISABLE_HEURISTIC_FALLBACK") == "true":
-                raw_probability = 0.05 # Base probability
+                raw_probability = 0.05  # Base probability
             else:
                 raw_probability = self._calculate_probability(features)
             model_version = self.model_version
