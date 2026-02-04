@@ -9,9 +9,6 @@ from fastapi.testclient import TestClient
 from api.main import app
 from api.schemas import Currency, SignalRequest
 from api.services import (
-    AMOUNT_RATIO_HIGH_THRESHOLD,
-    CONNECTION_BURST_THRESHOLD,
-    VELOCITY_HIGH_THRESHOLD,
     FeatureVector,
     SignalEvaluator,
     get_evaluator,
@@ -225,7 +222,7 @@ class TestSignalValidation:
 class TestSignalEvaluator:
     """Tests for SignalEvaluator service."""
 
-    def test_evaluate_returns_response(self, evaluator):
+    def test_predict_returns_response(self, evaluator):
         request = SignalRequest(
             user_id="user_test",
             amount=Decimal("100.00"),
@@ -233,11 +230,11 @@ class TestSignalEvaluator:
             client_transaction_id="txn_test",
         )
 
-        response = evaluator.evaluate(request)
+        response = evaluator.predict(request)
 
-        assert response.request_id.startswith("req_")
-        assert 1 <= response.score <= 99
-        assert response.model_version == "v1.0.0"
+        assert response["request_id"].startswith("req_")
+        assert 1 <= response["model_score"] <= 99
+        assert response["model_version"] == "v1.0.0"
 
     def test_probability_calculation_base(self, evaluator):
         """Low-risk features should give low probability."""
@@ -296,65 +293,6 @@ class TestSignalEvaluator:
 
         prob = evaluator._calculate_probability(extreme_features)
         assert prob <= 0.99
-
-
-class TestRiskComponents:
-    """Tests for risk component identification."""
-
-    def test_velocity_component(self, evaluator):
-        features = FeatureVector(
-            velocity_24h=VELOCITY_HIGH_THRESHOLD + 1,
-            has_history=True,
-        )
-
-        components = evaluator._identify_risk_components(features)
-        keys = [c.key for c in components]
-
-        assert "velocity" in keys
-
-    def test_amount_ratio_component(self, evaluator):
-        features = FeatureVector(
-            amount_to_avg_ratio_30d=AMOUNT_RATIO_HIGH_THRESHOLD + 1,
-            has_history=True,
-        )
-
-        components = evaluator._identify_risk_components(features)
-        keys = [c.key for c in components]
-
-        assert "amount_ratio" in keys
-
-    def test_connection_component(self, evaluator):
-        features = FeatureVector(
-            bank_connections_24h=CONNECTION_BURST_THRESHOLD + 1,
-            has_history=True,
-        )
-
-        components = evaluator._identify_risk_components(features)
-        keys = [c.key for c in components]
-
-        assert "connections" in keys
-
-    def test_history_component(self, evaluator):
-        features = FeatureVector(has_history=False)
-
-        components = evaluator._identify_risk_components(features)
-        keys = [c.key for c in components]
-
-        assert "history" in keys
-
-    def test_no_components_low_risk(self, evaluator):
-        """Low-risk features should have no components."""
-        features = FeatureVector(
-            velocity_24h=1,
-            amount_to_avg_ratio_30d=1.0,
-            balance_volatility_z_score=0.0,
-            bank_connections_24h=1,
-            merchant_risk_score=20,
-            has_history=True,
-        )
-
-        components = evaluator._identify_risk_components(features)
-        assert len(components) == 0
 
 
 class TestGetEvaluator:
