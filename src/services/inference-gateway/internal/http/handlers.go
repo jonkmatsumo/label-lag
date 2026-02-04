@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"hash/fnv"
 	"io"
 	"log/slog"
 	"math"
@@ -170,10 +171,33 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 		requestID = requestid.FromContext(r.Context())
 	}
 
+	// Feature Hydration: Move ownership to Go
 	features := map[string]any{}
-	if inferenceResp.FeaturesUsed != nil {
-		features = inferenceResp.FeaturesUsed.AsMap()
+
+	// 1. Try to fetch from Analytics
+	if h.analyticsClient != nil {
+		hydrated, err := h.analyticsClient.GetFeatures(r.Context(), req.UserId)
+		if err != nil {
+			h.logger.Warn("failed to hydrate features from analytics", "error", err, "user_id", req.UserId)
+		} else if hydrated != nil {
+			features = hydrated
+		} else {
+			// 2. Fallback to simulation for unknown users (matching Python behavior)
+			features = simulateFeatures(req.UserId, req.Amount)
+		}
 	}
+
+	// 3. Merge with features from Python gRPC (diagnostics/prediction features)
+	if inferenceResp.FeaturesUsed != nil {
+		for k, v := range inferenceResp.FeaturesUsed.AsMap() {
+			if _, exists := features[k]; !exists {
+				features[k] = v
+			}
+		}
+	}
+
+	// Add transaction specific features
+	features["transaction_amount"] = req.Amount
 
 	ruleset, err := h.rulesProvider.GetRules(r.Context())
 	if err != nil {
@@ -385,5 +409,28 @@ func toFloat(value any) float64 {
 		return v
 	default:
 		return 0
+	}
+}
+
+func simulateFeatures(userID string, amount float64) map[string]any {
+	// Deterministic hash matching Python's approach
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(userID))
+	userHash := int(h.Sum32() % 1000)
+
+	velocity := (userHash % 10) + 1
+	amountRatio := 0.5 + float64(userHash%50)/10.0
+	balanceZ := -3.0 + float64(userHash%60)/10.0
+	connections := userHash % 8
+	merchantRisk := userHash % 100
+
+	return map[string]any{
+		"velocity_24h":               float64(velocity),
+		"amount_to_avg_ratio_30d":    amountRatio,
+		"balance_volatility_z_score": balanceZ,
+		"bank_connections_24h":       float64(connections),
+		"merchant_risk_score":        float64(merchantRisk),
+		"has_history":                false,
+		"transaction_amount":         amount,
 	}
 }
