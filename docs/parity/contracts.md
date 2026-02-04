@@ -4,7 +4,15 @@ This document defines the shared contracts for inference and rule governance bet
 
 ## 1. Inference Response
 
-Both the API (`POST /evaluate/signal`) and the Gateway (`POST /evaluate/signal`) must return this structure:
+Both the API (`POST /evaluate/signal` - **DEPRECATED**) and the Gateway (`POST /evaluate/signal` - **CANONICAL**) must return this structure:
+
+...
+
+### Forecaster Boundary (Python)
+As of Feb 2026, Python API is migrating to a **pure forecaster** role.
+*   **CANONICAL**: `POST /predict/signal` returns calibrated model scores only.
+*   **DEPRECATED**: `POST /evaluate/signal` remains for rollback and shadowing but will be removed.
+*   **OWNER**: Go Inference Gateway owns all rule evaluation and final decisioning.
 
 ```json
 {
