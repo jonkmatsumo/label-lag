@@ -70,6 +70,117 @@ describe('HttpClient Timeouts and Retries', () => {
     expect(response.data.ok).toBe(true);
   });
 
+  it('should retry GET requests on 504', async () => {
+    const client = new HttpClient({ config, logger });
+    const mockPool = mockAgent.get('http://api');
+
+    mockPool.intercept({
+      path: '/flaky-504',
+      method: 'GET'
+    }).reply(504, { error: 'Gateway Timeout' });
+
+    mockPool.intercept({
+      path: '/flaky-504',
+      method: 'GET'
+    }).reply(200, { ok: true });
+
+    const response = await client.request<{ ok: boolean }>({
+      method: 'GET',
+      path: '/flaky-504',
+      requestId: 'req504'
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.data.ok).toBe(true);
+  });
+
+  it('should retry GET requests on timeout', async () => {
+    const client = new HttpClient({ config, logger });
+    const mockPool = mockAgent.get('http://api');
+
+    mockPool.intercept({
+      path: '/timeout-then-ok',
+      method: 'GET'
+    }).reply(200, { ok: true }).delay(100);
+
+    mockPool.intercept({
+      path: '/timeout-then-ok',
+      method: 'GET'
+    }).reply(200, { ok: true });
+
+    const response = await client.request<{ ok: boolean }>({
+      method: 'GET',
+      path: '/timeout-then-ok',
+      requestId: 'req-timeout'
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.data.ok).toBe(true);
+  });
+
+  it('should NOT retry GET requests on 501', async () => {
+    const client = new HttpClient({ config, logger });
+    const mockPool = mockAgent.get('http://api');
+
+    mockPool.intercept({
+      path: '/not-implemented',
+      method: 'GET'
+    }).reply(501, { error: 'not_implemented' });
+
+    mockPool.intercept({
+      path: '/not-implemented',
+      method: 'GET'
+    }).reply(200, { ok: true });
+
+    await expect(client.request({
+      method: 'GET',
+      path: '/not-implemented',
+      requestId: 'req-501'
+    })).rejects.toThrow('not_implemented');
+  });
+
+  it('should NOT retry GET requests on 400', async () => {
+    const client = new HttpClient({ config, logger });
+    const mockPool = mockAgent.get('http://api');
+
+    mockPool.intercept({
+      path: '/bad-request',
+      method: 'GET'
+    }).reply(400, { detail: 'bad request' });
+
+    mockPool.intercept({
+      path: '/bad-request',
+      method: 'GET'
+    }).reply(200, { ok: true });
+
+    await expect(client.request({
+      method: 'GET',
+      path: '/bad-request',
+      requestId: 'req-400'
+    })).rejects.toThrow('bad request');
+  });
+
+  it('should NOT retry GET requests on non-503/504 5xx', async () => {
+    const client = new HttpClient({ config, logger });
+    const mockPool = mockAgent.get('http://api');
+
+    mockPool.intercept({
+      path: '/server-error',
+      method: 'GET'
+    }).reply(500, { detail: 'boom' });
+
+    mockPool.intercept({
+      path: '/server-error',
+      method: 'GET'
+    }).reply(200, { ok: true });
+
+    await expect(client.request({
+      method: 'GET',
+      path: '/server-error',
+      requestId: 'req-500'
+    })).rejects.toThrow('boom');
+  });
+
   it('should NOT retry POST requests', async () => {
     const client = new HttpClient({ config, logger });
     const mockPool = mockAgent.get('http://api');
