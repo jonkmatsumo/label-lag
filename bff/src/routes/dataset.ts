@@ -20,6 +20,7 @@ export async function datasetRoutes(
           method: 'GET',
           path: '/analytics/overview', // Proxies to Python API
           requestId: request.requestId,
+          target: 'gateway',
         });
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
@@ -40,6 +41,7 @@ export async function datasetRoutes(
           method: 'GET',
           path: '/analytics/schema',
           requestId: request.requestId,
+          target: 'gateway',
         });
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
@@ -128,6 +130,7 @@ export async function datasetRoutes(
           path: '/analytics/feature-sample',
           query: request.query as Record<string, string | number | boolean>,
           requestId: request.requestId,
+          target: 'gateway',
         });
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {

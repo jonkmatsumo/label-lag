@@ -24,6 +24,7 @@ export interface TestContext {
   config: Config;
   mockAgent: MockAgent;
   mockPool: ReturnType<MockAgent['get']>;
+  mockGatewayPool: ReturnType<MockAgent['get']>;
   originalDispatcher: Dispatcher;
 }
 
@@ -55,6 +56,7 @@ export async function createTestApp(config?: Config): Promise<TestContext> {
 
   // Create a mock pool for the FastAPI backend
   const mockPool = mockAgent.get('http://mock-api:8000');
+  const mockGatewayPool = mockAgent.get('http://mock-gateway:8081');
 
   const logger = pino({ level: 'silent' });
 
@@ -83,7 +85,7 @@ export async function createTestApp(config?: Config): Promise<TestContext> {
   await app.register(datasetRoutes, { httpClient });
   await app.register(mlflowRoutes, { httpClient, mlflowTrackingUri: testConfig.mlflowTrackingUri });
 
-  return { app, config: testConfig, mockAgent, mockPool, originalDispatcher };
+  return { app, config: testConfig, mockAgent, mockPool, mockGatewayPool, originalDispatcher };
 }
 
 export function restoreDispatcher(originalDispatcher: Dispatcher): void {

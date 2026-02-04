@@ -63,6 +63,7 @@ export async function backtestRoutes(
           path: '/backtest/results',
           query,
           requestId: request.requestId,
+          target: 'gateway',
         });
 
         return reply.status(response.statusCode).send(response.data);
