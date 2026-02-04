@@ -271,6 +271,106 @@ func TestHandleAnalyticsDailyStats(t *testing.T) {
 	}
 }
 
+func TestHandleAnalyticsTransactions(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	stub := &stubAnalyticsClient{
+		transactionDetailsResp: &crudv1.GetTransactionDetailsResponse{
+			Transactions: []*crudv1.TransactionDetail{
+				{
+					RecordId:                "rec-1",
+					UserId:                  "user-1",
+					CreatedAt:               timestamppb.New(time.Date(2025, 2, 1, 2, 3, 4, 0, time.UTC)),
+					IsTrainEligible:         true,
+					IsPreFraud:              false,
+					Amount:                  99.5,
+					IsFraudulent:            false,
+					FraudType:               "",
+					IsOffHoursTxn:           false,
+					MerchantRiskScore:       12,
+					Velocity_24H:            3,
+					AmountToAvgRatio_30D:    1.2,
+					BalanceVolatilityZScore: 0.4,
+				},
+			},
+		},
+	}
+	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024)
+
+	req := httptest.NewRequest(http.MethodGet, "/analytics/transactions", nil)
+	rec := httptest.NewRecorder()
+
+	handler.handleAnalyticsTransactions(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if stub.lastTransactionDetailsReq == nil || stub.lastTransactionDetailsReq.GetDays() != 7 || stub.lastTransactionDetailsReq.GetLimit() != 1000 {
+		t.Fatalf("expected default days and limit, got %v", stub.lastTransactionDetailsReq)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	txs, ok := payload["transactions"].([]any)
+	if !ok || len(txs) != 1 {
+		t.Fatalf("expected 1 transaction, got %v", payload["transactions"])
+	}
+	tx := txs[0].(map[string]any)
+	if tx["record_id"] != "rec-1" {
+		t.Fatalf("expected record_id rec-1, got %v", tx["record_id"])
+	}
+}
+
+func TestHandleAnalyticsRecentAlerts(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	stub := &stubAnalyticsClient{
+		recentAlertsResp: &crudv1.GetRecentAlertsResponse{
+			Alerts: []*crudv1.Alert{
+				{
+					RecordId:                "rec-1",
+					UserId:                  "user-1",
+					CreatedAt:               timestamppb.New(time.Date(2025, 2, 1, 2, 3, 4, 0, time.UTC)),
+					Amount:                  250.75,
+					IsFraudulent:            true,
+					FraudType:               "stolen",
+					MerchantRiskScore:       15,
+					Velocity_24H:            2,
+					AmountToAvgRatio_30D:    1.1,
+					BalanceVolatilityZScore: 0.5,
+					ComputedRiskScore:       99,
+				},
+			},
+		},
+	}
+	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024)
+
+	req := httptest.NewRequest(http.MethodGet, "/analytics/recent-alerts", nil)
+	rec := httptest.NewRecorder()
+
+	handler.handleAnalyticsRecentAlerts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if stub.lastRecentAlertsReq == nil || stub.lastRecentAlertsReq.GetLimit() != 50 {
+		t.Fatalf("expected default limit 50, got %v", stub.lastRecentAlertsReq)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	alerts, ok := payload["alerts"].([]any)
+	if !ok || len(alerts) != 1 {
+		t.Fatalf("expected 1 alert, got %v", payload["alerts"])
+	}
+	alert := alerts[0].(map[string]any)
+	if alert["record_id"] != "rec-1" {
+		t.Fatalf("expected record_id rec-1, got %v", alert["record_id"])
+	}
+}
+
 type stubInferenceClient struct {
 	readyErr error
 }
@@ -284,13 +384,17 @@ func (s stubInferenceClient) Score(context.Context, *inferencev1.ScoreRequest) (
 }
 
 type stubAnalyticsClient struct {
-	resp              *crudv1.SearchTransactionsResponse
-	dailyStatsResp    *crudv1.GetDailyStatsResponse
-	overviewResp      *crudv1.GetOverviewMetricsResponse
-	err               error
-	lastReq           *crudv1.SearchTransactionsRequest
-	lastDailyStatsReq *crudv1.GetDailyStatsRequest
-	lastOverviewReq   *crudv1.GetOverviewMetricsRequest
+	resp                      *crudv1.SearchTransactionsResponse
+	dailyStatsResp            *crudv1.GetDailyStatsResponse
+	overviewResp              *crudv1.GetOverviewMetricsResponse
+	transactionDetailsResp    *crudv1.GetTransactionDetailsResponse
+	recentAlertsResp          *crudv1.GetRecentAlertsResponse
+	err                       error
+	lastReq                   *crudv1.SearchTransactionsRequest
+	lastDailyStatsReq         *crudv1.GetDailyStatsRequest
+	lastOverviewReq           *crudv1.GetOverviewMetricsRequest
+	lastTransactionDetailsReq *crudv1.GetTransactionDetailsRequest
+	lastRecentAlertsReq       *crudv1.GetRecentAlertsRequest
 }
 
 func (s *stubAnalyticsClient) SearchTransactions(ctx context.Context, req *crudv1.SearchTransactionsRequest) (*crudv1.SearchTransactionsResponse, error) {
@@ -306,6 +410,16 @@ func (s *stubAnalyticsClient) GetDailyStats(ctx context.Context, req *crudv1.Get
 func (s *stubAnalyticsClient) GetOverviewMetrics(ctx context.Context, req *crudv1.GetOverviewMetricsRequest) (*crudv1.GetOverviewMetricsResponse, error) {
 	s.lastOverviewReq = req
 	return s.overviewResp, s.err
+}
+
+func (s *stubAnalyticsClient) GetTransactionDetails(ctx context.Context, req *crudv1.GetTransactionDetailsRequest) (*crudv1.GetTransactionDetailsResponse, error) {
+	s.lastTransactionDetailsReq = req
+	return s.transactionDetailsResp, s.err
+}
+
+func (s *stubAnalyticsClient) GetRecentAlerts(ctx context.Context, req *crudv1.GetRecentAlertsRequest) (*crudv1.GetRecentAlertsResponse, error) {
+	s.lastRecentAlertsReq = req
+	return s.recentAlertsResp, s.err
 }
 
 type errProvider struct{}

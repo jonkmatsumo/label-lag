@@ -65,7 +65,7 @@ func (h *Handler) handleAnalyticsDailyStats(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	days, err := parseDaysQuery(r, 30, 1, 90)
+	days, err := parseIntQuery(r, "days", 30, 1, 90)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -92,9 +92,110 @@ func (h *Handler) handleAnalyticsDailyStats(w http.ResponseWriter, r *http.Reque
 	writeAnalyticsJSON(w, dailyStatsResponse{Stats: stats})
 }
 
-func (h *Handler) handleAnalyticsTransactions(w http.ResponseWriter, r *http.Request) {}
+func (h *Handler) handleAnalyticsTransactions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
 
-func (h *Handler) handleAnalyticsRecentAlerts(w http.ResponseWriter, r *http.Request) {}
+	if h.analyticsClient == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "analytics backend unavailable")
+		return
+	}
+
+	days, err := parseIntQuery(r, "days", 7, 1, 30)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	limit, err := parseIntQuery(r, "limit", 1000, 1, 5000)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	resp, err := h.analyticsClient.GetTransactionDetails(r.Context(), &crudv1.GetTransactionDetailsRequest{
+		Days:  days,
+		Limit: limit,
+	})
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	transactions := make([]transactionDetailResponse, 0, len(resp.GetTransactions()))
+	for _, tx := range resp.GetTransactions() {
+		createdAt := ""
+		if tx.GetCreatedAt() != nil {
+			createdAt = tx.GetCreatedAt().AsTime().UTC().Format(time.RFC3339)
+		}
+		transactions = append(transactions, transactionDetailResponse{
+			RecordID:                tx.GetRecordId(),
+			UserID:                  tx.GetUserId(),
+			CreatedAt:               createdAt,
+			IsTrainEligible:         tx.GetIsTrainEligible(),
+			IsPreFraud:              tx.GetIsPreFraud(),
+			Amount:                  tx.GetAmount(),
+			IsFraudulent:            tx.GetIsFraudulent(),
+			FraudType:               tx.GetFraudType(),
+			IsOffHoursTxn:           tx.GetIsOffHoursTxn(),
+			MerchantRiskScore:       tx.GetMerchantRiskScore(),
+			Velocity24H:             tx.GetVelocity_24H(),
+			AmountToAvgRatio30D:     tx.GetAmountToAvgRatio_30D(),
+			BalanceVolatilityZScore: tx.GetBalanceVolatilityZScore(),
+		})
+	}
+
+	writeAnalyticsJSON(w, transactionDetailsResponse{Transactions: transactions})
+}
+
+func (h *Handler) handleAnalyticsRecentAlerts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if h.analyticsClient == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "analytics backend unavailable")
+		return
+	}
+
+	limit, err := parseIntQuery(r, "limit", 50, 1, 200)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	resp, err := h.analyticsClient.GetRecentAlerts(r.Context(), &crudv1.GetRecentAlertsRequest{Limit: limit})
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	alerts := make([]alertResponse, 0, len(resp.GetAlerts()))
+	for _, alert := range resp.GetAlerts() {
+		createdAt := ""
+		if alert.GetCreatedAt() != nil {
+			createdAt = alert.GetCreatedAt().AsTime().UTC().Format(time.RFC3339)
+		}
+		alerts = append(alerts, alertResponse{
+			RecordID:                alert.GetRecordId(),
+			UserID:                  alert.GetUserId(),
+			CreatedAt:               createdAt,
+			Amount:                  alert.GetAmount(),
+			IsFraudulent:            alert.GetIsFraudulent(),
+			FraudType:               alert.GetFraudType(),
+			MerchantRiskScore:       alert.GetMerchantRiskScore(),
+			Velocity24H:             alert.GetVelocity_24H(),
+			AmountToAvgRatio30D:     alert.GetAmountToAvgRatio_30D(),
+			BalanceVolatilityZScore: alert.GetBalanceVolatilityZScore(),
+			ComputedRiskScore:       alert.GetComputedRiskScore(),
+		})
+	}
+
+	writeAnalyticsJSON(w, recentAlertsResponse{Alerts: alerts})
+}
 
 func (h *Handler) handleAnalyticsFingerprint(w http.ResponseWriter, r *http.Request) {}
 
@@ -104,17 +205,17 @@ func (h *Handler) handleAnalyticsSchema(w http.ResponseWriter, r *http.Request) 
 
 func (h *Handler) handleAnalyticsAttribution(w http.ResponseWriter, r *http.Request) {}
 
-func parseDaysQuery(r *http.Request, defaultDays, minDays, maxDays int32) (int32, error) {
-	raw := r.URL.Query().Get("days")
+func parseIntQuery(r *http.Request, name string, defaultValue, minValue, maxValue int32) (int32, error) {
+	raw := r.URL.Query().Get(name)
 	if raw == "" {
-		return defaultDays, nil
+		return defaultValue, nil
 	}
 	value, err := strconv.Atoi(raw)
 	if err != nil {
-		return 0, errors.New("invalid days parameter")
+		return 0, errors.New("invalid query parameter")
 	}
-	if value < int(minDays) || value > int(maxDays) {
-		return 0, errors.New("days parameter out of range")
+	if value < int(minValue) || value > int(maxValue) {
+		return 0, errors.New("query parameter out of range")
 	}
 	return int32(value), nil
 }
@@ -156,4 +257,26 @@ type dailyStatResponse struct {
 
 type dailyStatsResponse struct {
 	Stats []dailyStatResponse `json:"stats"`
+}
+
+type transactionDetailsResponse struct {
+	Transactions []transactionDetailResponse `json:"transactions"`
+}
+
+type alertResponse struct {
+	RecordID                string  `json:"record_id"`
+	UserID                  string  `json:"user_id"`
+	CreatedAt               string  `json:"created_at"`
+	Amount                  float64 `json:"amount"`
+	IsFraudulent            bool    `json:"is_fraudulent"`
+	FraudType               string  `json:"fraud_type"`
+	MerchantRiskScore       int32   `json:"merchant_risk_score"`
+	Velocity24H             int32   `json:"velocity_24h"`
+	AmountToAvgRatio30D     float64 `json:"amount_to_avg_ratio_30d"`
+	BalanceVolatilityZScore float64 `json:"balance_volatility_z_score"`
+	ComputedRiskScore       int32   `json:"computed_risk_score"`
+}
+
+type recentAlertsResponse struct {
+	Alerts []alertResponse `json:"alerts"`
 }
