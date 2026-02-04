@@ -15,6 +15,7 @@ export interface Config {
   corsOrigin: string;
   logLevel: string;
   testMode: boolean;
+  useLegacyEvaluation: boolean;
 }
 
 function getEnvOrDefault(key: string, defaultValue: string): string {
@@ -48,5 +49,6 @@ export function loadConfig(): Config {
     corsOrigin: getEnvOrDefault('BFF_CORS_ORIGIN', 'true'), // 'true' means reflect origin (dev), or comma-separated list
     logLevel: getEnvOrDefault('BFF_LOG_LEVEL', 'info'),
     testMode: getEnvAsBool('BFF_TEST_MODE', false),
+    useLegacyEvaluation: getEnvAsBool('BFF_USE_LEGACY_EVALUATION', false),
   };
 }

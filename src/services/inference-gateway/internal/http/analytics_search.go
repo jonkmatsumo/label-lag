@@ -23,6 +23,7 @@ type AnalyticsClient interface {
 	GetFeatureSample(ctx context.Context, req *crudv1.GetFeatureSampleRequest) (*crudv1.GetFeatureSampleResponse, error)
 	GetSchemaSummary(ctx context.Context, req *crudv1.GetSchemaSummaryRequest) (*crudv1.GetSchemaSummaryResponse, error)
 	ListBacktestResults(ctx context.Context, req *crudv1.ListBacktestResultsRequest) (*crudv1.ListBacktestResultsResponse, error)
+	GetFeatures(ctx context.Context, userID string) (map[string]any, error)
 }
 
 type searchTransactionsRequest struct {

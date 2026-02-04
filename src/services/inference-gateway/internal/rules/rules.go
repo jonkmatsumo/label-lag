@@ -100,13 +100,11 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset RuleSet) (
 				if rule.Score == nil {
 					return RuleResult{}, errors.New("override_score requires score")
 				}
-				if !rejected {
-					score = *rule.Score
-				}
+				score = *rule.Score
 				overrideApplied = true
 			}
 		case "clamp_min":
-			if !overrideApplied && !rejected {
+			if !overrideApplied {
 				if rule.Score == nil {
 					return RuleResult{}, errors.New("clamp_min requires score")
 				}
@@ -115,7 +113,7 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset RuleSet) (
 				}
 			}
 		case "clamp_max":
-			if !overrideApplied && !rejected {
+			if !overrideApplied {
 				if rule.Score == nil {
 					return RuleResult{}, errors.New("clamp_max requires score")
 				}

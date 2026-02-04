@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"hash/fnv"
 	"io"
 	"log/slog"
 	"math"
@@ -27,24 +29,32 @@ type InferenceClient interface {
 	Ready(ctx context.Context) error
 }
 
-type Handler struct {
-	logger          *slog.Logger
-	inferenceClient InferenceClient
-	analyticsClient AnalyticsClient
-	rulesProvider   rules.Provider
-	maxBodyBytes    int64
+type LegacyDecisionClient interface {
+	Evaluate(ctx context.Context, req *gatewayv1.SignalRequest) (*gatewayv1.SignalResponse, error)
 }
 
-func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient AnalyticsClient, provider rules.Provider, maxBodyBytes int64) *Handler {
+type Handler struct {
+	logger           *slog.Logger
+	inferenceClient  InferenceClient
+	analyticsClient  AnalyticsClient
+	rulesProvider    rules.Provider
+	legacyClient     LegacyDecisionClient
+	enableShadowMode bool
+	maxBodyBytes     int64
+}
+
+func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient AnalyticsClient, provider rules.Provider, legacyClient LegacyDecisionClient, enableShadowMode bool, maxBodyBytes int64) *Handler {
 	if maxBodyBytes <= 0 {
 		maxBodyBytes = 1 << 20
 	}
 	return &Handler{
-		logger:          logger,
-		inferenceClient: client,
-		analyticsClient: analyticsClient,
-		rulesProvider:   provider,
-		maxBodyBytes:    maxBodyBytes,
+		logger:           logger,
+		inferenceClient:  client,
+		analyticsClient:  analyticsClient,
+		rulesProvider:    provider,
+		legacyClient:     legacyClient,
+		enableShadowMode: enableShadowMode,
+		maxBodyBytes:     maxBodyBytes,
 	}
 }
 
@@ -170,10 +180,33 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 		requestID = requestid.FromContext(r.Context())
 	}
 
+	// Feature Hydration: Move ownership to Go
 	features := map[string]any{}
-	if inferenceResp.FeaturesUsed != nil {
-		features = inferenceResp.FeaturesUsed.AsMap()
+
+	// 1. Try to fetch from Analytics
+	if h.analyticsClient != nil {
+		hydrated, err := h.analyticsClient.GetFeatures(r.Context(), req.UserId)
+		if err != nil {
+			h.logger.Warn("failed to hydrate features from analytics", "error", err, "user_id", req.UserId)
+		} else if hydrated != nil {
+			features = hydrated
+		} else {
+			// 2. Fallback to simulation for unknown users (matching Python behavior)
+			features = simulateFeatures(req.UserId, req.Amount)
+		}
 	}
+
+	// 3. Merge with features from Python gRPC (diagnostics/prediction features)
+	if inferenceResp.FeaturesUsed != nil {
+		for k, v := range inferenceResp.FeaturesUsed.AsMap() {
+			if _, exists := features[k]; !exists {
+				features[k] = v
+			}
+		}
+	}
+
+	// Add transaction specific features
+	features["transaction_amount"] = req.Amount
 
 	ruleset, err := h.rulesProvider.GetRules(r.Context())
 	if err != nil {
@@ -238,6 +271,7 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 		attribute.Int("app.model_score", int(rawScore)),
 		attribute.Int("app.final_score", ruleResult.FinalScore),
 		attribute.Int("app.rule_matches", len(ruleResult.MatchedRules)),
+		attribute.Bool("app.shadow_mode_enabled", h.enableShadowMode),
 	)
 
 	riskComponents := buildRiskComponents(features)
@@ -275,7 +309,68 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 		response.RulesVersion = wrapperspb.String(ruleset.Version)
 	}
 
+	// Shadow Mode: Compare Go decision with Python legacy decision
+	if h.enableShadowMode && h.legacyClient != nil {
+		go h.runShadowComparison(requestID, &req, response)
+	}
+
 	writeProtoJSON(w, response)
+}
+
+func (h *Handler) runShadowComparison(requestID string, req *gatewayv1.SignalRequest, goResponse *gatewayv1.SignalResponse) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	legacyResponse, err := h.legacyClient.Evaluate(ctx, req)
+	if err != nil {
+		h.logger.Warn("shadow comparison failed: legacy client error", "request_id", requestID, "error", err)
+		return
+	}
+
+	// Compare decisions
+	diffs := []string{}
+	if goResponse.Score != legacyResponse.Score {
+		diffs = append(diffs, fmt.Sprintf("score: go=%d, legacy=%d", goResponse.Score, legacyResponse.Score))
+	}
+	if goResponse.RiskLabel != legacyResponse.RiskLabel {
+		diffs = append(diffs, fmt.Sprintf("risk_label: go=%s, legacy=%s", goResponse.RiskLabel, legacyResponse.RiskLabel))
+	}
+
+	// Compare matched rules (unordered)
+	goRules := make(map[string]bool)
+	for _, r := range goResponse.MatchedRules {
+		goRules[r.RuleId] = true
+	}
+	legacyRules := make(map[string]bool)
+	for _, r := range legacyResponse.MatchedRules {
+		legacyRules[r.RuleId] = true
+	}
+
+	if len(goRules) != len(legacyRules) {
+		diffs = append(diffs, fmt.Sprintf("matched_rules_count: go=%d, legacy=%d", len(goRules), len(legacyRules)))
+	} else {
+		for rid := range goRules {
+			if !legacyRules[rid] {
+				diffs = append(diffs, fmt.Sprintf("rule_mismatch: rule %s only in Go", rid))
+			}
+		}
+		for rid := range legacyRules {
+			if !goRules[rid] {
+				diffs = append(diffs, fmt.Sprintf("rule_mismatch: rule %s only in Legacy", rid))
+			}
+		}
+	}
+
+	if len(diffs) > 0 {
+		h.logger.Warn("ParityMismatch",
+			"request_id", requestID,
+			"diffs", diffs,
+			"go_score", goResponse.Score,
+			"legacy_score", legacyResponse.Score,
+		)
+	} else {
+		h.logger.Info("ParityMatch", "request_id", requestID)
+	}
 }
 
 func normalizeSignalRequest(req *gatewayv1.SignalRequest) {
@@ -385,5 +480,28 @@ func toFloat(value any) float64 {
 		return v
 	default:
 		return 0
+	}
+}
+
+func simulateFeatures(userID string, amount float64) map[string]any {
+	// Deterministic hash matching Python's approach
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(userID))
+	userHash := int(h.Sum32() % 1000)
+
+	velocity := (userHash % 10) + 1
+	amountRatio := 0.5 + float64(userHash%50)/10.0
+	balanceZ := -3.0 + float64(userHash%60)/10.0
+	connections := userHash % 8
+	merchantRisk := userHash % 100
+
+	return map[string]any{
+		"velocity_24h":               float64(velocity),
+		"amount_to_avg_ratio_30d":    amountRatio,
+		"balance_volatility_z_score": balanceZ,
+		"bank_connections_24h":       float64(connections),
+		"merchant_risk_score":        float64(merchantRisk),
+		"has_history":                false,
+		"transaction_amount":         amount,
 	}
 }

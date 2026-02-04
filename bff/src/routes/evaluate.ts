@@ -42,13 +42,14 @@ export async function evaluateRoutes(
     async (request: FastifyRequest<{ Body: EvaluateSignalBody }>, reply: FastifyReply) => {
       try {
         const signalRequest: SignalRequest = request.body;
+        const useLegacy = httpClient.config.useLegacyEvaluation;
 
         const response = await httpClient.request<SignalResponse>({
           method: 'POST',
           path: '/evaluate/signal',
           body: signalRequest,
           requestId: request.requestId,
-          target: 'gateway',
+          target: useLegacy ? 'python' : 'gateway',
         });
 
         return reply.status(response.statusCode).send(response.data);

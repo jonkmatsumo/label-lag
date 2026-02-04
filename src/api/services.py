@@ -1,6 +1,7 @@
 """Business logic for signal evaluation."""
 
 import logging
+import os
 import uuid
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -85,7 +86,10 @@ class SignalEvaluator:
             model_version = manager.model_version
         else:
             # Fall back to rule-based scoring
-            raw_probability = self._calculate_probability(features)
+            if os.getenv("DISABLE_HEURISTIC_FALLBACK") == "true":
+                raw_probability = 0.05  # Base probability
+            else:
+                raw_probability = self._calculate_probability(features)
             model_version = self.model_version
 
         # Calibrate to 1-99 score
@@ -228,6 +232,52 @@ class SignalEvaluator:
             ],
         )
 
+    def predict(self, request: SignalRequest) -> dict:
+        """Perform prediction only, skipping rule evaluation.
+
+        Args:
+            request: The signal request.
+
+        Returns:
+            Dict with prediction results.
+        """
+        import time
+
+        from api.model_manager import get_model_manager
+
+        start_time = time.time()
+        request_id = f"req_{uuid.uuid4().hex[:12]}"
+
+        features = self._fetch_features(request)
+        manager = get_model_manager()
+
+        if manager.model_loaded and features.has_history:
+            raw_probability = self._predict_with_model(manager, features)
+            model_version = manager.model_version
+            model_loaded = True
+        else:
+            if os.getenv("DISABLE_HEURISTIC_FALLBACK") == "true":
+                raw_probability = 0.05
+            else:
+                raw_probability = self._calculate_probability(features)
+            model_version = self.model_version
+            model_loaded = False
+
+        score = self._calibrate_score(raw_probability)
+        latency_ms = (time.time() - start_time) * 1000
+
+        return {
+            "request_id": request_id,
+            "model_score": score,
+            "model_version": model_version,
+            "model_loaded": model_loaded,
+            "latency_ms": latency_ms,
+            "diagnostics": {
+                "has_history": features.has_history,
+                "raw_probability": float(raw_probability),
+            },
+        }
+
     def _predict_with_model(self, manager, features: FeatureVector) -> float:
         """Use the ML model for prediction.
 
@@ -321,6 +371,9 @@ class SignalEvaluator:
             logger.warning(f"Failed to fetch features from Analytics: {e}")
 
         # Fallback: Use simulated features for unknown users
+        if os.getenv("DISABLE_FEATURE_SIMULATION") == "true":
+            return FeatureVector(has_history=False, transaction_amount=request.amount)
+
         return self._simulate_features(request)
 
     def _simulate_features(self, request: SignalRequest) -> FeatureVector:
@@ -422,6 +475,9 @@ class SignalEvaluator:
         Returns:
             RuleResult with final score and matched rules.
         """
+        if os.getenv("DISABLE_LEGACY_RULES") == "true":
+            return RuleResult(final_score=score, matched_rules=[], explanations=[])
+
         try:
             ruleset = manager.ruleset
             if ruleset is None or not ruleset.rules:

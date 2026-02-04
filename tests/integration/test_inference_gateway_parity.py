@@ -19,6 +19,24 @@ FIXTURES = [
         "currency": "USD",
         "client_transaction_id": "txn_002",
     },
+    {
+        "user_id": "user_high_velocity",
+        "amount": 10.0,
+        "currency": "USD",
+        "client_transaction_id": "txn_003",
+    },
+    {
+        "user_id": "user_large_amount",
+        "amount": 10000.0,
+        "currency": "USD",
+        "client_transaction_id": "txn_004",
+    },
+    {
+        "user_id": "unknown_user_123",
+        "amount": 50.0,
+        "currency": "USD",
+        "client_transaction_id": "txn_005",
+    },
 ]
 
 

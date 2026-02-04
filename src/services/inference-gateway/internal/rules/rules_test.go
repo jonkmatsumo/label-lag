@@ -113,3 +113,144 @@ func TestFilterValidRulesSkipsInvalid(t *testing.T) {
 func intPtr(v int) *int {
 	return &v
 }
+
+func TestEvaluateRules_RejectAndClamp(t *testing.T) {
+	// In Python, reject sets score to 99 and rejected=true,
+	// but subsequent clamp_max can still reduce the score.
+	score := 50
+	ruleset := RuleSet{
+		Version: "v1",
+		Rules: []Rule{
+			{
+				ID:     "reject",
+				Field:  "risk_score",
+				Op:     ">",
+				Value:  80,
+				Action: "reject",
+				Status: RuleStatusActive,
+			},
+			{
+				ID:     "clamp_max",
+				Field:  "risk_score",
+				Op:     ">",
+				Value:  80,
+				Action: "clamp_max",
+				Score:  intPtr(30),
+				Status: RuleStatusActive,
+			},
+		},
+	}
+
+	features := map[string]any{"risk_score": 90}
+	result, err := EvaluateRules(features, score, ruleset)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Current Go implementation will result in 99 because it blocks clamp after reject.
+	// We want it to be 30 to match Python.
+	if result.FinalScore != 30 {
+		t.Errorf("expected score 30 (clamp after reject), got %d", result.FinalScore)
+	}
+	if !result.Rejected {
+		t.Errorf("expected rejected=true")
+	}
+}
+
+func TestEvaluateRules_RejectAndOverride(t *testing.T) {
+	score := 50
+	ruleset := RuleSet{
+		Version: "v1",
+		Rules: []Rule{
+			{
+				ID:     "reject",
+				Field:  "risk_score",
+				Op:     ">",
+				Value:  80,
+				Action: "reject",
+				Status: RuleStatusActive,
+			},
+			{
+				ID:     "override",
+				Field:  "risk_score",
+				Op:     ">",
+				Value:  80,
+				Action: "override_score",
+				Score:  intPtr(10),
+				Status: RuleStatusActive,
+			},
+		},
+	}
+
+	features := map[string]any{"risk_score": 90}
+	result, err := EvaluateRules(features, score, ruleset)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Python: override applies after reject if override_applied is false.
+	if result.FinalScore != 10 {
+		t.Errorf("expected score 10 (override after reject), got %d", result.FinalScore)
+	}
+	if !result.Rejected {
+		t.Errorf("expected rejected=true")
+	}
+}
+
+func TestEvaluateRules_NumericCoercion(t *testing.T) {
+	score := 50
+	ruleset := RuleSet{
+		Version: "v1",
+		Rules: []Rule{
+			{
+				ID:     "numeric-match",
+				Field:  "val",
+				Op:     "==",
+				Value:  10.0,
+				Action: "override_score",
+				Score:  intPtr(99),
+				Status: RuleStatusActive,
+			},
+		},
+	}
+
+	// Test int feature vs float rule
+	features := map[string]any{"val": 10}
+	result, _ := EvaluateRules(features, score, ruleset)
+	if result.FinalScore != 99 {
+		t.Errorf("expected match for int 10 == float 10.0")
+	}
+
+	// Test string feature (no coercion)
+	features = map[string]any{"val": "10"}
+	result, _ = EvaluateRules(features, score, ruleset)
+	if result.FinalScore != 50 {
+		t.Errorf("expected NO match for string \"10\" == float 10.0")
+	}
+}
+
+func TestEvaluateRules_MissingFeature(t *testing.T) {
+	score := 50
+	ruleset := RuleSet{
+		Version: "v1",
+		Rules: []Rule{
+			{
+				ID:     "missing",
+				Field:  "non_existent",
+				Op:     "==",
+				Value:  1,
+				Action: "reject",
+				Status: RuleStatusActive,
+			},
+		},
+	}
+
+	features := map[string]any{"other": 1}
+	result, _ := EvaluateRules(features, score, ruleset)
+	if result.FinalScore != 50 {
+		t.Errorf("expected score to remain 50 when feature is missing")
+	}
+	if len(result.MatchedRules) != 0 {
+		t.Errorf("expected no matched rules")
+	}
+}

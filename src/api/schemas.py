@@ -156,6 +156,19 @@ class SignalResponse(BaseModel):
     }
 
 
+class PredictResponse(BaseModel):
+    """Response schema for prediction-only endpoint."""
+
+    request_id: str = Field(..., description="Request identifier")
+    model_score: int = Field(..., ge=1, le=99, description="Calibrated model score")
+    model_version: str = Field(..., description="Model version")
+    model_loaded: bool = Field(..., description="True if a custom model was used")
+    latency_ms: float = Field(..., description="Prediction latency")
+    diagnostics: dict[str, Any] = Field(
+        default_factory=dict, description="Diagnostic info"
+    )
+
+
 class HealthResponse(BaseModel):
     """Response schema for health check endpoint."""
 

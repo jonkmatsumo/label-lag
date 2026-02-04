@@ -219,3 +219,29 @@ func (c *AnalyticsClient) ListBacktestResults(ctx context.Context, req *crudv1.L
 	}
 	return resp, nil
 }
+
+func (c *AnalyticsClient) GetFeatures(ctx context.Context, userID string) (map[string]any, error) {
+	resp, err := c.SearchTransactions(ctx, &crudv1.SearchTransactionsRequest{
+		UserId: userID,
+		Limit:  1,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if len(resp.GetTransactions()) == 0 {
+		return nil, nil // Not found
+	}
+
+	tx := resp.GetTransactions()[0]
+	features := map[string]any{
+		"velocity_24h":                float64(tx.GetVelocity_24H()),
+		"amount_to_avg_ratio_30d":     tx.GetAmountToAvgRatio_30D(),
+		"balance_volatility_z_score":  tx.GetBalanceVolatilityZScore(),
+		"bank_connections_24h":        0.0, // Not yet in Analytics
+		"merchant_risk_score":         float64(tx.GetMerchantRiskScore()),
+		"has_history":                 true,
+	}
+
+	return features, nil
+}
