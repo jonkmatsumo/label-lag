@@ -87,6 +87,8 @@ from api.schemas import (
     RuleSuggestionResponse,
     RuleVersionListResponse,
     RuleVersionResponse,
+    SandboxDiffRequest,
+    SandboxDiffResponse,
     SandboxEvaluateRequest,
     SandboxEvaluateResponse,
     SandboxMatchedRule,
@@ -866,6 +868,102 @@ async def sandbox_evaluate(request: SandboxEvaluateRequest) -> SandboxEvaluateRe
         shadow_matched_rules=shadow_matched_rules,
         rejected=result.get("rejected", False),
         ruleset_version=result.get("ruleset_version", "unknown"),
+    )
+
+
+@app.post(
+    "/rules/sandbox/diff",
+    response_model=SandboxDiffResponse,
+    tags=["Rule Inspector"],
+    summary="Compare two rulesets in sandbox mode",
+    description="""
+Compare two rulesets (Baseline vs Proposed) on the same input.
+Shows score changes and matched rule differences.
+""",
+)
+async def sandbox_diff(request: SandboxDiffRequest) -> SandboxDiffResponse:
+    """Compare two rulesets against features in sandbox mode.
+
+    Args:
+        request: Sandbox diff request with features, base_score,
+            ruleset_a, and ruleset_b.
+
+    Returns:
+        SandboxDiffResponse with A vs B results.
+    """
+    from api.gateway_client import get_gateway_client
+
+    # Build feature dict from request
+    features = {
+        "velocity_24h": request.features.velocity_24h,
+        "amount_to_avg_ratio_30d": request.features.amount_to_avg_ratio_30d,
+        "balance_volatility_z_score": request.features.balance_volatility_z_score,
+        "bank_connections_24h": request.features.bank_connections_24h,
+        "merchant_risk_score": request.features.merchant_risk_score,
+        "has_history": request.features.has_history,
+        "transaction_amount": request.features.transaction_amount,
+    }
+
+    # Map rulesets if provided
+    ruleset_a_dict = None
+    if request.ruleset_a is not None:
+        ruleset_a_dict = request.ruleset_a.model_dump()
+
+    ruleset_b_dict = None
+    if request.ruleset_b is not None:
+        ruleset_b_dict = request.ruleset_b.model_dump()
+
+    # Call gateway diff
+    client = get_gateway_client()
+    try:
+        result = client.diff_rules(
+            features=features,
+            base_score=request.base_score,
+            ruleset_a=ruleset_a_dict,
+            ruleset_b=ruleset_b_dict,
+            shadow_mode=request.shadow_mode,
+        )
+    except Exception as e:
+        logger.exception("Sandbox diff failed via gateway")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+    # Helper to map gateway response back to SandboxEvaluateResponse
+    def map_eval(data):
+        m_rules = [
+            SandboxMatchedRule(
+                rule_id=exp["rule_id"],
+                severity=exp["severity"],
+                reason=exp["reason"],
+                action=exp.get("action", ""),
+                score=exp.get("score"),
+            )
+            for exp in data.get("explanations", [])
+        ]
+        s_rules = [
+            SandboxMatchedRule(
+                rule_id=exp["rule_id"],
+                severity=exp["severity"],
+                reason=exp["reason"],
+                action=exp.get("action", ""),
+                score=exp.get("score"),
+            )
+            for exp in data.get("shadow_explanations", [])
+        ]
+        return SandboxEvaluateResponse(
+            final_score=data["final_score"],
+            baseline_score=data.get("baseline_score", request.base_score),
+            shadow_score=data.get("shadow_score"),
+            matched_rules=m_rules,
+            explanations=data.get("explanations", []),
+            shadow_matched_rules=s_rules,
+            rejected=data.get("rejected", False),
+            ruleset_version=data.get("ruleset_version", "unknown"),
+        )
+
+    return SandboxDiffResponse(
+        a=map_eval(result["a"]),
+        b=map_eval(result["b"]),
+        diff=result["diff"],
     )
 
 

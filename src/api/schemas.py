@@ -513,6 +513,53 @@ class SandboxEvaluateResponse(BaseModel):
     ruleset_version: str = Field(..., description="Version of ruleset used")
 
 
+class SandboxDiffRequest(BaseModel):
+    """Request schema for sandbox ruleset comparison."""
+
+    features: SandboxFeatures = Field(
+        default_factory=SandboxFeatures,
+        description="Feature values for evaluation",
+    )
+    base_score: int = Field(
+        default=50,
+        ge=1,
+        le=99,
+        description="Base score before rule application",
+    )
+    ruleset_a: RuleSetDefinition | None = Field(
+        default=None,
+        description="Baseline ruleset. If None, uses production.",
+    )
+    ruleset_b: RuleSetDefinition | None = Field(
+        default=None,
+        description="Proposed ruleset. If None, uses production.",
+    )
+    shadow_mode: bool = Field(
+        default=False,
+        description="If True, diff based on shadow (simulated) results.",
+    )
+
+
+class RulesDiffSummary(BaseModel):
+    """Summary of differences between two ruleset evaluations."""
+
+    score_delta: int = Field(..., description="Difference in final score (B - A)")
+    matched_rules_added: list[str] = Field(
+        default_factory=list, description="Rules that matched in B but not A"
+    )
+    matched_rules_removed: list[str] = Field(
+        default_factory=list, description="Rules that matched in A but not B"
+    )
+
+
+class SandboxDiffResponse(BaseModel):
+    """Response schema for sandbox ruleset comparison."""
+
+    a: SandboxEvaluateResponse = Field(..., description="Evaluation result for ruleset A")
+    b: SandboxEvaluateResponse = Field(..., description="Evaluation result for ruleset B")
+    diff: RulesDiffSummary = Field(..., description="Summary of differences")
+
+
 class RuleMetricsItem(BaseModel):
     """Metrics for a single rule over a time period."""
 
