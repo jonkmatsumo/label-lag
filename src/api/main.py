@@ -1,7 +1,7 @@
-"""FastAPI application for fraud signal evaluation.
+"""FastAPI application for fraud signal forecasting.
 
 This API provides idempotent risk assessment for transactions.
-It does not modify transaction state - it only provides an evaluation.
+It does not modify transaction state - it only provides an prediction.
 """
 
 import logging
@@ -510,7 +510,7 @@ async def deploy_model(request: DeployModelRequest) -> DeployModelResponse:
 @app.post(
     "/predict/signal",
     response_model=PredictResponse,
-    tags=["Evaluation"],
+    tags=["Forecasting"],
     summary="Get model prediction only",
     description="""
 Get raw model prediction for a transaction. Does NOT apply rules.

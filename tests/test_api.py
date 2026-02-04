@@ -128,7 +128,7 @@ class TestSignalEndpoint:
         assert data["model_version"] == "v1.0.0"
 
     def test_predict_idempotent_same_user(self, client):
-        """Same user should get consistent scoring."""
+        """Same user should get consistent prediction."""
         request_data = {
             "user_id": "user_consistent",
             "amount": 200.00,

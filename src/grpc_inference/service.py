@@ -1,4 +1,4 @@
-"""gRPC service implementation for inference."""
+"""gRPC service implementation for forecasting."""
 
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class InferenceService(inference_pb2_grpc.InferenceServiceServicer):
+    """gRPC service for fraud signal forecasting."""
     def __init__(self, config: GRPCInferenceConfig):
         self._config = config
         self._forecaster = SignalForecaster()

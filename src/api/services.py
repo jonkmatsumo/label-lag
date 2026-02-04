@@ -1,4 +1,4 @@
-"""Business logic for signal evaluation."""
+"""Business logic for signal forecasting."""
 
 import logging
 import os
@@ -143,7 +143,7 @@ class SignalForecaster:
             if missing_features:
                 logger.warning(
                     f"Cannot use ML model: missing features {missing_features}. "
-                    "Falling back to rule-based scoring."
+                    "Falling back to heuristic prediction."
                 )
                 return self._calculate_probability(features)
 
@@ -155,14 +155,14 @@ class SignalForecaster:
                 # predict_single returned None due to missing features
                 logger.warning(
                     "ML model prediction failed due to missing features. "
-                    "Falling back to rule-based scoring."
+                    "Falling back to heuristic prediction."
                 )
                 return self._calculate_probability(features)
 
             logger.debug(f"ML model prediction: {probability}")
             return float(probability)
         except Exception as e:
-            logger.warning(f"ML prediction failed, falling back to rules: {e}")
+            logger.warning(f"ML prediction failed, falling back to heuristic: {e}")
             return self._calculate_probability(features)
 
     def _fetch_features(self, request: SignalRequest) -> FeatureVector:
@@ -242,7 +242,7 @@ class SignalForecaster:
         In production, this would be an XGBoost model.
 
         Args:
-            features: The feature vector for scoring.
+            features: The feature vector for forecasting.
 
         Returns:
             Raw probability between 0.0 and 1.0.
