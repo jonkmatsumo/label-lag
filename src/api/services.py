@@ -16,6 +16,13 @@ from model.evaluate import ScoreCalibrator
 
 logger = logging.getLogger(__name__)
 
+# Feature thresholds for risk component detection (based on percentiles)
+VELOCITY_HIGH_THRESHOLD = 5  # 24h transaction count threshold
+AMOUNT_RATIO_HIGH_THRESHOLD = 3.0  # Amount vs 30d avg threshold
+BALANCE_VOLATILITY_THRESHOLD = -2.0  # Z-score threshold (negative = low balance)
+MERCHANT_RISK_THRESHOLD = 70  # Merchant risk score threshold
+CONNECTION_BURST_THRESHOLD = 4  # 24h bank connections threshold
+
 MODEL_VERSION = "v1.0.0"
 
 

@@ -88,7 +88,26 @@ def mock_gateway_client(monkeypatch):
 
         return resp
 
+    def diff_side_effect(features, base_score, ruleset_a=None, ruleset_b=None, request_id=None, shadow_mode=False):
+        resp_a = side_effect(features, base_score, ruleset_a, request_id, shadow_mode)
+        resp_b = side_effect(features, base_score, ruleset_b, request_id, shadow_mode)
+        
+        diff = {
+            "score_delta": resp_b["final_score"] - resp_a["final_score"],
+            "matched_rules_added": [r for r in resp_b["matched_rules"] if r not in resp_a["matched_rules"]],
+            "matched_rules_removed": [r for r in resp_a["matched_rules"] if r not in resp_b["matched_rules"]],
+        }
+        if shadow_mode:
+            diff["score_delta"] = resp_b["shadow_score"] - resp_a["shadow_score"]
+            
+        return {
+            "a": resp_a,
+            "b": resp_b,
+            "diff": diff
+        }
+
     mock_client.evaluate_rules.side_effect = side_effect
+    mock_client.diff_rules.side_effect = diff_side_effect
     monkeypatch.setattr(gateway_client, "get_gateway_client", lambda: mock_client)
     return mock_client
 
@@ -350,6 +369,55 @@ class TestSandboxEvaluateEndpoint:
         assert data["rejected"] is False
         assert len(data["matched_rules"]) == 1
         assert data["matched_rules"][0]["rule_id"] == "shadow_test"
+
+    def test_sandbox_diff_success(self, client):
+        """Test sandbox diff between two rulesets."""
+        response = client.post(
+            "/rules/sandbox/diff",
+            json={
+                "features": {"velocity_24h": 10},
+                "base_score": 50,
+                "ruleset_a": {
+                    "version": "v1",
+                    "rules": [
+                        {
+                            "id": "rule1",
+                            "field": "velocity_24h",
+                            "op": ">",
+                            "value": 5,
+                            "action": "override_score",
+                            "score": 60,
+                            "status": "active",
+                        }
+                    ],
+                },
+                "ruleset_b": {
+                    "version": "v2",
+                    "rules": [
+                        {
+                            "id": "rule1",
+                            "field": "velocity_24h",
+                            "op": ">",
+                            "value": 5,
+                            "action": "override_score",
+                            "score": 80,
+                            "status": "active",
+                        }
+                    ],
+                },
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        assert "a" in data
+        assert "b" in data
+        assert "diff" in data
+        assert data["a"]["final_score"] == 60
+        assert data["b"]["final_score"] == 80
+        assert data["diff"]["score_delta"] == 20
+        assert data["diff"]["matched_rules_added"] == []
+        assert data["diff"]["matched_rules_removed"] == []
 
 
 class TestShadowComparisonEndpoint:
