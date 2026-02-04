@@ -59,6 +59,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/analytics/feature-sample", h.handleAnalyticsFeatureSample)
 	mux.HandleFunc("/analytics/schema", h.handleAnalyticsSchema)
 	mux.HandleFunc("/analytics/transactions/search", h.handleSearchTransactions)
+	mux.HandleFunc("/monitoring/drift", h.handleMonitoringDrift)
+	mux.HandleFunc("/metrics/shadow/comparison", h.handleMetricsShadowComparison)
 	for _, route := range notImplementedRoutes {
 		mux.HandleFunc(route, h.handleNotImplemented)
 	}

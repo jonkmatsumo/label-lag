@@ -477,6 +477,84 @@ func TestHandleAnalyticsSchema(t *testing.T) {
 	}
 }
 
+func TestHandleMonitoringDriftProxies(t *testing.T) {
+	var gotRequestID string
+	var gotPath string
+	var gotQuery string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotRequestID = r.Header.Get("X-Request-Id")
+		gotPath = r.URL.Path
+		gotQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	}))
+	defer upstream.Close()
+
+	t.Setenv("INFERENCE_GATEWAY_API_URL", upstream.URL)
+
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	handler := NewHandler(logger, nil, nil, rules.NewEmptyProvider(), 1024)
+
+	req := httptest.NewRequest(http.MethodGet, "/monitoring/drift?hours=24&threshold=0.25&force_refresh=false", nil)
+	req = req.WithContext(requestid.WithRequestID(req.Context(), "req-1"))
+	rec := httptest.NewRecorder()
+
+	handler.handleMonitoringDrift(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if gotRequestID != "req-1" {
+		t.Fatalf("expected request id req-1, got %v", gotRequestID)
+	}
+	if gotPath != "/monitoring/drift" {
+		t.Fatalf("expected path /monitoring/drift, got %v", gotPath)
+	}
+	if gotQuery != "hours=24&threshold=0.25&force_refresh=false" {
+		t.Fatalf("expected query forwarded, got %v", gotQuery)
+	}
+}
+
+func TestHandleMetricsShadowComparisonProxies(t *testing.T) {
+	var gotRequestID string
+	var gotPath string
+	var gotQuery string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotRequestID = r.Header.Get("X-Request-Id")
+		gotPath = r.URL.Path
+		gotQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"total_requests":0}`))
+	}))
+	defer upstream.Close()
+
+	t.Setenv("INFERENCE_GATEWAY_API_URL", upstream.URL)
+
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	handler := NewHandler(logger, nil, nil, rules.NewEmptyProvider(), 1024)
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics/shadow/comparison?start_date=2025-01-01&end_date=2025-01-31&rule_ids=r1,r2", nil)
+	req = req.WithContext(requestid.WithRequestID(req.Context(), "req-2"))
+	rec := httptest.NewRecorder()
+
+	handler.handleMetricsShadowComparison(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if gotRequestID != "req-2" {
+		t.Fatalf("expected request id req-2, got %v", gotRequestID)
+	}
+	if gotPath != "/metrics/shadow/comparison" {
+		t.Fatalf("expected path /metrics/shadow/comparison, got %v", gotPath)
+	}
+	if gotQuery != "start_date=2025-01-01&end_date=2025-01-31&rule_ids=r1,r2" {
+		t.Fatalf("expected query forwarded, got %v", gotQuery)
+	}
+}
+
 type stubInferenceClient struct {
 	readyErr error
 }
