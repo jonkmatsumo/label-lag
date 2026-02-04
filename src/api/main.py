@@ -68,6 +68,7 @@ from api.schemas import (
     GenerateDataRequest,
     GenerateDataResponse,
     HealthResponse,
+    PredictResponse,
     PublishRuleRequest,
     PublishRuleResponse,
     ReadinessReportResponse,
@@ -94,7 +95,6 @@ from api.schemas import (
     ShadowRuleResponse,
     SignalRequest,
     SignalResponse,
-    PredictResponse,
     SuggestionEvidence,
     SuggestionsListResponse,
     TrainRequest,
@@ -514,7 +514,7 @@ async def deploy_model(request: DeployModelRequest) -> DeployModelResponse:
     summary="Evaluate fraud signal (DEPRECATED)",
     deprecated=True,
     description="""
-DEPRECATED: Use /predict/signal for model scores and Go Inference Gateway for full evaluation.
+DEPRECATED: Use /predict/signal for model scores and Go Gateway for full evaluation.
 
 Evaluate the fraud risk signal for a transaction.
 """,

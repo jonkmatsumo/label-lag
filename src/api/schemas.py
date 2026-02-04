@@ -164,7 +164,9 @@ class PredictResponse(BaseModel):
     model_version: str = Field(..., description="Model version")
     model_loaded: bool = Field(..., description="True if a custom model was used")
     latency_ms: float = Field(..., description="Prediction latency")
-    diagnostics: dict[str, Any] = Field(default_factory=dict, description="Diagnostic info")
+    diagnostics: dict[str, Any] = Field(
+        default_factory=dict, description="Diagnostic info"
+    )
 
 
 class HealthResponse(BaseModel):
