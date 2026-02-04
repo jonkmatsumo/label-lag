@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/rules"
