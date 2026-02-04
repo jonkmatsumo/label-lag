@@ -1,14 +1,10 @@
-"""CLI entry point for synthetic data generation."""
+"""CLI entry point for synthetic data generation via Analytics service."""
 
 from typing import Annotated
 
 import typer
 
-from synthetic_pipeline.db import (
-    DatabaseSession,
-    EvaluationMetadataDB,
-    GeneratedRecordDB,
-)
+from api.crud_client import get_crud_client
 from synthetic_pipeline.generator import DataGenerator, FraudType
 from synthetic_pipeline.logging import configure_logging, get_logger
 from synthetic_pipeline.models import EvaluationMetadata, GeneratedRecord
@@ -20,43 +16,66 @@ app = typer.Typer(
 )
 
 
-def pydantic_to_db(record: GeneratedRecord) -> GeneratedRecordDB:
-    """Convert a Pydantic GeneratedRecord to SQLAlchemy model."""
-    return GeneratedRecordDB(
+def pydantic_to_proto(record: GeneratedRecord):
+    """Convert a Pydantic GeneratedRecord to proto message."""
+    from google.protobuf.timestamp_pb2 import Timestamp
+
+    from api.proto.proto.crud.v1 import analytics_pb2
+
+    ts = Timestamp()
+    ts.FromDatetime(record.transaction_timestamp)
+
+    ec_ts = Timestamp()
+    if record.identity_changes.email_changed_at:
+        ec_ts.FromDatetime(record.identity_changes.email_changed_at)
+
+    pc_ts = Timestamp()
+    if record.identity_changes.phone_changed_at:
+        pc_ts.FromDatetime(record.identity_changes.phone_changed_at)
+
+    return analytics_pb2.GeneratedRecord(
         record_id=record.record_id,
         user_id=record.user_id,
         full_name=record.full_name,
         email=record.email,
         phone=record.phone,
-        transaction_timestamp=record.transaction_timestamp,
+        transaction_timestamp=ts,
         is_off_hours_txn=record.is_off_hours_txn,
-        available_balance=record.account.available_balance,
-        balance_to_transaction_ratio=record.account.balance_to_transaction_ratio,
-        avg_available_balance_30d=record.behavior.avg_available_balance_30d,
-        balance_volatility_z_score=record.behavior.balance_volatility_z_score,
+        available_balance=float(record.account.available_balance),
+        balance_to_transaction_ratio=float(record.account.balance_to_transaction_ratio),
+        avg_available_balance_30d=float(record.behavior.avg_available_balance_30d),
+        balance_volatility_z_score=float(record.behavior.balance_volatility_z_score),
         bank_connections_count_24h=record.connection.bank_connections_count_24h,
         bank_connections_count_7d=record.connection.bank_connections_count_7d,
-        bank_connections_avg_30d=record.connection.bank_connections_avg_30d,
-        amount=record.transaction.amount,
-        amount_to_avg_ratio=record.transaction.amount_to_avg_ratio,
+        bank_connections_avg_30d=float(record.connection.bank_connections_avg_30d),
+        amount=float(record.transaction.amount),
+        amount_to_avg_ratio=float(record.transaction.amount_to_avg_ratio),
         merchant_risk_score=record.transaction.merchant_risk_score,
         is_returned=record.transaction.is_returned,
-        email_changed_at=record.identity_changes.email_changed_at,
-        phone_changed_at=record.identity_changes.phone_changed_at,
+        email_changed_at=ec_ts if record.identity_changes.email_changed_at else None,
+        phone_changed_at=pc_ts if record.identity_changes.phone_changed_at else None,
         is_fraudulent=record.is_fraudulent,
-        fraud_type=record.fraud_type,
+        fraud_type=record.fraud_type or "",
     )
 
 
-def metadata_to_db(meta: EvaluationMetadata) -> EvaluationMetadataDB:
-    """Convert a Pydantic EvaluationMetadata to SQLAlchemy model."""
-    return EvaluationMetadataDB(
+def metadata_to_proto(meta: EvaluationMetadata):
+    """Convert a Pydantic EvaluationMetadata to proto message."""
+    from google.protobuf.timestamp_pb2 import Timestamp
+
+    from api.proto.proto.crud.v1 import analytics_pb2
+
+    fc_ts = Timestamp()
+    if meta.fraud_confirmed_at:
+        fc_ts.FromDatetime(meta.fraud_confirmed_at)
+
+    return analytics_pb2.EvaluationMetadata(
         user_id=meta.user_id,
         record_id=meta.record_id,
         sequence_number=meta.sequence_number,
-        fraud_confirmed_at=meta.fraud_confirmed_at,
+        fraud_confirmed_at=fc_ts if meta.fraud_confirmed_at else None,
         is_pre_fraud=meta.is_pre_fraud,
-        days_to_fraud=meta.days_to_fraud,
+        days_to_fraud=meta.days_to_fraud or 0,
         is_train_eligible=meta.is_train_eligible,
     )
 
@@ -85,7 +104,9 @@ def seed(
     ] = 500,
     database_url: Annotated[
         str | None,
-        typer.Option("--database-url", envvar="DATABASE_URL", help="Database URL"),
+        typer.Option(
+            "--database-url", envvar="DATABASE_URL", help="Database URL (ignored)"
+        ),
     ] = None,
     drop_tables: Annotated[
         bool,
@@ -107,14 +128,7 @@ def seed(
         ),
     ] = False,
 ) -> None:
-    """Generate synthetic transaction profiles and seed the database.
-
-    Generates user transaction sequences with both legitimate and fraudulent
-    patterns, including evaluation metadata for proper train/test splitting.
-
-    Example:
-        synthetic-data-gen seed --users 100 --fraud-rate 0.05
-    """
+    """Generate synthetic transaction profiles and seed via Analytics service."""
     # Configure logging
     log_level = "DEBUG" if verbose else "INFO"
     configure_logging(level=log_level, json_format=json_logs)
@@ -147,9 +161,6 @@ def seed(
     generator = DataGenerator(seed=seed_value)
 
     if legacy_mode:
-        # Legacy mode: single transaction per user (backward compatible)
-        log.info("Using legacy generation mode")
-
         legitimate_records = generator.generate_legitimate(count=num_legitimate_users)
         fraudulent_records: list[GeneratedRecord] = []
 
@@ -168,17 +179,7 @@ def seed(
 
         all_records = legitimate_records + fraudulent_records
         all_metadata: list[EvaluationMetadata] = []
-
-        log.info(
-            "Legacy generation complete",
-            total_records=len(all_records),
-            legitimate=len(legitimate_records),
-            fraudulent=len(fraudulent_records),
-        )
     else:
-        # Sequence mode: multiple transactions per user with temporal tracking
-        log.info("Generating user sequences with evaluation metadata")
-
         result = generator.generate_dataset_with_sequences(
             num_users=num_users,
             fraud_rate=fraud_rate,
@@ -186,69 +187,29 @@ def seed(
         all_records = result.records
         all_metadata = result.metadata
 
-        # Count statistics
-        fraud_records = [r for r in all_records if r.is_fraudulent]
-        train_eligible = [m for m in all_metadata if m.is_train_eligible]
-        unique_users = len(set(r.user_id for r in all_records))
-
-        log.info(
-            "Sequence generation complete",
-            total_records=len(all_records),
-            unique_users=unique_users,
-            fraud_transactions=len(fraud_records),
-            train_eligible_records=len(train_eligible),
-            eval_only_records=len(all_metadata) - len(train_eligible),
-        )
-
-    # Log fraud type breakdown
-    fraud_breakdown: dict[str, int] = {}
-    for record in all_records:
-        if record.is_fraudulent:
-            fraud_type = record.fraud_type or "unknown"
-            fraud_breakdown[fraud_type] = fraud_breakdown.get(fraud_type, 0) + 1
-
-    if fraud_breakdown:
-        log.info("Fraud type breakdown", **fraud_breakdown)
-
-    # Database operations
-    log.info("Connecting to database")
-    db = DatabaseSession(database_url=database_url, echo=verbose)
+    client = get_crud_client()
 
     try:
         if drop_tables:
-            log.warning("Dropping existing tables")
-            db.drop_tables()
+            log.warning("Clearing all existing data via Analytics service")
+            client.clear_all_data()
 
-        log.info("Creating tables if not exist")
-        db.create_tables()
-
-        # Convert to DB models and insert
-        log.info("Converting records to database models")
-        db_records = [pydantic_to_db(r) for r in all_records]
+        log.info("Converting records to proto messages")
+        proto_records = [pydantic_to_proto(r) for r in all_records]
+        proto_metadata = [metadata_to_proto(m) for m in all_metadata]
 
         log.info(
-            "Inserting records into database",
-            record_count=len(db_records),
-            batch_size=batch_size,
+            "Storing records via Analytics service",
+            record_count=len(proto_records),
         )
 
-        with db.get_session() as session:
-            inserted = db.batch_insert(session, db_records, batch_size=batch_size)
-            log.info("Records inserted", count=inserted)
-
-            # Insert evaluation metadata if available
-            if all_metadata:
-                log.info("Inserting evaluation metadata", count=len(all_metadata))
-                db_metadata = [metadata_to_db(m) for m in all_metadata]
-                meta_inserted = db.batch_insert(
-                    session, db_metadata, batch_size=batch_size
-                )
-                log.info("Metadata inserted", count=meta_inserted)
+        resp = client.store_generated_data(
+            records=proto_records, metadata=proto_metadata
+        )
+        log.info("Records inserted", count=resp.records_saved)
 
     except Exception as e:
-        log.error(
-            "Database operation failed", error=str(e), error_type=type(e).__name__
-        )
+        log.error("Operation failed", error=str(e), error_type=type(e).__name__)
         raise typer.Exit(code=1) from e
 
     # Final summary
@@ -259,113 +220,54 @@ def seed(
     )
 
     typer.echo(f"\nSuccessfully generated {len(all_records)} transaction records")
-    if all_metadata:
-        train_count = sum(1 for m in all_metadata if m.is_train_eligible)
-        typer.echo(f"  Train-eligible: {train_count}")
-        typer.echo(f"  Evaluation-only: {len(all_metadata) - train_count}")
 
 
 @app.command()
 def init_db(
     database_url: Annotated[
         str | None,
-        typer.Option("--database-url", envvar="DATABASE_URL", help="Database URL"),
+        typer.Option(
+            "--database-url", envvar="DATABASE_URL", help="Database URL (ignored)"
+        ),
     ] = None,
     drop_tables: Annotated[
         bool,
-        typer.Option("--drop-tables", help="Drop existing tables before creating"),
+        typer.Option("--drop-tables", help="Drop existing tables (ignored)"),
     ] = False,
 ) -> None:
-    """Initialize the database schema without seeding data."""
-    configure_logging()
-    log = get_logger("init_db")
-
-    log.info("Initializing database")
-    db = DatabaseSession(database_url=database_url)
-
-    if drop_tables:
-        log.warning("Dropping existing tables")
-        db.drop_tables()
-
-    log.info("Creating tables")
-    db.create_tables()
-
-    log.info("Database initialization complete")
-    typer.echo("Database initialized successfully")
+    """Initialization is now handled by the Analytics service on startup."""
+    typer.echo("Database initialization is now managed by the Analytics service.")
 
 
 @app.command()
 def stats(
     database_url: Annotated[
         str | None,
-        typer.Option("--database-url", envvar="DATABASE_URL", help="Database URL"),
+        typer.Option(
+            "--database-url", envvar="DATABASE_URL", help="Database URL (ignored)"
+        ),
     ] = None,
 ) -> None:
-    """Show statistics about generated data in the database."""
-    from sqlalchemy import func, select
-
+    """Show statistics via Analytics service."""
     configure_logging()
     log = get_logger("stats")
 
-    db = DatabaseSession(database_url=database_url)
-
-    with db.get_session() as session:
-        # Total records
-        total = session.scalar(select(func.count(GeneratedRecordDB.id)))
-
-        # Unique users
-        unique_users = session.scalar(
-            select(func.count(func.distinct(GeneratedRecordDB.user_id)))
-        )
-
-        # Fraud count
-        fraud = session.scalar(
-            select(func.count(GeneratedRecordDB.id)).where(
-                GeneratedRecordDB.is_fraudulent.is_(True)
-            )
-        )
-
-        # Fraud type breakdown
-        fraud_types = session.execute(
-            select(GeneratedRecordDB.fraud_type, func.count(GeneratedRecordDB.id))
-            .where(GeneratedRecordDB.is_fraudulent.is_(True))
-            .group_by(GeneratedRecordDB.fraud_type)
-        ).all()
-
-        # Evaluation metadata stats
-        eval_total = session.scalar(select(func.count(EvaluationMetadataDB.id)))
-        train_eligible = session.scalar(
-            select(func.count(EvaluationMetadataDB.id)).where(
-                EvaluationMetadataDB.is_train_eligible.is_(True)
-            )
-        )
+    client = get_crud_client()
+    resp = client.get_overview_metrics()
 
     log.info(
         "Database statistics",
-        total_records=total,
-        unique_users=unique_users,
-        fraudulent=fraud,
-        legitimate=total - fraud if total else 0,
-        fraud_rate=round(fraud / total, 4) if total else 0,
+        total_records=resp.total_records,
+        unique_users=resp.unique_users,
+        fraudulent=resp.fraud_records,
+        fraud_rate=round(resp.fraud_rate, 4),
     )
 
     typer.echo("\nDatabase Statistics:")
-    typer.echo(f"  Total records: {total}")
-    typer.echo(f"  Unique users: {unique_users}")
-    typer.echo(f"  Legitimate: {total - fraud if total else 0}")
-    typer.echo(f"  Fraudulent: {fraud}")
-    typer.echo(f"  Fraud rate: {round(fraud / total * 100, 2) if total else 0}%")
-
-    if fraud_types:
-        typer.echo("\nFraud Type Breakdown:")
-        for fraud_type, count in fraud_types:
-            typer.echo(f"  {fraud_type}: {count}")
-
-    if eval_total:
-        typer.echo("\nEvaluation Metadata:")
-        typer.echo(f"  Total records: {eval_total}")
-        typer.echo(f"  Train-eligible: {train_eligible}")
-        typer.echo(f"  Evaluation-only: {eval_total - train_eligible}")
+    typer.echo(f"  Total records: {resp.total_records}")
+    typer.echo(f"  Unique users: {resp.unique_users}")
+    typer.echo(f"  Fraudulent: {resp.fraud_records}")
+    typer.echo(f"  Fraud rate: {round(resp.fraud_rate, 2)}%")
 
 
 if __name__ == "__main__":

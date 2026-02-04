@@ -52,24 +52,24 @@ export class HttpClient {
   async request<T>(options: RequestOptions): Promise<HttpResponse<T>> {
     const { method } = options;
     const maxRetries = method === 'GET' ? 1 : 0;
-    
+
     let lastError: Error | unknown;
-    
+
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         return await this.executeRequest<T>(options, attempt);
       } catch (error) {
         lastError = error;
-        const isRetryable = 
-          (error instanceof UpstreamError && error.statusCode >= 500) ||
+        const isRetryable =
+          (error instanceof UpstreamError && (error.statusCode === 503 || error.statusCode === 504)) ||
           (error instanceof Error && error.name === 'TimeoutError');
-          
+
         if (attempt < maxRetries && isRetryable) {
           const delay = 100 * (attempt + 1); // simple backoff
-          this.logger.warn({ 
-            requestId: options.requestId, 
-            attempt: attempt + 1, 
-            error: error instanceof Error ? error.message : 'Unknown' 
+          this.logger.warn({
+            requestId: options.requestId,
+            attempt: attempt + 1,
+            error: error instanceof Error ? error.message : 'Unknown'
           }, 'Retrying upstream request');
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
@@ -83,7 +83,7 @@ export class HttpClient {
   private async executeRequest<T>(options: RequestOptions, attempt: number): Promise<HttpResponse<T>> {
     const { method, path, body, requestId, timeout, target = 'fastapi', query } = options;
     const baseUrl = this.getBaseUrl(target);
-    
+
     // Construct URL with query params
     const urlObj = new URL(baseUrl + path);
     if (query) {
@@ -194,10 +194,16 @@ export class HttpClient {
   private createUpstreamError(statusCode: number, body: unknown, requestId: string): UpstreamError {
     // Try to extract error details from upstream response
     let apiError: ApiError;
+    const rawBody = body;
 
     if (typeof body === 'object' && body !== null) {
       const errorBody = body as Record<string, unknown>;
-      if ('error' in errorBody && typeof errorBody.error === 'object') {
+      if ('error' in errorBody && typeof errorBody.error === 'string') {
+        apiError = {
+          code: String(errorBody.error),
+          message: String(errorBody.error),
+        };
+      } else if ('error' in errorBody && typeof errorBody.error === 'object') {
         const innerError = errorBody.error as Record<string, unknown>;
         apiError = {
           code: String(innerError.code ?? 'UPSTREAM_ERROR'),
@@ -229,7 +235,13 @@ export class HttpClient {
       };
     }
 
-    return new UpstreamError(statusCode, apiError, requestId);
+    // Intercept generic auth errors from upstream (likely MLflow or similar)
+    if (apiError.message.toLowerCase().includes('authentication required')) {
+      apiError.message = 'Upstream service rejected the request (auth/config). Check MLflow/API service configuration or ensure containers are running.';
+      apiError.code = 'UPSTREAM_AUTH_ERROR';
+    }
+
+    return new UpstreamError(statusCode, apiError, requestId, rawBody);
   }
 }
 
@@ -237,18 +249,30 @@ export class UpstreamError extends Error {
   public readonly statusCode: number;
   public readonly apiError: ApiError;
   public readonly requestId: string;
+  public readonly rawBody?: unknown;
 
-  constructor(statusCode: number, apiError: ApiError, requestId: string) {
+  constructor(statusCode: number, apiError: ApiError, requestId: string, rawBody?: unknown) {
     super(apiError.message);
     this.name = 'UpstreamError';
     this.statusCode = statusCode;
     this.apiError = apiError;
     this.requestId = requestId;
+    this.rawBody = rawBody;
   }
 
-  toResponse(): ErrorResponse {
+  toResponse(): ErrorResponse | Record<string, unknown> {
+    if (this.statusCode === 501 && this.rawBody && typeof this.rawBody === 'object') {
+      const body = this.rawBody as Record<string, unknown>;
+      if (typeof body.error === 'string') {
+        return body;
+      }
+    }
     return {
-      error: this.apiError,
+      error: {
+        ...this.apiError,
+        upstream_status: this.statusCode,
+        request_id: this.requestId,
+      },
     };
   }
 }

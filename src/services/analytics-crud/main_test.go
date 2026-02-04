@@ -165,6 +165,50 @@ func TestGetTransactionDetailsRejectsInvalidLimit(t *testing.T) {
 	assert.Equal(t, codes.InvalidArgument, st.Code())
 }
 
+func TestSearchTransactions(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := &server{db: db}
+
+	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM generated_records WHERE user_id = \\$1 AND amount >= \\$2").
+		WithArgs("user-1", 12.5).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
+
+	mock.ExpectQuery("(?s)SELECT.*FROM generated_records WHERE user_id = \\$1 AND amount >= \\$2.*ORDER BY transaction_timestamp DESC OFFSET \\$3 LIMIT \\$4").
+		WithArgs("user-1", 12.5, int32(0), int32(25)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"record_id",
+			"user_id",
+			"transaction_timestamp",
+			"amount",
+			"is_fraudulent",
+			"fraud_type",
+			"is_off_hours_txn",
+			"merchant_risk_score",
+			"amount_to_avg_ratio",
+			"balance_volatility_z_score",
+		}).AddRow("rec-1", "user-1", time.Now(), 22.5, false, "none", false, 10, 1.2, -0.3))
+
+	minAmount := 12.5
+	req := &pb.SearchTransactionsRequest{
+		UserId:    "user-1",
+		MinAmount: &minAmount,
+		Limit:     25,
+		Offset:    0,
+	}
+
+	resp, err := s.SearchTransactions(context.Background(), req)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, int64(2), resp.Total)
+	assert.Len(t, resp.Transactions, 1)
+	assert.Equal(t, "rec-1", resp.Transactions[0].RecordId)
+	assert.True(t, resp.Transactions[0].IsTrainEligible)
+	assert.True(t, resp.Transactions[0].IsPreFraud)
+}
+
 func TestGetRecentAlertsRejectsInvalidLimit(t *testing.T) {
 	db, _, err := sqlmock.New()
 	require.NoError(t, err)

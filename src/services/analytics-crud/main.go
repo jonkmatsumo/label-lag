@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net"
@@ -46,6 +47,8 @@ const (
 	defaultTxnLimit      = 1000
 	defaultAlertLimit    = 50
 	defaultSampleSize    = 100
+	defaultSearchLimit   = 100
+	maxSearchLimit       = 1000
 	defaultDatabaseURL   = "postgresql://synthetic:synthetic_dev_password@localhost:5542/synthetic_data?sslmode=disable"
 )
 
@@ -170,6 +173,117 @@ func (s *server) GetTransactionDetails(ctx context.Context, req *pb.GetTransacti
 	}
 
 	return &pb.GetTransactionDetailsResponse{Transactions: txs}, nil
+}
+
+func (s *server) SearchTransactions(ctx context.Context, req *pb.SearchTransactionsRequest) (*pb.SearchTransactionsResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "request required")
+	}
+
+	limit, err := normalizeLimit(req.Limit, defaultSearchLimit, maxSearchLimit, "limit")
+	if err != nil {
+		return nil, err
+	}
+	offset, err := normalizeOffset(req.Offset)
+	if err != nil {
+		return nil, err
+	}
+
+	conditions := make([]string, 0)
+	args := make([]any, 0)
+
+	if req.UserId != "" {
+		conditions = append(conditions, fmt.Sprintf("user_id = $%d", len(args)+1))
+		args = append(args, req.UserId)
+	}
+	if req.TransactionId != "" {
+		conditions = append(conditions, fmt.Sprintf("record_id = $%d", len(args)+1))
+		args = append(args, req.TransactionId)
+	}
+	if req.MinAmount != nil {
+		conditions = append(conditions, fmt.Sprintf("amount >= $%d", len(args)+1))
+		args = append(args, req.GetMinAmount())
+	}
+	if req.MaxAmount != nil {
+		conditions = append(conditions, fmt.Sprintf("amount <= $%d", len(args)+1))
+		args = append(args, req.GetMaxAmount())
+	}
+	if req.StartDate != "" {
+		if parsed, ok := parseISODate(req.StartDate); ok {
+			conditions = append(conditions, fmt.Sprintf("transaction_timestamp >= $%d", len(args)+1))
+			args = append(args, parsed)
+		}
+	}
+	if req.EndDate != "" {
+		if parsed, ok := parseISODate(req.EndDate); ok {
+			conditions = append(conditions, fmt.Sprintf("transaction_timestamp <= $%d", len(args)+1))
+			args = append(args, parsed)
+		}
+	}
+	if req.IsFraudulent != nil {
+		conditions = append(conditions, fmt.Sprintf("is_fraudulent = $%d", len(args)+1))
+		args = append(args, req.GetIsFraudulent())
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = " WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := "SELECT COUNT(*) FROM generated_records" + whereClause
+	var total int64
+	if err := s.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, fmt.Errorf("failed to query transaction count: %v", err)
+	}
+
+	query := `
+		SELECT
+			record_id,
+			user_id,
+			transaction_timestamp,
+			amount,
+			is_fraudulent,
+			COALESCE(fraud_type, ''),
+			is_off_hours_txn,
+			merchant_risk_score,
+			amount_to_avg_ratio,
+			balance_volatility_z_score
+		FROM generated_records` + whereClause + fmt.Sprintf(" ORDER BY transaction_timestamp DESC OFFSET $%d LIMIT $%d", len(args)+1, len(args)+2)
+
+	args = append(args, offset, limit)
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query transactions: %v", err)
+	}
+	defer rows.Close()
+
+	var txs []*pb.TransactionDetail
+	for rows.Next() {
+		var tx pb.TransactionDetail
+		var createdAt time.Time
+		if err := rows.Scan(
+			&tx.RecordId,
+			&tx.UserId,
+			&createdAt,
+			&tx.Amount,
+			&tx.IsFraudulent,
+			&tx.FraudType,
+			&tx.IsOffHoursTxn,
+			&tx.MerchantRiskScore,
+			&tx.AmountToAvgRatio_30D,
+			&tx.BalanceVolatilityZScore,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan transaction: %v", err)
+		}
+
+		tx.CreatedAt = timestamppb.New(createdAt)
+		tx.IsTrainEligible = true
+		tx.IsPreFraud = true
+		tx.Velocity_24H = 0
+		txs = append(txs, &tx)
+	}
+
+	return &pb.SearchTransactionsResponse{Transactions: txs, Total: total}, nil
 }
 
 func (s *server) GetRecentAlerts(ctx context.Context, req *pb.GetRecentAlertsRequest) (*pb.GetRecentAlertsResponse, error) {
@@ -466,15 +580,6 @@ func (s *server) GetSchemaSummary(ctx context.Context, req *pb.GetSchemaSummaryR
 		tableNames = []string{"generated_records", "feature_snapshots"}
 	}
 
-	// Prepare query: convert slice to postgres array string, e.g. '{t1,t2}'
-	// Or use ANY operator with pq.Array.
-	// Since we are using standard sql, we will build a param list or use pq.Array if imported.
-	// We imported lib/pq as _, so we can use pq.Array if we change import or just build the IN clause.
-	// Simpler to use ANY($1) with a literal string array format or multiple params.
-	// Let's use ANY($1) and format the array manually to avoid explicit pq dep dependency in main code if possible,
-	// but using lib/pq directly is cleaner. We only did _ import, so let's change that if needed.
-	// Actually, just formatting '{a,b}' works for text arrays in Postgres.
-
 	arrStr := "{" + strings.Join(tableNames, ",") + "}"
 
 	query := `
@@ -515,6 +620,661 @@ func (s *server) GetSchemaSummary(ctx context.Context, req *pb.GetSchemaSummaryR
 	}
 
 	return &pb.GetSchemaSummaryResponse{Columns: columns}, nil
+}
+
+func (s *server) GetTrainingData(ctx context.Context, req *pb.GetTrainingDataRequest) (*pb.GetTrainingDataResponse, error) {
+	if req == nil || req.CutoffDate == nil {
+		return nil, status.Error(codes.InvalidArgument, "cutoff_date required")
+	}
+	cutoff := req.CutoffDate.AsTime()
+
+	// Train set query: transaction_timestamp < cutoff AND is_train_eligible = True
+	// Knowledge Horizon: Only label fraud if confirmed before cutoff
+	trainQuery := `
+		SELECT
+			fs.record_id,
+			fs.user_id,
+			em.created_at,
+			em.is_train_eligible,
+			em.is_pre_fraud,
+			gr.amount,
+			gr.is_off_hours_txn,
+			gr.merchant_risk_score,
+			fs.velocity_24h,
+			fs.amount_to_avg_ratio_30d,
+			fs.balance_volatility_z_score,
+			CASE
+				WHEN gr.is_fraudulent = TRUE
+					 AND em.fraud_confirmed_at IS NOT NULL
+					 AND em.fraud_confirmed_at <= $1
+				THEN TRUE
+				ELSE FALSE
+			END AS is_fraudulent,
+			COALESCE(gr.fraud_type, '')
+		FROM feature_snapshots fs
+		INNER JOIN evaluation_metadata em ON fs.record_id = em.record_id
+		INNER JOIN generated_records gr ON fs.record_id = gr.record_id
+		WHERE gr.transaction_timestamp < $1
+		  AND em.is_train_eligible = TRUE
+		ORDER BY gr.transaction_timestamp
+	`
+
+	// Test set query: transaction_timestamp >= cutoff
+	testQuery := `
+		SELECT
+			fs.record_id,
+			fs.user_id,
+			em.created_at,
+			em.is_train_eligible,
+			em.is_pre_fraud,
+			gr.amount,
+			gr.is_off_hours_txn,
+			gr.merchant_risk_score,
+			fs.velocity_24h,
+			fs.amount_to_avg_ratio_30d,
+			fs.balance_volatility_z_score,
+			gr.is_fraudulent,
+			COALESCE(gr.fraud_type, '')
+		FROM feature_snapshots fs
+		INNER JOIN evaluation_metadata em ON fs.record_id = em.record_id
+		INNER JOIN generated_records gr ON fs.record_id = gr.record_id
+		WHERE gr.transaction_timestamp >= $1
+		ORDER BY gr.transaction_timestamp
+	`
+
+	trainRecords, err := s.queryTrainingRecords(ctx, trainQuery, cutoff)
+	if err != nil {
+		return nil, err
+	}
+
+	testRecords, err := s.queryTrainingRecords(ctx, testQuery, cutoff)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.GetTrainingDataResponse{
+		TrainRecords: trainRecords,
+		TestRecords:  testRecords,
+	}, nil
+}
+
+func (s *server) queryTrainingRecords(ctx context.Context, query string, cutoff time.Time) ([]*pb.TransactionDetail, error) {
+	rows, err := s.db.QueryContext(ctx, query, cutoff)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query training records: %v", err)
+	}
+	defer rows.Close()
+
+	var records []*pb.TransactionDetail
+	for rows.Next() {
+		var tx pb.TransactionDetail
+		var createdAt time.Time
+		err := rows.Scan(
+			&tx.RecordId,
+			&tx.UserId,
+			&createdAt,
+			&tx.IsTrainEligible,
+			&tx.IsPreFraud,
+			&tx.Amount,
+			&tx.IsOffHoursTxn,
+			&tx.MerchantRiskScore,
+			&tx.Velocity_24H,
+			&tx.AmountToAvgRatio_30D,
+			&tx.BalanceVolatilityZScore,
+			&tx.IsFraudulent,
+			&tx.FraudType,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan training record: %v", err)
+		}
+		tx.CreatedAt = timestamppb.New(createdAt)
+		records = append(records, &tx)
+	}
+	return records, nil
+}
+
+func (s *server) GetBacktestFeatures(ctx context.Context, req *pb.GetBacktestFeaturesRequest) (*pb.GetBacktestFeaturesResponse, error) {
+	if req == nil || req.StartDate == nil || req.EndDate == nil {
+		return nil, status.Error(codes.InvalidArgument, "start_date and end_date required")
+	}
+	start := req.StartDate.AsTime()
+	end := req.EndDate.AsTime()
+
+	query := `
+		SELECT
+			record_id,
+			velocity_24h,
+			amount_to_avg_ratio_30d,
+			balance_volatility_z_score,
+			COALESCE(experimental_signals::text, '{}') as experimental_signals_json
+		FROM feature_snapshots
+		WHERE computed_at >= $1 AND computed_at <= $2
+		ORDER BY computed_at
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, start, end)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query backtest features: %v", err)
+	}
+	defer rows.Close()
+
+	var features []*pb.BacktestFeatureVector
+	for rows.Next() {
+		var f pb.BacktestFeatureVector
+		if err := rows.Scan(
+			&f.RecordId,
+			&f.Velocity_24H,
+			&f.AmountToAvgRatio_30D,
+			&f.BalanceVolatilityZScore,
+			&f.ExperimentalSignalsJson,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan backtest feature: %v", err)
+		}
+		features = append(features, &f)
+	}
+
+	return &pb.GetBacktestFeaturesResponse{Features: features}, nil
+}
+
+func (s *server) SaveBacktestResult(ctx context.Context, req *pb.SaveBacktestResultRequest) (*pb.SaveBacktestResultResponse, error) {
+	if req == nil || req.Result == nil {
+		return nil, status.Error(codes.InvalidArgument, "result required")
+	}
+	res := req.Result
+
+	metricsJSON, _ := json.Marshal(res.Metrics)
+
+	query := `
+		INSERT INTO backtest_results (
+			job_id, rule_id, ruleset_version, start_date, end_date,
+			metrics, completed_at, error
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		ON CONFLICT (job_id) DO UPDATE SET
+			metrics = EXCLUDED.metrics,
+			completed_at = EXCLUDED.completed_at,
+			error = EXCLUDED.error
+	`
+
+	_, err := s.db.ExecContext(ctx, query,
+		res.JobId, res.RuleId, res.RulesetVersion,
+		res.StartDate.AsTime(), res.EndDate.AsTime(),
+		metricsJSON, res.CompletedAt.AsTime(), res.Error,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to save backtest result: %v", err)
+	}
+
+	return &pb.SaveBacktestResultResponse{Success: true}, nil
+}
+
+func (s *server) ListBacktestResults(ctx context.Context, req *pb.ListBacktestResultsRequest) (*pb.ListBacktestResultsResponse, error) {
+	query := `
+		SELECT
+			job_id, rule_id, ruleset_version, start_date, end_date,
+			metrics, completed_at, error
+		FROM backtest_results
+		WHERE 1=1
+	`
+	args := []interface{}{}
+
+	if req.RuleId != "" {
+		args = append(args, req.RuleId)
+		query += fmt.Sprintf(" AND rule_id = $%d", len(args))
+	}
+	if req.StartDate != nil {
+		args = append(args, req.StartDate.AsTime())
+		query += fmt.Sprintf(" AND completed_at >= $%d", len(args))
+	}
+	if req.EndDate != nil {
+		args = append(args, req.EndDate.AsTime())
+		query += fmt.Sprintf(" AND completed_at <= $%d", len(args))
+	}
+
+	query += " ORDER BY completed_at DESC LIMIT 100"
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query backtest results: %v", err)
+	}
+	defer rows.Close()
+
+	var results []*pb.BacktestResult
+	for rows.Next() {
+		var res pb.BacktestResult
+		var start, end, completed time.Time
+		var metricsJSON []byte
+		var ruleID sql.NullString
+
+		if err := rows.Scan(
+			&res.JobId, &ruleID, &res.RulesetVersion, &start, &end,
+			&metricsJSON, &completed, &res.Error,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan backtest result: %v", err)
+		}
+
+		res.RuleId = ruleID.String
+		res.StartDate = timestamppb.New(start)
+		res.EndDate = timestamppb.New(end)
+		res.CompletedAt = timestamppb.New(completed)
+
+		var metrics pb.BacktestMetrics
+		if err := json.Unmarshal(metricsJSON, &metrics); err == nil {
+			res.Metrics = &metrics
+		}
+
+		results = append(results, &res)
+	}
+
+	return &pb.ListBacktestResultsResponse{Results: results}, nil
+}
+
+func (s *server) GetBacktestResult(ctx context.Context, req *pb.GetBacktestResultRequest) (*pb.GetBacktestResultResponse, error) {
+	query := `
+		SELECT
+			job_id, rule_id, ruleset_version, start_date, end_date,
+			metrics, completed_at, error
+		FROM backtest_results
+		WHERE job_id = $1
+	`
+
+	var res pb.BacktestResult
+	var start, end, completed time.Time
+	var metricsJSON []byte
+	var ruleID sql.NullString
+
+	err := s.db.QueryRowContext(ctx, query, req.JobId).Scan(
+		&res.JobId, &ruleID, &res.RulesetVersion, &start, &end,
+		&metricsJSON, &completed, &res.Error,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, status.Error(codes.NotFound, "backtest result not found")
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to query backtest result: %v", err)
+	}
+
+	res.RuleId = ruleID.String
+	res.StartDate = timestamppb.New(start)
+	res.EndDate = timestamppb.New(end)
+	res.CompletedAt = timestamppb.New(completed)
+
+	var metrics pb.BacktestMetrics
+	if err := json.Unmarshal(metricsJSON, &metrics); err == nil {
+		res.Metrics = &metrics
+	}
+
+	return &pb.GetBacktestResultResponse{Result: &res}, nil
+}
+
+func (s *server) GetDriftWindow(ctx context.Context, req *pb.GetDriftWindowRequest) (*pb.GetDriftWindowResponse, error) {
+	if req == nil || req.Hours <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "hours > 0 required")
+	}
+	cutoff := time.Now().Add(-time.Duration(req.Hours) * time.Hour)
+
+	query := `
+		SELECT
+			record_id,
+			user_id,
+			created_at,
+			velocity_24h,
+			amount_to_avg_ratio_30d,
+			balance_volatility_z_score
+		FROM feature_snapshots
+		WHERE computed_at >= $1
+		ORDER BY computed_at DESC
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, cutoff)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query drift window: %v", err)
+	}
+	defer rows.Close()
+
+	var txs []*pb.TransactionDetail
+	for rows.Next() {
+		var tx pb.TransactionDetail
+		var createdAt time.Time
+		if err := rows.Scan(
+			&tx.RecordId,
+			&tx.UserId,
+			&createdAt,
+			&tx.Velocity_24H,
+			&tx.AmountToAvgRatio_30D,
+			&tx.BalanceVolatilityZScore,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan drift window record: %v", err)
+		}
+		tx.CreatedAt = timestamppb.New(createdAt)
+		txs = append(txs, &tx)
+	}
+
+	return &pb.GetDriftWindowResponse{Transactions: txs}, nil
+}
+
+func (s *server) StoreGeneratedData(ctx context.Context, req *pb.StoreGeneratedDataRequest) (*pb.StoreGeneratedDataResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "request required")
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback()
+
+	// Insert generated records
+	recordQuery := `
+		INSERT INTO generated_records (
+			record_id, user_id, full_name, email, phone, transaction_timestamp,
+			is_off_hours_txn, available_balance, balance_to_transaction_ratio,
+			avg_available_balance_30d, balance_volatility_z_score,
+			bank_connections_count_24h, bank_connections_count_7d,
+			bank_connections_avg_30d, amount, amount_to_avg_ratio,
+			merchant_risk_score, is_returned, email_changed_at, phone_changed_at,
+			is_fraudulent, fraud_type
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
+		)
+	`
+
+	for _, r := range req.Records {
+		_, err := tx.ExecContext(ctx, recordQuery,
+			r.RecordId, r.UserId, r.FullName, r.Email, r.Phone,
+			r.TransactionTimestamp.AsTime(), r.IsOffHoursTxn, r.AvailableBalance,
+			r.BalanceToTransactionRatio, r.AvgAvailableBalance_30D,
+			r.BalanceVolatilityZScore, r.BankConnectionsCount_24H,
+			r.BankConnectionsCount_7D, r.BankConnectionsAvg_30D,
+			r.Amount, r.AmountToAvgRatio, r.MerchantRiskScore, r.IsReturned,
+			r.EmailChangedAt.AsTime(), r.PhoneChangedAt.AsTime(),
+			r.IsFraudulent, r.FraudType,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to insert record %s: %v", r.RecordId, err)
+		}
+	}
+
+	// Insert evaluation metadata
+	metaQuery := `
+		INSERT INTO evaluation_metadata (
+			user_id, record_id, sequence_number, fraud_confirmed_at,
+			is_pre_fraud, days_to_fraud, is_train_eligible
+		) VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`
+
+	for _, m := range req.Metadata {
+		var fraudConfirmedAt interface{}
+		if m.FraudConfirmedAt != nil {
+			fraudConfirmedAt = m.FraudConfirmedAt.AsTime()
+		}
+
+		_, err := tx.ExecContext(ctx, metaQuery,
+			m.UserId, m.RecordId, m.SequenceNumber, fraudConfirmedAt,
+			m.IsPreFraud, m.DaysToFraud, m.IsTrainEligible,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to insert metadata for %s: %v", m.RecordId, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	return &pb.StoreGeneratedDataResponse{
+		Success:      true,
+		RecordsSaved: int64(len(req.Records)),
+	}, nil
+}
+
+func (s *server) ClearAllData(ctx context.Context, req *pb.ClearAllDataRequest) (*pb.ClearAllDataResponse, error) {
+	tables := []string{"feature_snapshots", "evaluation_metadata", "generated_records", "backtest_results"}
+
+	for _, t := range tables {
+		if _, err := s.db.ExecContext(ctx, fmt.Sprintf("TRUNCATE TABLE %s CASCADE", t)); err != nil {
+			return nil, fmt.Errorf("failed to clear table %s: %v", t, err)
+		}
+	}
+
+	return &pb.ClearAllDataResponse{
+		Success:       true,
+		TablesCleared: tables,
+	}, nil
+}
+
+func (s *server) MaterializeFeatures(ctx context.Context, req *pb.MaterializeFeaturesRequest) (*pb.MaterializeFeaturesResponse, error) {
+	// SQL taken from materialize_features.py
+	materializeSQL := `
+		INSERT INTO feature_snapshots (
+			record_id, user_id, velocity_24h, amount_to_avg_ratio_30d,
+			balance_volatility_z_score, experimental_signals, computed_at
+		)
+		SELECT
+			fc.record_id,
+			fc.user_id,
+			fc.velocity_24h::INTEGER,
+			fc.amount_to_avg_ratio_30d::FLOAT,
+			fc.balance_volatility_z_score::FLOAT,
+			fc.experimental_signals,
+			NOW()
+		FROM (
+			WITH feature_calculations AS (
+				SELECT
+					gr.record_id,
+					gr.user_id,
+					gr.transaction_timestamp,
+					gr.amount,
+					gr.available_balance,
+					COUNT(*) OVER (
+						PARTITION BY gr.user_id
+						ORDER BY gr.transaction_timestamp
+						RANGE BETWEEN INTERVAL '24 hours' PRECEDING AND CURRENT ROW
+					) AS velocity_24h,
+					CASE
+						WHEN AVG(gr.amount) OVER (
+							PARTITION BY gr.user_id
+							ORDER BY gr.transaction_timestamp
+							RANGE BETWEEN INTERVAL '30 days' PRECEDING AND CURRENT ROW
+						) > 0
+						THEN gr.amount / AVG(gr.amount) OVER (
+							PARTITION BY gr.user_id
+							ORDER BY gr.transaction_timestamp
+							RANGE BETWEEN INTERVAL '30 days' PRECEDING AND CURRENT ROW
+						)
+						ELSE 1.0
+					END AS amount_to_avg_ratio_30d,
+					CASE
+						WHEN COALESCE(STDDEV(gr.available_balance) OVER (
+							PARTITION BY gr.user_id
+							ORDER BY gr.transaction_timestamp
+							RANGE BETWEEN INTERVAL '30 days' PRECEDING AND CURRENT ROW
+						), 0) > 0
+						THEN (
+							gr.available_balance - AVG(gr.available_balance) OVER (
+								PARTITION BY gr.user_id
+								ORDER BY gr.transaction_timestamp
+								RANGE BETWEEN INTERVAL '30 days' PRECEDING AND CURRENT ROW
+							)
+						) / STDDEV(gr.available_balance) OVER (
+							PARTITION BY gr.user_id
+							ORDER BY gr.transaction_timestamp
+							RANGE BETWEEN INTERVAL '30 days' PRECEDING AND CURRENT ROW
+						)
+						ELSE 0.0
+					END AS balance_volatility_z_score,
+					COUNT(*) OVER (
+						PARTITION BY gr.user_id
+						ORDER BY gr.transaction_timestamp
+						RANGE BETWEEN INTERVAL '7 days' PRECEDING AND CURRENT ROW
+					) AS velocity_7d,
+					MAX(gr.amount) OVER (
+						PARTITION BY gr.user_id
+						ORDER BY gr.transaction_timestamp
+						RANGE BETWEEN INTERVAL '30 days' PRECEDING AND CURRENT ROW
+					) AS max_amount_30d,
+					SUM(CASE WHEN gr.is_off_hours_txn THEN 1 ELSE 0 END) OVER (
+						PARTITION BY gr.user_id
+						ORDER BY gr.transaction_timestamp
+						RANGE BETWEEN INTERVAL '7 days' PRECEDING AND CURRENT ROW
+					) AS off_hours_count_7d,
+					gr.bank_connections_count_24h,
+					gr.merchant_risk_score
+				FROM generated_records gr
+				WHERE gr.record_id NOT IN (SELECT record_id FROM feature_snapshots)
+			)
+			SELECT
+				record_id,
+				user_id,
+				velocity_24h,
+				amount_to_avg_ratio_30d,
+				balance_volatility_z_score,
+				jsonb_build_object(
+					'velocity_7d', velocity_7d,
+					'max_amount_30d', max_amount_30d::FLOAT,
+					'off_hours_count_7d', off_hours_count_7d,
+					'bank_connections_24h', bank_connections_count_24h,
+					'merchant_risk_score', merchant_risk_score
+				) AS experimental_signals
+			FROM feature_calculations
+		) fc
+		ON CONFLICT (record_id) DO UPDATE SET
+			velocity_24h = EXCLUDED.velocity_24h,
+			amount_to_avg_ratio_30d = EXCLUDED.amount_to_avg_ratio_30d,
+			balance_volatility_z_score = EXCLUDED.balance_volatility_z_score,
+			experimental_signals = EXCLUDED.experimental_signals,
+			computed_at = EXCLUDED.computed_at;
+	`
+
+	res, err := s.db.ExecContext(ctx, materializeSQL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to materialize features: %v", err)
+	}
+
+	rowsAffected, _ := res.RowsAffected()
+
+	return &pb.MaterializeFeaturesResponse{
+		Success:        true,
+		TotalProcessed: rowsAffected,
+	}, nil
+}
+
+func (s *server) SaveRule(ctx context.Context, req *pb.SaveRuleRequest) (*pb.SaveRuleResponse, error) {
+	if req == nil || req.Rule == nil {
+		return nil, status.Error(codes.InvalidArgument, "rule required")
+	}
+	r := req.Rule
+
+	query := `
+		INSERT INTO rules (
+			rule_id, field, op, value, action, score, severity, reason, status
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		ON CONFLICT (rule_id) DO UPDATE SET
+			field = EXCLUDED.field,
+			op = EXCLUDED.op,
+			value = EXCLUDED.value,
+			action = EXCLUDED.action,
+			score = EXCLUDED.score,
+			severity = EXCLUDED.severity,
+			reason = EXCLUDED.reason,
+			status = EXCLUDED.status
+	`
+
+	_, err := s.db.ExecContext(ctx, query,
+		r.Id, r.Field, r.Op, r.ValueJson, r.Action, r.Score, r.Severity, r.Reason, r.Status,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to save rule: %v", err)
+	}
+
+	return &pb.SaveRuleResponse{Success: true}, nil
+}
+
+func (s *server) GetRule(ctx context.Context, req *pb.GetRuleRequest) (*pb.GetRuleResponse, error) {
+	query := `SELECT rule_id, field, op, value, action, score, severity, reason, status FROM rules WHERE rule_id = $1`
+
+	var r pb.Rule
+	err := s.db.QueryRowContext(ctx, query, req.RuleId).Scan(
+		&r.Id, &r.Field, &r.Op, &r.ValueJson, &r.Action, &r.Score, &r.Severity, &r.Reason, &r.Status,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, status.Error(codes.NotFound, "rule not found")
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to get rule: %v", err)
+	}
+
+	return &pb.GetRuleResponse{Rule: &r}, nil
+}
+
+func (s *server) ListRules(ctx context.Context, req *pb.ListRulesRequest) (*pb.ListRulesResponse, error) {
+	query := `SELECT rule_id, field, op, value, action, score, severity, reason, status FROM rules WHERE 1=1`
+	args := []interface{}{}
+
+	if req.Status != "" {
+		args = append(args, req.Status)
+		query += fmt.Sprintf(" AND status = $%d", len(args))
+	} else if !req.IncludeArchived {
+		query += " AND status != 'archived'"
+	}
+
+	query += " ORDER BY rule_id"
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list rules: %v", err)
+	}
+	defer rows.Close()
+
+	var rules []*pb.Rule
+	for rows.Next() {
+		var r pb.Rule
+		if err := rows.Scan(
+			&r.Id, &r.Field, &r.Op, &r.ValueJson, &r.Action, &r.Score, &r.Severity, &r.Reason, &r.Status,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan rule: %v", err)
+		}
+		rules = append(rules, &r)
+	}
+
+	return &pb.ListRulesResponse{Rules: rules}, nil
+}
+
+func (s *server) DeleteRule(ctx context.Context, req *pb.DeleteRuleRequest) (*pb.DeleteRuleResponse, error) {
+	query := `UPDATE rules SET status = 'archived' WHERE rule_id = $1`
+	_, err := s.db.ExecContext(ctx, query, req.RuleId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to archive rule: %v", err)
+	}
+	return &pb.DeleteRuleResponse{Success: true}, nil
+}
+
+func (s *server) LogInferenceEvent(ctx context.Context, req *pb.LogInferenceEventRequest) (*pb.LogInferenceEventResponse, error) {
+	if req == nil || req.Event == nil {
+		return nil, status.Error(codes.InvalidArgument, "event required")
+	}
+	e := req.Event
+
+	impactsJSON, _ := json.Marshal(e.RuleImpacts)
+
+	query := `
+		INSERT INTO inference_events (
+			request_id, timestamp, model_version, rules_version,
+			model_score, final_score, rule_impacts
+		) VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`
+
+	_, err := s.db.ExecContext(ctx, query,
+		e.RequestId, e.Timestamp.AsTime(), e.ModelVersion, e.RulesVersion,
+		e.ModelScore, e.FinalScore, impactsJSON,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to log inference event: %v", err)
+	}
+
+	return &pb.LogInferenceEventResponse{Success: true}, nil
 }
 
 func (s *server) GetFeatureSample(ctx context.Context, req *pb.GetFeatureSampleRequest) (*pb.GetFeatureSampleResponse, error) {
@@ -677,6 +1437,29 @@ func normalizeLimit(value, fallback, max int32, field string) (int32, error) {
 	return value, nil
 }
 
+func normalizeOffset(value int32) (int32, error) {
+	if value < 0 {
+		return 0, status.Error(codes.InvalidArgument, "offset must be >= 0")
+	}
+	return value, nil
+}
+
+func parseISODate(value string) (time.Time, bool) {
+	layouts := []string{
+		time.RFC3339Nano,
+		time.RFC3339,
+		"2006-01-02T15:04:05.999999",
+		"2006-01-02T15:04:05",
+		"2006-01-02",
+	}
+	for _, layout := range layouts {
+		if parsed, err := time.Parse(layout, value); err == nil {
+			return parsed, true
+		}
+	}
+	return time.Time{}, false
+}
+
 // loggingInterceptor logs the details of each gRPC request and response.
 func loggingInterceptor(
 	ctx context.Context,
@@ -795,6 +1578,11 @@ func main() {
 	}
 	defer db.Close()
 
+	if err := initDB(db); err != nil {
+		slog.Error("failed to initialize database", "error", err)
+		os.Exit(1)
+	}
+
 	// Configure connection pool
 	db.SetMaxOpenConns(10)
 	db.SetMaxIdleConns(5)
@@ -871,6 +1659,51 @@ func updateHealthStatus(ctx context.Context, db *sql.DB, healthServer *health.Se
 	return nil
 }
 
+func initDB(db *sql.DB) error {
+	queries := []string{
+		`CREATE TABLE IF NOT EXISTS backtest_results (
+			job_id TEXT PRIMARY KEY,
+			rule_id TEXT,
+			ruleset_version TEXT NOT NULL,
+			start_date TIMESTAMP NOT NULL,
+			end_date TIMESTAMP NOT NULL,
+			metrics JSONB NOT NULL,
+			completed_at TIMESTAMP NOT NULL,
+			error TEXT
+		)`,
+		`CREATE TABLE IF NOT EXISTS rules (
+			rule_id TEXT PRIMARY KEY,
+			field TEXT NOT NULL,
+			op TEXT NOT NULL,
+			value TEXT NOT NULL,
+			action TEXT NOT NULL,
+			score INTEGER,
+			severity TEXT NOT NULL,
+			reason TEXT,
+			status TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS inference_events (
+			request_id TEXT PRIMARY KEY,
+			timestamp TIMESTAMP NOT NULL,
+			model_version TEXT NOT NULL,
+			rules_version TEXT NOT NULL,
+			model_score INTEGER NOT NULL,
+			final_score INTEGER NOT NULL,
+			rule_impacts JSONB NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_backtest_results_rule_id ON backtest_results(rule_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_backtest_results_completed_at ON backtest_results(completed_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_rules_status ON rules(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_inference_events_timestamp ON inference_events(timestamp)`,
+	}
+
+	for _, q := range queries {
+		if _, err := db.Exec(q); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 func resolveDatabaseURL(getenv func(string) string) (string, error) {
 	if value := strings.TrimSpace(getenv("DATABASE_URL")); value != "" {
 		return value, nil

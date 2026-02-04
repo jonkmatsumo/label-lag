@@ -1,20 +1,18 @@
-"""Backtesting infrastructure for rule evaluation."""
+"""Backtesting infrastructure for rule evaluation via Analytics service."""
 
 import json
 import logging
-import os
 import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 import numpy as np
-from sqlalchemy import text
+from google.protobuf.timestamp_pb2 import Timestamp
 
+from api.crud_client import get_crud_client
 from api.rules import RuleSet, evaluate_rules
 from api.schemas import BacktestDelta
-from synthetic_pipeline.db.session import DatabaseSession
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +38,7 @@ class BacktestResult:
     """Result of a backtest run."""
 
     job_id: str
-    rule_id: str | None  # If testing single rule, None if testing ruleset
+    rule_id: str | None
     ruleset_version: str
     start_date: datetime
     end_date: datetime
@@ -49,38 +47,34 @@ class BacktestResult:
     error: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for serialization."""
+        """Convert to dictionary."""
         data = asdict(self)
         data["start_date"] = self.start_date.isoformat()
         data["end_date"] = self.end_date.isoformat()
         data["completed_at"] = self.completed_at.isoformat()
-        data["metrics"] = asdict(self.metrics)
         return data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "BacktestResult":
         """Create from dictionary."""
-        # Convert ISO strings back to datetime
         for field in ["start_date", "end_date", "completed_at"]:
             if isinstance(data[field], str):
                 data[field] = datetime.fromisoformat(data[field])
-
-        # Reconstruct metrics
-        data["metrics"] = BacktestMetrics(**data["metrics"])
-
+        if isinstance(data["metrics"], dict):
+            data["metrics"] = BacktestMetrics(**data["metrics"])
         return cls(**data)
 
 
 class BacktestRunner:
-    """Runs backtests by replaying historical features through rules."""
+    """Runs backtests by replaying historical features from Analytics service."""
 
-    def __init__(self, db_session: DatabaseSession | None = None):
+    def __init__(self, db_session=None):
         """Initialize backtest runner.
 
         Args:
-            db_session: Database session. If None, creates a new one.
+            db_session: Ignored in compute-only mode.
         """
-        self.db_session = db_session or DatabaseSession()
+        pass
 
     def run_backtest(
         self,
@@ -90,48 +84,17 @@ class BacktestRunner:
         base_score: int = 50,
         rule_id: str | None = None,
     ) -> BacktestResult:
-        """Run a backtest on historical data.
-
-        Args:
-            ruleset: RuleSet to test.
-            start_date: Start of date range.
-            end_date: End of date range.
-            base_score: Base score to use before rule application.
-            rule_id: Optional rule ID if testing a single rule.
-
-        Returns:
-            BacktestResult with computed metrics.
-        """
+        """Run a backtest on historical data."""
         job_id = f"backtest_{uuid.uuid4().hex[:12]}"
         logger.info(f"Starting backtest {job_id} for ruleset {ruleset.version}")
 
         try:
-            # Fetch historical features
+            # Fetch historical features via Analytics service
             features_list = self._fetch_historical_features(start_date, end_date)
 
             if not features_list:
-                logger.warning(
-                    f"No features found in date range {start_date} to {end_date}"
-                )
-                return BacktestResult(
-                    job_id=job_id,
-                    rule_id=rule_id,
-                    ruleset_version=ruleset.version,
-                    start_date=start_date,
-                    end_date=end_date,
-                    metrics=BacktestMetrics(
-                        total_records=0,
-                        matched_count=0,
-                        match_rate=0.0,
-                        score_distribution={},
-                        score_mean=0.0,
-                        score_std=0.0,
-                        score_min=0,
-                        score_max=0,
-                        rejected_count=0,
-                        rejected_rate=0.0,
-                    ),
-                    completed_at=datetime.now(timezone.utc),
+                return self._empty_result(
+                    job_id, ruleset.version, start_date, end_date, rule_id
                 )
 
             # Replay features through rules
@@ -163,140 +126,128 @@ class BacktestRunner:
                 completed_at=datetime.now(timezone.utc),
             )
 
-            logger.info(
-                f"Backtest {job_id} completed: {metrics.match_rate:.2%} match rate, "
-                f"{metrics.rejected_rate:.2%} rejection rate"
-            )
+            # Persist result via Analytics service
+            self._save_result(result)
 
+            logger.info(f"Backtest {job_id} completed and saved to Analytics service")
             return result
 
         except Exception as e:
             logger.error(f"Backtest {job_id} failed: {e}", exc_info=True)
-            return BacktestResult(
-                job_id=job_id,
-                rule_id=rule_id,
-                ruleset_version=ruleset.version,
-                start_date=start_date,
-                end_date=end_date,
-                metrics=BacktestMetrics(
-                    total_records=0,
-                    matched_count=0,
-                    match_rate=0.0,
-                    score_distribution={},
-                    score_mean=0.0,
-                    score_std=0.0,
-                    score_min=0,
-                    score_max=0,
-                    rejected_count=0,
-                    rejected_rate=0.0,
-                ),
-                completed_at=datetime.now(timezone.utc),
-                error=str(e),
+            return self._error_result(
+                job_id, ruleset.version, start_date, end_date, rule_id, str(e)
             )
 
     def _fetch_historical_features(
         self, start_date: datetime, end_date: datetime
     ) -> list[dict[str, Any]]:
-        """Fetch historical features from database.
+        """Fetch historical features from Analytics service."""
+        from api.proto.proto.crud.v1 import analytics_pb2
 
-        Args:
-            start_date: Start of date range.
-            end_date: End of date range.
+        start_ts = Timestamp()
+        start_ts.FromDatetime(start_date)
+        end_ts = Timestamp()
+        end_ts.FromDatetime(end_date)
 
-        Returns:
-            List of feature dictionaries.
-        """
+        client = get_crud_client()
+        resp = client.stub.GetBacktestFeatures(
+            analytics_pb2.GetBacktestFeaturesRequest(
+                start_date=start_ts,
+                end_date=end_ts,
+            ),
+            timeout=client.timeout_seconds,
+        )
+
         features_list = []
-
-        with self.db_session.get_session() as session:
-            query = text("""
-                SELECT
-                    velocity_24h,
-                    amount_to_avg_ratio_30d,
-                    balance_volatility_z_score,
-                    experimental_signals
-                FROM feature_snapshots
-                WHERE computed_at >= :start_date
-                  AND computed_at <= :end_date
-                ORDER BY computed_at
-            """)
-
-            result = session.execute(
-                query, {"start_date": start_date, "end_date": end_date}
-            )
-
-            for row in result:
-                feature_dict = {
-                    "velocity_24h": row.velocity_24h,
-                    "amount_to_avg_ratio_30d": float(row.amount_to_avg_ratio_30d),
-                    "balance_volatility_z_score": float(row.balance_volatility_z_score),
-                }
-
-                # Add experimental signals if available
-                if row.experimental_signals:
-                    exp_signals = row.experimental_signals
-                    if isinstance(exp_signals, dict):
-                        # Extract common experimental features
-                        if "bank_connections_24h" in exp_signals:
-                            feature_dict["bank_connections_24h"] = exp_signals[
-                                "bank_connections_24h"
-                            ]
-                        if "merchant_risk_score" in exp_signals:
-                            feature_dict["merchant_risk_score"] = exp_signals[
-                                "merchant_risk_score"
-                            ]
-                        if "has_history" in exp_signals:
-                            feature_dict["has_history"] = exp_signals["has_history"]
-
-                features_list.append(feature_dict)
-
+        for f in resp.features:
+            feature_dict = {
+                "velocity_24h": f.velocity_24h,
+                "amount_to_avg_ratio_30d": f.amount_to_avg_ratio_30d,
+                "balance_volatility_z_score": f.balance_volatility_z_score,
+            }
+            if f.experimental_signals_json:
+                try:
+                    exp = json.loads(f.experimental_signals_json)
+                    if isinstance(exp, dict):
+                        feature_dict.update(exp)
+                except json.JSONDecodeError:
+                    pass
+            features_list.append(feature_dict)
         return features_list
 
+    def _save_result(self, result: BacktestResult) -> None:
+        """Save backtest result via Analytics service."""
+        from api.proto.proto.crud.v1 import analytics_pb2
+
+        client = get_crud_client()
+
+        start_ts = Timestamp()
+        start_ts.FromDatetime(result.start_date)
+        end_ts = Timestamp()
+        end_ts.FromDatetime(result.end_date)
+        comp_ts = Timestamp()
+        completed_at = result.completed_at
+        if completed_at.tzinfo is None:
+            completed_at = completed_at.replace(tzinfo=timezone.utc)
+        comp_ts.FromDatetime(completed_at)
+
+        m = result.metrics
+        metrics_pb = analytics_pb2.BacktestMetrics(
+            total_records=m.total_records,
+            matched_count=m.matched_count,
+            match_rate=m.match_rate,
+            score_distribution=m.score_distribution,
+            score_mean=m.score_mean,
+            score_std=m.score_std,
+            score_min=m.score_min,
+            score_max=m.score_max,
+            rejected_count=m.rejected_count,
+            rejected_rate=m.rejected_rate,
+        )
+
+        res_pb = analytics_pb2.BacktestResult(
+            job_id=result.job_id,
+            rule_id=result.rule_id or "",
+            ruleset_version=result.ruleset_version,
+            start_date=start_ts,
+            end_date=end_ts,
+            metrics=metrics_pb,
+            completed_at=comp_ts,
+            error=result.error or "",
+        )
+
+        client.stub.SaveBacktestResult(
+            analytics_pb2.SaveBacktestResultRequest(result=res_pb),
+            timeout=client.timeout_seconds,
+        )
+
+    def _empty_result(self, job_id, version, start, end, rule_id):
+        return BacktestResult(
+            job_id=job_id,
+            rule_id=rule_id,
+            ruleset_version=version,
+            start_date=start,
+            end_date=end,
+            metrics=BacktestMetrics(0, 0, 0.0, {}, 0.0, 0.0, 0, 0, 0, 0.0),
+            completed_at=datetime.now(timezone.utc),
+        )
+
+    def _error_result(self, job_id, version, start, end, rule_id, error_msg):
+        res = self._empty_result(job_id, version, start, end, rule_id)
+        res.error = error_msg
+        return res
+
     def _compute_metrics(
-        self,
-        total_records: int,
-        scores: list[int],
-        matched_counts: list[int],
-        rejected_counts: list[int],
+        self, total_records, scores, matched_counts, rejected_counts
     ) -> BacktestMetrics:
-        """Compute backtest metrics.
-
-        Args:
-            total_records: Total number of records processed.
-            scores: List of final scores.
-            matched_counts: List of matched rule counts per record.
-            rejected_counts: List of rejection flags (0 or 1).
-
-        Returns:
-            BacktestMetrics with computed statistics.
-        """
         if total_records == 0:
-            return BacktestMetrics(
-                total_records=0,
-                matched_count=0,
-                match_rate=0.0,
-                score_distribution={},
-                score_mean=0.0,
-                score_std=0.0,
-                score_min=0,
-                score_max=0,
-                rejected_count=0,
-                rejected_rate=0.0,
-            )
+            return BacktestMetrics(0, 0, 0.0, {}, 0.0, 0.0, 0, 0, 0, 0.0)
 
         scores_array = np.array(scores)
         matched_count = sum(1 for c in matched_counts if c > 0)
         rejected_count = sum(rejected_counts)
 
-        # Score distribution by ranges
-        score_ranges = {
-            "1-20": 0,
-            "21-40": 0,
-            "41-60": 0,
-            "61-80": 0,
-            "81-99": 0,
-        }
-
+        score_ranges = {"1-20": 0, "21-40": 0, "41-60": 0, "61-80": 0, "81-99": 0}
         for score in scores:
             if score <= 20:
                 score_ranges["1-20"] += 1
@@ -312,120 +263,100 @@ class BacktestRunner:
         return BacktestMetrics(
             total_records=total_records,
             matched_count=matched_count,
-            match_rate=matched_count / total_records if total_records > 0 else 0.0,
+            match_rate=matched_count / total_records,
             score_distribution=score_ranges,
             score_mean=float(np.mean(scores_array)),
             score_std=float(np.std(scores_array)),
             score_min=int(np.min(scores_array)),
             score_max=int(np.max(scores_array)),
             rejected_count=rejected_count,
-            rejected_rate=rejected_count / total_records if total_records > 0 else 0.0,
+            rejected_rate=rejected_count / total_records,
         )
 
 
 class BacktestStore:
-    """Store and retrieve backtest results."""
+    """Retrieves backtest results from Analytics service."""
 
-    def __init__(self, storage_path: Path | str | None = None):
-        """Initialize backtest store.
-
-        Args:
-            storage_path: Path for persistent storage. If None, in-memory only.
-        """
-        self.storage_path = Path(storage_path) if storage_path else None
-        self._results: dict[str, BacktestResult] = {}
-
-        # Load existing results if file exists
-        if self.storage_path and self.storage_path.exists():
-            self._load_results()
-
-    def _load_results(self) -> None:
-        """Load results from storage file."""
-        if not self.storage_path or not self.storage_path.exists():
-            return
-
-        try:
-            with open(self.storage_path) as f:
-                data = json.load(f)
-                self._results = {
-                    job_id: BacktestResult.from_dict(result_dict)
-                    for job_id, result_dict in data.items()
-                }
-        except (json.JSONDecodeError, KeyError, ValueError) as e:
-            logger.warning(
-                f"Failed to load backtest results from {self.storage_path}: {e}"
-            )
-            self._results = {}
-
-    def _save_results(self) -> None:
-        """Save results to storage file."""
-        if not self.storage_path:
-            return
-
-        try:
-            self.storage_path.parent.mkdir(parents=True, exist_ok=True)
-
-            data = {
-                job_id: result.to_dict() for job_id, result in self._results.items()
-            }
-
-            with open(self.storage_path, "w") as f:
-                json.dump(data, f, indent=2)
-        except OSError as e:
-            logger.error(f"Failed to save backtest results to {self.storage_path}: {e}")
+    def __init__(self, storage_path=None):
+        """Initialize. storage_path is ignored."""
+        pass
 
     def save(self, result: BacktestResult) -> None:
-        """Save a backtest result.
-
-        Args:
-            result: BacktestResult to save.
-        """
-        self._results[result.job_id] = result
-        self._save_results()
+        """Save is handled by BacktestRunner directly via Analytics service."""
+        pass
 
     def get(self, job_id: str) -> BacktestResult | None:
-        """Get a backtest result by job ID.
+        """Get result from Analytics service."""
+        from api.proto.proto.crud.v1 import analytics_pb2
 
-        Args:
-            job_id: Job ID.
-
-        Returns:
-            BacktestResult if found, None otherwise.
-        """
-        return self._results.get(job_id)
+        client = get_crud_client()
+        try:
+            resp = client.stub.GetBacktestResult(
+                analytics_pb2.GetBacktestResultRequest(job_id=job_id),
+                timeout=client.timeout_seconds,
+            )
+            return self._from_pb(resp.result)
+        except Exception:
+            return None
 
     def list_results(
-        self,
-        rule_id: str | None = None,
-        start_date: datetime | None = None,
-        end_date: datetime | None = None,
+        self, rule_id=None, start_date=None, end_date=None
     ) -> list[BacktestResult]:
-        """List backtest results with optional filters.
+        """List results from Analytics service."""
+        from api.proto.proto.crud.v1 import analytics_pb2
 
-        Args:
-            rule_id: Filter by rule ID.
-            start_date: Filter results after this date.
-            end_date: Filter results before this date.
+        client = get_crud_client()
 
-        Returns:
-            List of matching BacktestResults, ordered by completed_at (newest first).
-        """
-        results = list(self._results.values())
+        start_ts = None
+        if start_date:
+            start_ts = Timestamp()
+            start_ts.FromDatetime(
+                start_date
+                if start_date.tzinfo
+                else start_date.replace(tzinfo=timezone.utc)
+            )
 
-        # Apply filters
-        if rule_id is not None:
-            results = [r for r in results if r.rule_id == rule_id]
+        end_ts = None
+        if end_date:
+            end_ts = Timestamp()
+            end_ts.FromDatetime(
+                end_date if end_date.tzinfo else end_date.replace(tzinfo=timezone.utc)
+            )
 
-        if start_date is not None:
-            results = [r for r in results if r.completed_at >= start_date]
+        req = analytics_pb2.ListBacktestResultsRequest(
+            rule_id=rule_id or "", start_date=start_ts, end_date=end_ts
+        )
+        resp = client.stub.ListBacktestResults(
+            req,
+            timeout=client.timeout_seconds,
+        )
+        return [self._from_pb(r) for r in resp.results]
 
-        if end_date is not None:
-            results = [r for r in results if r.completed_at <= end_date]
-
-        # Sort by completed_at (newest first)
-        results.sort(key=lambda r: r.completed_at, reverse=True)
-
-        return results
+    def _from_pb(self, r) -> BacktestResult:
+        """Convert proto BacktestResult to local dataclass."""
+        m = r.metrics
+        metrics = BacktestMetrics(
+            total_records=m.total_records,
+            matched_count=m.matched_count,
+            match_rate=m.match_rate,
+            score_distribution=dict(m.score_distribution),
+            score_mean=m.score_mean,
+            score_std=m.score_std,
+            score_min=m.score_min,
+            score_max=m.score_max,
+            rejected_count=m.rejected_count,
+            rejected_rate=m.rejected_rate,
+        )
+        return BacktestResult(
+            job_id=r.job_id,
+            rule_id=r.rule_id if r.rule_id else None,
+            ruleset_version=r.ruleset_version,
+            start_date=r.start_date.ToDatetime(),
+            end_date=r.end_date.ToDatetime(),
+            metrics=metrics,
+            completed_at=r.completed_at.ToDatetime(),
+            error=r.error if r.error else None,
+        )
 
 
 class BacktestComparator:
@@ -434,17 +365,6 @@ class BacktestComparator:
     def compute_delta(
         self, base: BacktestMetrics, candidate: BacktestMetrics
     ) -> BacktestDelta:
-        """Compute delta between two backtest metrics.
-
-        Deltas are calculated as (candidate - base).
-
-        Args:
-            base: Baseline metrics.
-            candidate: Candidate metrics.
-
-        Returns:
-            BacktestDelta with computed differences.
-        """
         return BacktestDelta(
             match_rate_delta=candidate.match_rate - base.match_rate,
             rejected_rate_delta=candidate.rejected_rate - base.rejected_rate,
@@ -455,18 +375,12 @@ class BacktestComparator:
         )
 
 
-# Global backtest store instance
 _global_backtest_store: BacktestStore | None = None
 
 
 def get_backtest_store() -> BacktestStore:
-    """Get the global backtest store instance.
-
-    Returns:
-        Global BacktestStore instance.
-    """
+    """Get the global backtest store instance."""
     global _global_backtest_store
     if _global_backtest_store is None:
-        storage_path = os.getenv("BACKTEST_STORAGE_PATH")
-        _global_backtest_store = BacktestStore(storage_path=storage_path)
+        _global_backtest_store = BacktestStore()
     return _global_backtest_store

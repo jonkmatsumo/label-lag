@@ -55,6 +55,17 @@ func main() {
 		}
 	}()
 
+	analyticsClient, err := grpcclient.NewAnalyticsClient("", 0)
+	if err != nil {
+		logger.Error("failed to create analytics client", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := analyticsClient.Close(); err != nil {
+			logger.Warn("failed to close analytics client", "error", err)
+		}
+	}()
+
 	rulesProvider := rules.Provider(rules.NewEmptyProvider())
 	if apiURL := os.Getenv("INFERENCE_GATEWAY_API_URL"); apiURL != "" {
 		ttl := 5 * time.Minute
@@ -84,7 +95,7 @@ func main() {
 		}
 	}
 
-	handler := httpserver.NewHandler(logger, inferenceClient, rulesProvider, maxBodyBytes)
+	handler := httpserver.NewHandler(logger, inferenceClient, analyticsClient, rulesProvider, maxBodyBytes)
 	readTimeout := parseDurationEnv(logger, "INFERENCE_GATEWAY_READ_TIMEOUT", 10*time.Second)
 	writeTimeout := parseDurationEnv(logger, "INFERENCE_GATEWAY_WRITE_TIMEOUT", 30*time.Second)
 	idleTimeout := parseDurationEnv(logger, "INFERENCE_GATEWAY_IDLE_TIMEOUT", 60*time.Second)

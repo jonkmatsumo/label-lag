@@ -25,6 +25,7 @@ from api.backtest import (
 )
 from api.crud_client import get_crud_client
 from api.drift_cache import get_drift_cache
+from api.errors import analytics_http_exception
 from api.model_manager import get_model_manager
 from api.readiness import CheckStatus, ReadinessEvaluator
 from api.schemas import (
@@ -46,7 +47,9 @@ from api.schemas import (
     ClearDataResponse,
     CompareRulesetsRequest,
     ConflictResponse,
+    CorrelationPair,
     DailyStatsResponse,
+    DatasetCorrelationsResponse,
     DatasetFingerprintResponse,
     DatasetRelationshipsResponse,
     DeployModelRequest,
@@ -102,62 +105,17 @@ from api.schemas import (
     TrainRequest,
     TrainResponse,
     TransactionDetailsResponse,
+    TransactionSearchRequest,
+    TransactionSearchResponse,
     ValidationResult,
 )
 from api.services import get_evaluator
 
 if TYPE_CHECKING:
-    from synthetic_pipeline.db.models import EvaluationMetadataDB, GeneratedRecordDB
-    from synthetic_pipeline.models import EvaluationMetadata, GeneratedRecord
+    pass
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-def _pydantic_to_db(record: "GeneratedRecord") -> "GeneratedRecordDB":
-    """Convert a Pydantic GeneratedRecord to SQLAlchemy model."""
-    from synthetic_pipeline.db.models import GeneratedRecordDB
-
-    return GeneratedRecordDB(
-        record_id=record.record_id,
-        user_id=record.user_id,
-        full_name=record.full_name,
-        email=record.email,
-        phone=record.phone,
-        transaction_timestamp=record.transaction_timestamp,
-        is_off_hours_txn=record.is_off_hours_txn,
-        available_balance=record.account.available_balance,
-        balance_to_transaction_ratio=record.account.balance_to_transaction_ratio,
-        avg_available_balance_30d=record.behavior.avg_available_balance_30d,
-        balance_volatility_z_score=record.behavior.balance_volatility_z_score,
-        bank_connections_count_24h=record.connection.bank_connections_count_24h,
-        bank_connections_count_7d=record.connection.bank_connections_count_7d,
-        bank_connections_avg_30d=record.connection.bank_connections_avg_30d,
-        amount=record.transaction.amount,
-        amount_to_avg_ratio=record.transaction.amount_to_avg_ratio,
-        merchant_risk_score=record.transaction.merchant_risk_score,
-        is_returned=record.transaction.is_returned,
-        email_changed_at=record.identity_changes.email_changed_at,
-        phone_changed_at=record.identity_changes.phone_changed_at,
-        is_fraudulent=record.is_fraudulent,
-        fraud_type=record.fraud_type,
-    )
-
-
-def _metadata_to_db(meta: "EvaluationMetadata") -> "EvaluationMetadataDB":
-    """Convert a Pydantic EvaluationMetadata to SQLAlchemy model."""
-    from synthetic_pipeline.db.models import EvaluationMetadataDB
-
-    return EvaluationMetadataDB(
-        user_id=meta.user_id,
-        record_id=meta.record_id,
-        sequence_number=meta.sequence_number,
-        fraud_confirmed_at=meta.fraud_confirmed_at,
-        is_pre_fraud=meta.is_pre_fraud,
-        days_to_fraud=meta.days_to_fraud,
-        is_train_eligible=meta.is_train_eligible,
-    )
 
 
 @asynccontextmanager
@@ -629,7 +587,7 @@ async def evaluate_signal(request: SignalRequest) -> SignalResponse:
     description="Generate synthetic transaction data with configurable fraud rate.",
 )
 async def generate_data(request: GenerateDataRequest) -> GenerateDataResponse:
-    """Generate synthetic transaction data.
+    """Generate synthetic transaction data via Analytics service.
 
     Args:
         request: Generation request with num_users, fraud_rate, and drop_existing.
@@ -638,11 +596,9 @@ async def generate_data(request: GenerateDataRequest) -> GenerateDataResponse:
         GenerateDataResponse with counts of generated records.
     """
     try:
-        from pipeline.materialize_features import FeatureMaterializer
-        from synthetic_pipeline.db.models import Base
-        from synthetic_pipeline.db.session import DatabaseSession
+        from google.protobuf.timestamp_pb2 import Timestamp
 
-        # Assuming DataGenerator is imported or defined elsewhere
+        from api.proto.proto.crud.v1 import analytics_pb2
         from synthetic_pipeline.generator import DataGenerator
 
         # Generate data
@@ -655,32 +611,88 @@ async def generate_data(request: GenerateDataRequest) -> GenerateDataResponse:
         # Count fraud records
         fraud_count = sum(1 for r in result.records if r.is_fraudulent)
 
-        # Connect to database
-        db_session = DatabaseSession()
+        client = get_crud_client()
 
-        with db_session.get_session() as session:
-            if request.drop_existing:
-                # Drop and recreate tables
-                Base.metadata.drop_all(db_session.engine)
-                Base.metadata.create_all(db_session.engine)
-            else:
-                # Just ensure tables exist
-                Base.metadata.create_all(db_session.engine)
+        if request.drop_existing:
+            client.clear_all_data()
 
-            # Convert and insert records
-            db_records = [_pydantic_to_db(record) for record in result.records]
-            session.bulk_save_objects(db_records)
+        # Convert to proto
+        proto_records = []
+        for r in result.records:
+            ts = Timestamp()
+            ts.FromDatetime(r.transaction_timestamp)
 
-            # Insert metadata
-            meta_records = [_metadata_to_db(meta) for meta in result.metadata]
-            session.bulk_save_objects(meta_records)
+            ec_ts = Timestamp()
+            if r.identity_changes.email_changed_at:
+                ec_ts.FromDatetime(r.identity_changes.email_changed_at)
 
-            session.commit()
+            pc_ts = Timestamp()
+            if r.identity_changes.phone_changed_at:
+                pc_ts.FromDatetime(r.identity_changes.phone_changed_at)
 
-        # Materialize features
-        materializer = FeatureMaterializer()
-        materialize_stats = materializer.materialize_all()
-        features_count = materialize_stats.get("total_processed", 0)
+            proto_records.append(
+                analytics_pb2.GeneratedRecord(
+                    record_id=r.record_id,
+                    user_id=r.user_id,
+                    full_name=r.full_name,
+                    email=r.email,
+                    phone=r.phone,
+                    transaction_timestamp=ts,
+                    is_off_hours_txn=r.is_off_hours_txn,
+                    available_balance=float(r.account.available_balance),
+                    balance_to_transaction_ratio=float(
+                        r.account.balance_to_transaction_ratio
+                    ),
+                    avg_available_balance_30d=float(
+                        r.behavior.avg_available_balance_30d
+                    ),
+                    balance_volatility_z_score=float(
+                        r.behavior.balance_volatility_z_score
+                    ),
+                    bank_connections_count_24h=r.connection.bank_connections_count_24h,
+                    bank_connections_count_7d=r.connection.bank_connections_count_7d,
+                    bank_connections_avg_30d=float(
+                        r.connection.bank_connections_avg_30d
+                    ),
+                    amount=float(r.transaction.amount),
+                    amount_to_avg_ratio=float(r.transaction.amount_to_avg_ratio),
+                    merchant_risk_score=r.transaction.merchant_risk_score,
+                    is_returned=r.transaction.is_returned,
+                    email_changed_at=ec_ts
+                    if r.identity_changes.email_changed_at
+                    else None,
+                    phone_changed_at=pc_ts
+                    if r.identity_changes.phone_changed_at
+                    else None,
+                    is_fraudulent=r.is_fraudulent,
+                    fraud_type=r.fraud_type or "",
+                )
+            )
+
+        proto_metadata = []
+        for m in result.metadata:
+            fc_ts = Timestamp()
+            if m.fraud_confirmed_at:
+                fc_ts.FromDatetime(m.fraud_confirmed_at)
+
+            proto_metadata.append(
+                analytics_pb2.EvaluationMetadata(
+                    user_id=m.user_id,
+                    record_id=m.record_id,
+                    sequence_number=m.sequence_number,
+                    fraud_confirmed_at=fc_ts if m.fraud_confirmed_at else None,
+                    is_pre_fraud=m.is_pre_fraud,
+                    days_to_fraud=m.days_to_fraud or 0,
+                    is_train_eligible=m.is_train_eligible,
+                )
+            )
+
+        # Store via Analytics service
+        client.store_generated_data(records=proto_records, metadata=proto_metadata)
+
+        # Materialize via Analytics service
+        mat_resp = client.materialize_features()
+        features_count = mat_resp.total_processed
 
         return GenerateDataResponse(
             success=True,
@@ -699,32 +711,20 @@ async def generate_data(request: GenerateDataRequest) -> GenerateDataResponse:
     response_model=ClearDataResponse,
     tags=["Data Management"],
     summary="Clear all data",
-    description="Delete all records from the database tables.",
+    description="Delete all records from the database tables via Analytics service.",
 )
 async def clear_data() -> ClearDataResponse:
-    """Clear all data from the database.
+    """Clear all data from the database via Analytics service.
 
     Returns:
         ClearDataResponse with list of cleared tables.
     """
     try:
-        from synthetic_pipeline.db.models import Base
-        from synthetic_pipeline.db.session import DatabaseSession
-
-        db_session = DatabaseSession()
-
-        # Get table names before dropping
-        table_names = [table.name for table in Base.metadata.sorted_tables]
-
-        # Drop all tables
-        Base.metadata.drop_all(db_session.engine)
-
-        # Recreate empty tables
-        Base.metadata.create_all(db_session.engine)
-
+        client = get_crud_client()
+        resp = client.clear_all_data()
         return ClearDataResponse(
-            success=True,
-            tables_cleared=table_names,
+            success=resp.success,
+            tables_cleared=list(resp.tables_cleared),
         )
 
     except Exception as e:
@@ -4171,7 +4171,7 @@ async def get_daily_stats(days: int = Query(default=30, ge=1, le=90)) -> dict:
         )
     except Exception as e:
         logger.error(f"Failed to get daily stats from CRUD service: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise analytics_http_exception(e)
 
 
 @app.get(
@@ -4195,7 +4195,7 @@ async def get_transaction_details(
         )
     except Exception as e:
         logger.error(f"Failed to get transaction details from CRUD service: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise analytics_http_exception(e)
 
 
 @app.get(
@@ -4218,7 +4218,7 @@ async def get_recent_alerts(
         )
     except Exception as e:
         logger.error(f"Failed to get recent alerts from CRUD service: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise analytics_http_exception(e)
 
 
 @app.get(
@@ -4239,7 +4239,7 @@ async def get_overview_metrics() -> dict:
         )
     except Exception as e:
         logger.error(f"Failed to get overview metrics from CRUD service: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise analytics_http_exception(e)
 
 
 @app.get(
@@ -4260,7 +4260,7 @@ async def get_dataset_fingerprint() -> dict:
         )
     except Exception as e:
         logger.error(f"Failed to get dataset fingerprint from CRUD service: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise analytics_http_exception(e)
 
 
 @app.get(
@@ -4285,7 +4285,7 @@ async def get_feature_sample(
         )
     except Exception as e:
         logger.error(f"Failed to get feature sample from CRUD service: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise analytics_http_exception(e)
 
 
 @app.get(
@@ -4309,7 +4309,7 @@ async def get_schema_summary(
         )
     except Exception as e:
         logger.error(f"Failed to get schema summary from CRUD service: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise analytics_http_exception(e)
 
 
 @app.get(
@@ -4439,7 +4439,188 @@ async def get_dataset_relationships(
         )
     except Exception as e:
         logger.error(f"Failed to compute dataset relationships: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise analytics_http_exception(e)
+
+
+@app.get(
+    "/analytics/correlations",
+    response_model=DatasetCorrelationsResponse,
+    tags=["Analytics"],
+    summary="Get dataset feature correlations (N×N)",
+)
+async def get_dataset_correlations(
+    sample_size: int = Query(default=1000, ge=100, le=5000),
+) -> DatasetCorrelationsResponse:
+    """Compute N×N correlation matrices for numeric and categorical features."""
+    import numpy as np
+    import pandas as pd
+    from scipy import stats
+
+    client = get_crud_client()
+    try:
+        resp = client.get_feature_sample(sample_size=sample_size, stratify=True)
+        samples = MessageToDict(
+            resp,
+            preserving_proto_field_name=True,
+            always_print_fields_with_no_presence=True,
+            use_integers_for_enums=True,
+        ).get("samples", [])
+
+        if not samples:
+            return DatasetCorrelationsResponse(
+                pearson=[],
+                spearman=[],
+                cramers_v=[],
+                numeric_columns=[],
+                categorical_columns=[],
+            )
+
+        df = pd.DataFrame(samples)
+        exclude = ["record_id", "user_id", "snapshot_id"]
+
+        # Identify columns
+        numeric_cols = []
+        categorical_cols = []
+
+        for col in df.columns:
+            if col in exclude:
+                continue
+            if pd.api.types.is_numeric_dtype(df[col]):
+                numeric_cols.append(col)
+            else:
+                categorical_cols.append(col)
+
+        pearson_pairs = []
+        spearman_pairs = []
+        cramers_pairs = []
+
+        # Numeric correlations
+        if len(numeric_cols) >= 2:
+            # Pearson
+            p_corr = df[numeric_cols].corr(method="pearson")
+            for i in range(len(numeric_cols)):
+                for j in range(len(numeric_cols)):
+                    val = p_corr.iloc[i, j]
+                    if not np.isnan(val):
+                        pearson_pairs.append(
+                            CorrelationPair(
+                                feature_a=numeric_cols[i],
+                                feature_b=numeric_cols[j],
+                                value=float(val),
+                            )
+                        )
+
+            # Spearman
+            s_corr = df[numeric_cols].corr(method="spearman")
+            for i in range(len(numeric_cols)):
+                for j in range(len(numeric_cols)):
+                    val = s_corr.iloc[i, j]
+                    if not np.isnan(val):
+                        spearman_pairs.append(
+                            CorrelationPair(
+                                feature_a=numeric_cols[i],
+                                feature_b=numeric_cols[j],
+                                value=float(val),
+                            )
+                        )
+
+        # Categorical associations (Cramér's V)
+        if len(categorical_cols) >= 2:
+            for col_a in categorical_cols:
+                for col_b in categorical_cols:
+                    if col_a == col_b:
+                        cramers_pairs.append(
+                            CorrelationPair(feature_a=col_a, feature_b=col_b, value=1.0)
+                        )
+                        continue
+
+                    # Compute Cramer's V
+                    confusion_matrix = pd.crosstab(df[col_a], df[col_b])
+                    chi2 = stats.chi2_contingency(confusion_matrix)[0]
+                    n = confusion_matrix.sum().sum()
+                    if n > 1:
+                        phi2 = chi2 / n
+                        r, k = confusion_matrix.shape
+                        phi2corr = max(0, phi2 - ((k - 1) * (r - 1)) / (n - 1))
+                        rcorr = r - ((r - 1) ** 2) / (n - 1)
+                        kcorr = k - ((k - 1) ** 2) / (n - 1)
+                        denom = min((kcorr - 1), (rcorr - 1))
+                        v = 0.0
+                        if denom > 0:
+                            v = np.sqrt(phi2corr / denom)
+
+                        cramers_pairs.append(
+                            CorrelationPair(
+                                feature_a=col_a,
+                                feature_b=col_b,
+                                value=float(v) if not np.isnan(v) else 0.0,
+                            )
+                        )
+
+        return DatasetCorrelationsResponse(
+            pearson=pearson_pairs,
+            spearman=spearman_pairs,
+            cramers_v=cramers_pairs,
+            numeric_columns=numeric_cols,
+            categorical_columns=categorical_cols,
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to compute dataset correlations: {e}")
+        raise analytics_http_exception(e)
+
+
+@app.post(
+    "/analytics/transactions/search",
+    response_model=TransactionSearchResponse,
+    tags=["Analytics"],
+    summary="Search transactions with filters",
+)
+async def search_transactions(
+    request: TransactionSearchRequest,
+) -> TransactionSearchResponse:
+    """Search transactions with advanced filtering via Analytics service."""
+    from api.schemas import TransactionDetail
+
+    client = get_crud_client()
+    try:
+        resp = client.search_transactions(
+            user_id=request.user_id or "",
+            transaction_id=request.transaction_id or "",
+            min_amount=request.min_amount,
+            max_amount=request.max_amount,
+            start_date=request.start_date or "",
+            end_date=request.end_date or "",
+            is_fraudulent=request.is_fraudulent,
+            limit=request.limit,
+            offset=request.offset,
+        )
+
+        transactions = []
+        for r in resp.transactions:
+            transactions.append(
+                TransactionDetail(
+                    record_id=r.record_id,
+                    user_id=r.user_id,
+                    created_at=r.created_at.ToDatetime(),
+                    is_train_eligible=r.is_train_eligible,
+                    is_pre_fraud=r.is_pre_fraud,
+                    amount=r.amount,
+                    is_fraudulent=r.is_fraudulent,
+                    fraud_type=r.fraud_type,
+                    is_off_hours_txn=r.is_off_hours_txn,
+                    merchant_risk_score=r.merchant_risk_score,
+                    velocity_24h=r.velocity_24h,
+                    amount_to_avg_ratio_30d=r.amount_to_avg_ratio_30d,
+                    balance_volatility_z_score=r.balance_volatility_z_score,
+                )
+            )
+
+        return TransactionSearchResponse(transactions=transactions, total=resp.total)
+
+    except Exception as e:
+        logger.error(f"Failed to search transactions via CRUD service: {e}")
+        raise analytics_http_exception(e)
 
 
 @app.exception_handler(Exception)

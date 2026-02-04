@@ -9,11 +9,30 @@ import "google/protobuf/timestamp.proto";
 service AnalyticsService {
   rpc GetDailyStats(GetDailyStatsRequest) returns (GetDailyStatsResponse);
   rpc GetTransactionDetails(GetTransactionDetailsRequest) returns (GetTransactionDetailsResponse);
+  rpc SearchTransactions(SearchTransactionsRequest) returns (SearchTransactionsResponse);
   rpc GetRecentAlerts(GetRecentAlertsRequest) returns (GetRecentAlertsResponse);
   rpc GetOverviewMetrics(GetOverviewMetricsRequest) returns (GetOverviewMetricsResponse);
   rpc GetDatasetFingerprint(GetDatasetFingerprintRequest) returns (GetDatasetFingerprintResponse);
   rpc GetFeatureSample(GetFeatureSampleRequest) returns (GetFeatureSampleResponse);
   rpc GetSchemaSummary(GetSchemaSummaryRequest) returns (GetSchemaSummaryResponse);
+  rpc GetTrainingData(GetTrainingDataRequest) returns (GetTrainingDataResponse);
+  rpc GetBacktestFeatures(GetBacktestFeaturesRequest) returns (GetBacktestFeaturesResponse);
+  rpc SaveBacktestResult(SaveBacktestResultRequest) returns (SaveBacktestResultResponse);
+  rpc ListBacktestResults(ListBacktestResultsRequest) returns (ListBacktestResultsResponse);
+  rpc GetBacktestResult(GetBacktestResultRequest) returns (GetBacktestResultResponse);
+  rpc GetDriftWindow(GetDriftWindowRequest) returns (GetDriftWindowResponse);
+  rpc StoreGeneratedData(StoreGeneratedDataRequest) returns (StoreGeneratedDataResponse);
+  rpc ClearAllData(ClearAllDataRequest) returns (ClearAllDataResponse);
+  rpc MaterializeFeatures(MaterializeFeaturesRequest) returns (MaterializeFeaturesResponse);
+
+  // Rule Management
+  rpc SaveRule(SaveRuleRequest) returns (SaveRuleResponse);
+  rpc GetRule(GetRuleRequest) returns (GetRuleResponse);
+  rpc ListRules(ListRulesRequest) returns (ListRulesResponse);
+  rpc DeleteRule(DeleteRuleRequest) returns (DeleteRuleResponse);
+
+  // Inference Events
+  rpc LogInferenceEvent(LogInferenceEventRequest) returns (LogInferenceEventResponse);
 }
 
 message GetDailyStatsRequest {
@@ -28,9 +47,6 @@ message DailyStat {
   double total_amount = 5;
   double avg_z_score = 6;
 }
-
-// Re-evaluating Date: google.type.Date requires importing google/type/date.proto which might not be in standard path.
-// I'll use string "YYYY-MM-DD" for simplicity or a Timestamp. The UI uses date objects.
 
 message GetDailyStatsResponse {
   repeated DailyStat stats = 1;
@@ -59,6 +75,25 @@ message TransactionDetail {
 
 message GetTransactionDetailsResponse {
   repeated TransactionDetail transactions = 1;
+}
+
+message SearchTransactionsRequest {
+  string user_id = 1;
+  string transaction_id = 2;
+  optional double min_amount = 3;
+  optional double max_amount = 4;
+  string start_date = 5;
+  string end_date = 6;
+  optional bool is_fraudulent = 7;
+  optional int32 min_score = 8;
+  optional int32 max_score = 9;
+  int32 limit = 10;
+  int32 offset = 11;
+}
+
+message SearchTransactionsResponse {
+  repeated TransactionDetail transactions = 1;
+  int64 total = 2;
 }
 
 message GetRecentAlertsRequest {
@@ -143,4 +178,217 @@ message ColumnInfo {
 
 message GetSchemaSummaryResponse {
   repeated ColumnInfo columns = 1;
+}
+
+message GetTrainingDataRequest {
+  google.protobuf.Timestamp cutoff_date = 1;
+}
+
+message GetTrainingDataResponse {
+  repeated TransactionDetail train_records = 1;
+  repeated TransactionDetail test_records = 2;
+}
+
+message GetBacktestFeaturesRequest {
+  google.protobuf.Timestamp start_date = 1;
+  google.protobuf.Timestamp end_date = 2;
+}
+
+message BacktestFeatureVector {
+  string record_id = 1;
+  int32 velocity_24h = 2;
+  double amount_to_avg_ratio_30d = 3;
+  double balance_volatility_z_score = 4;
+  string experimental_signals_json = 5;
+}
+
+message GetBacktestFeaturesResponse {
+  repeated BacktestFeatureVector features = 1;
+}
+
+message BacktestMetrics {
+  int64 total_records = 1;
+  int64 matched_count = 2;
+  double match_rate = 3;
+  map<string, int32> score_distribution = 4;
+  double score_mean = 5;
+  double score_std = 6;
+  int32 score_min = 7;
+  int32 score_max = 8;
+  int64 rejected_count = 9;
+  double rejected_rate = 10;
+}
+
+message BacktestResult {
+  string job_id = 1;
+  string rule_id = 2;
+  string ruleset_version = 3;
+  google.protobuf.Timestamp start_date = 4;
+  google.protobuf.Timestamp end_date = 5;
+  BacktestMetrics metrics = 6;
+  google.protobuf.Timestamp completed_at = 7;
+  string error = 8;
+}
+
+message SaveBacktestResultRequest {
+  BacktestResult result = 1;
+}
+
+message SaveBacktestResultResponse {
+  bool success = 1;
+}
+
+message ListBacktestResultsRequest {
+  string rule_id = 1;
+  google.protobuf.Timestamp start_date = 2;
+  google.protobuf.Timestamp end_date = 3;
+}
+
+message ListBacktestResultsResponse {
+  repeated BacktestResult results = 1;
+}
+
+message GetBacktestResultRequest {
+  string job_id = 1;
+}
+
+message GetBacktestResultResponse {
+  BacktestResult result = 1;
+}
+
+message GetDriftWindowRequest {
+  int32 hours = 1;
+}
+
+message GetDriftWindowResponse {
+  repeated TransactionDetail transactions = 1;
+}
+
+message StoreGeneratedDataRequest {
+  repeated GeneratedRecord records = 1;
+  repeated EvaluationMetadata metadata = 2;
+}
+
+message GeneratedRecord {
+  string record_id = 1;
+  string user_id = 2;
+  string full_name = 3;
+  string email = 4;
+  string phone = 5;
+  google.protobuf.Timestamp transaction_timestamp = 6;
+  bool is_off_hours_txn = 7;
+  double available_balance = 8;
+  double balance_to_transaction_ratio = 9;
+  double avg_available_balance_30d = 10;
+  double balance_volatility_z_score = 11;
+  int32 bank_connections_count_24h = 12;
+  int32 bank_connections_count_7d = 13;
+  double bank_connections_avg_30d = 14;
+  double amount = 15;
+  double amount_to_avg_ratio = 16;
+  int32 merchant_risk_score = 17;
+  bool is_returned = 18;
+  google.protobuf.Timestamp email_changed_at = 19;
+  google.protobuf.Timestamp phone_changed_at = 20;
+  bool is_fraudulent = 21;
+  string fraud_type = 22;
+}
+
+message EvaluationMetadata {
+  string user_id = 1;
+  string record_id = 2;
+  int32 sequence_number = 3;
+  google.protobuf.Timestamp fraud_confirmed_at = 4;
+  bool is_pre_fraud = 5;
+  int32 days_to_fraud = 6;
+  bool is_train_eligible = 7;
+}
+
+message StoreGeneratedDataResponse {
+  bool success = 1;
+  int64 records_saved = 2;
+}
+
+message ClearAllDataRequest {}
+message ClearAllDataResponse {
+  bool success = 1;
+  repeated string tables_cleared = 2;
+}
+
+message MaterializeFeaturesRequest {
+  int32 batch_size = 1;
+}
+
+message MaterializeFeaturesResponse {
+  bool success = 1;
+  int64 total_processed = 2;
+}
+
+message Rule {
+  string id = 1;
+  string field = 2;
+  string op = 3;
+  string value_json = 4;
+  string action = 5;
+  int32 score = 6;
+  string severity = 7;
+  string reason = 8;
+  string status = 9;
+}
+
+message SaveRuleRequest {
+  Rule rule = 1;
+}
+
+message SaveRuleResponse {
+  bool success = 1;
+}
+
+message GetRuleRequest {
+  string rule_id = 1;
+}
+
+message GetRuleResponse {
+  Rule rule = 1;
+}
+
+message ListRulesRequest {
+  string status = 1;
+  bool include_archived = 2;
+}
+
+message ListRulesResponse {
+  repeated Rule rules = 1;
+}
+
+message DeleteRuleRequest {
+  string rule_id = 1;
+}
+
+message DeleteRuleResponse {
+  bool success = 1;
+}
+
+message RuleImpact {
+  string rule_id = 1;
+  bool is_shadow = 2;
+  double score_delta = 3;
+}
+
+message InferenceEvent {
+  string request_id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string model_version = 3;
+  string rules_version = 4;
+  int32 model_score = 5;
+  int32 final_score = 6;
+  repeated RuleImpact rule_impacts = 7;
+}
+
+message LogInferenceEventRequest {
+  InferenceEvent event = 1;
+}
+
+message LogInferenceEventResponse {
+  bool success = 1;
 }

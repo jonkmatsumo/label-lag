@@ -1,15 +1,13 @@
-"""Data loader for XGBoost training with temporal splitting."""
+"""Data loader for XGBoost training with temporal splitting via Analytics service."""
 
 import hashlib
 from dataclasses import dataclass
 from datetime import datetime
 
 import pandas as pd
-from sqlalchemy import text
-from sqlalchemy.orm import Session
 
+from api.crud_client import get_crud_client
 from api.schemas import SplitConfig
-from synthetic_pipeline.db.session import DatabaseSession
 
 
 @dataclass
@@ -51,6 +49,9 @@ class DataLoader:
     2. Label Maturity (Knowledge Horizon): In training set, only label fraud if
        fraud_confirmed_at <= cutoff. This simulates not knowing about fraud
        that hasn't been detected yet.
+
+    In compute-only mode, the logic for temporal splitting and label maturity
+    is moved to the Analytics gRPC service.
     """
 
     # Feature columns from feature_snapshots table
@@ -60,47 +61,34 @@ class DataLoader:
         "balance_volatility_z_score",
     ]
 
-    # Columns that should not be used as training features
-    DEFAULT_NON_FEATURE_COLUMNS = [
-        "record_id",
-        "snapshot_id",
-        "computed_at",
-        "user_id",
-    ]
-
     def __init__(self, database_url: str | None = None):
         """Initialize DataLoader.
 
         Args:
-            database_url: Database connection URL. Defaults to env vars.
+            database_url: Ignored in compute-only mode.
         """
-        self.db_session = DatabaseSession(database_url=database_url)
+        pass
 
     def load_train_test_split(
         self,
         training_cutoff_date: str | datetime,
-        session: Session | None = None,
+        session=None,
         feature_columns: list[str] | None = None,
         split_config: SplitConfig | None = None,
     ) -> TrainTestSplit:
-        """Load train/test split with temporal splitting and label maturity.
+        """Load train/test split via Analytics service.
 
         Args:
-            training_cutoff_date: Cutoff date for train/test split (e.g., '2024-04-01').
-                Records with created_at < cutoff go to train, >= cutoff go to test.
-            session: Optional existing database session.
-            feature_columns: Optional list of feature columns to use. If None, uses
-                default FEATURE_COLUMNS.
-            split_config: Optional split/CV config. When provided, split_manifest
-                is populated on the returned TrainTestSplit.
+            training_cutoff_date: Cutoff date for train/test split.
+            session: Ignored.
+            feature_columns: Optional list of feature columns to use.
+            split_config: Optional split/CV config.
 
         Returns:
-            TrainTestSplit containing X_train, y_train, X_test, y_test, and
-            optionally split_manifest.
-
-        Raises:
-            ValueError: If any requested feature columns are missing from the data.
+            TrainTestSplit containing X_train, y_train, X_test, y_test.
         """
+        from google.protobuf.timestamp_pb2 import Timestamp
+
         if isinstance(training_cutoff_date, str):
             cutoff = datetime.fromisoformat(training_cutoff_date)
         else:
@@ -109,40 +97,46 @@ class DataLoader:
         if feature_columns is None:
             feature_columns = self.FEATURE_COLUMNS
 
-        if session is not None:
-            return self._load_with_session(
-                session, cutoff, feature_columns, split_config
-            )
+        # Convert datetime to proto Timestamp
+        ts = Timestamp()
+        ts.FromDatetime(cutoff)
 
-        with self.db_session.get_session() as session:
-            return self._load_with_session(
-                session, cutoff, feature_columns, split_config
-            )
+        client = get_crud_client()
+        resp = client.get_training_data(cutoff_date=ts)
 
-    def _load_with_session(
+        train_df = self._records_to_df(resp.train_records)
+        test_df = self._records_to_df(resp.test_records)
+
+        return self._prepare_split(
+            train_df, test_df, cutoff, feature_columns, split_config
+        )
+
+    def _records_to_df(self, records) -> pd.DataFrame:
+        """Convert proto records to DataFrame."""
+        data = []
+        for r in records:
+            data.append(
+                {
+                    "record_id": r.record_id,
+                    "user_id": r.user_id,
+                    "velocity_24h": r.velocity_24h,
+                    "amount_to_avg_ratio_30d": r.amount_to_avg_ratio_30d,
+                    "balance_volatility_z_score": r.balance_volatility_z_score,
+                    "label": 1 if r.is_fraudulent else 0,
+                    "transaction_timestamp": r.created_at.ToDatetime(),
+                }
+            )
+        return pd.DataFrame(data)
+
+    def _prepare_split(
         self,
-        session: Session,
+        train_df: pd.DataFrame,
+        test_df: pd.DataFrame,
         cutoff: datetime,
         feature_columns: list[str],
         split_config: SplitConfig | None = None,
     ) -> TrainTestSplit:
-        """Load data using provided session.
-
-        Args:
-            session: Database session.
-            cutoff: Training cutoff date.
-            feature_columns: List of feature columns to extract.
-            split_config: Optional split config for manifest generation.
-
-        Returns:
-            TrainTestSplit with selected features and optionally split_manifest.
-
-        Raises:
-            ValueError: If any requested feature columns are missing from the data.
-        """
-        train_df = self._load_train_set(session, cutoff)
-        test_df = self._load_test_set(session, cutoff)
-
+        """Prepare TrainTestSplit from DataFrames."""
         all_columns = set()
         if len(train_df) > 0:
             all_columns.update(train_df.columns)
@@ -171,7 +165,7 @@ class DataLoader:
             features_test = pd.DataFrame(columns=feature_columns)
             labels_test = pd.Series(dtype=int)
 
-        manifest: dict | None = None
+        manifest = None
         if split_config is not None and "record_id" in all_columns:
             train_ids = (
                 train_df["record_id"].astype(str).tolist() if len(train_df) > 0 else []
@@ -179,44 +173,26 @@ class DataLoader:
             test_ids = (
                 test_df["record_id"].astype(str).tolist() if len(test_df) > 0 else []
             )
-            s = split_config.strategy
-
-            # Compute time ranges
-            train_time_range = None
-            test_time_range = None
-            if len(train_df) > 0 and "transaction_timestamp" in train_df.columns:
-                train_timestamps = pd.to_datetime(train_df["transaction_timestamp"])
-                train_time_range = {
-                    "min": train_timestamps.min().isoformat(),
-                    "max": train_timestamps.max().isoformat(),
-                }
-            if len(test_df) > 0 and "transaction_timestamp" in test_df.columns:
-                test_timestamps = pd.to_datetime(test_df["transaction_timestamp"])
-                test_time_range = {
-                    "min": test_timestamps.min().isoformat(),
-                    "max": test_timestamps.max().isoformat(),
-                }
 
             # Compute unique user counts
-            train_unique_users = 0
-            test_unique_users = 0
-            if len(train_df) > 0 and "user_id" in train_df.columns:
-                train_unique_users = int(train_df["user_id"].nunique())
-            if len(test_df) > 0 and "user_id" in test_df.columns:
-                test_unique_users = int(test_df["user_id"].nunique())
+            train_unique_users = (
+                int(train_df["user_id"].nunique()) if len(train_df) > 0 else 0
+            )
+            test_unique_users = (
+                int(test_df["user_id"].nunique()) if len(test_df) > 0 else 0
+            )
 
-            # Compute manifest hash (SHA-256 of sorted record IDs)
+            # Compute manifest hash
             all_ids = sorted(train_ids + test_ids)
             id_string = ",".join(all_ids)
             manifest_hash = hashlib.sha256(id_string.encode()).hexdigest()
 
             manifest = {
-                "strategy": s.value if hasattr(s, "value") else str(s),
+                "strategy": str(split_config.strategy),
                 "seed": split_config.seed,
                 "training_cutoff_date": cutoff.isoformat(),
                 "train_record_ids": train_ids,
                 "test_record_ids": test_ids,
-                "fold_assignments": None,  # Will be populated in train.py if k-fold
                 "train_size": len(features_train),
                 "test_size": len(features_test),
                 "train_fraud_rate": (
@@ -225,8 +201,6 @@ class DataLoader:
                 "test_fraud_rate": (
                     float(labels_test.mean()) if len(labels_test) > 0 else 0.0
                 ),
-                "train_time_range": train_time_range,
-                "test_time_range": test_time_range,
                 "train_unique_users": train_unique_users,
                 "test_unique_users": test_unique_users,
                 "manifest_hash": f"sha256:{manifest_hash}",
@@ -240,91 +214,8 @@ class DataLoader:
             split_manifest=manifest,
         )
 
-    def _load_train_set(self, session: Session, cutoff: datetime) -> pd.DataFrame:
-        """Load training set with label maturity enforcement.
-
-        Train Set Rules:
-        - transaction_timestamp < cutoff
-        - is_train_eligible = True
-        - Label is fraud ONLY IF fraud_confirmed_at <= cutoff (knowledge horizon)
-        """
-        query = text("""
-            SELECT
-                fs.record_id,
-                fs.user_id,
-                fs.velocity_24h,
-                fs.amount_to_avg_ratio_30d,
-                fs.balance_volatility_z_score,
-                fs.experimental_signals,
-                em.is_train_eligible,
-                em.fraud_confirmed_at,
-                gr.is_fraudulent,
-                gr.transaction_timestamp,
-                -- Knowledge Horizon: Only label fraud if confirmed before cutoff
-                CASE
-                    WHEN gr.is_fraudulent = TRUE
-                         AND em.fraud_confirmed_at IS NOT NULL
-                         AND em.fraud_confirmed_at <= :cutoff
-                    THEN 1
-                    ELSE 0
-                END AS label
-            FROM feature_snapshots fs
-            INNER JOIN evaluation_metadata em ON fs.record_id = em.record_id
-            INNER JOIN generated_records gr ON fs.record_id = gr.record_id
-            WHERE gr.transaction_timestamp < :cutoff
-              AND em.is_train_eligible = TRUE
-            ORDER BY gr.transaction_timestamp
-        """)
-
-        result = session.execute(query, {"cutoff": cutoff})
-        rows = result.fetchall()
-        columns = result.keys()
-
-        return pd.DataFrame(rows, columns=list(columns))
-
-    def _load_test_set(self, session: Session, cutoff: datetime) -> pd.DataFrame:
-        """Load test set (all records after cutoff).
-
-        Test Set Rules:
-        - transaction_timestamp >= cutoff
-        - Uses actual fraud label (no knowledge horizon restriction)
-        """
-        query = text("""
-            SELECT
-                fs.record_id,
-                fs.user_id,
-                fs.velocity_24h,
-                fs.amount_to_avg_ratio_30d,
-                fs.balance_volatility_z_score,
-                fs.experimental_signals,
-                em.is_train_eligible,
-                em.fraud_confirmed_at,
-                gr.is_fraudulent,
-                gr.transaction_timestamp,
-                -- Test set uses actual fraud label
-                CASE WHEN gr.is_fraudulent = TRUE THEN 1 ELSE 0 END AS label
-            FROM feature_snapshots fs
-            INNER JOIN evaluation_metadata em ON fs.record_id = em.record_id
-            INNER JOIN generated_records gr ON fs.record_id = gr.record_id
-            WHERE gr.transaction_timestamp >= :cutoff
-            ORDER BY gr.transaction_timestamp
-        """)
-
-        result = session.execute(query, {"cutoff": cutoff})
-        rows = result.fetchall()
-        columns = result.keys()
-
-        return pd.DataFrame(rows, columns=list(columns))
-
     def get_split_summary(self, split: TrainTestSplit) -> dict:
-        """Get summary statistics for the train/test split.
-
-        Args:
-            split: TrainTestSplit object.
-
-        Returns:
-            Dictionary with summary statistics.
-        """
+        """Get summary statistics for the train/test split."""
         train_fraud = int(split.y_train.sum()) if len(split.y_train) > 0 else 0
         test_fraud = int(split.y_test.sum()) if len(split.y_test) > 0 else 0
 

@@ -1,7 +1,7 @@
 """Tests for inference event sink abstraction."""
 
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -49,15 +49,20 @@ def reset_sink():
 class TestInferenceEventSinkBackendConfig:
     """Tests for inference event sink backend configuration."""
 
-    def test_default_backend_is_jsonl(self, monkeypatch):
-        """Test that default backend is jsonl when env var not set."""
+    def test_default_backend_is_none(self, monkeypatch):
+        """Test that default backend is none (compute-only) when env var not set."""
         monkeypatch.delenv("INFERENCE_EVENT_SINK", raising=False)
-        assert get_inference_event_sink_backend() == "jsonl"
+        assert get_inference_event_sink_backend() == "none"
 
     def test_backend_from_env_var(self, monkeypatch):
         """Test that backend is read from INFERENCE_EVENT_SINK env var."""
         monkeypatch.setenv("INFERENCE_EVENT_SINK", "stdout")
         assert get_inference_event_sink_backend() == "stdout"
+
+    def test_jsonl_backend_value(self, monkeypatch):
+        """Test that jsonl backend value is recognized."""
+        monkeypatch.setenv("INFERENCE_EVENT_SINK", "jsonl")
+        assert get_inference_event_sink_backend() == "jsonl"
 
     def test_postgres_backend_value(self, monkeypatch):
         """Test that postgres backend value is recognized."""
@@ -107,21 +112,21 @@ class TestJsonlFileSink:
 
     def test_log_event_writes_to_file(self, sample_event, tmp_path):
         """Test that JsonlFileSink writes events to file."""
-        log_path = tmp_path / "events.jsonl"
-        sink = JsonlFileSink(storage_path=log_path)
+        log_file = tmp_path / "events.jsonl"
+        sink = JsonlFileSink(log_path=str(log_file))
 
         sink.log_event(sample_event)
 
         # Check file was created and has content
-        assert log_path.exists()
-        content = log_path.read_text()
+        assert log_file.exists()
+        content = log_file.read_text()
         assert "test-request-001" in content
         assert "high_velocity" in content
 
     def test_multiple_events_append(self, sample_event, tmp_path):
         """Test that multiple events are appended to the file."""
-        log_path = tmp_path / "events.jsonl"
-        sink = JsonlFileSink(storage_path=log_path)
+        log_file = tmp_path / "events.jsonl"
+        sink = JsonlFileSink(log_path=str(log_file))
 
         # Log multiple events
         sink.log_event(sample_event)
@@ -129,30 +134,36 @@ class TestJsonlFileSink:
         sink.log_event(sample_event)
 
         # Check file has 3 lines
-        lines = log_path.read_text().strip().split("\n")
+        lines = log_file.read_text().strip().split("\n")
         assert len(lines) == 3
 
-    def test_get_sink_returns_jsonl_by_default(self, monkeypatch):
-        """Test that default sink is JsonlFileSink."""
-        monkeypatch.delenv("INFERENCE_EVENT_SINK", raising=False)
+    def test_get_sink_returns_jsonl_when_configured(self, monkeypatch):
+        """Test that INFERENCE_EVENT_SINK=jsonl returns JsonlFileSink."""
+        monkeypatch.setenv("INFERENCE_EVENT_SINK", "jsonl")
         sink = get_inference_event_sink()
         assert isinstance(sink, JsonlFileSink)
 
+    def test_get_sink_returns_noop_by_default(self, monkeypatch):
+        """Test that default sink is NoOpSink (compute-only)."""
+        monkeypatch.delenv("INFERENCE_EVENT_SINK", raising=False)
+        sink = get_inference_event_sink()
+        assert isinstance(sink, NoOpSink)
+
     def test_log_event_handles_errors_gracefully(self, sample_event, tmp_path):
         """Test that file write errors are logged but not raised."""
-        log_path = tmp_path / "events.jsonl"
-        sink = JsonlFileSink(storage_path=log_path)
+        log_file = tmp_path / "events.jsonl"
+        sink = JsonlFileSink(log_path=str(log_file))
 
         # Make the file read-only after sink creation
-        log_path.touch()
-        log_path.chmod(0o444)
+        log_file.touch()
+        log_file.chmod(0o444)
 
         try:
             # Should not raise even if write fails
             sink.log_event(sample_event)
         finally:
             # Restore permissions for cleanup
-            log_path.chmod(0o644)
+            log_file.chmod(0o644)
 
 
 class TestSetInferenceEventSink:
@@ -172,18 +183,11 @@ class TestSetInferenceEventSink:
 class TestSinkGracefulDegradation:
     """Tests for graceful degradation behavior."""
 
-    def test_postgres_fallback_on_error(self, monkeypatch):
-        """Test that postgres failure falls back to JSONL."""
-        monkeypatch.setenv("INFERENCE_EVENT_SINK", "postgres")
+    def test_unknown_backend_falls_back_to_noop(self, monkeypatch):
+        """Test that unknown backend falls back to NoOpSink."""
+        monkeypatch.setenv("INFERENCE_EVENT_SINK", "unknown_backend")
 
-        # Mock the postgres import to fail
-        with patch.dict(
-            "sys.modules",
-            {"api.postgres_inference_sink": None},
-        ):
-            # Force re-initialization
-            reset_inference_event_sink()
-            sink = get_inference_event_sink()
+        sink = get_inference_event_sink()
 
-            # Should fall back to JSONL
-            assert isinstance(sink, JsonlFileSink)
+        # Should fall back to NoOpSink
+        assert isinstance(sink, NoOpSink)

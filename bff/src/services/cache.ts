@@ -37,7 +37,7 @@ export class SimpleCache {
 
     const ttl = ttlMs ?? this.config.cacheTtlMs;
     const expiry = Date.now() + ttl;
-    
+
     // Simple LRU-like safety: if too big, clear it
     if (this.cache.size > 1000) {
       this.cache.clear();

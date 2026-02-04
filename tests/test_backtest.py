@@ -1,13 +1,15 @@
-"""Tests for backtesting infrastructure."""
+"""Tests for backtesting infrastructure.
 
-import tempfile
+Tests mock the analytics client to verify backtest computation logic
+without requiring a live analytics service.
+"""
+
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
-from api.backtest import BacktestMetrics, BacktestResult, BacktestRunner, BacktestStore
+from api.backtest import BacktestMetrics, BacktestRunner, BacktestStore
 from api.rules import Rule, RuleSet
 
 
@@ -40,36 +42,23 @@ class TestBacktestMetrics:
         assert metrics.rejected_rate == 0.05
 
 
+def _make_mock_feature(
+    velocity_24h: int,
+    amount_to_avg_ratio_30d: float,
+    balance_volatility_z_score: float,
+    experimental_signals_json: str = "",
+) -> MagicMock:
+    """Create a mock proto feature vector."""
+    feature = MagicMock()
+    feature.velocity_24h = velocity_24h
+    feature.amount_to_avg_ratio_30d = amount_to_avg_ratio_30d
+    feature.balance_volatility_z_score = balance_volatility_z_score
+    feature.experimental_signals_json = experimental_signals_json
+    return feature
+
+
 class TestBacktestRunner:
     """Tests for BacktestRunner class."""
-
-    @pytest.fixture
-    def mock_db_session(self):
-        """Create a mock database session."""
-        session = MagicMock()
-        session.get_session.return_value.__enter__.return_value.execute.return_value = (
-            iter(
-                [
-                    MagicMock(
-                        velocity_24h=10,
-                        amount_to_avg_ratio_30d=3.5,
-                        balance_volatility_z_score=-1.5,
-                        experimental_signals={
-                            "bank_connections_24h": 5,
-                            "merchant_risk_score": 75,
-                            "has_history": True,
-                        },
-                    ),
-                    MagicMock(
-                        velocity_24h=2,
-                        amount_to_avg_ratio_30d=1.0,
-                        balance_volatility_z_score=0.0,
-                        experimental_signals=None,
-                    ),
-                ]
-            )
-        )
-        return session
 
     @pytest.fixture
     def sample_ruleset(self):
@@ -86,9 +75,21 @@ class TestBacktestRunner:
         ]
         return RuleSet(version="v1", rules=rules)
 
-    def test_run_backtest_with_matching_rules(self, mock_db_session, sample_ruleset):
+    def test_run_backtest_with_matching_rules(self, sample_ruleset, monkeypatch):
         """Test running a backtest where rules match."""
-        runner = BacktestRunner(db_session=mock_db_session)
+        from api import crud_client
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.features = [
+            _make_mock_feature(10, 3.5, -1.5),  # velocity > 5, rule matches
+            _make_mock_feature(2, 1.0, 0.0),  # velocity <= 5, no match
+        ]
+        mock_client.stub.GetBacktestFeatures.return_value = mock_response
+        mock_client.stub.SaveBacktestResult.return_value = MagicMock(success=True)
+        monkeypatch.setattr(crud_client, "_client", mock_client)
+
+        runner = BacktestRunner()
         start_date = datetime.now(timezone.utc) - timedelta(days=7)
         end_date = datetime.now(timezone.utc)
 
@@ -100,11 +101,23 @@ class TestBacktestRunner:
         assert result.ruleset_version == "v1"
         assert result.metrics.total_records == 2
         assert result.metrics.matched_count == 1  # First record matches
-        assert result.metrics.match_rate > 0
+        assert result.metrics.match_rate == 0.5
         assert result.error is None
 
-    def test_run_backtest_with_no_matches(self, mock_db_session):
+    def test_run_backtest_with_no_matches(self, monkeypatch):
         """Test running a backtest where no rules match."""
+        from api import crud_client
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.features = [
+            _make_mock_feature(2, 1.0, 0.0),
+            _make_mock_feature(3, 1.5, 0.5),
+        ]
+        mock_client.stub.GetBacktestFeatures.return_value = mock_response
+        mock_client.stub.SaveBacktestResult.return_value = MagicMock(success=True)
+        monkeypatch.setattr(crud_client, "_client", mock_client)
+
         rules = [
             Rule(
                 id="high_threshold",
@@ -117,7 +130,7 @@ class TestBacktestRunner:
         ]
         ruleset = RuleSet(version="v1", rules=rules)
 
-        runner = BacktestRunner(db_session=mock_db_session)
+        runner = BacktestRunner()
         start_date = datetime.now(timezone.utc) - timedelta(days=7)
         end_date = datetime.now(timezone.utc)
 
@@ -127,10 +140,22 @@ class TestBacktestRunner:
         assert result.metrics.match_rate == 0.0
 
     def test_run_backtest_computes_score_distribution(
-        self, mock_db_session, sample_ruleset
+        self, sample_ruleset, monkeypatch
     ):
         """Test that backtest computes score distribution."""
-        runner = BacktestRunner(db_session=mock_db_session)
+        from api import crud_client
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.features = [
+            _make_mock_feature(10, 3.5, -1.5),  # rule matches -> high score
+            _make_mock_feature(2, 1.0, 0.0),  # no match -> base score
+        ]
+        mock_client.stub.GetBacktestFeatures.return_value = mock_response
+        mock_client.stub.SaveBacktestResult.return_value = MagicMock(success=True)
+        monkeypatch.setattr(crud_client, "_client", mock_client)
+
+        runner = BacktestRunner()
         start_date = datetime.now(timezone.utc) - timedelta(days=7)
         end_date = datetime.now(timezone.utc)
 
@@ -138,19 +163,24 @@ class TestBacktestRunner:
             sample_ruleset, start_date, end_date, base_score=50
         )
 
+        # Score distribution should have bins populated
         assert "1-20" in result.metrics.score_distribution
         assert "21-40" in result.metrics.score_distribution
         assert "41-60" in result.metrics.score_distribution
         assert "61-80" in result.metrics.score_distribution
         assert "81-99" in result.metrics.score_distribution
 
-    def test_run_backtest_handles_empty_data(self, mock_db_session, sample_ruleset):
+    def test_run_backtest_handles_empty_data(self, sample_ruleset, monkeypatch):
         """Test that backtest handles empty historical data."""
-        empty_session = MagicMock()
-        enter_mock = empty_session.get_session.return_value.__enter__.return_value
-        enter_mock.execute.return_value = iter([])
+        from api import crud_client
 
-        runner = BacktestRunner(db_session=empty_session)
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.features = []
+        mock_client.stub.GetBacktestFeatures.return_value = mock_response
+        monkeypatch.setattr(crud_client, "_client", mock_client)
+
+        runner = BacktestRunner()
         start_date = datetime.now(timezone.utc) - timedelta(days=7)
         end_date = datetime.now(timezone.utc)
 
@@ -161,12 +191,15 @@ class TestBacktestRunner:
         assert result.metrics.total_records == 0
         assert result.metrics.match_rate == 0.0
 
-    def test_run_backtest_handles_errors_gracefully(self, sample_ruleset):
+    def test_run_backtest_handles_errors_gracefully(self, sample_ruleset, monkeypatch):
         """Test that backtest handles errors gracefully."""
-        error_session = MagicMock()
-        error_session.get_session.side_effect = Exception("Database error")
+        from api import crud_client
 
-        runner = BacktestRunner(db_session=error_session)
+        mock_client = MagicMock()
+        mock_client.stub.GetBacktestFeatures.side_effect = Exception("Analytics error")
+        monkeypatch.setattr(crud_client, "_client", mock_client)
+
+        runner = BacktestRunner()
         start_date = datetime.now(timezone.utc) - timedelta(days=7)
         end_date = datetime.now(timezone.utc)
 
@@ -175,7 +208,7 @@ class TestBacktestRunner:
         )
 
         assert result.error is not None
-        assert "Database error" in result.error
+        assert "Analytics error" in result.error
 
     def test_compute_metrics_calculates_statistics(self):
         """Test that metrics computation is correct."""
@@ -197,138 +230,110 @@ class TestBacktestRunner:
         assert metrics.score_mean == pytest.approx(54.9, abs=0.1)
 
 
+def _make_backtest_result_pb(
+    job_id: str,
+    rule_id: str,
+    metrics: BacktestMetrics,
+    completed_at: datetime,
+) -> MagicMock:
+    """Create a mock proto BacktestResult."""
+    result = MagicMock()
+    result.job_id = job_id
+    result.rule_id = rule_id
+    result.ruleset_version = "v1"
+    result.start_date = MagicMock()
+    result.start_date.ToDatetime.return_value = datetime.now(timezone.utc) - timedelta(
+        days=7
+    )
+    result.end_date = MagicMock()
+    result.end_date.ToDatetime.return_value = datetime.now(timezone.utc)
+    result.completed_at = MagicMock()
+    result.completed_at.ToDatetime.return_value = completed_at
+    result.error = ""
+
+    result.metrics = MagicMock()
+    result.metrics.total_records = metrics.total_records
+    result.metrics.matched_count = metrics.matched_count
+    result.metrics.match_rate = metrics.match_rate
+    result.metrics.score_distribution = metrics.score_distribution
+    result.metrics.score_mean = metrics.score_mean
+    result.metrics.score_std = metrics.score_std
+    result.metrics.score_min = metrics.score_min
+    result.metrics.score_max = metrics.score_max
+    result.metrics.rejected_count = metrics.rejected_count
+    result.metrics.rejected_rate = metrics.rejected_rate
+
+    return result
+
+
 class TestBacktestStore:
     """Tests for BacktestStore class."""
 
-    def test_save_and_get_result(self):
-        """Test saving and retrieving backtest results."""
-        store = BacktestStore()
-
-        result = BacktestResult(
-            job_id="test_job",
-            rule_id="test_rule",
-            ruleset_version="v1",
-            start_date=datetime.now(timezone.utc) - timedelta(days=7),
-            end_date=datetime.now(timezone.utc),
-            metrics=BacktestMetrics(
-                total_records=100,
-                matched_count=25,
-                match_rate=0.25,
-                score_distribution={},
-                score_mean=50.0,
-                score_std=20.0,
-                score_min=10,
-                score_max=95,
-                rejected_count=5,
-                rejected_rate=0.05,
-            ),
-            completed_at=datetime.now(timezone.utc),
+    @pytest.fixture
+    def sample_metrics(self):
+        return BacktestMetrics(
+            total_records=100,
+            matched_count=25,
+            match_rate=0.25,
+            score_distribution={},
+            score_mean=50.0,
+            score_std=20.0,
+            score_min=10,
+            score_max=95,
+            rejected_count=5,
+            rejected_rate=0.05,
         )
 
-        store.save(result)
+    def test_save_and_get_result(self, sample_metrics, monkeypatch):
+        """Test retrieving backtest results via analytics service."""
+        from api import crud_client
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.result = _make_backtest_result_pb(
+            "test_job", "test_rule", sample_metrics, datetime.now(timezone.utc)
+        )
+        mock_client.stub.GetBacktestResult.return_value = mock_response
+        monkeypatch.setattr(crud_client, "_client", mock_client)
+
+        store = BacktestStore()
         retrieved = store.get("test_job")
 
         assert retrieved is not None
         assert retrieved.job_id == "test_job"
         assert retrieved.rule_id == "test_rule"
 
-    def test_list_results_with_filters(self):
-        """Test listing results with filters."""
-        store = BacktestStore()
+    def test_list_results_with_filters(self, sample_metrics, monkeypatch):
+        """Test listing results with filters via analytics service."""
+        from api import crud_client
 
         base_time = datetime.now(timezone.utc)
 
-        result1 = BacktestResult(
-            job_id="job1",
-            rule_id="rule1",
-            ruleset_version="v1",
-            start_date=base_time - timedelta(days=7),
-            end_date=base_time,
-            metrics=BacktestMetrics(
-                total_records=100,
-                matched_count=25,
-                match_rate=0.25,
-                score_distribution={},
-                score_mean=50.0,
-                score_std=20.0,
-                score_min=10,
-                score_max=95,
-                rejected_count=5,
-                rejected_rate=0.05,
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.results = [
+            _make_backtest_result_pb(
+                "job1", "rule1", sample_metrics, base_time - timedelta(days=1)
             ),
-            completed_at=base_time - timedelta(days=1),
-        )
+        ]
+        mock_client.stub.ListBacktestResults.return_value = mock_response
+        monkeypatch.setattr(crud_client, "_client", mock_client)
 
-        result2 = BacktestResult(
-            job_id="job2",
-            rule_id="rule2",
-            ruleset_version="v1",
-            start_date=base_time - timedelta(days=7),
-            end_date=base_time,
-            metrics=BacktestMetrics(
-                total_records=100,
-                matched_count=30,
-                match_rate=0.30,
-                score_distribution={},
-                score_mean=55.0,
-                score_std=20.0,
-                score_min=10,
-                score_max=95,
-                rejected_count=3,
-                rejected_rate=0.03,
-            ),
-            completed_at=base_time,
-        )
-
-        store.save(result1)
-        store.save(result2)
-
-        # Filter by rule_id
+        store = BacktestStore()
         results = store.list_results(rule_id="rule1")
+
         assert len(results) == 1
         assert results[0].job_id == "job1"
 
-        # Filter by date range
-        results = store.list_results(
-            start_date=base_time - timedelta(hours=12),
-            end_date=base_time + timedelta(hours=1),
-        )
-        assert len(results) == 1
-        assert results[0].job_id == "job2"
+    def test_get_returns_none_on_error(self, monkeypatch):
+        """Test that get returns None when analytics service errors."""
+        from api import crud_client
 
-    def test_persistent_storage(self):
-        """Test saving and loading results from file."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            storage_path = Path(tmpdir) / "backtests.json"
+        mock_client = MagicMock()
+        mock_client.stub.GetBacktestResult.side_effect = Exception("Not found")
+        monkeypatch.setattr(crud_client, "_client", mock_client)
 
-            # Create store and save result
-            store1 = BacktestStore(storage_path=storage_path)
-            result = BacktestResult(
-                job_id="test_job",
-                rule_id="test_rule",
-                ruleset_version="v1",
-                start_date=datetime.now(timezone.utc) - timedelta(days=7),
-                end_date=datetime.now(timezone.utc),
-                metrics=BacktestMetrics(
-                    total_records=100,
-                    matched_count=25,
-                    match_rate=0.25,
-                    score_distribution={},
-                    score_mean=50.0,
-                    score_std=20.0,
-                    score_min=10,
-                    score_max=95,
-                    rejected_count=5,
-                    rejected_rate=0.05,
-                ),
-                completed_at=datetime.now(timezone.utc),
-            )
-            store1.save(result)
+        store = BacktestStore()
+        result = store.get("nonexistent_job")
 
-            # Create new store and load
-            store2 = BacktestStore(storage_path=storage_path)
-            retrieved = store2.get("test_job")
-
-            assert retrieved is not None
-            assert retrieved.job_id == "test_job"
-            assert retrieved.rule_id == "test_rule"
+        assert result is None

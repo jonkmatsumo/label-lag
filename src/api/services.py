@@ -6,8 +6,8 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 
 import numpy as np
-from sqlalchemy import text
 
+from api.crud_client import get_crud_client
 from api.rules import RuleResult, evaluate_rules
 from api.schemas import (
     MatchedRule,
@@ -16,7 +16,6 @@ from api.schemas import (
     SignalResponse,
 )
 from model.evaluate import ScoreCalibrator
-from synthetic_pipeline.db.session import DatabaseSession
 
 logger = logging.getLogger(__name__)
 
@@ -55,12 +54,6 @@ class SignalEvaluator:
 
     calibrator: ScoreCalibrator = field(default_factory=ScoreCalibrator)
     model_version: str = MODEL_VERSION
-    db_session: DatabaseSession | None = field(default=None)
-
-    def __post_init__(self):
-        """Initialize database session."""
-        if self.db_session is None:
-            self.db_session = DatabaseSession()
 
     def evaluate(self, request: SignalRequest) -> SignalResponse:
         """Evaluate fraud signal for a transaction.
@@ -293,9 +286,9 @@ class SignalEvaluator:
             return self._calculate_probability(features)
 
     def _fetch_features(self, request: SignalRequest) -> FeatureVector:
-        """Fetch features for the user from feature store.
+        """Fetch features for the user from feature store via Analytics service.
 
-        Queries the feature_snapshots table for the most recent features
+        Queries the Analytics service for the most recent features
         for the given user. Falls back to simulated features if not found.
 
         Args:
@@ -305,39 +298,27 @@ class SignalEvaluator:
             FeatureVector with user features.
         """
         try:
-            with self.db_session.get_session() as session:
-                # Get most recent feature snapshot for this user
-                query = text("""
-                    SELECT
-                        velocity_24h,
-                        amount_to_avg_ratio_30d,
-                        balance_volatility_z_score
-                    FROM feature_snapshots
-                    WHERE user_id = :user_id
-                    ORDER BY computed_at DESC
-                    LIMIT 1
-                """)
-                result = session.execute(query, {"user_id": request.user_id})
-                row = result.fetchone()
+            client = get_crud_client()
+            tx = client.get_features(user_id=request.user_id)
 
-                if row is not None:
-                    logger.debug(f"Found features for user {request.user_id}")
-                    return FeatureVector(
-                        velocity_24h=int(row.velocity_24h),
-                        amount_to_avg_ratio_30d=float(row.amount_to_avg_ratio_30d),
-                        balance_volatility_z_score=float(
-                            row.balance_volatility_z_score
-                        ),
-                        bank_connections_24h=0,  # Not in feature_snapshots yet
-                        merchant_risk_score=0,  # Not in feature_snapshots yet
-                        has_history=True,
-                        transaction_amount=request.amount,
-                    )
-                else:
-                    logger.debug(f"No features found for user {request.user_id}")
+            if tx is not None:
+                logger.debug(f"Found features for user {request.user_id} via Analytics")
+                return FeatureVector(
+                    velocity_24h=int(tx.velocity_24h),
+                    amount_to_avg_ratio_30d=float(tx.amount_to_avg_ratio_30d),
+                    balance_volatility_z_score=float(tx.balance_volatility_z_score),
+                    bank_connections_24h=0,  # Not in feature_snapshots yet
+                    merchant_risk_score=int(tx.merchant_risk_score),
+                    has_history=True,
+                    transaction_amount=request.amount,
+                )
+            else:
+                logger.debug(
+                    f"No features found for user {request.user_id} in Analytics"
+                )
 
         except Exception as e:
-            logger.warning(f"Failed to fetch features from DB: {e}")
+            logger.warning(f"Failed to fetch features from Analytics: {e}")
 
         # Fallback: Use simulated features for unknown users
         return self._simulate_features(request)

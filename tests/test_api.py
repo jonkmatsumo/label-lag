@@ -453,21 +453,8 @@ class TestGenerateDataEndpoint:
 class TestClearDataEndpoint:
     """Tests for data clearing endpoint."""
 
-    @patch("synthetic_pipeline.db.session.DatabaseSession")
-    @patch("synthetic_pipeline.db.models.Base")
-    def test_clear_data_success(self, mock_base, mock_db_session_cls, client):
-        """Test successful data clearing."""
-        # Setup mocks
-        mock_table1 = MagicMock()
-        mock_table1.name = "generated_records"
-        mock_table2 = MagicMock()
-        mock_table2.name = "evaluation_metadata"
-
-        mock_base.metadata.sorted_tables = [mock_table1, mock_table2]
-
-        mock_db = MagicMock()
-        mock_db_session_cls.return_value = mock_db
-
+    def test_clear_data_success(self, client, mock_crud_client):
+        """Test successful data clearing via analytics client."""
         response = client.delete("/data/clear")
 
         assert response.status_code == 200
@@ -476,14 +463,16 @@ class TestClearDataEndpoint:
         assert "generated_records" in data["tables_cleared"]
         assert "evaluation_metadata" in data["tables_cleared"]
 
-        # Verify drop and create were called
-        mock_base.metadata.drop_all.assert_called_once()
-        mock_base.metadata.create_all.assert_called_once()
-
-    @patch("synthetic_pipeline.db.session.DatabaseSession")
-    def test_clear_data_handles_error(self, mock_db_session_cls, client):
+    def test_clear_data_handles_error(self, client, monkeypatch):
         """Test error handling in data clearing."""
-        mock_db_session_cls.side_effect = Exception("Connection failed")
+        from api import crud_client
+
+        def raise_error():
+            raise Exception("Connection failed")
+
+        mock = MagicMock()
+        mock.clear_all_data.side_effect = Exception("Connection failed")
+        monkeypatch.setattr(crud_client, "_client", mock)
 
         response = client.delete("/data/clear")
 

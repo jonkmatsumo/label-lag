@@ -4,7 +4,7 @@ export function exportToCsv<T extends object>(data: T[], filename: string) {
   const headers = Object.keys(data[0]);
   const csvContent = [
     headers.join(','),
-    ...data.map(row => 
+    ...data.map(row =>
       headers.map(header => {
         const val = row[header as keyof T];
         // Handle strings with commas

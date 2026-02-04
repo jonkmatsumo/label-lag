@@ -8,15 +8,16 @@ import type {
   SandboxEvaluateResponse,
   ApprovalSignalItem,
 } from '../types/api';
-import { 
-  AlertTriangle, CheckCircle, Info, Shield, 
+import {
+  AlertTriangle, CheckCircle, Info, Shield,
   ChevronRight, ChevronDown, User, FileText, Send,
   History, BarChart2, Diff, ArrowRight
 } from 'lucide-react';
-import { 
+import {
   Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   Cell, ComposedChart, Line
 } from 'recharts';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 const ruleTabs = [
   { path: '/rules', label: 'Management', exact: true },
@@ -95,9 +96,7 @@ export function RuleManagement() {
       {rulesQuery.isLoading ? (
         <div className="text-center p-5"><div className="spinner-border text-primary" /></div>
       ) : rulesQuery.isError ? (
-        <div className="alert alert-danger">
-          Failed to load rules: {rulesQuery.error?.message}
-        </div>
+        <ErrorBanner error={rulesQuery.error} title="Failed to load rules" className="alert alert-danger mb-4" />
       ) : rulesQuery.data?.rules.length === 0 ? (
         <div className="empty-state text-center py-5">
           <div className="display-1 text-muted mb-3">📋</div>
@@ -121,7 +120,7 @@ export function RuleManagement() {
               <tbody>
                 {rulesQuery.data?.rules.map((rule) => (
                   <React.Fragment key={rule.id}>
-                    <tr 
+                    <tr
                       onClick={() => setExpandedRule(expandedRule === rule.id ? null : rule.id)}
                       style={{ cursor: 'pointer' }}
                       className={expandedRule === rule.id ? 'table-active' : ''}
@@ -181,19 +180,19 @@ function RuleDetail({ rule, onPublished }: { rule: DraftRule, onPublished: () =>
   return (
     <div>
       <div className="d-flex border-bottom mb-4">
-        <button 
+        <button
           className={`btn btn-sm px-3 py-2 rounded-0 border-bottom border-3 ${activeTab === 'overview' ? 'border-primary fw-bold text-primary' : 'border-transparent text-muted'}`}
           onClick={() => setActiveTab('overview')}
         >
           Overview
         </button>
-        <button 
+        <button
           className={`btn btn-sm px-3 py-2 rounded-0 border-bottom border-3 ${activeTab === 'history' ? 'border-primary fw-bold text-primary' : 'border-transparent text-muted'}`}
           onClick={() => setActiveTab('history')}
         >
           <History size={14} className="me-1" /> Version History
         </button>
-        <button 
+        <button
           className={`btn btn-sm px-3 py-2 rounded-0 border-bottom border-3 ${activeTab === 'impact' ? 'border-primary fw-bold text-primary' : 'border-transparent text-muted'}`}
           onClick={() => setActiveTab('impact')}
         >
@@ -206,10 +205,10 @@ function RuleDetail({ rule, onPublished }: { rule: DraftRule, onPublished: () =>
       {activeTab === 'impact' && <RuleImpactTab ruleId={rule.id} />}
 
       {showPublishModal && (
-        <PublishModal 
-          rule={rule} 
-          onClose={() => setShowPublishModal(false)} 
-          onSuccess={onPublished} 
+        <PublishModal
+          rule={rule}
+          onClose={() => setShowPublishModal(false)}
+          onSuccess={onPublished}
         />
       )}
     </div>
@@ -294,7 +293,7 @@ function RuleOverviewTab({ rule, onShowPublish }: { rule: DraftRule, onShowPubli
                 Publication Blocked
               </div>
             )}
-            <button 
+            <button
               className="btn btn-primary btn-sm d-flex align-items-center px-3"
               onClick={onShowPublish}
               disabled={!isReady}
@@ -342,7 +341,7 @@ function RuleHistoryTab({ ruleId }: { ruleId: string }) {
         <h6 className="fw-bold mb-3 small text-uppercase tracking-wider text-muted">Version History</h6>
         <div className="list-group list-group-flush border rounded overflow-hidden shadow-sm">
           {versions.map(v => (
-            <button 
+            <button
               key={v.version_id}
               className={`list-group-item list-group-item-action py-3 px-3 border-bottom d-flex justify-content-between align-items-start ${selectedVersions.includes(v.version_id) ? 'bg-primary bg-opacity-10 border-start border-4 border-primary' : ''}`}
               onClick={() => handleToggleVersion(v.version_id)}
@@ -369,7 +368,7 @@ function RuleHistoryTab({ ruleId }: { ruleId: string }) {
           <span><Diff size={14} className="me-2" /> Comparison</span>
           {selectedVersions.length === 2 && <span className="badge bg-light text-primary border">Diffing...</span>}
         </h6>
-        
+
         {selectedVersions.length < 2 ? (
           <div className="text-center py-5 bg-light rounded text-muted">
             <Diff size={48} className="mb-3 opacity-25" />
@@ -406,7 +405,9 @@ function RuleHistoryTab({ ruleId }: { ruleId: string }) {
               </tbody>
             </table>
           </div>
-        ) : <div className="alert alert-danger small">Failed to compute diff.</div>}
+        ) : diffQuery.isError ? (
+          <ErrorBanner error={diffQuery.error} title="Failed to compute diff" className="alert alert-danger small" />
+        ) : null}
       </div>
     </div>
   );
@@ -422,7 +423,7 @@ function RuleImpactTab({ ruleId }: { ruleId: string }) {
   if (!attributionQuery.data) return <div className="alert alert-info">No attribution data available for this rule.</div>;
 
   const data = attributionQuery.data;
-  
+
   // Waterfall data: Base -> Impact -> Final
   const waterfallData = [
     { name: 'Model Base', value: data.mean_model_score, fill: '#8884d8' },
@@ -490,7 +491,7 @@ function PublishModal({ rule, onClose, onSuccess }: { rule: DraftRule, onClose: 
   const [reason, setReason] = useState('');
 
   const publishMutation = useMutation({
-    mutationFn: ({ actor, reason }: { actor: string, reason: string }) => 
+    mutationFn: ({ actor, reason }: { actor: string, reason: string }) =>
       rulesApi.publishRule(rule.id, { actor, reason }),
     onSuccess: () => {
       onSuccess();
@@ -518,15 +519,15 @@ function PublishModal({ rule, onClose, onSuccess }: { rule: DraftRule, onClose: 
               <p className="text-muted small mb-4">
                 This rule will become effective immediately for live traffic. An audit trail is required.
               </p>
-              
+
               <div className="mb-3">
                 <label className="form-label small fw-bold d-flex align-items-center">
                   <User size={14} className="me-1" /> Authorized Actor
                 </label>
-                <input 
-                  type="text" 
-                  className="form-control" 
-                  placeholder="name@example.com" 
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="name@example.com"
                   value={actor}
                   onChange={e => setActor(e.target.value)}
                   required
@@ -537,9 +538,9 @@ function PublishModal({ rule, onClose, onSuccess }: { rule: DraftRule, onClose: 
                 <label className="form-label small fw-bold d-flex align-items-center">
                   <FileText size={14} className="me-1" /> Business Reason
                 </label>
-                <textarea 
-                  className="form-control" 
-                  rows={3} 
+                <textarea
+                  className="form-control"
+                  rows={3}
                   placeholder="Explain why this rule is being published..."
                   value={reason}
                   onChange={e => setReason(e.target.value)}
@@ -548,16 +549,14 @@ function PublishModal({ rule, onClose, onSuccess }: { rule: DraftRule, onClose: 
               </div>
 
               {publishMutation.isError && (
-                <div className="alert alert-danger small py-2">
-                  {publishMutation.error instanceof Error ? publishMutation.error.message : 'Publishing failed'}
-                </div>
+                <ErrorBanner error={publishMutation.error} title="Publishing failed" className="alert alert-danger small py-2" />
               )}
             </div>
             <div className="modal-footer border-0 pt-0">
               <button type="button" className="btn btn-light" onClick={onClose}>Cancel</button>
-              <button 
-                type="submit" 
-                className="btn btn-primary px-4" 
+              <button
+                type="submit"
+                className="btn btn-primary px-4"
                 disabled={publishMutation.isPending || !actor || !reason}
               >
                 {publishMutation.isPending ? 'Publishing...' : 'Confirm Publish'}
@@ -582,7 +581,7 @@ export function RuleSandbox() {
   });
   const [inputMode, setInputMode] = useState<'sliders' | 'json'>('sliders');
   const [featuresJson, setFeaturesJson] = useState('{}');
-  
+
   // Default common features for sliders
   const [sliderFeatures, setSliderFeatures] = useState({
     amount: 100,
@@ -662,7 +661,7 @@ export function RuleSandbox() {
                   </div>
                 ) : (
                   <div className="mb-3">
-                    <textarea 
+                    <textarea
                       className={`form-control font-monospace small ${jsonError ? 'is-invalid' : ''}`}
                       rows={12} value={featuresJson} onChange={e => setFeaturesJson(e.target.value)}
                     />
@@ -814,9 +813,7 @@ export function RuleShadow() {
       {shadowQuery.isLoading ? (
         <div className="loading">Loading shadow metrics...</div>
       ) : shadowQuery.isError ? (
-        <div className="alert alert-error">
-          Failed to load shadow metrics: {shadowQuery.error?.message}
-        </div>
+        <ErrorBanner error={shadowQuery.error} title="Failed to load shadow metrics" className="alert alert-danger" />
       ) : shadowQuery.data && shadowQuery.data.rule_metrics.length > 0 ? (
         <div className="card">
           <div className="card-header">
@@ -941,9 +938,7 @@ export function RuleBacktests() {
       {backtestsQuery.isLoading ? (
         <div className="loading">Loading backtest results...</div>
       ) : backtestsQuery.isError ? (
-        <div className="alert alert-error">
-          Failed to load backtests: {backtestsQuery.error?.message}
-        </div>
+        <ErrorBanner error={backtestsQuery.error} title="Failed to load backtests" className="alert alert-danger" />
       ) : results.length > 0 ? (
         <div className="card">
           <div className="card-header">
@@ -988,19 +983,19 @@ export function RuleBacktests() {
               </tbody>
             </table>
           </div>
-          
+
           {totalPages > 1 && (
             <div className="pagination-controls" style={{ padding: '1rem', display: 'flex', justifyContent: 'center', gap: '1rem', alignItems: 'center' }}>
-              <button 
-                className="btn btn-secondary btn-sm" 
+              <button
+                className="btn btn-secondary btn-sm"
                 disabled={page === 1}
                 onClick={() => setPage(p => p - 1)}
               >
                 &lt; Prev
               </button>
               <span className="text-muted small">Page {page} of {totalPages}</span>
-              <button 
-                className="btn btn-secondary btn-sm" 
+              <button
+                className="btn btn-secondary btn-sm"
                 disabled={page === totalPages}
                 onClick={() => setPage(p => p + 1)}
               >
@@ -1055,9 +1050,9 @@ export function RuleSuggestions() {
       <div className="card mb-3">
         <div className="card-body">
           <label className="form-label me-2">Minimum Confidence:</label>
-          <input 
-            type="range" className="form-range" 
-            min="0.5" max="0.95" step="0.05" 
+          <input
+            type="range" className="form-range"
+            min="0.5" max="0.95" step="0.05"
             value={minConfidence} onChange={e => setMinConfidence(parseFloat(e.target.value))}
             style={{maxWidth: '300px', display: 'inline-block', verticalAlign: 'middle'}}
           />
@@ -1068,7 +1063,7 @@ export function RuleSuggestions() {
       {suggestionsQuery.isLoading ? (
         <div className="loading">Analyzing patterns...</div>
       ) : suggestionsQuery.isError ? (
-         <div className="alert alert-error">Analysis failed: {suggestionsQuery.error?.message}</div>
+         <ErrorBanner error={suggestionsQuery.error} title="Analysis failed" className="alert alert-danger" />
       ) : suggestionsQuery.data && suggestionsQuery.data.suggestions.length > 0 ? (
         <div className="row">
            {suggestionsQuery.data.suggestions.map((s: any, idx: number) => (
@@ -1087,12 +1082,12 @@ export function RuleSuggestions() {
                        <li>Evidence: Mean {s.evidence.mean?.toFixed(2)}, Count {s.evidence.sample_count}</li>
                      )}
                    </ul>
-                   <button 
+                   <button
                      className="btn btn-outline-primary btn-sm w-100"
-                     onClick={() => acceptMutation.mutate({ 
-                       suggestion: s, 
-                       actor: 'user', 
-                       custom_id: `suggest_${Date.now()}_${idx}` 
+                     onClick={() => acceptMutation.mutate({
+                       suggestion: s,
+                       actor: 'user',
+                       custom_id: `suggest_${Date.now()}_${idx}`
                      })}
                      disabled={acceptMutation.isPending}
                    >

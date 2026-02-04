@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import type { DatasetCorrelationsResponse, RelationshipMetric } from '../types/api';
 
 export interface DatasetOverview {
   total_records: number;
@@ -33,17 +34,20 @@ export interface FeatureSample {
 
 export const datasetApi = {
   getOverview: () => apiClient.get<DatasetOverview>('/bff/v1/dataset/overview'),
-  
+
   getSchema: () => apiClient.get<{ columns: SchemaColumn[] }>('/bff/v1/dataset/schema'),
-  
+
   generateData: (params: { num_users: number; fraud_rate: number; drop_existing: boolean }) =>
     apiClient.post<GenerateDataResponse>('/bff/v1/dataset/generate', params),
-    
+
   clearData: () => apiClient.delete<{ success: boolean; tables_cleared: string[] }>('/bff/v1/dataset/clear'),
-  
+
   getFeatureSample: (sampleSize: number = 1000, stratify: boolean = true) =>
     apiClient.get<{ samples: FeatureSample[] }>(`/bff/v1/dataset/sample?sample_size=${sampleSize}&stratify=${stratify}`),
 
   getRelationships: (sampleSize: number = 500, targetColumn: string = 'is_fraudulent') =>
-    apiClient.get<{ relationships: any[], target_column: string }>(`/bff/v1/dataset/relationships?sample_size=${sampleSize}&target_column=${targetColumn}`),
+    apiClient.get<{ relationships: RelationshipMetric[], target_column: string }>(`/bff/v1/dataset/relationships?sample_size=${sampleSize}&target_column=${targetColumn}`),
+
+  getCorrelations: (sampleSize: number = 1000) =>
+    apiClient.get<DatasetCorrelationsResponse>(`/bff/v1/dataset/correlations?sample_size=${sampleSize}`),
 };

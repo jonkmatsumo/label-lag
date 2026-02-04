@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v6.33.4
-// source: proto/crud/v1/analytics.proto
+// source: crud/v1/analytics.proto
 
 package crudv1
 
@@ -31,7 +31,7 @@ type GetDailyStatsRequest struct {
 
 func (x *GetDailyStatsRequest) Reset() {
 	*x = GetDailyStatsRequest{}
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[0]
+	mi := &file_crud_v1_analytics_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -43,7 +43,7 @@ func (x *GetDailyStatsRequest) String() string {
 func (*GetDailyStatsRequest) ProtoMessage() {}
 
 func (x *GetDailyStatsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[0]
+	mi := &file_crud_v1_analytics_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -56,7 +56,7 @@ func (x *GetDailyStatsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDailyStatsRequest.ProtoReflect.Descriptor instead.
 func (*GetDailyStatsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_crud_v1_analytics_proto_rawDescGZIP(), []int{0}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *GetDailyStatsRequest) GetDays() int32 {
@@ -80,7 +80,7 @@ type DailyStat struct {
 
 func (x *DailyStat) Reset() {
 	*x = DailyStat{}
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[1]
+	mi := &file_crud_v1_analytics_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -92,7 +92,7 @@ func (x *DailyStat) String() string {
 func (*DailyStat) ProtoMessage() {}
 
 func (x *DailyStat) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[1]
+	mi := &file_crud_v1_analytics_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -105,7 +105,7 @@ func (x *DailyStat) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DailyStat.ProtoReflect.Descriptor instead.
 func (*DailyStat) Descriptor() ([]byte, []int) {
-	return file_proto_crud_v1_analytics_proto_rawDescGZIP(), []int{1}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *DailyStat) GetDate() string {
@@ -159,7 +159,7 @@ type GetDailyStatsResponse struct {
 
 func (x *GetDailyStatsResponse) Reset() {
 	*x = GetDailyStatsResponse{}
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[2]
+	mi := &file_crud_v1_analytics_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -171,7 +171,7 @@ func (x *GetDailyStatsResponse) String() string {
 func (*GetDailyStatsResponse) ProtoMessage() {}
 
 func (x *GetDailyStatsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[2]
+	mi := &file_crud_v1_analytics_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -184,7 +184,7 @@ func (x *GetDailyStatsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDailyStatsResponse.ProtoReflect.Descriptor instead.
 func (*GetDailyStatsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_crud_v1_analytics_proto_rawDescGZIP(), []int{2}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *GetDailyStatsResponse) GetStats() []*DailyStat {
@@ -204,7 +204,7 @@ type GetTransactionDetailsRequest struct {
 
 func (x *GetTransactionDetailsRequest) Reset() {
 	*x = GetTransactionDetailsRequest{}
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[3]
+	mi := &file_crud_v1_analytics_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -216,7 +216,7 @@ func (x *GetTransactionDetailsRequest) String() string {
 func (*GetTransactionDetailsRequest) ProtoMessage() {}
 
 func (x *GetTransactionDetailsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[3]
+	mi := &file_crud_v1_analytics_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -229,7 +229,7 @@ func (x *GetTransactionDetailsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTransactionDetailsRequest.ProtoReflect.Descriptor instead.
 func (*GetTransactionDetailsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_crud_v1_analytics_proto_rawDescGZIP(), []int{3}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *GetTransactionDetailsRequest) GetDays() int32 {
@@ -267,7 +267,7 @@ type TransactionDetail struct {
 
 func (x *TransactionDetail) Reset() {
 	*x = TransactionDetail{}
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[4]
+	mi := &file_crud_v1_analytics_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -279,7 +279,7 @@ func (x *TransactionDetail) String() string {
 func (*TransactionDetail) ProtoMessage() {}
 
 func (x *TransactionDetail) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[4]
+	mi := &file_crud_v1_analytics_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -292,7 +292,7 @@ func (x *TransactionDetail) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransactionDetail.ProtoReflect.Descriptor instead.
 func (*TransactionDetail) Descriptor() ([]byte, []int) {
-	return file_proto_crud_v1_analytics_proto_rawDescGZIP(), []int{4}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *TransactionDetail) GetRecordId() string {
@@ -395,7 +395,7 @@ type GetTransactionDetailsResponse struct {
 
 func (x *GetTransactionDetailsResponse) Reset() {
 	*x = GetTransactionDetailsResponse{}
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[5]
+	mi := &file_crud_v1_analytics_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -407,7 +407,7 @@ func (x *GetTransactionDetailsResponse) String() string {
 func (*GetTransactionDetailsResponse) ProtoMessage() {}
 
 func (x *GetTransactionDetailsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[5]
+	mi := &file_crud_v1_analytics_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -420,7 +420,7 @@ func (x *GetTransactionDetailsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTransactionDetailsResponse.ProtoReflect.Descriptor instead.
 func (*GetTransactionDetailsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_crud_v1_analytics_proto_rawDescGZIP(), []int{5}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *GetTransactionDetailsResponse) GetTransactions() []*TransactionDetail {
@@ -428,6 +428,182 @@ func (x *GetTransactionDetailsResponse) GetTransactions() []*TransactionDetail {
 		return x.Transactions
 	}
 	return nil
+}
+
+type SearchTransactionsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	TransactionId string                 `protobuf:"bytes,2,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	MinAmount     *float64               `protobuf:"fixed64,3,opt,name=min_amount,json=minAmount,proto3,oneof" json:"min_amount,omitempty"`
+	MaxAmount     *float64               `protobuf:"fixed64,4,opt,name=max_amount,json=maxAmount,proto3,oneof" json:"max_amount,omitempty"`
+	StartDate     string                 `protobuf:"bytes,5,opt,name=start_date,json=startDate,proto3" json:"start_date,omitempty"`
+	EndDate       string                 `protobuf:"bytes,6,opt,name=end_date,json=endDate,proto3" json:"end_date,omitempty"`
+	IsFraudulent  *bool                  `protobuf:"varint,7,opt,name=is_fraudulent,json=isFraudulent,proto3,oneof" json:"is_fraudulent,omitempty"`
+	MinScore      *int32                 `protobuf:"varint,8,opt,name=min_score,json=minScore,proto3,oneof" json:"min_score,omitempty"`
+	MaxScore      *int32                 `protobuf:"varint,9,opt,name=max_score,json=maxScore,proto3,oneof" json:"max_score,omitempty"`
+	Limit         int32                  `protobuf:"varint,10,opt,name=limit,proto3" json:"limit,omitempty"`
+	Offset        int32                  `protobuf:"varint,11,opt,name=offset,proto3" json:"offset,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SearchTransactionsRequest) Reset() {
+	*x = SearchTransactionsRequest{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SearchTransactionsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SearchTransactionsRequest) ProtoMessage() {}
+
+func (x *SearchTransactionsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SearchTransactionsRequest.ProtoReflect.Descriptor instead.
+func (*SearchTransactionsRequest) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *SearchTransactionsRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *SearchTransactionsRequest) GetTransactionId() string {
+	if x != nil {
+		return x.TransactionId
+	}
+	return ""
+}
+
+func (x *SearchTransactionsRequest) GetMinAmount() float64 {
+	if x != nil && x.MinAmount != nil {
+		return *x.MinAmount
+	}
+	return 0
+}
+
+func (x *SearchTransactionsRequest) GetMaxAmount() float64 {
+	if x != nil && x.MaxAmount != nil {
+		return *x.MaxAmount
+	}
+	return 0
+}
+
+func (x *SearchTransactionsRequest) GetStartDate() string {
+	if x != nil {
+		return x.StartDate
+	}
+	return ""
+}
+
+func (x *SearchTransactionsRequest) GetEndDate() string {
+	if x != nil {
+		return x.EndDate
+	}
+	return ""
+}
+
+func (x *SearchTransactionsRequest) GetIsFraudulent() bool {
+	if x != nil && x.IsFraudulent != nil {
+		return *x.IsFraudulent
+	}
+	return false
+}
+
+func (x *SearchTransactionsRequest) GetMinScore() int32 {
+	if x != nil && x.MinScore != nil {
+		return *x.MinScore
+	}
+	return 0
+}
+
+func (x *SearchTransactionsRequest) GetMaxScore() int32 {
+	if x != nil && x.MaxScore != nil {
+		return *x.MaxScore
+	}
+	return 0
+}
+
+func (x *SearchTransactionsRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *SearchTransactionsRequest) GetOffset() int32 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
+type SearchTransactionsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Transactions  []*TransactionDetail   `protobuf:"bytes,1,rep,name=transactions,proto3" json:"transactions,omitempty"`
+	Total         int64                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SearchTransactionsResponse) Reset() {
+	*x = SearchTransactionsResponse{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SearchTransactionsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SearchTransactionsResponse) ProtoMessage() {}
+
+func (x *SearchTransactionsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SearchTransactionsResponse.ProtoReflect.Descriptor instead.
+func (*SearchTransactionsResponse) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *SearchTransactionsResponse) GetTransactions() []*TransactionDetail {
+	if x != nil {
+		return x.Transactions
+	}
+	return nil
+}
+
+func (x *SearchTransactionsResponse) GetTotal() int64 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
 }
 
 type GetRecentAlertsRequest struct {
@@ -439,7 +615,7 @@ type GetRecentAlertsRequest struct {
 
 func (x *GetRecentAlertsRequest) Reset() {
 	*x = GetRecentAlertsRequest{}
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[6]
+	mi := &file_crud_v1_analytics_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -451,7 +627,7 @@ func (x *GetRecentAlertsRequest) String() string {
 func (*GetRecentAlertsRequest) ProtoMessage() {}
 
 func (x *GetRecentAlertsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[6]
+	mi := &file_crud_v1_analytics_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -464,7 +640,7 @@ func (x *GetRecentAlertsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRecentAlertsRequest.ProtoReflect.Descriptor instead.
 func (*GetRecentAlertsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_crud_v1_analytics_proto_rawDescGZIP(), []int{6}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *GetRecentAlertsRequest) GetLimit() int32 {
@@ -493,7 +669,7 @@ type Alert struct {
 
 func (x *Alert) Reset() {
 	*x = Alert{}
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[7]
+	mi := &file_crud_v1_analytics_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -505,7 +681,7 @@ func (x *Alert) String() string {
 func (*Alert) ProtoMessage() {}
 
 func (x *Alert) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[7]
+	mi := &file_crud_v1_analytics_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -518,7 +694,7 @@ func (x *Alert) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Alert.ProtoReflect.Descriptor instead.
 func (*Alert) Descriptor() ([]byte, []int) {
-	return file_proto_crud_v1_analytics_proto_rawDescGZIP(), []int{7}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Alert) GetRecordId() string {
@@ -607,7 +783,7 @@ type GetRecentAlertsResponse struct {
 
 func (x *GetRecentAlertsResponse) Reset() {
 	*x = GetRecentAlertsResponse{}
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[8]
+	mi := &file_crud_v1_analytics_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -619,7 +795,7 @@ func (x *GetRecentAlertsResponse) String() string {
 func (*GetRecentAlertsResponse) ProtoMessage() {}
 
 func (x *GetRecentAlertsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[8]
+	mi := &file_crud_v1_analytics_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -632,7 +808,7 @@ func (x *GetRecentAlertsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRecentAlertsResponse.ProtoReflect.Descriptor instead.
 func (*GetRecentAlertsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_crud_v1_analytics_proto_rawDescGZIP(), []int{8}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *GetRecentAlertsResponse) GetAlerts() []*Alert {
@@ -650,7 +826,7 @@ type GetOverviewMetricsRequest struct {
 
 func (x *GetOverviewMetricsRequest) Reset() {
 	*x = GetOverviewMetricsRequest{}
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[9]
+	mi := &file_crud_v1_analytics_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -662,7 +838,7 @@ func (x *GetOverviewMetricsRequest) String() string {
 func (*GetOverviewMetricsRequest) ProtoMessage() {}
 
 func (x *GetOverviewMetricsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[9]
+	mi := &file_crud_v1_analytics_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -675,7 +851,7 @@ func (x *GetOverviewMetricsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetOverviewMetricsRequest.ProtoReflect.Descriptor instead.
 func (*GetOverviewMetricsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_crud_v1_analytics_proto_rawDescGZIP(), []int{9}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{11}
 }
 
 type GetOverviewMetricsResponse struct {
@@ -696,7 +872,7 @@ type GetOverviewMetricsResponse struct {
 
 func (x *GetOverviewMetricsResponse) Reset() {
 	*x = GetOverviewMetricsResponse{}
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[10]
+	mi := &file_crud_v1_analytics_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -708,7 +884,7 @@ func (x *GetOverviewMetricsResponse) String() string {
 func (*GetOverviewMetricsResponse) ProtoMessage() {}
 
 func (x *GetOverviewMetricsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[10]
+	mi := &file_crud_v1_analytics_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -721,7 +897,7 @@ func (x *GetOverviewMetricsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetOverviewMetricsResponse.ProtoReflect.Descriptor instead.
 func (*GetOverviewMetricsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_crud_v1_analytics_proto_rawDescGZIP(), []int{10}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *GetOverviewMetricsResponse) GetTotalRecords() int64 {
@@ -802,7 +978,7 @@ type GetDatasetFingerprintRequest struct {
 
 func (x *GetDatasetFingerprintRequest) Reset() {
 	*x = GetDatasetFingerprintRequest{}
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[11]
+	mi := &file_crud_v1_analytics_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -814,7 +990,7 @@ func (x *GetDatasetFingerprintRequest) String() string {
 func (*GetDatasetFingerprintRequest) ProtoMessage() {}
 
 func (x *GetDatasetFingerprintRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[11]
+	mi := &file_crud_v1_analytics_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -827,7 +1003,7 @@ func (x *GetDatasetFingerprintRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDatasetFingerprintRequest.ProtoReflect.Descriptor instead.
 func (*GetDatasetFingerprintRequest) Descriptor() ([]byte, []int) {
-	return file_proto_crud_v1_analytics_proto_rawDescGZIP(), []int{11}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{13}
 }
 
 type TableFingerprint struct {
@@ -842,7 +1018,7 @@ type TableFingerprint struct {
 
 func (x *TableFingerprint) Reset() {
 	*x = TableFingerprint{}
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[12]
+	mi := &file_crud_v1_analytics_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -854,7 +1030,7 @@ func (x *TableFingerprint) String() string {
 func (*TableFingerprint) ProtoMessage() {}
 
 func (x *TableFingerprint) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[12]
+	mi := &file_crud_v1_analytics_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -867,7 +1043,7 @@ func (x *TableFingerprint) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TableFingerprint.ProtoReflect.Descriptor instead.
 func (*TableFingerprint) Descriptor() ([]byte, []int) {
-	return file_proto_crud_v1_analytics_proto_rawDescGZIP(), []int{12}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *TableFingerprint) GetCount() int64 {
@@ -908,7 +1084,7 @@ type GetDatasetFingerprintResponse struct {
 
 func (x *GetDatasetFingerprintResponse) Reset() {
 	*x = GetDatasetFingerprintResponse{}
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[13]
+	mi := &file_crud_v1_analytics_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -920,7 +1096,7 @@ func (x *GetDatasetFingerprintResponse) String() string {
 func (*GetDatasetFingerprintResponse) ProtoMessage() {}
 
 func (x *GetDatasetFingerprintResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[13]
+	mi := &file_crud_v1_analytics_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -933,7 +1109,7 @@ func (x *GetDatasetFingerprintResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDatasetFingerprintResponse.ProtoReflect.Descriptor instead.
 func (*GetDatasetFingerprintResponse) Descriptor() ([]byte, []int) {
-	return file_proto_crud_v1_analytics_proto_rawDescGZIP(), []int{13}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *GetDatasetFingerprintResponse) GetGeneratedRecords() *TableFingerprint {
@@ -960,7 +1136,7 @@ type GetFeatureSampleRequest struct {
 
 func (x *GetFeatureSampleRequest) Reset() {
 	*x = GetFeatureSampleRequest{}
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[14]
+	mi := &file_crud_v1_analytics_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -972,7 +1148,7 @@ func (x *GetFeatureSampleRequest) String() string {
 func (*GetFeatureSampleRequest) ProtoMessage() {}
 
 func (x *GetFeatureSampleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[14]
+	mi := &file_crud_v1_analytics_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -985,7 +1161,7 @@ func (x *GetFeatureSampleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFeatureSampleRequest.ProtoReflect.Descriptor instead.
 func (*GetFeatureSampleRequest) Descriptor() ([]byte, []int) {
-	return file_proto_crud_v1_analytics_proto_rawDescGZIP(), []int{14}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *GetFeatureSampleRequest) GetSampleSize() int32 {
@@ -1015,7 +1191,7 @@ type FeatureSample struct {
 
 func (x *FeatureSample) Reset() {
 	*x = FeatureSample{}
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[15]
+	mi := &file_crud_v1_analytics_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1027,7 +1203,7 @@ func (x *FeatureSample) String() string {
 func (*FeatureSample) ProtoMessage() {}
 
 func (x *FeatureSample) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[15]
+	mi := &file_crud_v1_analytics_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1040,7 +1216,7 @@ func (x *FeatureSample) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FeatureSample.ProtoReflect.Descriptor instead.
 func (*FeatureSample) Descriptor() ([]byte, []int) {
-	return file_proto_crud_v1_analytics_proto_rawDescGZIP(), []int{15}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *FeatureSample) GetRecordId() string {
@@ -1087,7 +1263,7 @@ type GetFeatureSampleResponse struct {
 
 func (x *GetFeatureSampleResponse) Reset() {
 	*x = GetFeatureSampleResponse{}
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[16]
+	mi := &file_crud_v1_analytics_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1099,7 +1275,7 @@ func (x *GetFeatureSampleResponse) String() string {
 func (*GetFeatureSampleResponse) ProtoMessage() {}
 
 func (x *GetFeatureSampleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[16]
+	mi := &file_crud_v1_analytics_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1112,7 +1288,7 @@ func (x *GetFeatureSampleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFeatureSampleResponse.ProtoReflect.Descriptor instead.
 func (*GetFeatureSampleResponse) Descriptor() ([]byte, []int) {
-	return file_proto_crud_v1_analytics_proto_rawDescGZIP(), []int{16}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *GetFeatureSampleResponse) GetSamples() []*FeatureSample {
@@ -1131,7 +1307,7 @@ type GetSchemaSummaryRequest struct {
 
 func (x *GetSchemaSummaryRequest) Reset() {
 	*x = GetSchemaSummaryRequest{}
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[17]
+	mi := &file_crud_v1_analytics_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1143,7 +1319,7 @@ func (x *GetSchemaSummaryRequest) String() string {
 func (*GetSchemaSummaryRequest) ProtoMessage() {}
 
 func (x *GetSchemaSummaryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[17]
+	mi := &file_crud_v1_analytics_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1156,7 +1332,7 @@ func (x *GetSchemaSummaryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSchemaSummaryRequest.ProtoReflect.Descriptor instead.
 func (*GetSchemaSummaryRequest) Descriptor() ([]byte, []int) {
-	return file_proto_crud_v1_analytics_proto_rawDescGZIP(), []int{17}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *GetSchemaSummaryRequest) GetTableNames() []string {
@@ -1179,7 +1355,7 @@ type ColumnInfo struct {
 
 func (x *ColumnInfo) Reset() {
 	*x = ColumnInfo{}
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[18]
+	mi := &file_crud_v1_analytics_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1191,7 +1367,7 @@ func (x *ColumnInfo) String() string {
 func (*ColumnInfo) ProtoMessage() {}
 
 func (x *ColumnInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[18]
+	mi := &file_crud_v1_analytics_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1204,7 +1380,7 @@ func (x *ColumnInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ColumnInfo.ProtoReflect.Descriptor instead.
 func (*ColumnInfo) Descriptor() ([]byte, []int) {
-	return file_proto_crud_v1_analytics_proto_rawDescGZIP(), []int{18}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ColumnInfo) GetTableName() string {
@@ -1251,7 +1427,7 @@ type GetSchemaSummaryResponse struct {
 
 func (x *GetSchemaSummaryResponse) Reset() {
 	*x = GetSchemaSummaryResponse{}
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[19]
+	mi := &file_crud_v1_analytics_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1263,7 +1439,7 @@ func (x *GetSchemaSummaryResponse) String() string {
 func (*GetSchemaSummaryResponse) ProtoMessage() {}
 
 func (x *GetSchemaSummaryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_crud_v1_analytics_proto_msgTypes[19]
+	mi := &file_crud_v1_analytics_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1276,7 +1452,7 @@ func (x *GetSchemaSummaryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSchemaSummaryResponse.ProtoReflect.Descriptor instead.
 func (*GetSchemaSummaryResponse) Descriptor() ([]byte, []int) {
-	return file_proto_crud_v1_analytics_proto_rawDescGZIP(), []int{19}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *GetSchemaSummaryResponse) GetColumns() []*ColumnInfo {
@@ -1286,11 +1462,2163 @@ func (x *GetSchemaSummaryResponse) GetColumns() []*ColumnInfo {
 	return nil
 }
 
-var File_proto_crud_v1_analytics_proto protoreflect.FileDescriptor
+type GetTrainingDataRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CutoffDate    *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=cutoff_date,json=cutoffDate,proto3" json:"cutoff_date,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
 
-const file_proto_crud_v1_analytics_proto_rawDesc = "" +
+func (x *GetTrainingDataRequest) Reset() {
+	*x = GetTrainingDataRequest{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetTrainingDataRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetTrainingDataRequest) ProtoMessage() {}
+
+func (x *GetTrainingDataRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetTrainingDataRequest.ProtoReflect.Descriptor instead.
+func (*GetTrainingDataRequest) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *GetTrainingDataRequest) GetCutoffDate() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CutoffDate
+	}
+	return nil
+}
+
+type GetTrainingDataResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TrainRecords  []*TransactionDetail   `protobuf:"bytes,1,rep,name=train_records,json=trainRecords,proto3" json:"train_records,omitempty"`
+	TestRecords   []*TransactionDetail   `protobuf:"bytes,2,rep,name=test_records,json=testRecords,proto3" json:"test_records,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetTrainingDataResponse) Reset() {
+	*x = GetTrainingDataResponse{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetTrainingDataResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetTrainingDataResponse) ProtoMessage() {}
+
+func (x *GetTrainingDataResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetTrainingDataResponse.ProtoReflect.Descriptor instead.
+func (*GetTrainingDataResponse) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *GetTrainingDataResponse) GetTrainRecords() []*TransactionDetail {
+	if x != nil {
+		return x.TrainRecords
+	}
+	return nil
+}
+
+func (x *GetTrainingDataResponse) GetTestRecords() []*TransactionDetail {
+	if x != nil {
+		return x.TestRecords
+	}
+	return nil
+}
+
+type GetBacktestFeaturesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	StartDate     *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=start_date,json=startDate,proto3" json:"start_date,omitempty"`
+	EndDate       *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=end_date,json=endDate,proto3" json:"end_date,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetBacktestFeaturesRequest) Reset() {
+	*x = GetBacktestFeaturesRequest{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetBacktestFeaturesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetBacktestFeaturesRequest) ProtoMessage() {}
+
+func (x *GetBacktestFeaturesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetBacktestFeaturesRequest.ProtoReflect.Descriptor instead.
+func (*GetBacktestFeaturesRequest) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *GetBacktestFeaturesRequest) GetStartDate() *timestamppb.Timestamp {
+	if x != nil {
+		return x.StartDate
+	}
+	return nil
+}
+
+func (x *GetBacktestFeaturesRequest) GetEndDate() *timestamppb.Timestamp {
+	if x != nil {
+		return x.EndDate
+	}
+	return nil
+}
+
+type BacktestFeatureVector struct {
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	RecordId                string                 `protobuf:"bytes,1,opt,name=record_id,json=recordId,proto3" json:"record_id,omitempty"`
+	Velocity_24H            int32                  `protobuf:"varint,2,opt,name=velocity_24h,json=velocity24h,proto3" json:"velocity_24h,omitempty"`
+	AmountToAvgRatio_30D    float64                `protobuf:"fixed64,3,opt,name=amount_to_avg_ratio_30d,json=amountToAvgRatio30d,proto3" json:"amount_to_avg_ratio_30d,omitempty"`
+	BalanceVolatilityZScore float64                `protobuf:"fixed64,4,opt,name=balance_volatility_z_score,json=balanceVolatilityZScore,proto3" json:"balance_volatility_z_score,omitempty"`
+	ExperimentalSignalsJson string                 `protobuf:"bytes,5,opt,name=experimental_signals_json,json=experimentalSignalsJson,proto3" json:"experimental_signals_json,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *BacktestFeatureVector) Reset() {
+	*x = BacktestFeatureVector{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BacktestFeatureVector) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BacktestFeatureVector) ProtoMessage() {}
+
+func (x *BacktestFeatureVector) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BacktestFeatureVector.ProtoReflect.Descriptor instead.
+func (*BacktestFeatureVector) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *BacktestFeatureVector) GetRecordId() string {
+	if x != nil {
+		return x.RecordId
+	}
+	return ""
+}
+
+func (x *BacktestFeatureVector) GetVelocity_24H() int32 {
+	if x != nil {
+		return x.Velocity_24H
+	}
+	return 0
+}
+
+func (x *BacktestFeatureVector) GetAmountToAvgRatio_30D() float64 {
+	if x != nil {
+		return x.AmountToAvgRatio_30D
+	}
+	return 0
+}
+
+func (x *BacktestFeatureVector) GetBalanceVolatilityZScore() float64 {
+	if x != nil {
+		return x.BalanceVolatilityZScore
+	}
+	return 0
+}
+
+func (x *BacktestFeatureVector) GetExperimentalSignalsJson() string {
+	if x != nil {
+		return x.ExperimentalSignalsJson
+	}
+	return ""
+}
+
+type GetBacktestFeaturesResponse struct {
+	state         protoimpl.MessageState   `protogen:"open.v1"`
+	Features      []*BacktestFeatureVector `protobuf:"bytes,1,rep,name=features,proto3" json:"features,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetBacktestFeaturesResponse) Reset() {
+	*x = GetBacktestFeaturesResponse{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetBacktestFeaturesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetBacktestFeaturesResponse) ProtoMessage() {}
+
+func (x *GetBacktestFeaturesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetBacktestFeaturesResponse.ProtoReflect.Descriptor instead.
+func (*GetBacktestFeaturesResponse) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *GetBacktestFeaturesResponse) GetFeatures() []*BacktestFeatureVector {
+	if x != nil {
+		return x.Features
+	}
+	return nil
+}
+
+type BacktestMetrics struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	TotalRecords      int64                  `protobuf:"varint,1,opt,name=total_records,json=totalRecords,proto3" json:"total_records,omitempty"`
+	MatchedCount      int64                  `protobuf:"varint,2,opt,name=matched_count,json=matchedCount,proto3" json:"matched_count,omitempty"`
+	MatchRate         float64                `protobuf:"fixed64,3,opt,name=match_rate,json=matchRate,proto3" json:"match_rate,omitempty"`
+	ScoreDistribution map[string]int32       `protobuf:"bytes,4,rep,name=score_distribution,json=scoreDistribution,proto3" json:"score_distribution,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	ScoreMean         float64                `protobuf:"fixed64,5,opt,name=score_mean,json=scoreMean,proto3" json:"score_mean,omitempty"`
+	ScoreStd          float64                `protobuf:"fixed64,6,opt,name=score_std,json=scoreStd,proto3" json:"score_std,omitempty"`
+	ScoreMin          int32                  `protobuf:"varint,7,opt,name=score_min,json=scoreMin,proto3" json:"score_min,omitempty"`
+	ScoreMax          int32                  `protobuf:"varint,8,opt,name=score_max,json=scoreMax,proto3" json:"score_max,omitempty"`
+	RejectedCount     int64                  `protobuf:"varint,9,opt,name=rejected_count,json=rejectedCount,proto3" json:"rejected_count,omitempty"`
+	RejectedRate      float64                `protobuf:"fixed64,10,opt,name=rejected_rate,json=rejectedRate,proto3" json:"rejected_rate,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *BacktestMetrics) Reset() {
+	*x = BacktestMetrics{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BacktestMetrics) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BacktestMetrics) ProtoMessage() {}
+
+func (x *BacktestMetrics) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BacktestMetrics.ProtoReflect.Descriptor instead.
+func (*BacktestMetrics) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *BacktestMetrics) GetTotalRecords() int64 {
+	if x != nil {
+		return x.TotalRecords
+	}
+	return 0
+}
+
+func (x *BacktestMetrics) GetMatchedCount() int64 {
+	if x != nil {
+		return x.MatchedCount
+	}
+	return 0
+}
+
+func (x *BacktestMetrics) GetMatchRate() float64 {
+	if x != nil {
+		return x.MatchRate
+	}
+	return 0
+}
+
+func (x *BacktestMetrics) GetScoreDistribution() map[string]int32 {
+	if x != nil {
+		return x.ScoreDistribution
+	}
+	return nil
+}
+
+func (x *BacktestMetrics) GetScoreMean() float64 {
+	if x != nil {
+		return x.ScoreMean
+	}
+	return 0
+}
+
+func (x *BacktestMetrics) GetScoreStd() float64 {
+	if x != nil {
+		return x.ScoreStd
+	}
+	return 0
+}
+
+func (x *BacktestMetrics) GetScoreMin() int32 {
+	if x != nil {
+		return x.ScoreMin
+	}
+	return 0
+}
+
+func (x *BacktestMetrics) GetScoreMax() int32 {
+	if x != nil {
+		return x.ScoreMax
+	}
+	return 0
+}
+
+func (x *BacktestMetrics) GetRejectedCount() int64 {
+	if x != nil {
+		return x.RejectedCount
+	}
+	return 0
+}
+
+func (x *BacktestMetrics) GetRejectedRate() float64 {
+	if x != nil {
+		return x.RejectedRate
+	}
+	return 0
+}
+
+type BacktestResult struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	JobId          string                 `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	RuleId         string                 `protobuf:"bytes,2,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
+	RulesetVersion string                 `protobuf:"bytes,3,opt,name=ruleset_version,json=rulesetVersion,proto3" json:"ruleset_version,omitempty"`
+	StartDate      *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=start_date,json=startDate,proto3" json:"start_date,omitempty"`
+	EndDate        *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=end_date,json=endDate,proto3" json:"end_date,omitempty"`
+	Metrics        *BacktestMetrics       `protobuf:"bytes,6,opt,name=metrics,proto3" json:"metrics,omitempty"`
+	CompletedAt    *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=completed_at,json=completedAt,proto3" json:"completed_at,omitempty"`
+	Error          string                 `protobuf:"bytes,8,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *BacktestResult) Reset() {
+	*x = BacktestResult{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BacktestResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BacktestResult) ProtoMessage() {}
+
+func (x *BacktestResult) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BacktestResult.ProtoReflect.Descriptor instead.
+func (*BacktestResult) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *BacktestResult) GetJobId() string {
+	if x != nil {
+		return x.JobId
+	}
+	return ""
+}
+
+func (x *BacktestResult) GetRuleId() string {
+	if x != nil {
+		return x.RuleId
+	}
+	return ""
+}
+
+func (x *BacktestResult) GetRulesetVersion() string {
+	if x != nil {
+		return x.RulesetVersion
+	}
+	return ""
+}
+
+func (x *BacktestResult) GetStartDate() *timestamppb.Timestamp {
+	if x != nil {
+		return x.StartDate
+	}
+	return nil
+}
+
+func (x *BacktestResult) GetEndDate() *timestamppb.Timestamp {
+	if x != nil {
+		return x.EndDate
+	}
+	return nil
+}
+
+func (x *BacktestResult) GetMetrics() *BacktestMetrics {
+	if x != nil {
+		return x.Metrics
+	}
+	return nil
+}
+
+func (x *BacktestResult) GetCompletedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CompletedAt
+	}
+	return nil
+}
+
+func (x *BacktestResult) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+type SaveBacktestResultRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Result        *BacktestResult        `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SaveBacktestResultRequest) Reset() {
+	*x = SaveBacktestResultRequest{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SaveBacktestResultRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveBacktestResultRequest) ProtoMessage() {}
+
+func (x *SaveBacktestResultRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveBacktestResultRequest.ProtoReflect.Descriptor instead.
+func (*SaveBacktestResultRequest) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *SaveBacktestResultRequest) GetResult() *BacktestResult {
+	if x != nil {
+		return x.Result
+	}
+	return nil
+}
+
+type SaveBacktestResultResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SaveBacktestResultResponse) Reset() {
+	*x = SaveBacktestResultResponse{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SaveBacktestResultResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveBacktestResultResponse) ProtoMessage() {}
+
+func (x *SaveBacktestResultResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveBacktestResultResponse.ProtoReflect.Descriptor instead.
+func (*SaveBacktestResultResponse) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *SaveBacktestResultResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+type ListBacktestResultsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RuleId        string                 `protobuf:"bytes,1,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
+	StartDate     *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=start_date,json=startDate,proto3" json:"start_date,omitempty"`
+	EndDate       *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=end_date,json=endDate,proto3" json:"end_date,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListBacktestResultsRequest) Reset() {
+	*x = ListBacktestResultsRequest{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListBacktestResultsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListBacktestResultsRequest) ProtoMessage() {}
+
+func (x *ListBacktestResultsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListBacktestResultsRequest.ProtoReflect.Descriptor instead.
+func (*ListBacktestResultsRequest) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *ListBacktestResultsRequest) GetRuleId() string {
+	if x != nil {
+		return x.RuleId
+	}
+	return ""
+}
+
+func (x *ListBacktestResultsRequest) GetStartDate() *timestamppb.Timestamp {
+	if x != nil {
+		return x.StartDate
+	}
+	return nil
+}
+
+func (x *ListBacktestResultsRequest) GetEndDate() *timestamppb.Timestamp {
+	if x != nil {
+		return x.EndDate
+	}
+	return nil
+}
+
+type ListBacktestResultsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Results       []*BacktestResult      `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListBacktestResultsResponse) Reset() {
+	*x = ListBacktestResultsResponse{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListBacktestResultsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListBacktestResultsResponse) ProtoMessage() {}
+
+func (x *ListBacktestResultsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListBacktestResultsResponse.ProtoReflect.Descriptor instead.
+func (*ListBacktestResultsResponse) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *ListBacktestResultsResponse) GetResults() []*BacktestResult {
+	if x != nil {
+		return x.Results
+	}
+	return nil
+}
+
+type GetBacktestResultRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	JobId         string                 `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetBacktestResultRequest) Reset() {
+	*x = GetBacktestResultRequest{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetBacktestResultRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetBacktestResultRequest) ProtoMessage() {}
+
+func (x *GetBacktestResultRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetBacktestResultRequest.ProtoReflect.Descriptor instead.
+func (*GetBacktestResultRequest) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *GetBacktestResultRequest) GetJobId() string {
+	if x != nil {
+		return x.JobId
+	}
+	return ""
+}
+
+type GetBacktestResultResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Result        *BacktestResult        `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetBacktestResultResponse) Reset() {
+	*x = GetBacktestResultResponse{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetBacktestResultResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetBacktestResultResponse) ProtoMessage() {}
+
+func (x *GetBacktestResultResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetBacktestResultResponse.ProtoReflect.Descriptor instead.
+func (*GetBacktestResultResponse) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *GetBacktestResultResponse) GetResult() *BacktestResult {
+	if x != nil {
+		return x.Result
+	}
+	return nil
+}
+
+type GetDriftWindowRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Hours         int32                  `protobuf:"varint,1,opt,name=hours,proto3" json:"hours,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetDriftWindowRequest) Reset() {
+	*x = GetDriftWindowRequest{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDriftWindowRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDriftWindowRequest) ProtoMessage() {}
+
+func (x *GetDriftWindowRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDriftWindowRequest.ProtoReflect.Descriptor instead.
+func (*GetDriftWindowRequest) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *GetDriftWindowRequest) GetHours() int32 {
+	if x != nil {
+		return x.Hours
+	}
+	return 0
+}
+
+type GetDriftWindowResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Transactions  []*TransactionDetail   `protobuf:"bytes,1,rep,name=transactions,proto3" json:"transactions,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetDriftWindowResponse) Reset() {
+	*x = GetDriftWindowResponse{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDriftWindowResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDriftWindowResponse) ProtoMessage() {}
+
+func (x *GetDriftWindowResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDriftWindowResponse.ProtoReflect.Descriptor instead.
+func (*GetDriftWindowResponse) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *GetDriftWindowResponse) GetTransactions() []*TransactionDetail {
+	if x != nil {
+		return x.Transactions
+	}
+	return nil
+}
+
+type StoreGeneratedDataRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Records       []*GeneratedRecord     `protobuf:"bytes,1,rep,name=records,proto3" json:"records,omitempty"`
+	Metadata      []*EvaluationMetadata  `protobuf:"bytes,2,rep,name=metadata,proto3" json:"metadata,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StoreGeneratedDataRequest) Reset() {
+	*x = StoreGeneratedDataRequest{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StoreGeneratedDataRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StoreGeneratedDataRequest) ProtoMessage() {}
+
+func (x *StoreGeneratedDataRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StoreGeneratedDataRequest.ProtoReflect.Descriptor instead.
+func (*StoreGeneratedDataRequest) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *StoreGeneratedDataRequest) GetRecords() []*GeneratedRecord {
+	if x != nil {
+		return x.Records
+	}
+	return nil
+}
+
+func (x *StoreGeneratedDataRequest) GetMetadata() []*EvaluationMetadata {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+type GeneratedRecord struct {
+	state                     protoimpl.MessageState `protogen:"open.v1"`
+	RecordId                  string                 `protobuf:"bytes,1,opt,name=record_id,json=recordId,proto3" json:"record_id,omitempty"`
+	UserId                    string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	FullName                  string                 `protobuf:"bytes,3,opt,name=full_name,json=fullName,proto3" json:"full_name,omitempty"`
+	Email                     string                 `protobuf:"bytes,4,opt,name=email,proto3" json:"email,omitempty"`
+	Phone                     string                 `protobuf:"bytes,5,opt,name=phone,proto3" json:"phone,omitempty"`
+	TransactionTimestamp      *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=transaction_timestamp,json=transactionTimestamp,proto3" json:"transaction_timestamp,omitempty"`
+	IsOffHoursTxn             bool                   `protobuf:"varint,7,opt,name=is_off_hours_txn,json=isOffHoursTxn,proto3" json:"is_off_hours_txn,omitempty"`
+	AvailableBalance          float64                `protobuf:"fixed64,8,opt,name=available_balance,json=availableBalance,proto3" json:"available_balance,omitempty"`
+	BalanceToTransactionRatio float64                `protobuf:"fixed64,9,opt,name=balance_to_transaction_ratio,json=balanceToTransactionRatio,proto3" json:"balance_to_transaction_ratio,omitempty"`
+	AvgAvailableBalance_30D   float64                `protobuf:"fixed64,10,opt,name=avg_available_balance_30d,json=avgAvailableBalance30d,proto3" json:"avg_available_balance_30d,omitempty"`
+	BalanceVolatilityZScore   float64                `protobuf:"fixed64,11,opt,name=balance_volatility_z_score,json=balanceVolatilityZScore,proto3" json:"balance_volatility_z_score,omitempty"`
+	BankConnectionsCount_24H  int32                  `protobuf:"varint,12,opt,name=bank_connections_count_24h,json=bankConnectionsCount24h,proto3" json:"bank_connections_count_24h,omitempty"`
+	BankConnectionsCount_7D   int32                  `protobuf:"varint,13,opt,name=bank_connections_count_7d,json=bankConnectionsCount7d,proto3" json:"bank_connections_count_7d,omitempty"`
+	BankConnectionsAvg_30D    float64                `protobuf:"fixed64,14,opt,name=bank_connections_avg_30d,json=bankConnectionsAvg30d,proto3" json:"bank_connections_avg_30d,omitempty"`
+	Amount                    float64                `protobuf:"fixed64,15,opt,name=amount,proto3" json:"amount,omitempty"`
+	AmountToAvgRatio          float64                `protobuf:"fixed64,16,opt,name=amount_to_avg_ratio,json=amountToAvgRatio,proto3" json:"amount_to_avg_ratio,omitempty"`
+	MerchantRiskScore         int32                  `protobuf:"varint,17,opt,name=merchant_risk_score,json=merchantRiskScore,proto3" json:"merchant_risk_score,omitempty"`
+	IsReturned                bool                   `protobuf:"varint,18,opt,name=is_returned,json=isReturned,proto3" json:"is_returned,omitempty"`
+	EmailChangedAt            *timestamppb.Timestamp `protobuf:"bytes,19,opt,name=email_changed_at,json=emailChangedAt,proto3" json:"email_changed_at,omitempty"`
+	PhoneChangedAt            *timestamppb.Timestamp `protobuf:"bytes,20,opt,name=phone_changed_at,json=phoneChangedAt,proto3" json:"phone_changed_at,omitempty"`
+	IsFraudulent              bool                   `protobuf:"varint,21,opt,name=is_fraudulent,json=isFraudulent,proto3" json:"is_fraudulent,omitempty"`
+	FraudType                 string                 `protobuf:"bytes,22,opt,name=fraud_type,json=fraudType,proto3" json:"fraud_type,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
+}
+
+func (x *GeneratedRecord) Reset() {
+	*x = GeneratedRecord{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GeneratedRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GeneratedRecord) ProtoMessage() {}
+
+func (x *GeneratedRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GeneratedRecord.ProtoReflect.Descriptor instead.
+func (*GeneratedRecord) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *GeneratedRecord) GetRecordId() string {
+	if x != nil {
+		return x.RecordId
+	}
+	return ""
+}
+
+func (x *GeneratedRecord) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *GeneratedRecord) GetFullName() string {
+	if x != nil {
+		return x.FullName
+	}
+	return ""
+}
+
+func (x *GeneratedRecord) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *GeneratedRecord) GetPhone() string {
+	if x != nil {
+		return x.Phone
+	}
+	return ""
+}
+
+func (x *GeneratedRecord) GetTransactionTimestamp() *timestamppb.Timestamp {
+	if x != nil {
+		return x.TransactionTimestamp
+	}
+	return nil
+}
+
+func (x *GeneratedRecord) GetIsOffHoursTxn() bool {
+	if x != nil {
+		return x.IsOffHoursTxn
+	}
+	return false
+}
+
+func (x *GeneratedRecord) GetAvailableBalance() float64 {
+	if x != nil {
+		return x.AvailableBalance
+	}
+	return 0
+}
+
+func (x *GeneratedRecord) GetBalanceToTransactionRatio() float64 {
+	if x != nil {
+		return x.BalanceToTransactionRatio
+	}
+	return 0
+}
+
+func (x *GeneratedRecord) GetAvgAvailableBalance_30D() float64 {
+	if x != nil {
+		return x.AvgAvailableBalance_30D
+	}
+	return 0
+}
+
+func (x *GeneratedRecord) GetBalanceVolatilityZScore() float64 {
+	if x != nil {
+		return x.BalanceVolatilityZScore
+	}
+	return 0
+}
+
+func (x *GeneratedRecord) GetBankConnectionsCount_24H() int32 {
+	if x != nil {
+		return x.BankConnectionsCount_24H
+	}
+	return 0
+}
+
+func (x *GeneratedRecord) GetBankConnectionsCount_7D() int32 {
+	if x != nil {
+		return x.BankConnectionsCount_7D
+	}
+	return 0
+}
+
+func (x *GeneratedRecord) GetBankConnectionsAvg_30D() float64 {
+	if x != nil {
+		return x.BankConnectionsAvg_30D
+	}
+	return 0
+}
+
+func (x *GeneratedRecord) GetAmount() float64 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
+}
+
+func (x *GeneratedRecord) GetAmountToAvgRatio() float64 {
+	if x != nil {
+		return x.AmountToAvgRatio
+	}
+	return 0
+}
+
+func (x *GeneratedRecord) GetMerchantRiskScore() int32 {
+	if x != nil {
+		return x.MerchantRiskScore
+	}
+	return 0
+}
+
+func (x *GeneratedRecord) GetIsReturned() bool {
+	if x != nil {
+		return x.IsReturned
+	}
+	return false
+}
+
+func (x *GeneratedRecord) GetEmailChangedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.EmailChangedAt
+	}
+	return nil
+}
+
+func (x *GeneratedRecord) GetPhoneChangedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.PhoneChangedAt
+	}
+	return nil
+}
+
+func (x *GeneratedRecord) GetIsFraudulent() bool {
+	if x != nil {
+		return x.IsFraudulent
+	}
+	return false
+}
+
+func (x *GeneratedRecord) GetFraudType() string {
+	if x != nil {
+		return x.FraudType
+	}
+	return ""
+}
+
+type EvaluationMetadata struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	UserId           string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	RecordId         string                 `protobuf:"bytes,2,opt,name=record_id,json=recordId,proto3" json:"record_id,omitempty"`
+	SequenceNumber   int32                  `protobuf:"varint,3,opt,name=sequence_number,json=sequenceNumber,proto3" json:"sequence_number,omitempty"`
+	FraudConfirmedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=fraud_confirmed_at,json=fraudConfirmedAt,proto3" json:"fraud_confirmed_at,omitempty"`
+	IsPreFraud       bool                   `protobuf:"varint,5,opt,name=is_pre_fraud,json=isPreFraud,proto3" json:"is_pre_fraud,omitempty"`
+	DaysToFraud      int32                  `protobuf:"varint,6,opt,name=days_to_fraud,json=daysToFraud,proto3" json:"days_to_fraud,omitempty"`
+	IsTrainEligible  bool                   `protobuf:"varint,7,opt,name=is_train_eligible,json=isTrainEligible,proto3" json:"is_train_eligible,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *EvaluationMetadata) Reset() {
+	*x = EvaluationMetadata{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EvaluationMetadata) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EvaluationMetadata) ProtoMessage() {}
+
+func (x *EvaluationMetadata) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EvaluationMetadata.ProtoReflect.Descriptor instead.
+func (*EvaluationMetadata) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *EvaluationMetadata) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *EvaluationMetadata) GetRecordId() string {
+	if x != nil {
+		return x.RecordId
+	}
+	return ""
+}
+
+func (x *EvaluationMetadata) GetSequenceNumber() int32 {
+	if x != nil {
+		return x.SequenceNumber
+	}
+	return 0
+}
+
+func (x *EvaluationMetadata) GetFraudConfirmedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.FraudConfirmedAt
+	}
+	return nil
+}
+
+func (x *EvaluationMetadata) GetIsPreFraud() bool {
+	if x != nil {
+		return x.IsPreFraud
+	}
+	return false
+}
+
+func (x *EvaluationMetadata) GetDaysToFraud() int32 {
+	if x != nil {
+		return x.DaysToFraud
+	}
+	return 0
+}
+
+func (x *EvaluationMetadata) GetIsTrainEligible() bool {
+	if x != nil {
+		return x.IsTrainEligible
+	}
+	return false
+}
+
+type StoreGeneratedDataResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	RecordsSaved  int64                  `protobuf:"varint,2,opt,name=records_saved,json=recordsSaved,proto3" json:"records_saved,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StoreGeneratedDataResponse) Reset() {
+	*x = StoreGeneratedDataResponse{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StoreGeneratedDataResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StoreGeneratedDataResponse) ProtoMessage() {}
+
+func (x *StoreGeneratedDataResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StoreGeneratedDataResponse.ProtoReflect.Descriptor instead.
+func (*StoreGeneratedDataResponse) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *StoreGeneratedDataResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *StoreGeneratedDataResponse) GetRecordsSaved() int64 {
+	if x != nil {
+		return x.RecordsSaved
+	}
+	return 0
+}
+
+type ClearAllDataRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClearAllDataRequest) Reset() {
+	*x = ClearAllDataRequest{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClearAllDataRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClearAllDataRequest) ProtoMessage() {}
+
+func (x *ClearAllDataRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClearAllDataRequest.ProtoReflect.Descriptor instead.
+func (*ClearAllDataRequest) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{41}
+}
+
+type ClearAllDataResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	TablesCleared []string               `protobuf:"bytes,2,rep,name=tables_cleared,json=tablesCleared,proto3" json:"tables_cleared,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClearAllDataResponse) Reset() {
+	*x = ClearAllDataResponse{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClearAllDataResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClearAllDataResponse) ProtoMessage() {}
+
+func (x *ClearAllDataResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClearAllDataResponse.ProtoReflect.Descriptor instead.
+func (*ClearAllDataResponse) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *ClearAllDataResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *ClearAllDataResponse) GetTablesCleared() []string {
+	if x != nil {
+		return x.TablesCleared
+	}
+	return nil
+}
+
+type MaterializeFeaturesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BatchSize     int32                  `protobuf:"varint,1,opt,name=batch_size,json=batchSize,proto3" json:"batch_size,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MaterializeFeaturesRequest) Reset() {
+	*x = MaterializeFeaturesRequest{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MaterializeFeaturesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MaterializeFeaturesRequest) ProtoMessage() {}
+
+func (x *MaterializeFeaturesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MaterializeFeaturesRequest.ProtoReflect.Descriptor instead.
+func (*MaterializeFeaturesRequest) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *MaterializeFeaturesRequest) GetBatchSize() int32 {
+	if x != nil {
+		return x.BatchSize
+	}
+	return 0
+}
+
+type MaterializeFeaturesResponse struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Success        bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	TotalProcessed int64                  `protobuf:"varint,2,opt,name=total_processed,json=totalProcessed,proto3" json:"total_processed,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *MaterializeFeaturesResponse) Reset() {
+	*x = MaterializeFeaturesResponse{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MaterializeFeaturesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MaterializeFeaturesResponse) ProtoMessage() {}
+
+func (x *MaterializeFeaturesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MaterializeFeaturesResponse.ProtoReflect.Descriptor instead.
+func (*MaterializeFeaturesResponse) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *MaterializeFeaturesResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *MaterializeFeaturesResponse) GetTotalProcessed() int64 {
+	if x != nil {
+		return x.TotalProcessed
+	}
+	return 0
+}
+
+type Rule struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Field         string                 `protobuf:"bytes,2,opt,name=field,proto3" json:"field,omitempty"`
+	Op            string                 `protobuf:"bytes,3,opt,name=op,proto3" json:"op,omitempty"`
+	ValueJson     string                 `protobuf:"bytes,4,opt,name=value_json,json=valueJson,proto3" json:"value_json,omitempty"`
+	Action        string                 `protobuf:"bytes,5,opt,name=action,proto3" json:"action,omitempty"`
+	Score         int32                  `protobuf:"varint,6,opt,name=score,proto3" json:"score,omitempty"`
+	Severity      string                 `protobuf:"bytes,7,opt,name=severity,proto3" json:"severity,omitempty"`
+	Reason        string                 `protobuf:"bytes,8,opt,name=reason,proto3" json:"reason,omitempty"`
+	Status        string                 `protobuf:"bytes,9,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Rule) Reset() {
+	*x = Rule{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Rule) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Rule) ProtoMessage() {}
+
+func (x *Rule) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Rule.ProtoReflect.Descriptor instead.
+func (*Rule) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *Rule) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *Rule) GetField() string {
+	if x != nil {
+		return x.Field
+	}
+	return ""
+}
+
+func (x *Rule) GetOp() string {
+	if x != nil {
+		return x.Op
+	}
+	return ""
+}
+
+func (x *Rule) GetValueJson() string {
+	if x != nil {
+		return x.ValueJson
+	}
+	return ""
+}
+
+func (x *Rule) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *Rule) GetScore() int32 {
+	if x != nil {
+		return x.Score
+	}
+	return 0
+}
+
+func (x *Rule) GetSeverity() string {
+	if x != nil {
+		return x.Severity
+	}
+	return ""
+}
+
+func (x *Rule) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *Rule) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+type SaveRuleRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Rule          *Rule                  `protobuf:"bytes,1,opt,name=rule,proto3" json:"rule,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SaveRuleRequest) Reset() {
+	*x = SaveRuleRequest{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SaveRuleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveRuleRequest) ProtoMessage() {}
+
+func (x *SaveRuleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveRuleRequest.ProtoReflect.Descriptor instead.
+func (*SaveRuleRequest) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{46}
+}
+
+func (x *SaveRuleRequest) GetRule() *Rule {
+	if x != nil {
+		return x.Rule
+	}
+	return nil
+}
+
+type SaveRuleResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SaveRuleResponse) Reset() {
+	*x = SaveRuleResponse{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SaveRuleResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveRuleResponse) ProtoMessage() {}
+
+func (x *SaveRuleResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveRuleResponse.ProtoReflect.Descriptor instead.
+func (*SaveRuleResponse) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *SaveRuleResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+type GetRuleRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RuleId        string                 `protobuf:"bytes,1,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetRuleRequest) Reset() {
+	*x = GetRuleRequest{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetRuleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRuleRequest) ProtoMessage() {}
+
+func (x *GetRuleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRuleRequest.ProtoReflect.Descriptor instead.
+func (*GetRuleRequest) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *GetRuleRequest) GetRuleId() string {
+	if x != nil {
+		return x.RuleId
+	}
+	return ""
+}
+
+type GetRuleResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Rule          *Rule                  `protobuf:"bytes,1,opt,name=rule,proto3" json:"rule,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetRuleResponse) Reset() {
+	*x = GetRuleResponse{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetRuleResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRuleResponse) ProtoMessage() {}
+
+func (x *GetRuleResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRuleResponse.ProtoReflect.Descriptor instead.
+func (*GetRuleResponse) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *GetRuleResponse) GetRule() *Rule {
+	if x != nil {
+		return x.Rule
+	}
+	return nil
+}
+
+type ListRulesRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Status          string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	IncludeArchived bool                   `protobuf:"varint,2,opt,name=include_archived,json=includeArchived,proto3" json:"include_archived,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ListRulesRequest) Reset() {
+	*x = ListRulesRequest{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListRulesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListRulesRequest) ProtoMessage() {}
+
+func (x *ListRulesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListRulesRequest.ProtoReflect.Descriptor instead.
+func (*ListRulesRequest) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{50}
+}
+
+func (x *ListRulesRequest) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *ListRulesRequest) GetIncludeArchived() bool {
+	if x != nil {
+		return x.IncludeArchived
+	}
+	return false
+}
+
+type ListRulesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Rules         []*Rule                `protobuf:"bytes,1,rep,name=rules,proto3" json:"rules,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListRulesResponse) Reset() {
+	*x = ListRulesResponse{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[51]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListRulesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListRulesResponse) ProtoMessage() {}
+
+func (x *ListRulesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[51]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListRulesResponse.ProtoReflect.Descriptor instead.
+func (*ListRulesResponse) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{51}
+}
+
+func (x *ListRulesResponse) GetRules() []*Rule {
+	if x != nil {
+		return x.Rules
+	}
+	return nil
+}
+
+type DeleteRuleRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RuleId        string                 `protobuf:"bytes,1,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteRuleRequest) Reset() {
+	*x = DeleteRuleRequest{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[52]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteRuleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteRuleRequest) ProtoMessage() {}
+
+func (x *DeleteRuleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[52]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteRuleRequest.ProtoReflect.Descriptor instead.
+func (*DeleteRuleRequest) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{52}
+}
+
+func (x *DeleteRuleRequest) GetRuleId() string {
+	if x != nil {
+		return x.RuleId
+	}
+	return ""
+}
+
+type DeleteRuleResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteRuleResponse) Reset() {
+	*x = DeleteRuleResponse{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[53]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteRuleResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteRuleResponse) ProtoMessage() {}
+
+func (x *DeleteRuleResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[53]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteRuleResponse.ProtoReflect.Descriptor instead.
+func (*DeleteRuleResponse) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{53}
+}
+
+func (x *DeleteRuleResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+type RuleImpact struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RuleId        string                 `protobuf:"bytes,1,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
+	IsShadow      bool                   `protobuf:"varint,2,opt,name=is_shadow,json=isShadow,proto3" json:"is_shadow,omitempty"`
+	ScoreDelta    float64                `protobuf:"fixed64,3,opt,name=score_delta,json=scoreDelta,proto3" json:"score_delta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RuleImpact) Reset() {
+	*x = RuleImpact{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[54]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RuleImpact) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RuleImpact) ProtoMessage() {}
+
+func (x *RuleImpact) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[54]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RuleImpact.ProtoReflect.Descriptor instead.
+func (*RuleImpact) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{54}
+}
+
+func (x *RuleImpact) GetRuleId() string {
+	if x != nil {
+		return x.RuleId
+	}
+	return ""
+}
+
+func (x *RuleImpact) GetIsShadow() bool {
+	if x != nil {
+		return x.IsShadow
+	}
+	return false
+}
+
+func (x *RuleImpact) GetScoreDelta() float64 {
+	if x != nil {
+		return x.ScoreDelta
+	}
+	return 0
+}
+
+type InferenceEvent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	ModelVersion  string                 `protobuf:"bytes,3,opt,name=model_version,json=modelVersion,proto3" json:"model_version,omitempty"`
+	RulesVersion  string                 `protobuf:"bytes,4,opt,name=rules_version,json=rulesVersion,proto3" json:"rules_version,omitempty"`
+	ModelScore    int32                  `protobuf:"varint,5,opt,name=model_score,json=modelScore,proto3" json:"model_score,omitempty"`
+	FinalScore    int32                  `protobuf:"varint,6,opt,name=final_score,json=finalScore,proto3" json:"final_score,omitempty"`
+	RuleImpacts   []*RuleImpact          `protobuf:"bytes,7,rep,name=rule_impacts,json=ruleImpacts,proto3" json:"rule_impacts,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InferenceEvent) Reset() {
+	*x = InferenceEvent{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[55]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InferenceEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InferenceEvent) ProtoMessage() {}
+
+func (x *InferenceEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[55]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InferenceEvent.ProtoReflect.Descriptor instead.
+func (*InferenceEvent) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{55}
+}
+
+func (x *InferenceEvent) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *InferenceEvent) GetTimestamp() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Timestamp
+	}
+	return nil
+}
+
+func (x *InferenceEvent) GetModelVersion() string {
+	if x != nil {
+		return x.ModelVersion
+	}
+	return ""
+}
+
+func (x *InferenceEvent) GetRulesVersion() string {
+	if x != nil {
+		return x.RulesVersion
+	}
+	return ""
+}
+
+func (x *InferenceEvent) GetModelScore() int32 {
+	if x != nil {
+		return x.ModelScore
+	}
+	return 0
+}
+
+func (x *InferenceEvent) GetFinalScore() int32 {
+	if x != nil {
+		return x.FinalScore
+	}
+	return 0
+}
+
+func (x *InferenceEvent) GetRuleImpacts() []*RuleImpact {
+	if x != nil {
+		return x.RuleImpacts
+	}
+	return nil
+}
+
+type LogInferenceEventRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Event         *InferenceEvent        `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogInferenceEventRequest) Reset() {
+	*x = LogInferenceEventRequest{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[56]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogInferenceEventRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogInferenceEventRequest) ProtoMessage() {}
+
+func (x *LogInferenceEventRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[56]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogInferenceEventRequest.ProtoReflect.Descriptor instead.
+func (*LogInferenceEventRequest) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{56}
+}
+
+func (x *LogInferenceEventRequest) GetEvent() *InferenceEvent {
+	if x != nil {
+		return x.Event
+	}
+	return nil
+}
+
+type LogInferenceEventResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogInferenceEventResponse) Reset() {
+	*x = LogInferenceEventResponse{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[57]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogInferenceEventResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogInferenceEventResponse) ProtoMessage() {}
+
+func (x *LogInferenceEventResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[57]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogInferenceEventResponse.ProtoReflect.Descriptor instead.
+func (*LogInferenceEventResponse) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{57}
+}
+
+func (x *LogInferenceEventResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+var File_crud_v1_analytics_proto protoreflect.FileDescriptor
+
+const file_crud_v1_analytics_proto_rawDesc = "" +
 	"\n" +
-	"\x1dproto/crud/v1/analytics.proto\x12\acrud.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"*\n" +
+	"\x17crud/v1/analytics.proto\x12\acrud.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"*\n" +
 	"\x14GetDailyStatsRequest\x12\x12\n" +
 	"\x04days\x18\x01 \x01(\x05R\x04days\"\xd1\x01\n" +
 	"\tDailyStat\x12\x12\n" +
@@ -1326,7 +3654,33 @@ const file_proto_crud_v1_analytics_proto_rawDesc = "" +
 	"\x17amount_to_avg_ratio_30d\x18\f \x01(\x01R\x13amountToAvgRatio30d\x12;\n" +
 	"\x1abalance_volatility_z_score\x18\r \x01(\x01R\x17balanceVolatilityZScore\"_\n" +
 	"\x1dGetTransactionDetailsResponse\x12>\n" +
-	"\ftransactions\x18\x01 \x03(\v2\x1a.crud.v1.TransactionDetailR\ftransactions\".\n" +
+	"\ftransactions\x18\x01 \x03(\v2\x1a.crud.v1.TransactionDetailR\ftransactions\"\xc5\x03\n" +
+	"\x19SearchTransactionsRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12%\n" +
+	"\x0etransaction_id\x18\x02 \x01(\tR\rtransactionId\x12\"\n" +
+	"\n" +
+	"min_amount\x18\x03 \x01(\x01H\x00R\tminAmount\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"max_amount\x18\x04 \x01(\x01H\x01R\tmaxAmount\x88\x01\x01\x12\x1d\n" +
+	"\n" +
+	"start_date\x18\x05 \x01(\tR\tstartDate\x12\x19\n" +
+	"\bend_date\x18\x06 \x01(\tR\aendDate\x12(\n" +
+	"\ris_fraudulent\x18\a \x01(\bH\x02R\fisFraudulent\x88\x01\x01\x12 \n" +
+	"\tmin_score\x18\b \x01(\x05H\x03R\bminScore\x88\x01\x01\x12 \n" +
+	"\tmax_score\x18\t \x01(\x05H\x04R\bmaxScore\x88\x01\x01\x12\x14\n" +
+	"\x05limit\x18\n" +
+	" \x01(\x05R\x05limit\x12\x16\n" +
+	"\x06offset\x18\v \x01(\x05R\x06offsetB\r\n" +
+	"\v_min_amountB\r\n" +
+	"\v_max_amountB\x10\n" +
+	"\x0e_is_fraudulentB\f\n" +
+	"\n" +
+	"_min_scoreB\f\n" +
+	"\n" +
+	"_max_score\"r\n" +
+	"\x1aSearchTransactionsResponse\x12>\n" +
+	"\ftransactions\x18\x01 \x03(\v2\x1a.crud.v1.TransactionDetailR\ftransactions\x12\x14\n" +
+	"\x05total\x18\x02 \x01(\x03R\x05total\".\n" +
 	"\x16GetRecentAlertsRequest\x12\x14\n" +
 	"\x05limit\x18\x01 \x01(\x05R\x05limit\"\xca\x03\n" +
 	"\x05Alert\x12\x1b\n" +
@@ -1395,109 +3749,389 @@ const file_proto_crud_v1_analytics_proto_rawDesc = "" +
 	"isNullable\x12)\n" +
 	"\x10ordinal_position\x18\x05 \x01(\x05R\x0fordinalPosition\"I\n" +
 	"\x18GetSchemaSummaryResponse\x12-\n" +
-	"\acolumns\x18\x01 \x03(\v2\x13.crud.v1.ColumnInfoR\acolumns2\x99\x05\n" +
+	"\acolumns\x18\x01 \x03(\v2\x13.crud.v1.ColumnInfoR\acolumns\"U\n" +
+	"\x16GetTrainingDataRequest\x12;\n" +
+	"\vcutoff_date\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"cutoffDate\"\x99\x01\n" +
+	"\x17GetTrainingDataResponse\x12?\n" +
+	"\rtrain_records\x18\x01 \x03(\v2\x1a.crud.v1.TransactionDetailR\ftrainRecords\x12=\n" +
+	"\ftest_records\x18\x02 \x03(\v2\x1a.crud.v1.TransactionDetailR\vtestRecords\"\x8e\x01\n" +
+	"\x1aGetBacktestFeaturesRequest\x129\n" +
+	"\n" +
+	"start_date\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\tstartDate\x125\n" +
+	"\bend_date\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\aendDate\"\x86\x02\n" +
+	"\x15BacktestFeatureVector\x12\x1b\n" +
+	"\trecord_id\x18\x01 \x01(\tR\brecordId\x12!\n" +
+	"\fvelocity_24h\x18\x02 \x01(\x05R\vvelocity24h\x124\n" +
+	"\x17amount_to_avg_ratio_30d\x18\x03 \x01(\x01R\x13amountToAvgRatio30d\x12;\n" +
+	"\x1abalance_volatility_z_score\x18\x04 \x01(\x01R\x17balanceVolatilityZScore\x12:\n" +
+	"\x19experimental_signals_json\x18\x05 \x01(\tR\x17experimentalSignalsJson\"Y\n" +
+	"\x1bGetBacktestFeaturesResponse\x12:\n" +
+	"\bfeatures\x18\x01 \x03(\v2\x1e.crud.v1.BacktestFeatureVectorR\bfeatures\"\xe2\x03\n" +
+	"\x0fBacktestMetrics\x12#\n" +
+	"\rtotal_records\x18\x01 \x01(\x03R\ftotalRecords\x12#\n" +
+	"\rmatched_count\x18\x02 \x01(\x03R\fmatchedCount\x12\x1d\n" +
+	"\n" +
+	"match_rate\x18\x03 \x01(\x01R\tmatchRate\x12^\n" +
+	"\x12score_distribution\x18\x04 \x03(\v2/.crud.v1.BacktestMetrics.ScoreDistributionEntryR\x11scoreDistribution\x12\x1d\n" +
+	"\n" +
+	"score_mean\x18\x05 \x01(\x01R\tscoreMean\x12\x1b\n" +
+	"\tscore_std\x18\x06 \x01(\x01R\bscoreStd\x12\x1b\n" +
+	"\tscore_min\x18\a \x01(\x05R\bscoreMin\x12\x1b\n" +
+	"\tscore_max\x18\b \x01(\x05R\bscoreMax\x12%\n" +
+	"\x0erejected_count\x18\t \x01(\x03R\rrejectedCount\x12#\n" +
+	"\rrejected_rate\x18\n" +
+	" \x01(\x01R\frejectedRate\x1aD\n" +
+	"\x16ScoreDistributionEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\"\xe4\x02\n" +
+	"\x0eBacktestResult\x12\x15\n" +
+	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x17\n" +
+	"\arule_id\x18\x02 \x01(\tR\x06ruleId\x12'\n" +
+	"\x0fruleset_version\x18\x03 \x01(\tR\x0erulesetVersion\x129\n" +
+	"\n" +
+	"start_date\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tstartDate\x125\n" +
+	"\bend_date\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\aendDate\x122\n" +
+	"\ametrics\x18\x06 \x01(\v2\x18.crud.v1.BacktestMetricsR\ametrics\x12=\n" +
+	"\fcompleted_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\vcompletedAt\x12\x14\n" +
+	"\x05error\x18\b \x01(\tR\x05error\"L\n" +
+	"\x19SaveBacktestResultRequest\x12/\n" +
+	"\x06result\x18\x01 \x01(\v2\x17.crud.v1.BacktestResultR\x06result\"6\n" +
+	"\x1aSaveBacktestResultResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xa7\x01\n" +
+	"\x1aListBacktestResultsRequest\x12\x17\n" +
+	"\arule_id\x18\x01 \x01(\tR\x06ruleId\x129\n" +
+	"\n" +
+	"start_date\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\tstartDate\x125\n" +
+	"\bend_date\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\aendDate\"P\n" +
+	"\x1bListBacktestResultsResponse\x121\n" +
+	"\aresults\x18\x01 \x03(\v2\x17.crud.v1.BacktestResultR\aresults\"1\n" +
+	"\x18GetBacktestResultRequest\x12\x15\n" +
+	"\x06job_id\x18\x01 \x01(\tR\x05jobId\"L\n" +
+	"\x19GetBacktestResultResponse\x12/\n" +
+	"\x06result\x18\x01 \x01(\v2\x17.crud.v1.BacktestResultR\x06result\"-\n" +
+	"\x15GetDriftWindowRequest\x12\x14\n" +
+	"\x05hours\x18\x01 \x01(\x05R\x05hours\"X\n" +
+	"\x16GetDriftWindowResponse\x12>\n" +
+	"\ftransactions\x18\x01 \x03(\v2\x1a.crud.v1.TransactionDetailR\ftransactions\"\x88\x01\n" +
+	"\x19StoreGeneratedDataRequest\x122\n" +
+	"\arecords\x18\x01 \x03(\v2\x18.crud.v1.GeneratedRecordR\arecords\x127\n" +
+	"\bmetadata\x18\x02 \x03(\v2\x1b.crud.v1.EvaluationMetadataR\bmetadata\"\x89\b\n" +
+	"\x0fGeneratedRecord\x12\x1b\n" +
+	"\trecord_id\x18\x01 \x01(\tR\brecordId\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x1b\n" +
+	"\tfull_name\x18\x03 \x01(\tR\bfullName\x12\x14\n" +
+	"\x05email\x18\x04 \x01(\tR\x05email\x12\x14\n" +
+	"\x05phone\x18\x05 \x01(\tR\x05phone\x12O\n" +
+	"\x15transaction_timestamp\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\x14transactionTimestamp\x12'\n" +
+	"\x10is_off_hours_txn\x18\a \x01(\bR\risOffHoursTxn\x12+\n" +
+	"\x11available_balance\x18\b \x01(\x01R\x10availableBalance\x12?\n" +
+	"\x1cbalance_to_transaction_ratio\x18\t \x01(\x01R\x19balanceToTransactionRatio\x129\n" +
+	"\x19avg_available_balance_30d\x18\n" +
+	" \x01(\x01R\x16avgAvailableBalance30d\x12;\n" +
+	"\x1abalance_volatility_z_score\x18\v \x01(\x01R\x17balanceVolatilityZScore\x12;\n" +
+	"\x1abank_connections_count_24h\x18\f \x01(\x05R\x17bankConnectionsCount24h\x129\n" +
+	"\x19bank_connections_count_7d\x18\r \x01(\x05R\x16bankConnectionsCount7d\x127\n" +
+	"\x18bank_connections_avg_30d\x18\x0e \x01(\x01R\x15bankConnectionsAvg30d\x12\x16\n" +
+	"\x06amount\x18\x0f \x01(\x01R\x06amount\x12-\n" +
+	"\x13amount_to_avg_ratio\x18\x10 \x01(\x01R\x10amountToAvgRatio\x12.\n" +
+	"\x13merchant_risk_score\x18\x11 \x01(\x05R\x11merchantRiskScore\x12\x1f\n" +
+	"\vis_returned\x18\x12 \x01(\bR\n" +
+	"isReturned\x12D\n" +
+	"\x10email_changed_at\x18\x13 \x01(\v2\x1a.google.protobuf.TimestampR\x0eemailChangedAt\x12D\n" +
+	"\x10phone_changed_at\x18\x14 \x01(\v2\x1a.google.protobuf.TimestampR\x0ephoneChangedAt\x12#\n" +
+	"\ris_fraudulent\x18\x15 \x01(\bR\fisFraudulent\x12\x1d\n" +
+	"\n" +
+	"fraud_type\x18\x16 \x01(\tR\tfraudType\"\xaf\x02\n" +
+	"\x12EvaluationMetadata\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1b\n" +
+	"\trecord_id\x18\x02 \x01(\tR\brecordId\x12'\n" +
+	"\x0fsequence_number\x18\x03 \x01(\x05R\x0esequenceNumber\x12H\n" +
+	"\x12fraud_confirmed_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x10fraudConfirmedAt\x12 \n" +
+	"\fis_pre_fraud\x18\x05 \x01(\bR\n" +
+	"isPreFraud\x12\"\n" +
+	"\rdays_to_fraud\x18\x06 \x01(\x05R\vdaysToFraud\x12*\n" +
+	"\x11is_train_eligible\x18\a \x01(\bR\x0fisTrainEligible\"[\n" +
+	"\x1aStoreGeneratedDataResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12#\n" +
+	"\rrecords_saved\x18\x02 \x01(\x03R\frecordsSaved\"\x15\n" +
+	"\x13ClearAllDataRequest\"W\n" +
+	"\x14ClearAllDataResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12%\n" +
+	"\x0etables_cleared\x18\x02 \x03(\tR\rtablesCleared\";\n" +
+	"\x1aMaterializeFeaturesRequest\x12\x1d\n" +
+	"\n" +
+	"batch_size\x18\x01 \x01(\x05R\tbatchSize\"`\n" +
+	"\x1bMaterializeFeaturesResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12'\n" +
+	"\x0ftotal_processed\x18\x02 \x01(\x03R\x0etotalProcessed\"\xd5\x01\n" +
+	"\x04Rule\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
+	"\x05field\x18\x02 \x01(\tR\x05field\x12\x0e\n" +
+	"\x02op\x18\x03 \x01(\tR\x02op\x12\x1d\n" +
+	"\n" +
+	"value_json\x18\x04 \x01(\tR\tvalueJson\x12\x16\n" +
+	"\x06action\x18\x05 \x01(\tR\x06action\x12\x14\n" +
+	"\x05score\x18\x06 \x01(\x05R\x05score\x12\x1a\n" +
+	"\bseverity\x18\a \x01(\tR\bseverity\x12\x16\n" +
+	"\x06reason\x18\b \x01(\tR\x06reason\x12\x16\n" +
+	"\x06status\x18\t \x01(\tR\x06status\"4\n" +
+	"\x0fSaveRuleRequest\x12!\n" +
+	"\x04rule\x18\x01 \x01(\v2\r.crud.v1.RuleR\x04rule\",\n" +
+	"\x10SaveRuleResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\")\n" +
+	"\x0eGetRuleRequest\x12\x17\n" +
+	"\arule_id\x18\x01 \x01(\tR\x06ruleId\"4\n" +
+	"\x0fGetRuleResponse\x12!\n" +
+	"\x04rule\x18\x01 \x01(\v2\r.crud.v1.RuleR\x04rule\"U\n" +
+	"\x10ListRulesRequest\x12\x16\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status\x12)\n" +
+	"\x10include_archived\x18\x02 \x01(\bR\x0fincludeArchived\"8\n" +
+	"\x11ListRulesResponse\x12#\n" +
+	"\x05rules\x18\x01 \x03(\v2\r.crud.v1.RuleR\x05rules\",\n" +
+	"\x11DeleteRuleRequest\x12\x17\n" +
+	"\arule_id\x18\x01 \x01(\tR\x06ruleId\".\n" +
+	"\x12DeleteRuleResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"c\n" +
+	"\n" +
+	"RuleImpact\x12\x17\n" +
+	"\arule_id\x18\x01 \x01(\tR\x06ruleId\x12\x1b\n" +
+	"\tis_shadow\x18\x02 \x01(\bR\bisShadow\x12\x1f\n" +
+	"\vscore_delta\x18\x03 \x01(\x01R\n" +
+	"scoreDelta\"\xad\x02\n" +
+	"\x0eInferenceEvent\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x128\n" +
+	"\ttimestamp\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12#\n" +
+	"\rmodel_version\x18\x03 \x01(\tR\fmodelVersion\x12#\n" +
+	"\rrules_version\x18\x04 \x01(\tR\frulesVersion\x12\x1f\n" +
+	"\vmodel_score\x18\x05 \x01(\x05R\n" +
+	"modelScore\x12\x1f\n" +
+	"\vfinal_score\x18\x06 \x01(\x05R\n" +
+	"finalScore\x126\n" +
+	"\frule_impacts\x18\a \x03(\v2\x13.crud.v1.RuleImpactR\vruleImpacts\"I\n" +
+	"\x18LogInferenceEventRequest\x12-\n" +
+	"\x05event\x18\x01 \x01(\v2\x17.crud.v1.InferenceEventR\x05event\"5\n" +
+	"\x19LogInferenceEventResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess2\x94\x0f\n" +
 	"\x10AnalyticsService\x12N\n" +
 	"\rGetDailyStats\x12\x1d.crud.v1.GetDailyStatsRequest\x1a\x1e.crud.v1.GetDailyStatsResponse\x12f\n" +
-	"\x15GetTransactionDetails\x12%.crud.v1.GetTransactionDetailsRequest\x1a&.crud.v1.GetTransactionDetailsResponse\x12T\n" +
+	"\x15GetTransactionDetails\x12%.crud.v1.GetTransactionDetailsRequest\x1a&.crud.v1.GetTransactionDetailsResponse\x12]\n" +
+	"\x12SearchTransactions\x12\".crud.v1.SearchTransactionsRequest\x1a#.crud.v1.SearchTransactionsResponse\x12T\n" +
 	"\x0fGetRecentAlerts\x12\x1f.crud.v1.GetRecentAlertsRequest\x1a .crud.v1.GetRecentAlertsResponse\x12]\n" +
 	"\x12GetOverviewMetrics\x12\".crud.v1.GetOverviewMetricsRequest\x1a#.crud.v1.GetOverviewMetricsResponse\x12f\n" +
 	"\x15GetDatasetFingerprint\x12%.crud.v1.GetDatasetFingerprintRequest\x1a&.crud.v1.GetDatasetFingerprintResponse\x12W\n" +
 	"\x10GetFeatureSample\x12 .crud.v1.GetFeatureSampleRequest\x1a!.crud.v1.GetFeatureSampleResponse\x12W\n" +
-	"\x10GetSchemaSummary\x12 .crud.v1.GetSchemaSummaryRequest\x1a!.crud.v1.GetSchemaSummaryResponseBSZQgithub.com/jonkmatsumo/label-lag/src/services/analytics-crud/proto/crud/v1;crudv1b\x06proto3"
+	"\x10GetSchemaSummary\x12 .crud.v1.GetSchemaSummaryRequest\x1a!.crud.v1.GetSchemaSummaryResponse\x12T\n" +
+	"\x0fGetTrainingData\x12\x1f.crud.v1.GetTrainingDataRequest\x1a .crud.v1.GetTrainingDataResponse\x12`\n" +
+	"\x13GetBacktestFeatures\x12#.crud.v1.GetBacktestFeaturesRequest\x1a$.crud.v1.GetBacktestFeaturesResponse\x12]\n" +
+	"\x12SaveBacktestResult\x12\".crud.v1.SaveBacktestResultRequest\x1a#.crud.v1.SaveBacktestResultResponse\x12`\n" +
+	"\x13ListBacktestResults\x12#.crud.v1.ListBacktestResultsRequest\x1a$.crud.v1.ListBacktestResultsResponse\x12Z\n" +
+	"\x11GetBacktestResult\x12!.crud.v1.GetBacktestResultRequest\x1a\".crud.v1.GetBacktestResultResponse\x12Q\n" +
+	"\x0eGetDriftWindow\x12\x1e.crud.v1.GetDriftWindowRequest\x1a\x1f.crud.v1.GetDriftWindowResponse\x12]\n" +
+	"\x12StoreGeneratedData\x12\".crud.v1.StoreGeneratedDataRequest\x1a#.crud.v1.StoreGeneratedDataResponse\x12K\n" +
+	"\fClearAllData\x12\x1c.crud.v1.ClearAllDataRequest\x1a\x1d.crud.v1.ClearAllDataResponse\x12`\n" +
+	"\x13MaterializeFeatures\x12#.crud.v1.MaterializeFeaturesRequest\x1a$.crud.v1.MaterializeFeaturesResponse\x12?\n" +
+	"\bSaveRule\x12\x18.crud.v1.SaveRuleRequest\x1a\x19.crud.v1.SaveRuleResponse\x12<\n" +
+	"\aGetRule\x12\x17.crud.v1.GetRuleRequest\x1a\x18.crud.v1.GetRuleResponse\x12B\n" +
+	"\tListRules\x12\x19.crud.v1.ListRulesRequest\x1a\x1a.crud.v1.ListRulesResponse\x12E\n" +
+	"\n" +
+	"DeleteRule\x12\x1a.crud.v1.DeleteRuleRequest\x1a\x1b.crud.v1.DeleteRuleResponse\x12Z\n" +
+	"\x11LogInferenceEvent\x12!.crud.v1.LogInferenceEventRequest\x1a\".crud.v1.LogInferenceEventResponseBSZQgithub.com/jonkmatsumo/label-lag/src/services/analytics-crud/proto/crud/v1;crudv1b\x06proto3"
 
 var (
-	file_proto_crud_v1_analytics_proto_rawDescOnce sync.Once
-	file_proto_crud_v1_analytics_proto_rawDescData []byte
+	file_crud_v1_analytics_proto_rawDescOnce sync.Once
+	file_crud_v1_analytics_proto_rawDescData []byte
 )
 
-func file_proto_crud_v1_analytics_proto_rawDescGZIP() []byte {
-	file_proto_crud_v1_analytics_proto_rawDescOnce.Do(func() {
-		file_proto_crud_v1_analytics_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_proto_crud_v1_analytics_proto_rawDesc), len(file_proto_crud_v1_analytics_proto_rawDesc)))
+func file_crud_v1_analytics_proto_rawDescGZIP() []byte {
+	file_crud_v1_analytics_proto_rawDescOnce.Do(func() {
+		file_crud_v1_analytics_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_crud_v1_analytics_proto_rawDesc), len(file_crud_v1_analytics_proto_rawDesc)))
 	})
-	return file_proto_crud_v1_analytics_proto_rawDescData
+	return file_crud_v1_analytics_proto_rawDescData
 }
 
-var file_proto_crud_v1_analytics_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
-var file_proto_crud_v1_analytics_proto_goTypes = []any{
+var file_crud_v1_analytics_proto_msgTypes = make([]protoimpl.MessageInfo, 59)
+var file_crud_v1_analytics_proto_goTypes = []any{
 	(*GetDailyStatsRequest)(nil),          // 0: crud.v1.GetDailyStatsRequest
 	(*DailyStat)(nil),                     // 1: crud.v1.DailyStat
 	(*GetDailyStatsResponse)(nil),         // 2: crud.v1.GetDailyStatsResponse
 	(*GetTransactionDetailsRequest)(nil),  // 3: crud.v1.GetTransactionDetailsRequest
 	(*TransactionDetail)(nil),             // 4: crud.v1.TransactionDetail
 	(*GetTransactionDetailsResponse)(nil), // 5: crud.v1.GetTransactionDetailsResponse
-	(*GetRecentAlertsRequest)(nil),        // 6: crud.v1.GetRecentAlertsRequest
-	(*Alert)(nil),                         // 7: crud.v1.Alert
-	(*GetRecentAlertsResponse)(nil),       // 8: crud.v1.GetRecentAlertsResponse
-	(*GetOverviewMetricsRequest)(nil),     // 9: crud.v1.GetOverviewMetricsRequest
-	(*GetOverviewMetricsResponse)(nil),    // 10: crud.v1.GetOverviewMetricsResponse
-	(*GetDatasetFingerprintRequest)(nil),  // 11: crud.v1.GetDatasetFingerprintRequest
-	(*TableFingerprint)(nil),              // 12: crud.v1.TableFingerprint
-	(*GetDatasetFingerprintResponse)(nil), // 13: crud.v1.GetDatasetFingerprintResponse
-	(*GetFeatureSampleRequest)(nil),       // 14: crud.v1.GetFeatureSampleRequest
-	(*FeatureSample)(nil),                 // 15: crud.v1.FeatureSample
-	(*GetFeatureSampleResponse)(nil),      // 16: crud.v1.GetFeatureSampleResponse
-	(*GetSchemaSummaryRequest)(nil),       // 17: crud.v1.GetSchemaSummaryRequest
-	(*ColumnInfo)(nil),                    // 18: crud.v1.ColumnInfo
-	(*GetSchemaSummaryResponse)(nil),      // 19: crud.v1.GetSchemaSummaryResponse
-	(*timestamppb.Timestamp)(nil),         // 20: google.protobuf.Timestamp
+	(*SearchTransactionsRequest)(nil),     // 6: crud.v1.SearchTransactionsRequest
+	(*SearchTransactionsResponse)(nil),    // 7: crud.v1.SearchTransactionsResponse
+	(*GetRecentAlertsRequest)(nil),        // 8: crud.v1.GetRecentAlertsRequest
+	(*Alert)(nil),                         // 9: crud.v1.Alert
+	(*GetRecentAlertsResponse)(nil),       // 10: crud.v1.GetRecentAlertsResponse
+	(*GetOverviewMetricsRequest)(nil),     // 11: crud.v1.GetOverviewMetricsRequest
+	(*GetOverviewMetricsResponse)(nil),    // 12: crud.v1.GetOverviewMetricsResponse
+	(*GetDatasetFingerprintRequest)(nil),  // 13: crud.v1.GetDatasetFingerprintRequest
+	(*TableFingerprint)(nil),              // 14: crud.v1.TableFingerprint
+	(*GetDatasetFingerprintResponse)(nil), // 15: crud.v1.GetDatasetFingerprintResponse
+	(*GetFeatureSampleRequest)(nil),       // 16: crud.v1.GetFeatureSampleRequest
+	(*FeatureSample)(nil),                 // 17: crud.v1.FeatureSample
+	(*GetFeatureSampleResponse)(nil),      // 18: crud.v1.GetFeatureSampleResponse
+	(*GetSchemaSummaryRequest)(nil),       // 19: crud.v1.GetSchemaSummaryRequest
+	(*ColumnInfo)(nil),                    // 20: crud.v1.ColumnInfo
+	(*GetSchemaSummaryResponse)(nil),      // 21: crud.v1.GetSchemaSummaryResponse
+	(*GetTrainingDataRequest)(nil),        // 22: crud.v1.GetTrainingDataRequest
+	(*GetTrainingDataResponse)(nil),       // 23: crud.v1.GetTrainingDataResponse
+	(*GetBacktestFeaturesRequest)(nil),    // 24: crud.v1.GetBacktestFeaturesRequest
+	(*BacktestFeatureVector)(nil),         // 25: crud.v1.BacktestFeatureVector
+	(*GetBacktestFeaturesResponse)(nil),   // 26: crud.v1.GetBacktestFeaturesResponse
+	(*BacktestMetrics)(nil),               // 27: crud.v1.BacktestMetrics
+	(*BacktestResult)(nil),                // 28: crud.v1.BacktestResult
+	(*SaveBacktestResultRequest)(nil),     // 29: crud.v1.SaveBacktestResultRequest
+	(*SaveBacktestResultResponse)(nil),    // 30: crud.v1.SaveBacktestResultResponse
+	(*ListBacktestResultsRequest)(nil),    // 31: crud.v1.ListBacktestResultsRequest
+	(*ListBacktestResultsResponse)(nil),   // 32: crud.v1.ListBacktestResultsResponse
+	(*GetBacktestResultRequest)(nil),      // 33: crud.v1.GetBacktestResultRequest
+	(*GetBacktestResultResponse)(nil),     // 34: crud.v1.GetBacktestResultResponse
+	(*GetDriftWindowRequest)(nil),         // 35: crud.v1.GetDriftWindowRequest
+	(*GetDriftWindowResponse)(nil),        // 36: crud.v1.GetDriftWindowResponse
+	(*StoreGeneratedDataRequest)(nil),     // 37: crud.v1.StoreGeneratedDataRequest
+	(*GeneratedRecord)(nil),               // 38: crud.v1.GeneratedRecord
+	(*EvaluationMetadata)(nil),            // 39: crud.v1.EvaluationMetadata
+	(*StoreGeneratedDataResponse)(nil),    // 40: crud.v1.StoreGeneratedDataResponse
+	(*ClearAllDataRequest)(nil),           // 41: crud.v1.ClearAllDataRequest
+	(*ClearAllDataResponse)(nil),          // 42: crud.v1.ClearAllDataResponse
+	(*MaterializeFeaturesRequest)(nil),    // 43: crud.v1.MaterializeFeaturesRequest
+	(*MaterializeFeaturesResponse)(nil),   // 44: crud.v1.MaterializeFeaturesResponse
+	(*Rule)(nil),                          // 45: crud.v1.Rule
+	(*SaveRuleRequest)(nil),               // 46: crud.v1.SaveRuleRequest
+	(*SaveRuleResponse)(nil),              // 47: crud.v1.SaveRuleResponse
+	(*GetRuleRequest)(nil),                // 48: crud.v1.GetRuleRequest
+	(*GetRuleResponse)(nil),               // 49: crud.v1.GetRuleResponse
+	(*ListRulesRequest)(nil),              // 50: crud.v1.ListRulesRequest
+	(*ListRulesResponse)(nil),             // 51: crud.v1.ListRulesResponse
+	(*DeleteRuleRequest)(nil),             // 52: crud.v1.DeleteRuleRequest
+	(*DeleteRuleResponse)(nil),            // 53: crud.v1.DeleteRuleResponse
+	(*RuleImpact)(nil),                    // 54: crud.v1.RuleImpact
+	(*InferenceEvent)(nil),                // 55: crud.v1.InferenceEvent
+	(*LogInferenceEventRequest)(nil),      // 56: crud.v1.LogInferenceEventRequest
+	(*LogInferenceEventResponse)(nil),     // 57: crud.v1.LogInferenceEventResponse
+	nil,                                   // 58: crud.v1.BacktestMetrics.ScoreDistributionEntry
+	(*timestamppb.Timestamp)(nil),         // 59: google.protobuf.Timestamp
 }
-var file_proto_crud_v1_analytics_proto_depIdxs = []int32{
+var file_crud_v1_analytics_proto_depIdxs = []int32{
 	1,  // 0: crud.v1.GetDailyStatsResponse.stats:type_name -> crud.v1.DailyStat
-	20, // 1: crud.v1.TransactionDetail.created_at:type_name -> google.protobuf.Timestamp
+	59, // 1: crud.v1.TransactionDetail.created_at:type_name -> google.protobuf.Timestamp
 	4,  // 2: crud.v1.GetTransactionDetailsResponse.transactions:type_name -> crud.v1.TransactionDetail
-	20, // 3: crud.v1.Alert.created_at:type_name -> google.protobuf.Timestamp
-	7,  // 4: crud.v1.GetRecentAlertsResponse.alerts:type_name -> crud.v1.Alert
-	20, // 5: crud.v1.GetOverviewMetricsResponse.min_transaction_timestamp:type_name -> google.protobuf.Timestamp
-	20, // 6: crud.v1.GetOverviewMetricsResponse.max_transaction_timestamp:type_name -> google.protobuf.Timestamp
-	20, // 7: crud.v1.GetOverviewMetricsResponse.min_created_at:type_name -> google.protobuf.Timestamp
-	20, // 8: crud.v1.GetOverviewMetricsResponse.max_created_at:type_name -> google.protobuf.Timestamp
-	20, // 9: crud.v1.TableFingerprint.max_created_at:type_name -> google.protobuf.Timestamp
-	20, // 10: crud.v1.TableFingerprint.max_timestamp:type_name -> google.protobuf.Timestamp
-	12, // 11: crud.v1.GetDatasetFingerprintResponse.generated_records:type_name -> crud.v1.TableFingerprint
-	12, // 12: crud.v1.GetDatasetFingerprintResponse.feature_snapshots:type_name -> crud.v1.TableFingerprint
-	15, // 13: crud.v1.GetFeatureSampleResponse.samples:type_name -> crud.v1.FeatureSample
-	18, // 14: crud.v1.GetSchemaSummaryResponse.columns:type_name -> crud.v1.ColumnInfo
-	0,  // 15: crud.v1.AnalyticsService.GetDailyStats:input_type -> crud.v1.GetDailyStatsRequest
-	3,  // 16: crud.v1.AnalyticsService.GetTransactionDetails:input_type -> crud.v1.GetTransactionDetailsRequest
-	6,  // 17: crud.v1.AnalyticsService.GetRecentAlerts:input_type -> crud.v1.GetRecentAlertsRequest
-	9,  // 18: crud.v1.AnalyticsService.GetOverviewMetrics:input_type -> crud.v1.GetOverviewMetricsRequest
-	11, // 19: crud.v1.AnalyticsService.GetDatasetFingerprint:input_type -> crud.v1.GetDatasetFingerprintRequest
-	14, // 20: crud.v1.AnalyticsService.GetFeatureSample:input_type -> crud.v1.GetFeatureSampleRequest
-	17, // 21: crud.v1.AnalyticsService.GetSchemaSummary:input_type -> crud.v1.GetSchemaSummaryRequest
-	2,  // 22: crud.v1.AnalyticsService.GetDailyStats:output_type -> crud.v1.GetDailyStatsResponse
-	5,  // 23: crud.v1.AnalyticsService.GetTransactionDetails:output_type -> crud.v1.GetTransactionDetailsResponse
-	8,  // 24: crud.v1.AnalyticsService.GetRecentAlerts:output_type -> crud.v1.GetRecentAlertsResponse
-	10, // 25: crud.v1.AnalyticsService.GetOverviewMetrics:output_type -> crud.v1.GetOverviewMetricsResponse
-	13, // 26: crud.v1.AnalyticsService.GetDatasetFingerprint:output_type -> crud.v1.GetDatasetFingerprintResponse
-	16, // 27: crud.v1.AnalyticsService.GetFeatureSample:output_type -> crud.v1.GetFeatureSampleResponse
-	19, // 28: crud.v1.AnalyticsService.GetSchemaSummary:output_type -> crud.v1.GetSchemaSummaryResponse
-	22, // [22:29] is the sub-list for method output_type
-	15, // [15:22] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	4,  // 3: crud.v1.SearchTransactionsResponse.transactions:type_name -> crud.v1.TransactionDetail
+	59, // 4: crud.v1.Alert.created_at:type_name -> google.protobuf.Timestamp
+	9,  // 5: crud.v1.GetRecentAlertsResponse.alerts:type_name -> crud.v1.Alert
+	59, // 6: crud.v1.GetOverviewMetricsResponse.min_transaction_timestamp:type_name -> google.protobuf.Timestamp
+	59, // 7: crud.v1.GetOverviewMetricsResponse.max_transaction_timestamp:type_name -> google.protobuf.Timestamp
+	59, // 8: crud.v1.GetOverviewMetricsResponse.min_created_at:type_name -> google.protobuf.Timestamp
+	59, // 9: crud.v1.GetOverviewMetricsResponse.max_created_at:type_name -> google.protobuf.Timestamp
+	59, // 10: crud.v1.TableFingerprint.max_created_at:type_name -> google.protobuf.Timestamp
+	59, // 11: crud.v1.TableFingerprint.max_timestamp:type_name -> google.protobuf.Timestamp
+	14, // 12: crud.v1.GetDatasetFingerprintResponse.generated_records:type_name -> crud.v1.TableFingerprint
+	14, // 13: crud.v1.GetDatasetFingerprintResponse.feature_snapshots:type_name -> crud.v1.TableFingerprint
+	17, // 14: crud.v1.GetFeatureSampleResponse.samples:type_name -> crud.v1.FeatureSample
+	20, // 15: crud.v1.GetSchemaSummaryResponse.columns:type_name -> crud.v1.ColumnInfo
+	59, // 16: crud.v1.GetTrainingDataRequest.cutoff_date:type_name -> google.protobuf.Timestamp
+	4,  // 17: crud.v1.GetTrainingDataResponse.train_records:type_name -> crud.v1.TransactionDetail
+	4,  // 18: crud.v1.GetTrainingDataResponse.test_records:type_name -> crud.v1.TransactionDetail
+	59, // 19: crud.v1.GetBacktestFeaturesRequest.start_date:type_name -> google.protobuf.Timestamp
+	59, // 20: crud.v1.GetBacktestFeaturesRequest.end_date:type_name -> google.protobuf.Timestamp
+	25, // 21: crud.v1.GetBacktestFeaturesResponse.features:type_name -> crud.v1.BacktestFeatureVector
+	58, // 22: crud.v1.BacktestMetrics.score_distribution:type_name -> crud.v1.BacktestMetrics.ScoreDistributionEntry
+	59, // 23: crud.v1.BacktestResult.start_date:type_name -> google.protobuf.Timestamp
+	59, // 24: crud.v1.BacktestResult.end_date:type_name -> google.protobuf.Timestamp
+	27, // 25: crud.v1.BacktestResult.metrics:type_name -> crud.v1.BacktestMetrics
+	59, // 26: crud.v1.BacktestResult.completed_at:type_name -> google.protobuf.Timestamp
+	28, // 27: crud.v1.SaveBacktestResultRequest.result:type_name -> crud.v1.BacktestResult
+	59, // 28: crud.v1.ListBacktestResultsRequest.start_date:type_name -> google.protobuf.Timestamp
+	59, // 29: crud.v1.ListBacktestResultsRequest.end_date:type_name -> google.protobuf.Timestamp
+	28, // 30: crud.v1.ListBacktestResultsResponse.results:type_name -> crud.v1.BacktestResult
+	28, // 31: crud.v1.GetBacktestResultResponse.result:type_name -> crud.v1.BacktestResult
+	4,  // 32: crud.v1.GetDriftWindowResponse.transactions:type_name -> crud.v1.TransactionDetail
+	38, // 33: crud.v1.StoreGeneratedDataRequest.records:type_name -> crud.v1.GeneratedRecord
+	39, // 34: crud.v1.StoreGeneratedDataRequest.metadata:type_name -> crud.v1.EvaluationMetadata
+	59, // 35: crud.v1.GeneratedRecord.transaction_timestamp:type_name -> google.protobuf.Timestamp
+	59, // 36: crud.v1.GeneratedRecord.email_changed_at:type_name -> google.protobuf.Timestamp
+	59, // 37: crud.v1.GeneratedRecord.phone_changed_at:type_name -> google.protobuf.Timestamp
+	59, // 38: crud.v1.EvaluationMetadata.fraud_confirmed_at:type_name -> google.protobuf.Timestamp
+	45, // 39: crud.v1.SaveRuleRequest.rule:type_name -> crud.v1.Rule
+	45, // 40: crud.v1.GetRuleResponse.rule:type_name -> crud.v1.Rule
+	45, // 41: crud.v1.ListRulesResponse.rules:type_name -> crud.v1.Rule
+	59, // 42: crud.v1.InferenceEvent.timestamp:type_name -> google.protobuf.Timestamp
+	54, // 43: crud.v1.InferenceEvent.rule_impacts:type_name -> crud.v1.RuleImpact
+	55, // 44: crud.v1.LogInferenceEventRequest.event:type_name -> crud.v1.InferenceEvent
+	0,  // 45: crud.v1.AnalyticsService.GetDailyStats:input_type -> crud.v1.GetDailyStatsRequest
+	3,  // 46: crud.v1.AnalyticsService.GetTransactionDetails:input_type -> crud.v1.GetTransactionDetailsRequest
+	6,  // 47: crud.v1.AnalyticsService.SearchTransactions:input_type -> crud.v1.SearchTransactionsRequest
+	8,  // 48: crud.v1.AnalyticsService.GetRecentAlerts:input_type -> crud.v1.GetRecentAlertsRequest
+	11, // 49: crud.v1.AnalyticsService.GetOverviewMetrics:input_type -> crud.v1.GetOverviewMetricsRequest
+	13, // 50: crud.v1.AnalyticsService.GetDatasetFingerprint:input_type -> crud.v1.GetDatasetFingerprintRequest
+	16, // 51: crud.v1.AnalyticsService.GetFeatureSample:input_type -> crud.v1.GetFeatureSampleRequest
+	19, // 52: crud.v1.AnalyticsService.GetSchemaSummary:input_type -> crud.v1.GetSchemaSummaryRequest
+	22, // 53: crud.v1.AnalyticsService.GetTrainingData:input_type -> crud.v1.GetTrainingDataRequest
+	24, // 54: crud.v1.AnalyticsService.GetBacktestFeatures:input_type -> crud.v1.GetBacktestFeaturesRequest
+	29, // 55: crud.v1.AnalyticsService.SaveBacktestResult:input_type -> crud.v1.SaveBacktestResultRequest
+	31, // 56: crud.v1.AnalyticsService.ListBacktestResults:input_type -> crud.v1.ListBacktestResultsRequest
+	33, // 57: crud.v1.AnalyticsService.GetBacktestResult:input_type -> crud.v1.GetBacktestResultRequest
+	35, // 58: crud.v1.AnalyticsService.GetDriftWindow:input_type -> crud.v1.GetDriftWindowRequest
+	37, // 59: crud.v1.AnalyticsService.StoreGeneratedData:input_type -> crud.v1.StoreGeneratedDataRequest
+	41, // 60: crud.v1.AnalyticsService.ClearAllData:input_type -> crud.v1.ClearAllDataRequest
+	43, // 61: crud.v1.AnalyticsService.MaterializeFeatures:input_type -> crud.v1.MaterializeFeaturesRequest
+	46, // 62: crud.v1.AnalyticsService.SaveRule:input_type -> crud.v1.SaveRuleRequest
+	48, // 63: crud.v1.AnalyticsService.GetRule:input_type -> crud.v1.GetRuleRequest
+	50, // 64: crud.v1.AnalyticsService.ListRules:input_type -> crud.v1.ListRulesRequest
+	52, // 65: crud.v1.AnalyticsService.DeleteRule:input_type -> crud.v1.DeleteRuleRequest
+	56, // 66: crud.v1.AnalyticsService.LogInferenceEvent:input_type -> crud.v1.LogInferenceEventRequest
+	2,  // 67: crud.v1.AnalyticsService.GetDailyStats:output_type -> crud.v1.GetDailyStatsResponse
+	5,  // 68: crud.v1.AnalyticsService.GetTransactionDetails:output_type -> crud.v1.GetTransactionDetailsResponse
+	7,  // 69: crud.v1.AnalyticsService.SearchTransactions:output_type -> crud.v1.SearchTransactionsResponse
+	10, // 70: crud.v1.AnalyticsService.GetRecentAlerts:output_type -> crud.v1.GetRecentAlertsResponse
+	12, // 71: crud.v1.AnalyticsService.GetOverviewMetrics:output_type -> crud.v1.GetOverviewMetricsResponse
+	15, // 72: crud.v1.AnalyticsService.GetDatasetFingerprint:output_type -> crud.v1.GetDatasetFingerprintResponse
+	18, // 73: crud.v1.AnalyticsService.GetFeatureSample:output_type -> crud.v1.GetFeatureSampleResponse
+	21, // 74: crud.v1.AnalyticsService.GetSchemaSummary:output_type -> crud.v1.GetSchemaSummaryResponse
+	23, // 75: crud.v1.AnalyticsService.GetTrainingData:output_type -> crud.v1.GetTrainingDataResponse
+	26, // 76: crud.v1.AnalyticsService.GetBacktestFeatures:output_type -> crud.v1.GetBacktestFeaturesResponse
+	30, // 77: crud.v1.AnalyticsService.SaveBacktestResult:output_type -> crud.v1.SaveBacktestResultResponse
+	32, // 78: crud.v1.AnalyticsService.ListBacktestResults:output_type -> crud.v1.ListBacktestResultsResponse
+	34, // 79: crud.v1.AnalyticsService.GetBacktestResult:output_type -> crud.v1.GetBacktestResultResponse
+	36, // 80: crud.v1.AnalyticsService.GetDriftWindow:output_type -> crud.v1.GetDriftWindowResponse
+	40, // 81: crud.v1.AnalyticsService.StoreGeneratedData:output_type -> crud.v1.StoreGeneratedDataResponse
+	42, // 82: crud.v1.AnalyticsService.ClearAllData:output_type -> crud.v1.ClearAllDataResponse
+	44, // 83: crud.v1.AnalyticsService.MaterializeFeatures:output_type -> crud.v1.MaterializeFeaturesResponse
+	47, // 84: crud.v1.AnalyticsService.SaveRule:output_type -> crud.v1.SaveRuleResponse
+	49, // 85: crud.v1.AnalyticsService.GetRule:output_type -> crud.v1.GetRuleResponse
+	51, // 86: crud.v1.AnalyticsService.ListRules:output_type -> crud.v1.ListRulesResponse
+	53, // 87: crud.v1.AnalyticsService.DeleteRule:output_type -> crud.v1.DeleteRuleResponse
+	57, // 88: crud.v1.AnalyticsService.LogInferenceEvent:output_type -> crud.v1.LogInferenceEventResponse
+	67, // [67:89] is the sub-list for method output_type
+	45, // [45:67] is the sub-list for method input_type
+	45, // [45:45] is the sub-list for extension type_name
+	45, // [45:45] is the sub-list for extension extendee
+	0,  // [0:45] is the sub-list for field type_name
 }
 
-func init() { file_proto_crud_v1_analytics_proto_init() }
-func file_proto_crud_v1_analytics_proto_init() {
-	if File_proto_crud_v1_analytics_proto != nil {
+func init() { file_crud_v1_analytics_proto_init() }
+func file_crud_v1_analytics_proto_init() {
+	if File_crud_v1_analytics_proto != nil {
 		return
 	}
+	file_crud_v1_analytics_proto_msgTypes[6].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_crud_v1_analytics_proto_rawDesc), len(file_proto_crud_v1_analytics_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_crud_v1_analytics_proto_rawDesc), len(file_crud_v1_analytics_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   20,
+			NumMessages:   59,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_proto_crud_v1_analytics_proto_goTypes,
-		DependencyIndexes: file_proto_crud_v1_analytics_proto_depIdxs,
-		MessageInfos:      file_proto_crud_v1_analytics_proto_msgTypes,
+		GoTypes:           file_crud_v1_analytics_proto_goTypes,
+		DependencyIndexes: file_crud_v1_analytics_proto_depIdxs,
+		MessageInfos:      file_crud_v1_analytics_proto_msgTypes,
 	}.Build()
-	File_proto_crud_v1_analytics_proto = out.File
-	file_proto_crud_v1_analytics_proto_goTypes = nil
-	file_proto_crud_v1_analytics_proto_depIdxs = nil
+	File_crud_v1_analytics_proto = out.File
+	file_crud_v1_analytics_proto_goTypes = nil
+	file_crud_v1_analytics_proto_depIdxs = nil
 }

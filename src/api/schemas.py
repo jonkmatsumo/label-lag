@@ -1224,7 +1224,7 @@ class TransactionDetail(BaseModel):
     is_pre_fraud: bool
     amount: float
     is_fraudulent: bool
-    fraud_type: str
+    fraud_type: str | None = None
     is_off_hours_txn: bool
     merchant_risk_score: int
     velocity_24h: int
@@ -1308,6 +1308,39 @@ class RelationshipMetric(BaseModel):
     feature_b: str
     metric_type: str  # 'pearson', 'cramers_v', 'eta'
     value: float
+
+
+class CorrelationPair(BaseModel):
+    feature_a: str
+    feature_b: str
+    value: float
+
+
+class DatasetCorrelationsResponse(BaseModel):
+    pearson: list[CorrelationPair]
+    spearman: list[CorrelationPair]
+    cramers_v: list[CorrelationPair]
+    numeric_columns: list[str]
+    categorical_columns: list[str]
+
+
+class TransactionSearchRequest(BaseModel):
+    user_id: str | None = None
+    transaction_id: str | None = None
+    min_amount: float | None = None
+    max_amount: float | None = None
+    start_date: str | None = None
+    end_date: str | None = None
+    is_fraudulent: bool | None = None
+    min_score: int | None = None
+    max_score: int | None = None
+    limit: int = Field(default=100, ge=1, le=1000)
+    offset: int = Field(default=0, ge=0)
+
+
+class TransactionSearchResponse(BaseModel):
+    transactions: list[TransactionDetail]
+    total: int
 
 
 class DatasetRelationshipsResponse(BaseModel):

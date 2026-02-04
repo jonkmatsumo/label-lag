@@ -5,6 +5,8 @@ import type {
   AnalyticsOverviewResponse,
   DailyStatsResponse,
   TransactionDetailsResponse,
+  TransactionSearchRequest,
+  TransactionSearchResponse,
   RecentAlertsResponse,
   DatasetFingerprintResponse,
   FeatureSampleResponse,
@@ -326,6 +328,51 @@ export async function analyticsRoutes(
           requestId: request.requestId,
         });
 
+        return reply.status(response.statusCode).send(response.data);
+      } catch (error) {
+        if (error instanceof UpstreamError) {
+          return reply.status(error.statusCode).send(error.toResponse());
+        }
+        throw error;
+      }
+    }
+  );
+
+  // POST /bff/v1/analytics/transactions/search
+  fastify.post<{ Body: TransactionSearchRequest }>(
+    '/bff/v1/analytics/transactions/search',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          properties: {
+            user_id: { type: 'string' },
+            transaction_id: { type: 'string' },
+            min_amount: { type: 'number' },
+            max_amount: { type: 'number' },
+            start_date: { type: 'string' },
+            end_date: { type: 'string' },
+            is_fraudulent: { type: 'boolean' },
+            min_score: { type: 'integer' },
+            max_score: { type: 'integer' },
+            limit: { type: 'integer', default: 100 },
+            offset: { type: 'integer', default: 0 },
+          },
+        },
+      },
+    },
+    async (
+      request: FastifyRequest<{ Body: TransactionSearchRequest }>,
+      reply: FastifyReply
+    ) => {
+      try {
+        const response = await httpClient.request<TransactionSearchResponse>({
+          method: 'POST',
+          path: '/analytics/transactions/search',
+          body: request.body,
+          target: 'gateway',
+          requestId: request.requestId,
+        });
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
         if (error instanceof UpstreamError) {

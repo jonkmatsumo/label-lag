@@ -47,73 +47,8 @@ class TestFeatureSnapshotModel:
         assert "JSONB" in str(exp_col.type)
 
 
-class TestFeatureEngineeringSQL:
-    """Tests for feature engineering SQL queries."""
-
-    def test_sql_has_velocity_window(self):
-        """Test that SQL includes velocity window function."""
-        from pipeline.materialize_features import FEATURE_ENGINEERING_SQL
-
-        # Check for 24h window function
-        assert "RANGE BETWEEN INTERVAL '24 hours' PRECEDING" in FEATURE_ENGINEERING_SQL
-        assert "COUNT(*) OVER" in FEATURE_ENGINEERING_SQL
-
-    def test_sql_has_amount_ratio_window(self):
-        """Test that SQL includes amount ratio window function."""
-        from pipeline.materialize_features import FEATURE_ENGINEERING_SQL
-
-        # Check for 30-day window for amount ratio
-        assert "RANGE BETWEEN INTERVAL '30 days' PRECEDING" in FEATURE_ENGINEERING_SQL
-        assert "AVG(gr.amount) OVER" in FEATURE_ENGINEERING_SQL
-
-    def test_sql_has_volatility_window(self):
-        """Test that SQL includes balance volatility window function."""
-        from pipeline.materialize_features import FEATURE_ENGINEERING_SQL
-
-        # Check for STDDEV calculation
-        assert "STDDEV(gr.available_balance) OVER" in FEATURE_ENGINEERING_SQL
-
-    def test_sql_has_point_in_time_correctness(self):
-        """Test that SQL uses CURRENT ROW to prevent future leakage."""
-        from pipeline.materialize_features import FEATURE_ENGINEERING_SQL
-
-        # All windows should end at CURRENT ROW (no future leakage)
-        assert "AND CURRENT ROW" in FEATURE_ENGINEERING_SQL
-
-    def test_sql_partitions_by_user(self):
-        """Test that SQL partitions window functions by user_id."""
-        from pipeline.materialize_features import FEATURE_ENGINEERING_SQL
-
-        assert "PARTITION BY gr.user_id" in FEATURE_ENGINEERING_SQL
-
-    def test_sql_orders_by_timestamp(self):
-        """Test that SQL orders window functions by transaction_timestamp."""
-        from pipeline.materialize_features import FEATURE_ENGINEERING_SQL
-
-        assert "ORDER BY gr.transaction_timestamp" in FEATURE_ENGINEERING_SQL
-
-    def test_sql_excludes_existing_records(self):
-        """Test that SQL excludes already-processed records."""
-        from pipeline.materialize_features import FEATURE_ENGINEERING_SQL
-
-        expected = "NOT IN (SELECT record_id FROM feature_snapshots)"
-        assert expected in FEATURE_ENGINEERING_SQL
-
-    def test_sql_builds_experimental_signals_json(self):
-        """Test that SQL builds JSONB for experimental signals."""
-        from pipeline.materialize_features import FEATURE_ENGINEERING_SQL
-
-        assert "jsonb_build_object" in FEATURE_ENGINEERING_SQL
-
-
 class TestFeatureMaterializer:
-    """Tests for FeatureMaterializer class."""
-
-    def test_materializer_imports(self):
-        """Test that FeatureMaterializer can be imported."""
-        from pipeline.materialize_features import FeatureMaterializer
-
-        assert FeatureMaterializer is not None
+    """Tests for feature materialization via Analytics service."""
 
     def test_materialize_function_imports(self):
         """Test that materialize_features function can be imported."""
@@ -121,20 +56,55 @@ class TestFeatureMaterializer:
 
         assert materialize_features is not None
 
-    def test_materializer_has_required_methods(self):
-        """Test that FeatureMaterializer has required methods."""
-        from pipeline.materialize_features import FeatureMaterializer
+    def test_materialization_mode_imports(self):
+        """Test that materialization mode function can be imported."""
+        from pipeline.materialize_features import get_materialization_mode
 
-        required_methods = [
-            "create_table",
-            "get_pending_record_count",
-            "compute_features_batch",
-            "materialize_all",
-            "get_feature_stats",
-        ]
+        assert get_materialization_mode is not None
 
-        for method in required_methods:
-            assert hasattr(FeatureMaterializer, method), f"Missing method: {method}"
+    def test_materialization_mode_default_is_legacy(self, monkeypatch):
+        """Test that default materialization mode is legacy."""
+        monkeypatch.delenv("FEATURE_MATERIALIZATION_MODE", raising=False)
+        from pipeline.materialize_features import get_materialization_mode
+
+        assert get_materialization_mode() == "legacy"
+
+    def test_materialize_features_via_analytics(self, monkeypatch):
+        """Test that materialize_features calls analytics service."""
+        from unittest.mock import MagicMock
+
+        from api import crud_client
+        from pipeline.materialize_features import materialize_features
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.success = True
+        mock_response.total_processed = 100
+        mock_client.materialize_features.return_value = mock_response
+        monkeypatch.setattr(crud_client, "_client", mock_client)
+
+        result = materialize_features(batch_size=500)
+
+        assert result["success"] is True
+        assert result["total_processed"] == 100
+        mock_client.materialize_features.assert_called_once_with(batch_size=500)
+
+    def test_materialize_features_handles_errors(self, monkeypatch):
+        """Test that materialize_features handles analytics errors gracefully."""
+        from unittest.mock import MagicMock
+
+        from api import crud_client
+        from pipeline.materialize_features import materialize_features
+
+        mock_client = MagicMock()
+        mock_client.materialize_features.side_effect = Exception("Analytics error")
+        monkeypatch.setattr(crud_client, "_client", mock_client)
+
+        result = materialize_features()
+
+        assert result["success"] is False
+        assert "error" in result
+        assert "Analytics error" in result["error"]
 
 
 class TestMigrationSQL:

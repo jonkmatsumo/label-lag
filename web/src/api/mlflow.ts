@@ -57,7 +57,7 @@ export interface SplitManifest {
 }
 
 export const mlflowApi = {
-  searchExperiments: (filter?: string) => 
+  searchExperiments: (filter?: string) =>
     apiClient.get<{ experiments: MlflowExperiment[] }>(`/bff/v1/mlflow/experiments/search?filter=${encodeURIComponent(filter || '')}`),
 
   searchRuns: (experimentIds: string[], filter?: string) =>
@@ -70,6 +70,9 @@ export const mlflowApi = {
 
   searchModelVersions: (filter: string = "name='ach-fraud-detection'") =>
     apiClient.get<{ model_versions: MlflowModelVersion[] }>(`/bff/v1/mlflow/model-versions/search?filter=${encodeURIComponent(filter)}`),
+
+  getRun: (runId: string) =>
+    apiClient.get<{ run: MlflowRun }>(`/bff/v1/mlflow/runs/${runId}`),
 
   getArtifact: <T>(runId: string, path: string) =>
     apiClient.get<T>(`/bff/v1/mlflow/runs/${runId}/artifacts?path=${encodeURIComponent(path)}`),

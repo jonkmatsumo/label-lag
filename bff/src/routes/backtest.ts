@@ -52,7 +52,7 @@ export async function backtestRoutes(
     ) => {
       try {
         const { rule_id, start_date, end_date, limit = 50 } = request.query;
-        
+
         const query: Record<string, string | number | undefined> = { limit };
         if (rule_id) query.rule_id = rule_id;
         if (start_date) query.start_date = start_date;

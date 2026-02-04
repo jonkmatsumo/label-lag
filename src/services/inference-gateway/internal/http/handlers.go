@@ -30,17 +30,19 @@ type InferenceClient interface {
 type Handler struct {
 	logger          *slog.Logger
 	inferenceClient InferenceClient
+	analyticsClient AnalyticsClient
 	rulesProvider   rules.Provider
 	maxBodyBytes    int64
 }
 
-func NewHandler(logger *slog.Logger, client InferenceClient, provider rules.Provider, maxBodyBytes int64) *Handler {
+func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient AnalyticsClient, provider rules.Provider, maxBodyBytes int64) *Handler {
 	if maxBodyBytes <= 0 {
 		maxBodyBytes = 1 << 20
 	}
 	return &Handler{
 		logger:          logger,
 		inferenceClient: client,
+		analyticsClient: analyticsClient,
 		rulesProvider:   provider,
 		maxBodyBytes:    maxBodyBytes,
 	}
@@ -49,6 +51,10 @@ func NewHandler(logger *slog.Logger, client InferenceClient, provider rules.Prov
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/evaluate/signal", h.handleEvaluateSignal)
 	mux.HandleFunc("/ready", h.handleReady)
+	mux.HandleFunc("/analytics/transactions/search", h.handleSearchTransactions)
+	for _, route := range notImplementedRoutes {
+		mux.HandleFunc(route, h.handleNotImplemented)
+	}
 }
 
 func (h *Handler) handleReady(w http.ResponseWriter, r *http.Request) {
