@@ -85,8 +85,17 @@ class BacktestRunner:
         rule_id: str | None = None,
     ) -> BacktestResult:
         """Run a backtest on historical data."""
+        import os
+        from dataclasses import asdict
+
+        from api.gateway_client import get_gateway_client
+
         job_id = f"backtest_{uuid.uuid4().hex[:12]}"
         logger.info(f"Starting backtest {job_id} for ruleset {ruleset.version}")
+
+        decision_mode = os.getenv("BACKTEST_DECISION_MODE", "gateway")
+        client = get_gateway_client()
+        ruleset_dict = asdict(ruleset)
 
         try:
             # Fetch historical features via Analytics service
@@ -102,11 +111,22 @@ class BacktestRunner:
             matched_counts = []
             rejected_counts = []
 
-            for feature_dict in features_list:
-                result = evaluate_rules(feature_dict, base_score, ruleset)
-                scores.append(result.final_score)
-                matched_counts.append(len(result.matched_rules))
-                rejected_counts.append(1 if result.rejected else 0)
+            for i, feature_dict in enumerate(features_list):
+                if decision_mode == "gateway":
+                    result = client.evaluate_rules(
+                        features=feature_dict,
+                        base_score=base_score,
+                        ruleset=ruleset_dict,
+                        request_id=f"{job_id}_{i}",
+                    )
+                    scores.append(result["final_score"])
+                    matched_counts.append(len(result["matched_rules"]))
+                    rejected_counts.append(1 if result.get("rejected") else 0)
+                else:
+                    result = evaluate_rules(feature_dict, base_score, ruleset)
+                    scores.append(result.final_score)
+                    matched_counts.append(len(result.matched_rules))
+                    rejected_counts.append(1 if result.rejected else 0)
 
             # Compute metrics
             metrics = self._compute_metrics(
