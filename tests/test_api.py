@@ -57,9 +57,9 @@ class TestHealthEndpoint:
 class TestSignalEndpoint:
     """Tests for signal evaluation endpoint."""
 
-    def test_evaluate_returns_200(self, client):
+    def test_predict_returns_200(self, client):
         response = client.post(
-            "/evaluate/signal",
+            "/predict/signal",
             json={
                 "user_id": "user_123",
                 "amount": 100.00,
@@ -69,9 +69,9 @@ class TestSignalEndpoint:
         )
         assert response.status_code == 200
 
-    def test_evaluate_response_structure(self, client):
+    def test_predict_response_structure(self, client):
         response = client.post(
-            "/evaluate/signal",
+            "/predict/signal",
             json={
                 "user_id": "user_123",
                 "amount": 100.00,
@@ -82,13 +82,14 @@ class TestSignalEndpoint:
         data = response.json()
 
         assert "request_id" in data
-        assert "score" in data
-        assert "risk_components" in data
+        assert "model_score" in data
         assert "model_version" in data
+        assert "model_loaded" in data
+        assert "latency_ms" in data
 
-    def test_evaluate_score_in_range(self, client):
+    def test_predict_score_in_range(self, client):
         response = client.post(
-            "/evaluate/signal",
+            "/predict/signal",
             json={
                 "user_id": "user_456",
                 "amount": 500.00,
@@ -98,11 +99,11 @@ class TestSignalEndpoint:
         )
         data = response.json()
 
-        assert 1 <= data["score"] <= 99
+        assert 1 <= data["model_score"] <= 99
 
-    def test_evaluate_request_id_format(self, client):
+    def test_predict_request_id_format(self, client):
         response = client.post(
-            "/evaluate/signal",
+            "/predict/signal",
             json={
                 "user_id": "user_789",
                 "amount": 250.00,
@@ -115,9 +116,9 @@ class TestSignalEndpoint:
         assert data["request_id"].startswith("req_")
         assert len(data["request_id"]) == 16  # "req_" + 12 hex chars
 
-    def test_evaluate_model_version_present(self, client):
+    def test_predict_model_version_present(self, client):
         response = client.post(
-            "/evaluate/signal",
+            "/predict/signal",
             json={
                 "user_id": "user_test",
                 "amount": 100.00,
@@ -129,23 +130,7 @@ class TestSignalEndpoint:
 
         assert data["model_version"] == "v1.0.0"
 
-    def test_evaluate_risk_components_structure(self, client):
-        response = client.post(
-            "/evaluate/signal",
-            json={
-                "user_id": "user_risky",
-                "amount": 1000.00,
-                "currency": "USD",
-                "client_transaction_id": "txn_risky",
-            },
-        )
-        data = response.json()
-
-        for component in data["risk_components"]:
-            assert "key" in component
-            assert "label" in component
-
-    def test_evaluate_idempotent_same_user(self, client):
+    def test_predict_idempotent_same_user(self, client):
         """Same user should get consistent scoring."""
         request_data = {
             "user_id": "user_consistent",
@@ -154,16 +139,11 @@ class TestSignalEndpoint:
             "client_transaction_id": "txn_1",
         }
 
-        response1 = client.post("/evaluate/signal", json=request_data)
-        response2 = client.post("/evaluate/signal", json=request_data)
+        response1 = client.post("/predict/signal", json=request_data)
+        response2 = client.post("/predict/signal", json=request_data)
 
         # Score should be the same for same user
-        assert response1.json()["score"] == response2.json()["score"]
-
-        # Risk components should be the same
-        assert (
-            response1.json()["risk_components"] == response2.json()["risk_components"]
-        )
+        assert response1.json()["model_score"] == response2.json()["model_score"]
 
         # Request IDs should be different (each request gets new ID)
         assert response1.json()["request_id"] != response2.json()["request_id"]
@@ -174,7 +154,7 @@ class TestSignalValidation:
 
     def test_missing_user_id(self, client):
         response = client.post(
-            "/evaluate/signal",
+            "/predict/signal",
             json={
                 "amount": 100.00,
                 "currency": "USD",
@@ -185,7 +165,7 @@ class TestSignalValidation:
 
     def test_missing_amount(self, client):
         response = client.post(
-            "/evaluate/signal",
+            "/predict/signal",
             json={
                 "user_id": "user_123",
                 "currency": "USD",
@@ -196,7 +176,7 @@ class TestSignalValidation:
 
     def test_negative_amount(self, client):
         response = client.post(
-            "/evaluate/signal",
+            "/predict/signal",
             json={
                 "user_id": "user_123",
                 "amount": -100.00,
@@ -208,7 +188,7 @@ class TestSignalValidation:
 
     def test_zero_amount(self, client):
         response = client.post(
-            "/evaluate/signal",
+            "/predict/signal",
             json={
                 "user_id": "user_123",
                 "amount": 0,
@@ -220,7 +200,7 @@ class TestSignalValidation:
 
     def test_invalid_currency(self, client):
         response = client.post(
-            "/evaluate/signal",
+            "/predict/signal",
             json={
                 "user_id": "user_123",
                 "amount": 100.00,
@@ -232,7 +212,7 @@ class TestSignalValidation:
 
     def test_missing_transaction_id(self, client):
         response = client.post(
-            "/evaluate/signal",
+            "/predict/signal",
             json={
                 "user_id": "user_123",
                 "amount": 100.00,
@@ -567,58 +547,3 @@ class TestTrainEndpoint:
             data = response.json()
             assert data["success"] is False
             assert "invalid_col" in data["error"]
-
-
-class TestRulesIntegration:
-    """Tests for rule integration in inference."""
-
-    def test_inference_with_no_rules_unchanged(self, client):
-        """Test that inference behavior is unchanged when no rules are present."""
-        response = client.post(
-            "/evaluate/signal",
-            json={
-                "user_id": "user_test_no_rules",
-                "amount": 100.00,
-                "currency": "USD",
-                "client_transaction_id": "txn_test",
-            },
-        )
-
-        assert response.status_code == 200
-        data = response.json()
-
-        # Response should have matched_rules field (empty)
-        assert "matched_rules" in data
-        assert data["matched_rules"] == []
-
-        # model_score and rules_version should be None when no rules
-        assert "model_score" in data
-        assert data["model_score"] is None
-        assert "rules_version" in data
-        assert data["rules_version"] is None
-
-    def test_response_includes_matched_rules_field(self, client):
-        """Test that response includes matched_rules field structure."""
-        response = client.post(
-            "/evaluate/signal",
-            json={
-                "user_id": "user_test",
-                "amount": 100.00,
-                "currency": "USD",
-                "client_transaction_id": "txn_test",
-            },
-        )
-
-        assert response.status_code == 200
-        data = response.json()
-
-        # Verify matched_rules field exists and is a list
-        assert "matched_rules" in data
-        assert isinstance(data["matched_rules"], list)
-
-        # If rules matched, verify structure
-        if data["matched_rules"]:
-            for rule in data["matched_rules"]:
-                assert "rule_id" in rule
-                assert "severity" in rule
-                assert "reason" in rule

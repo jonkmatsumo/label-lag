@@ -508,44 +508,6 @@ async def deploy_model(request: DeployModelRequest) -> DeployModelResponse:
 
 
 @app.post(
-    "/evaluate/signal",
-    response_model=SignalResponse,
-    tags=["Evaluation"],
-    summary="Evaluate fraud signal (DEPRECATED)",
-    deprecated=True,
-    description="""
-DEPRECATED: Use /predict/signal for model scores and Go Gateway for full evaluation.
-
-Evaluate the fraud risk signal for a transaction.
-""",
-    responses={
-        200: {
-            "description": "Successful evaluation",
-        },
-        422: {"description": "Validation error"},
-    },
-)
-async def evaluate_signal(request: SignalRequest) -> SignalResponse:
-    """Evaluate fraud signal for a transaction.
-
-    Args:
-        request: Signal evaluation request with user_id, amount, currency,
-            and client_transaction_id.
-
-    Returns:
-        SignalResponse with risk score and contributing factors.
-    """
-    try:
-        evaluator = get_evaluator()
-        return evaluator.evaluate(request)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Evaluation failed: {e!s}",
-        ) from e
-
-
-@app.post(
     "/predict/signal",
     response_model=PredictResponse,
     tags=["Evaluation"],
