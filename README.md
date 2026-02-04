@@ -2,7 +2,7 @@
 
 ## Overview
 
-Label Lag is an end-to-end fraud detection system that pairs realistic label-delay simulation with hybrid model-and-rules scoring. It generates synthetic transaction data, trains and registers models, serves live inference through an API, and provides a dashboard for analysis and rule authoring.
+Label Lag is an end-to-end fraud detection system that pairs realistic label-delay simulation with hybrid model-and-rules scoring. It generates synthetic transaction data, trains and registers models, serves live inference through an API, and provides a React dashboard for analysis and rule authoring.
 
 ## Diagrams
 
@@ -14,7 +14,6 @@ This diagram shows the current runtime path for inference, analytics, and model 
 flowchart TB
     subgraph UI[User Interfaces]
         UI_REACT[React UI]
-        UI_STREAMLIT[Streamlit UI]
     end
 
     subgraph Edge[Edge Layer]
@@ -37,7 +36,6 @@ flowchart TB
     end
 
     UI_REACT --> BFF --> GO_INF --> PY_API --> GO_CRUD --> DB
-    UI_STREAMLIT --> PY_API
     PY_API --> MLFLOW --> MINIO
 ```
 
@@ -88,11 +86,11 @@ stateDiagram-v2
 
 1) Copy `.env.example` to `.env` and adjust ports or credentials as needed.
 2) Start the stack with `docker compose up -d`.
-3) Open the dashboard at `http://localhost:8601` and verify Live Scoring renders.
+3) Open the dashboard at `http://localhost:5180` and verify Live Scoring renders.
 
 ## Detailed Architecture Breakdown
 
-Label Lag separates infrastructure, application runtime, and lifecycle workflows so that training and deployment are explicit and observable. The system design diagram above shows the runtime path (React → BFF → Go Inference → Python ML → Go Analytics → DB) alongside Streamlit’s direct API access. The pipeline diagram shows how models move from training to production inference. The rule state machine anchors governance, ensuring changes pass review before affecting live scoring.
+Label Lag separates infrastructure, application runtime, and lifecycle workflows so that training and deployment are explicit and observable. The system design diagram above shows the runtime path (React → BFF → Go Inference → Python ML → Go Analytics → DB). The pipeline diagram shows how models move from training to production inference. The rule state machine anchors governance, ensuring changes pass review before affecting live scoring.
 
 Core flows:
 - **Data generation and feature materialization** feed training and historical analytics while preserving point-in-time correctness.
@@ -106,8 +104,7 @@ All ports are configurable via `.env`.
 
 | Service | Port | Purpose |
 |---------|------|---------|
-| Dashboard (Streamlit) | 8601 | Streamlit UI for scoring, analytics, model training, and rule authoring |
-| Web (React) | 5180 | React UI - modern alternative to Streamlit (runs in parallel) |
+| Web (React) | 5180 | React UI for scoring, analytics, model training, and rule authoring |
 | BFF | 3210 | Backend for Frontend - Node.js proxy layer for React UI |
 | API | 8100 | FastAPI fraud scoring and training endpoints |
 | API Docs | 8100 | Swagger UI served by the API |
@@ -117,10 +114,6 @@ All ports are configurable via `.env`.
 | PostgreSQL | 5542 | Transaction and feature storage |
 | Inference Gateway | 8181 | Go-based high-throughput inference gateway |
 | Analytics CRUD | 50051 | Go analytics service (gRPC) backing compute-only data access |
-
-### Parallel UI Operation
-
-Both Streamlit (port 8601) and React (port 5180) UIs run simultaneously. The React UI communicates with the Go Inference Gateway through the BFF proxy layer (port 3210), and the gateway forwards compute requests to the Python ML API. Streamlit connects directly to the Python API for admin, training, and analytics workflows. This allows safe migration without disrupting existing workflows.
 
 The React UI now supports:
 - **Synthetic Dataset Management**: Generate data, view distributions, and analyze correlations.

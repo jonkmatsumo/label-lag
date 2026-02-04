@@ -84,7 +84,7 @@ services:
       context: src/ui
       dockerfile: Dockerfile
     container_name: synthetic-data-dashboard
-    profiles: ["streamlit", "all"]
+    profiles: ["streamlit"]
     environment:
       - API_BASE_URL=http://api:8000
       - MLFLOW_TRACKING_URI=http://mlflow:5000
