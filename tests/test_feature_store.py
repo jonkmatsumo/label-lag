@@ -72,6 +72,7 @@ class TestFeatureMaterializer:
     def test_materialize_features_via_analytics(self, monkeypatch):
         """Test that materialize_features calls analytics service."""
         from unittest.mock import MagicMock
+
         from api import crud_client
         from pipeline.materialize_features import materialize_features
 
@@ -91,6 +92,7 @@ class TestFeatureMaterializer:
     def test_materialize_features_handles_errors(self, monkeypatch):
         """Test that materialize_features handles analytics errors gracefully."""
         from unittest.mock import MagicMock
+
         from api import crud_client
         from pipeline.materialize_features import materialize_features
 

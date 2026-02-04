@@ -5,6 +5,7 @@ Rule Inspector endpoints.
 """
 
 from datetime import datetime, timedelta
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -308,6 +309,18 @@ class TestShadowComparisonEndpoint:
 class TestBacktestResultsEndpoint:
     """Tests for GET /backtest/results endpoint."""
 
+    @pytest.fixture(autouse=True)
+    def mock_crud_client(self, monkeypatch):
+        """Mock the analytics CRUD client for all tests in this class."""
+        from api import crud_client
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.results = []
+        mock_client.stub.ListBacktestResults.return_value = mock_response
+        monkeypatch.setattr(crud_client, "_client", mock_client)
+        return mock_client
+
     def test_backtest_results_returns_200(self, client):
         """Test that endpoint returns 200."""
         response = client.get("/backtest/results")
@@ -361,6 +374,17 @@ class TestBacktestResultsEndpoint:
 
 class TestBacktestResultByIdEndpoint:
     """Tests for GET /backtest/results/{job_id} endpoint."""
+
+    @pytest.fixture(autouse=True)
+    def mock_crud_client(self, monkeypatch):
+        """Mock the analytics CRUD client for all tests in this class."""
+        from api import crud_client
+
+        mock_client = MagicMock()
+        # Mock GetBacktestResult to raise exception (simulates not found)
+        mock_client.stub.GetBacktestResult.side_effect = Exception("Not found")
+        monkeypatch.setattr(crud_client, "_client", mock_client)
+        return mock_client
 
     def test_backtest_result_not_found(self, client):
         """Test that non-existent job returns 404."""
@@ -494,8 +518,16 @@ class TestEndpointsSafety:
         # Should return same data
         assert response1.json() == response2.json()
 
-    def test_backtest_results_is_read_only(self, client):
+    def test_backtest_results_is_read_only(self, client, monkeypatch):
         """Test that backtest results has no side effects."""
+        from api import crud_client
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.results = []
+        mock_client.stub.ListBacktestResults.return_value = mock_response
+        monkeypatch.setattr(crud_client, "_client", mock_client)
+
         # Call multiple times
         response1 = client.get("/backtest/results")
         response2 = client.get("/backtest/results")

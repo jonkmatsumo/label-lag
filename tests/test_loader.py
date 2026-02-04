@@ -6,7 +6,7 @@ Analytics service.
 """
 
 from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
@@ -125,14 +125,10 @@ class TestFeatureColumnOverride:
         mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.train_records = [
-            _make_mock_record(
-                "rec1", "user1", 5, 1.5, 0.2, False, datetime(2024, 3, 1)
-            )
+            _make_mock_record("rec1", "user1", 5, 1.5, 0.2, False, datetime(2024, 3, 1))
         ]
         mock_response.test_records = [
-            _make_mock_record(
-                "rec2", "user2", 10, 2.5, 0.5, True, datetime(2024, 5, 1)
-            )
+            _make_mock_record("rec2", "user2", 10, 2.5, 0.5, True, datetime(2024, 5, 1))
         ]
         mock_client.get_training_data.return_value = mock_response
         monkeypatch.setattr(crud_client, "_client", mock_client)
@@ -150,9 +146,7 @@ class TestFeatureColumnOverride:
         mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.train_records = [
-            _make_mock_record(
-                "rec1", "user1", 5, 1.5, 0.2, False, datetime(2024, 3, 1)
-            )
+            _make_mock_record("rec1", "user1", 5, 1.5, 0.2, False, datetime(2024, 3, 1))
         ]
         mock_response.test_records = []
         mock_client.get_training_data.return_value = mock_response
@@ -173,9 +167,7 @@ class TestFeatureColumnOverride:
         mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.train_records = [
-            _make_mock_record(
-                "rec1", "user1", 5, 1.5, 0.2, False, datetime(2024, 3, 1)
-            )
+            _make_mock_record("rec1", "user1", 5, 1.5, 0.2, False, datetime(2024, 3, 1))
         ]
         mock_response.test_records = []
         mock_client.get_training_data.return_value = mock_response
@@ -307,9 +299,7 @@ class TestDataLoaderLabels:
         mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.train_records = [
-            _make_mock_record(
-                "rec1", "user1", 5, 1.5, 0.2, True, datetime(2024, 3, 1)
-            ),
+            _make_mock_record("rec1", "user1", 5, 1.5, 0.2, True, datetime(2024, 3, 1)),
         ]
         mock_response.test_records = []
         mock_client.get_training_data.return_value = mock_response
@@ -406,9 +396,7 @@ class TestSplitConfig:
 
         loader = DataLoader()
         config = SplitConfig(seed=42)
-        split = loader.load_train_test_split(
-            datetime(2024, 4, 1), split_config=config
-        )
+        split = loader.load_train_test_split(datetime(2024, 4, 1), split_config=config)
 
         assert "train_rec1" in split.split_manifest["train_record_ids"]
         assert "test_rec1" in split.split_manifest["test_record_ids"]
@@ -436,9 +424,7 @@ class TestSplitConfig:
 
         loader = DataLoader()
         config = SplitConfig(seed=42)
-        split = loader.load_train_test_split(
-            datetime(2024, 4, 1), split_config=config
-        )
+        split = loader.load_train_test_split(datetime(2024, 4, 1), split_config=config)
 
         assert split.split_manifest["train_unique_users"] == 2
 
@@ -459,8 +445,6 @@ class TestSplitConfig:
 
         loader = DataLoader()
         config = SplitConfig(seed=42)
-        split = loader.load_train_test_split(
-            datetime(2024, 4, 1), split_config=config
-        )
+        split = loader.load_train_test_split(datetime(2024, 4, 1), split_config=config)
 
         assert split.split_manifest["manifest_hash"].startswith("sha256:")

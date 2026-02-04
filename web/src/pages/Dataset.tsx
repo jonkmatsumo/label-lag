@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { datasetApi } from '../api/dataset';
 import { monitoringApi } from '../api';
 import type { RelationshipMetric, CorrelationPair } from '../types/api';
-import { 
+import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 import { AlertCircle, CheckCircle, RefreshCw, Trash2, Database, Activity } from 'lucide-react';
@@ -11,7 +11,7 @@ import { ErrorBanner } from '../components/ErrorBanner';
 
 export function Dataset() {
   const [activeTab, setActiveTab] = useState<'overview' | 'generate' | 'diagnostics' | 'drift'>('overview');
-  
+
   return (
     <div className="container-fluid py-4">
       <header className="mb-4">
@@ -23,7 +23,7 @@ export function Dataset() {
         <div className="card-header bg-white py-3">
           <ul className="nav nav-pills card-header-pills">
             <li className="nav-item">
-              <button 
+              <button
                 className={`nav-link ${activeTab === 'overview' ? 'active' : ''}`}
                 onClick={() => setActiveTab('overview')}
               >
@@ -32,7 +32,7 @@ export function Dataset() {
               </button>
             </li>
             <li className="nav-item">
-              <button 
+              <button
                 className={`nav-link ${activeTab === 'generate' ? 'active' : ''}`}
                 onClick={() => setActiveTab('generate')}
               >
@@ -41,7 +41,7 @@ export function Dataset() {
               </button>
             </li>
             <li className="nav-item">
-              <button 
+              <button
                 className={`nav-link ${activeTab === 'diagnostics' ? 'active' : ''}`}
                 onClick={() => setActiveTab('diagnostics')}
               >
@@ -50,7 +50,7 @@ export function Dataset() {
               </button>
             </li>
             <li className="nav-item">
-              <button 
+              <button
                 className={`nav-link ${activeTab === 'drift' ? 'active' : ''}`}
                 onClick={() => setActiveTab('drift')}
               >
@@ -164,7 +164,7 @@ function GenerateTab() {
   const [numUsers, setNumUsers] = useState(500);
   const [fraudRate, setFraudRate] = useState(0.05);
   const [dropExisting, setDropExisting] = useState(true);
-  
+
   const queryClient = useQueryClient();
 
   const generateMutation = useMutation({
@@ -189,11 +189,11 @@ function GenerateTab() {
           <div className="card-body">
             <div className="mb-3">
               <label className="form-label">Number of Users</label>
-              <input 
-                type="range" 
-                className="form-range" 
-                min="100" max="5000" step="100" 
-                value={numUsers} 
+              <input
+                type="range"
+                className="form-range"
+                min="100" max="5000" step="100"
+                value={numUsers}
                 onChange={e => setNumUsers(parseInt(e.target.value))}
               />
               <div className="d-flex justify-content-between text-muted small">
@@ -205,11 +205,11 @@ function GenerateTab() {
 
             <div className="mb-3">
               <label className="form-label">Fraud Rate</label>
-              <input 
-                type="range" 
-                className="form-range" 
-                min="0.01" max="0.20" step="0.01" 
-                value={fraudRate} 
+              <input
+                type="range"
+                className="form-range"
+                min="0.01" max="0.20" step="0.01"
+                value={fraudRate}
                 onChange={e => setFraudRate(parseFloat(e.target.value))}
               />
               <div className="d-flex justify-content-between text-muted small">
@@ -220,11 +220,11 @@ function GenerateTab() {
             </div>
 
             <div className="mb-4 form-check">
-              <input 
-                type="checkbox" 
-                className="form-check-input" 
-                id="dropExisting" 
-                checked={dropExisting} 
+              <input
+                type="checkbox"
+                className="form-check-input"
+                id="dropExisting"
+                checked={dropExisting}
                 onChange={e => setDropExisting(e.target.checked)}
               />
               <label className="form-check-label" htmlFor="dropExisting">
@@ -232,8 +232,8 @@ function GenerateTab() {
               </label>
             </div>
 
-            <button 
-              className="btn btn-primary w-100" 
+            <button
+              className="btn btn-primary w-100"
               onClick={() => generateMutation.mutate({ num_users: numUsers, fraud_rate: fraudRate, drop_existing: dropExisting })}
               disabled={generateMutation.isPending}
             >
@@ -252,8 +252,8 @@ function GenerateTab() {
             <div>
               <strong>Generation Complete!</strong>
               <div className="small">
-                Created {generateMutation.data.total_records} records 
-                ({generateMutation.data.fraud_records} fraud). 
+                Created {generateMutation.data.total_records} records
+                ({generateMutation.data.fraud_records} fraud).
                 Materialized {generateMutation.data.features_materialized} feature snapshots.
               </div>
             </div>
@@ -270,11 +270,11 @@ function GenerateTab() {
           <div className="card-header bg-danger text-white fw-bold">Danger Zone</div>
           <div className="card-body">
             <p className="card-text text-muted">
-              Permanently delete all generated records, metadata, and feature snapshots. 
+              Permanently delete all generated records, metadata, and feature snapshots.
               This action cannot be undone.
             </p>
-            <button 
-              className="btn btn-outline-danger" 
+            <button
+              className="btn btn-outline-danger"
               onClick={() => {
                 if(confirm('Are you sure you want to delete all data?')) {
                   clearMutation.mutate();
@@ -309,12 +309,12 @@ function DiagnosticsTab() {
   });
 
   const samples = data?.samples || [];
-  
+
   const numericKeys = useMemo(() => {
     if (!samples.length) return [];
     const first = samples[0];
-    return Object.keys(first).filter(k => 
-      typeof first[k] === 'number' && 
+    return Object.keys(first).filter(k =>
+      typeof first[k] === 'number' &&
       !['record_id', 'user_id', 'snapshot_id', 'is_fraudulent'].includes(k)
     );
   }, [samples]);
@@ -359,22 +359,22 @@ function DiagnosticsTab() {
     if (!samples.length || !selectedFeature) return null;
     const values = samples.map(s => Number(s[selectedFeature])).filter(v => !isNaN(v)).sort((a,b) => a - b);
     if (values.length < 4) return null;
-    
+
     const q1Idx = Math.floor(values.length * 0.25);
     const q2Idx = Math.floor(values.length * 0.5);
     const q3Idx = Math.floor(values.length * 0.75);
-    
+
     const q1 = values[q1Idx];
     const q2 = values[q2Idx];
     const q3 = values[q3Idx];
     const iqr = q3 - q1;
-    
+
     const lowWhisker = Math.max(values[0], q1 - 1.5 * iqr);
     const highWhisker = Math.min(values[values.length - 1], q3 + 1.5 * iqr);
-    
+
     const outliers = values.filter(v => v < lowWhisker || v > highWhisker);
     const outlierPct = (outliers.length / values.length) * 100;
-    
+
     return { min: values[0], max: values[values.length-1], q1, q2, q3, lowWhisker, highWhisker, outlierCount: outliers.length, outlierPct };
   }, [samples, selectedFeature]);
 
@@ -445,26 +445,26 @@ function DiagnosticsTab() {
                       <div className="mb-4" style={{ height: '140px', position: 'relative', padding: '0 40px' }}>
                          {/* Scale background */}
                          <div style={{ position: 'absolute', bottom: '0', left: '40px', right: '40px', height: '1px', backgroundColor: '#dee2e6' }}></div>
-                         
+
                          {/* Whisker Line */}
                          <div style={{ position: 'absolute', top: '50%', left: `${((outlierStats.lowWhisker - outlierStats.min) / (outlierStats.max - outlierStats.min)) * 80 + 10}%`, right: `${100 - (((outlierStats.highWhisker - outlierStats.min) / (outlierStats.max - outlierStats.min)) * 80 + 10)}%`, height: '2px', backgroundColor: '#6c757d' }}></div>
-                         
+
                          {/* Low Whisker */}
                          <div style={{ position: 'absolute', top: '40%', bottom: '40%', left: `${((outlierStats.lowWhisker - outlierStats.min) / (outlierStats.max - outlierStats.min)) * 80 + 10}%`, width: '2px', backgroundColor: '#6c757d' }}></div>
-                         
+
                          {/* High Whisker */}
                          <div style={{ position: 'absolute', top: '40%', bottom: '40%', left: `${((outlierStats.highWhisker - outlierStats.min) / (outlierStats.max - outlierStats.min)) * 80 + 10}%`, width: '2px', backgroundColor: '#6c757d' }}></div>
-                         
+
                          {/* Box (Q1 to Q3) */}
-                         <div style={{ 
-                           position: 'absolute', top: '30%', bottom: '30%', 
-                           left: `${((outlierStats.q1 - outlierStats.min) / (outlierStats.max - outlierStats.min)) * 80 + 10}%`, 
-                           width: `${((outlierStats.q3 - outlierStats.q1) / (outlierStats.max - outlierStats.min)) * 80}%`, 
+                         <div style={{
+                           position: 'absolute', top: '30%', bottom: '30%',
+                           left: `${((outlierStats.q1 - outlierStats.min) / (outlierStats.max - outlierStats.min)) * 80 + 10}%`,
+                           width: `${((outlierStats.q3 - outlierStats.q1) / (outlierStats.max - outlierStats.min)) * 80}%`,
                            backgroundColor: 'rgba(13, 110, 253, 0.15)',
                            border: '2px solid #0d6efd',
                            borderRadius: '2px'
                          }}></div>
-                         
+
                          {/* Median Line */}
                          <div style={{ position: 'absolute', top: '30%', bottom: '30%', left: `${((outlierStats.q2 - outlierStats.min) / (outlierStats.max - outlierStats.min)) * 80 + 10}%`, width: '3px', backgroundColor: '#0d6efd' }}></div>
                       </div>
@@ -528,24 +528,24 @@ function RelationshipsTab({ featureColumns }: { featureColumns: string[] }) {
       <div className="card-header bg-white py-3 border-bottom">
         <ul className="nav nav-tabs card-header-tabs">
           <li className="nav-item">
-            <button 
-              className={`nav-link ${activeSubTab === 'target' ? 'active' : ''}`} 
+            <button
+              className={`nav-link ${activeSubTab === 'target' ? 'active' : ''}`}
               onClick={() => setActiveSubTab('target')}
             >
               Feature vs Target
             </button>
           </li>
           <li className="nav-item">
-            <button 
-              className={`nav-link ${activeSubTab === 'numeric' ? 'active' : ''}`} 
+            <button
+              className={`nav-link ${activeSubTab === 'numeric' ? 'active' : ''}`}
               onClick={() => setActiveSubTab('numeric')}
             >
               Numeric Heatmap (Pearson)
             </button>
           </li>
           <li className="nav-item">
-            <button 
-              className={`nav-link ${activeSubTab === 'categorical' ? 'active' : ''}`} 
+            <button
+              className={`nav-link ${activeSubTab === 'categorical' ? 'active' : ''}`}
               onClick={() => setActiveSubTab('categorical')}
             >
               Categorical Heatmap (Cramér's V)
@@ -553,33 +553,33 @@ function RelationshipsTab({ featureColumns }: { featureColumns: string[] }) {
           </li>
         </ul>
       </div>
-      
+
       <div className="card-body p-4">
         {activeSubTab === 'target' && (
-           <TargetRelationshipsTable 
-             data={targetQuery.data} 
-             isLoading={targetQuery.isLoading} 
-             targetColumn={targetColumn} 
-             setTargetColumn={setTargetColumn} 
-             featureColumns={featureColumns} 
+           <TargetRelationshipsTable
+             data={targetQuery.data}
+             isLoading={targetQuery.isLoading}
+             targetColumn={targetColumn}
+             setTargetColumn={setTargetColumn}
+             featureColumns={featureColumns}
            />
         )}
-        
+
         {activeSubTab === 'numeric' && (
-           <CorrelationHeatmap 
-             title="Pearson Correlation Matrix" 
-             data={matrixQuery.data?.pearson} 
-             columns={matrixQuery.data?.numeric_columns} 
+           <CorrelationHeatmap
+             title="Pearson Correlation Matrix"
+             data={matrixQuery.data?.pearson}
+             columns={matrixQuery.data?.numeric_columns}
              isLoading={matrixQuery.isLoading}
              baseColor="25, 135, 84" // Green-ish
            />
         )}
 
         {activeSubTab === 'categorical' && (
-           <CorrelationHeatmap 
-             title="Cramér's V Association Matrix" 
-             data={matrixQuery.data?.cramers_v} 
-             columns={matrixQuery.data?.categorical_columns} 
+           <CorrelationHeatmap
+             title="Cramér's V Association Matrix"
+             data={matrixQuery.data?.cramers_v}
+             columns={matrixQuery.data?.categorical_columns}
              isLoading={matrixQuery.isLoading}
              baseColor="255, 193, 7" // Orange-ish
            />
@@ -628,7 +628,7 @@ function TargetRelationshipsTable({ data, isLoading, targetColumn, setTargetColu
                   <td>
                     <div className="d-flex align-items-center gap-2">
                       <div className="progress flex-grow-1" style={{height: '6px'}}>
-                        <div 
+                        <div
                           className={`progress-bar ${Math.abs(rel.value) > 0.5 ? 'bg-danger' : Math.abs(rel.value) > 0.2 ? 'bg-warning' : 'bg-success'}`}
                           style={{width: `${Math.min(Math.abs(rel.value) * 100, 100)}%`}}
                         ></div>
@@ -656,7 +656,7 @@ function CorrelationHeatmap({ title, data, columns, isLoading, baseColor = "13, 
 
   // Limit columns to avoid clutter (e.g. top 20)
   const displayCols = columns.slice(0, 20);
-  
+
   // Create matrix map
   const matrix: Record<string, number> = {};
   data.forEach((d: CorrelationPair) => {
@@ -688,7 +688,7 @@ function CorrelationHeatmap({ title, data, columns, isLoading, baseColor = "13, 
                   const opacity = Math.max(0.05, Math.abs(val));
                   const bg = `rgba(${baseColor}, ${opacity})`;
                   const textColor = opacity > 0.6 ? '#fff' : '#000';
-                  
+
                   return (
                     <td key={col} style={{backgroundColor: bg, color: textColor, transition: 'all 0.2s'}}>
                       {val.toFixed(2)}

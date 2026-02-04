@@ -118,7 +118,7 @@ export async function mlflowRoutes(
           },
           requestId: request.requestId,
         });
-        
+
         // Return raw data
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {

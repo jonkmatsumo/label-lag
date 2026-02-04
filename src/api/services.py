@@ -313,7 +313,9 @@ class SignalEvaluator:
                     transaction_amount=request.amount,
                 )
             else:
-                logger.debug(f"No features found for user {request.user_id} in Analytics")
+                logger.debug(
+                    f"No features found for user {request.user_id} in Analytics"
+                )
 
         except Exception as e:
             logger.warning(f"Failed to fetch features from Analytics: {e}")

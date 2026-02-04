@@ -57,7 +57,7 @@ export interface SplitManifest {
 }
 
 export const mlflowApi = {
-  searchExperiments: (filter?: string) => 
+  searchExperiments: (filter?: string) =>
     apiClient.get<{ experiments: MlflowExperiment[] }>(`/bff/v1/mlflow/experiments/search?filter=${encodeURIComponent(filter || '')}`),
 
   searchRuns: (experimentIds: string[], filter?: string) =>

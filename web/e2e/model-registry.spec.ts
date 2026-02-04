@@ -11,7 +11,7 @@ test.describe('Model Registry', () => {
 
     await page.goto('/model-lab');
     await page.getByRole('button', { name: 'Model Registry' }).click();
-    
+
     await expect(page.getByText('v2')).toBeVisible();
     await expect(page.getByText('PRODUCTION')).toBeVisible();
     await expect(page.getByText('v1')).toBeVisible();
@@ -27,7 +27,7 @@ test.describe('Model Registry', () => {
     await page.route('**/bff/v1/mlflow/runs/abc/artifacts?path=cv_fold_metrics.json', async route => {
       await route.fulfill({ json: { precision: [0.9, 0.92] }});
     });
-    
+
     await page.route('**/bff/v1/mlflow/runs/abc/artifacts?path=tuning_trials.json', async route => {
       await route.fulfill({ json: [{ trial: 1, value: 0.85, state: "COMPLETE" }]});
     });
@@ -38,10 +38,10 @@ test.describe('Model Registry', () => {
 
     await page.goto('/model-lab');
     await page.getByRole('button', { name: 'Model Registry' }).click();
-    
+
     // Click row to expand
     await page.getByText('v1').click();
-    
+
     await expect(page.getByText('Cross-Validation Metrics')).toBeVisible();
     await expect(page.getByText('Tuning Trials')).toBeVisible();
     await expect(page.getByText('#1')).toBeVisible();

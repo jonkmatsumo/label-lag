@@ -24,13 +24,13 @@ service AnalyticsService {
   rpc StoreGeneratedData(StoreGeneratedDataRequest) returns (StoreGeneratedDataResponse);
   rpc ClearAllData(ClearAllDataRequest) returns (ClearAllDataResponse);
   rpc MaterializeFeatures(MaterializeFeaturesRequest) returns (MaterializeFeaturesResponse);
-  
+
   // Rule Management
   rpc SaveRule(SaveRuleRequest) returns (SaveRuleResponse);
   rpc GetRule(GetRuleRequest) returns (GetRuleResponse);
   rpc ListRules(ListRulesRequest) returns (ListRulesResponse);
   rpc DeleteRule(DeleteRuleRequest) returns (DeleteRuleResponse);
-  
+
   // Inference Events
   rpc LogInferenceEvent(LogInferenceEventRequest) returns (LogInferenceEventResponse);
 }

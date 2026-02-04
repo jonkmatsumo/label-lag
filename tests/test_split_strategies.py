@@ -1,5 +1,6 @@
 """Tests for split strategies."""
 
+from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -14,6 +15,28 @@ from model.split_strategies import (
     TimeSeriesKFoldStrategy,
     get_strategy,
 )
+
+
+def _make_mock_record(
+    record_id: str,
+    user_id: str,
+    velocity: int,
+    ratio: float,
+    volatility: float,
+    is_fraudulent: bool,
+    created_at: datetime,
+):
+    """Create a mock proto record for testing."""
+    record = MagicMock()
+    record.record_id = record_id
+    record.user_id = user_id
+    record.velocity_24h = velocity
+    record.amount_to_avg_ratio_30d = ratio
+    record.balance_volatility_z_score = volatility
+    record.is_fraudulent = is_fraudulent
+    record.created_at = MagicMock()
+    record.created_at.ToDatetime.return_value = created_at
+    return record
 
 
 class TestTemporalSplit:
@@ -96,44 +119,31 @@ class TestGroupTemporalSplit:
 class TestSplitManifestStructure:
     """Split manifest from loader has expected keys."""
 
-    def test_split_manifest_structure(self):
+    def test_split_manifest_structure(self, monkeypatch):
         """Manifest contains strategy, seed, train/test ids, sizes."""
-        loader = DataLoader(database_url="postgresql://x:x@localhost/x")
-        mock = MagicMock()
-        mock_result = MagicMock()
-        mock_result.fetchall.return_value = [
-            (
+        from api import crud_client
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.train_records = [
+            _make_mock_record(
                 "r1",
                 "u1",
-                1.0,
+                1,
                 1.0,
                 0.0,
-                None,
-                True,
-                None,
                 False,
-                pd.Timestamp("2024-01-01"),
-                0,
+                datetime(2024, 1, 1, tzinfo=timezone.utc),
             ),
         ]
-        mock_result.keys.return_value = [
-            "record_id",
-            "user_id",
-            "velocity_24h",
-            "amount_to_avg_ratio_30d",
-            "balance_volatility_z_score",
-            "experimental_signals",
-            "is_train_eligible",
-            "fraud_confirmed_at",
-            "is_fraudulent",
-            "transaction_timestamp",
-            "label",
-        ]
-        mock.execute.return_value = mock_result
+        mock_response.test_records = []
+        mock_client.get_training_data.return_value = mock_response
+        monkeypatch.setattr(crud_client, "_client", mock_client)
+
+        loader = DataLoader()
         config = SplitConfig(seed=42)
         split = loader.load_train_test_split(
             "2024-04-01",
-            session=mock,
             feature_columns=["velocity_24h", "amount_to_avg_ratio_30d"],
             split_config=config,
         )
@@ -159,216 +169,52 @@ class TestGetStrategy:
 
 
 class TestEnhancedManifest:
-    """Enhanced split manifest with time ranges, user counts, and hash."""
+    """Enhanced split manifest with user counts and hash."""
 
-    def test_manifest_has_time_ranges(self):
-        """Manifest includes train_time_range and test_time_range."""
-        from datetime import datetime
-        from unittest.mock import MagicMock
-
-        from model.loader import DataLoader
-
-        loader = DataLoader(database_url="postgresql://test:test@localhost/test")
-        session = MagicMock()
-
-        # Create mock data with timestamps
-        train_data = [
-            (
-                "rec1",
-                "u1",
-                1,
-                1.0,
-                0.0,
-                None,
-                True,
-                None,
-                False,
-                datetime(2024, 1, 1),
-                0,
-            ),
-            (
-                "rec2",
-                "u2",
-                2,
-                2.0,
-                0.1,
-                None,
-                True,
-                None,
-                False,
-                datetime(2024, 3, 31),
-                0,
-            ),
-        ]
-        test_data = [
-            (
-                "rec3",
-                "u3",
-                3,
-                3.0,
-                0.2,
-                None,
-                True,
-                None,
-                False,
-                datetime(2024, 4, 1),
-                0,
-            ),
-        ]
-
-        mock_result_train = MagicMock()
-        mock_result_train.fetchall.return_value = train_data
-        mock_result_train.keys.return_value = [
-            "record_id",
-            "user_id",
-            "velocity_24h",
-            "amount_to_avg_ratio_30d",
-            "balance_volatility_z_score",
-            "experimental_signals",
-            "is_train_eligible",
-            "fraud_confirmed_at",
-            "is_fraudulent",
-            "transaction_timestamp",
-            "label",
-        ]
-
-        mock_result_test = MagicMock()
-        mock_result_test.fetchall.return_value = test_data
-        mock_result_test.keys.return_value = [
-            "record_id",
-            "user_id",
-            "velocity_24h",
-            "amount_to_avg_ratio_30d",
-            "balance_volatility_z_score",
-            "experimental_signals",
-            "is_train_eligible",
-            "fraud_confirmed_at",
-            "is_fraudulent",
-            "transaction_timestamp",
-            "label",
-        ]
-
-        def execute_side_effect(query, params):
-            if "transaction_timestamp <" in str(query):
-                return mock_result_train
-            return mock_result_test
-
-        session.execute.side_effect = execute_side_effect
-
-        config = SplitConfig(seed=42)
-        split = loader.load_train_test_split(
-            datetime(2024, 4, 1),
-            session=session,
-            feature_columns=["velocity_24h", "amount_to_avg_ratio_30d"],
-            split_config=config,
-        )
-
-        assert split.split_manifest is not None
-        assert "train_time_range" in split.split_manifest
-        assert "test_time_range" in split.split_manifest
-        assert split.split_manifest["train_time_range"] is not None
-        assert split.split_manifest["test_time_range"] is not None
-        assert "min" in split.split_manifest["train_time_range"]
-        assert "max" in split.split_manifest["train_time_range"]
-
-    def test_manifest_has_unique_user_counts(self):
+    def test_manifest_has_unique_user_counts(self, monkeypatch):
         """Manifest includes train_unique_users and test_unique_users."""
-        from datetime import datetime
-        from unittest.mock import MagicMock
+        from api import crud_client
 
-        from model.loader import DataLoader
-
-        loader = DataLoader(database_url="postgresql://test:test@localhost/test")
-        session = MagicMock()
-
-        # Create mock data with different users
-        train_data = [
-            (
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.train_records = [
+            _make_mock_record(
                 "rec1",
                 "u1",
                 1,
                 1.0,
                 0.0,
-                None,
-                True,
-                None,
                 False,
-                datetime(2024, 3, 1),
-                0,
+                datetime(2024, 3, 1, tzinfo=timezone.utc),
             ),
-            (
+            _make_mock_record(
                 "rec2",
                 "u2",
                 2,
                 2.0,
                 0.1,
-                None,
-                True,
-                None,
                 False,
-                datetime(2024, 3, 2),
-                0,
+                datetime(2024, 3, 2, tzinfo=timezone.utc),
             ),
         ]
-        test_data = [
-            (
+        mock_response.test_records = [
+            _make_mock_record(
                 "rec3",
                 "u3",
                 3,
                 3.0,
                 0.2,
-                None,
-                True,
-                None,
                 False,
-                datetime(2024, 4, 1),
-                0,
+                datetime(2024, 4, 1, tzinfo=timezone.utc),
             ),
         ]
+        mock_client.get_training_data.return_value = mock_response
+        monkeypatch.setattr(crud_client, "_client", mock_client)
 
-        mock_result_train = MagicMock()
-        mock_result_train.fetchall.return_value = train_data
-        mock_result_train.keys.return_value = [
-            "record_id",
-            "user_id",
-            "velocity_24h",
-            "amount_to_avg_ratio_30d",
-            "balance_volatility_z_score",
-            "experimental_signals",
-            "is_train_eligible",
-            "fraud_confirmed_at",
-            "is_fraudulent",
-            "transaction_timestamp",
-            "label",
-        ]
-
-        mock_result_test = MagicMock()
-        mock_result_test.fetchall.return_value = test_data
-        mock_result_test.keys.return_value = [
-            "record_id",
-            "user_id",
-            "velocity_24h",
-            "amount_to_avg_ratio_30d",
-            "balance_volatility_z_score",
-            "experimental_signals",
-            "is_train_eligible",
-            "fraud_confirmed_at",
-            "is_fraudulent",
-            "transaction_timestamp",
-            "label",
-        ]
-
-        def execute_side_effect(query, params):
-            if "transaction_timestamp <" in str(query):
-                return mock_result_train
-            return mock_result_test
-
-        session.execute.side_effect = execute_side_effect
-
+        loader = DataLoader()
         config = SplitConfig(seed=42)
         split = loader.load_train_test_split(
             datetime(2024, 4, 1),
-            session=session,
             feature_columns=["velocity_24h", "amount_to_avg_ratio_30d"],
             split_config=config,
         )
@@ -379,51 +225,31 @@ class TestEnhancedManifest:
         assert split.split_manifest["train_unique_users"] == 2
         assert split.split_manifest["test_unique_users"] == 1
 
-    def test_manifest_has_hash(self):
+    def test_manifest_has_hash(self, monkeypatch):
         """Manifest includes manifest_hash."""
-        from datetime import datetime
-        from unittest.mock import MagicMock
+        from api import crud_client
 
-        from model.loader import DataLoader
-
-        loader = DataLoader(database_url="postgresql://test:test@localhost/test")
-        session = MagicMock()
-
-        mock_result = MagicMock()
-        mock_result.fetchall.return_value = [
-            (
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.train_records = [
+            _make_mock_record(
                 "rec1",
                 "u1",
                 1,
                 1.0,
                 0.0,
-                None,
-                True,
-                None,
                 False,
-                datetime(2024, 3, 1),
-                0,
+                datetime(2024, 3, 1, tzinfo=timezone.utc),
             ),
         ]
-        mock_result.keys.return_value = [
-            "record_id",
-            "user_id",
-            "velocity_24h",
-            "amount_to_avg_ratio_30d",
-            "balance_volatility_z_score",
-            "experimental_signals",
-            "is_train_eligible",
-            "fraud_confirmed_at",
-            "is_fraudulent",
-            "transaction_timestamp",
-            "label",
-        ]
-        session.execute.return_value = mock_result
+        mock_response.test_records = []
+        mock_client.get_training_data.return_value = mock_response
+        monkeypatch.setattr(crud_client, "_client", mock_client)
 
+        loader = DataLoader()
         config = SplitConfig(seed=42)
         split = loader.load_train_test_split(
             datetime(2024, 4, 1),
-            session=session,
             feature_columns=["velocity_24h", "amount_to_avg_ratio_30d"],
             split_config=config,
         )

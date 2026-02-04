@@ -2,11 +2,10 @@
 
 import json
 import logging
-from typing import Any
 
 from api.crud_client import get_crud_client
 from api.proto.proto.crud.v1 import analytics_pb2
-from api.rules import Rule, RuleStatus
+from api.rules import Rule
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +20,7 @@ class GrpcRuleStore:
     def save(self, rule: Rule) -> None:
         """Save a rule via Analytics service."""
         client = get_crud_client()
-        
+
         # Determine value_json
         if isinstance(rule.value, (list, dict)):
             value_json = json.dumps(rule.value)
@@ -39,15 +38,21 @@ class GrpcRuleStore:
             reason=rule.reason or "",
             status=rule.status,
         )
-        
-        client.stub.SaveRule(analytics_pb2.SaveRuleRequest(rule=rule_pb))
+
+        client.stub.SaveRule(
+            analytics_pb2.SaveRuleRequest(rule=rule_pb),
+            timeout=client.timeout_seconds,
+        )
         logger.debug(f"Saved rule {rule.id} via Analytics service")
 
     def get(self, rule_id: str) -> Rule | None:
         """Get a rule via Analytics service."""
         client = get_crud_client()
         try:
-            resp = client.stub.GetRule(analytics_pb2.GetRuleRequest(rule_id=rule_id))
+            resp = client.stub.GetRule(
+                analytics_pb2.GetRuleRequest(rule_id=rule_id),
+                timeout=client.timeout_seconds,
+            )
             return self._from_pb(resp.rule)
         except Exception as e:
             logger.debug(f"Rule {rule_id} not found or error: {e}")
@@ -61,17 +66,22 @@ class GrpcRuleStore:
         """List rules via Analytics service."""
         client = get_crud_client()
         req = analytics_pb2.ListRulesRequest(
-            status=status or "",
-            include_archived=include_archived
+            status=status or "", include_archived=include_archived
         )
-        resp = client.stub.ListRules(req)
+        resp = client.stub.ListRules(
+            req,
+            timeout=client.timeout_seconds,
+        )
         return [self._from_pb(r) for r in resp.rules]
 
     def delete(self, rule_id: str) -> bool:
         """Archive a rule via Analytics service."""
         client = get_crud_client()
         try:
-            client.stub.DeleteRule(analytics_pb2.DeleteRuleRequest(rule_id=rule_id))
+            client.stub.DeleteRule(
+                analytics_pb2.DeleteRuleRequest(rule_id=rule_id),
+                timeout=client.timeout_seconds,
+            )
             return True
         except Exception as e:
             logger.error(f"Failed to delete rule {rule_id}: {e}")

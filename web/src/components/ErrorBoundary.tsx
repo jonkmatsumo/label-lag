@@ -45,7 +45,7 @@ export class ErrorBoundary extends Component<Props, State> {
               </div>
               <h2 className="h4 fw-bold mb-3">Something went wrong</h2>
               <p className="text-muted mb-4">
-                An unexpected error occurred while rendering this page. 
+                An unexpected error occurred while rendering this page.
                 {this.state.error && <code className="d-block mt-2 p-2 bg-light rounded small text-danger">{this.state.error.message}</code>}
               </p>
               <div className="d-grid gap-2">

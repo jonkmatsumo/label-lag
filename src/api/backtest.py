@@ -93,7 +93,9 @@ class BacktestRunner:
             features_list = self._fetch_historical_features(start_date, end_date)
 
             if not features_list:
-                return self._empty_result(job_id, ruleset.version, start_date, end_date, rule_id)
+                return self._empty_result(
+                    job_id, ruleset.version, start_date, end_date, rule_id
+                )
 
             # Replay features through rules
             scores = []
@@ -132,9 +134,13 @@ class BacktestRunner:
 
         except Exception as e:
             logger.error(f"Backtest {job_id} failed: {e}", exc_info=True)
-            return self._error_result(job_id, ruleset.version, start_date, end_date, rule_id, str(e))
+            return self._error_result(
+                job_id, ruleset.version, start_date, end_date, rule_id, str(e)
+            )
 
-    def _fetch_historical_features(self, start_date: datetime, end_date: datetime) -> list[dict[str, Any]]:
+    def _fetch_historical_features(
+        self, start_date: datetime, end_date: datetime
+    ) -> list[dict[str, Any]]:
         """Fetch historical features from Analytics service."""
         from api.proto.proto.crud.v1 import analytics_pb2
 
@@ -145,7 +151,11 @@ class BacktestRunner:
 
         client = get_crud_client()
         resp = client.stub.GetBacktestFeatures(
-            analytics_pb2.GetBacktestFeaturesRequest(start_date=start_ts, end_date=end_ts)
+            analytics_pb2.GetBacktestFeaturesRequest(
+                start_date=start_ts,
+                end_date=end_ts,
+            ),
+            timeout=client.timeout_seconds,
         )
 
         features_list = []
@@ -170,7 +180,7 @@ class BacktestRunner:
         from api.proto.proto.crud.v1 import analytics_pb2
 
         client = get_crud_client()
-        
+
         start_ts = Timestamp()
         start_ts.FromDatetime(result.start_date)
         end_ts = Timestamp()
@@ -206,12 +216,18 @@ class BacktestRunner:
             error=result.error or "",
         )
 
-        client.stub.SaveBacktestResult(analytics_pb2.SaveBacktestResultRequest(result=res_pb))
+        client.stub.SaveBacktestResult(
+            analytics_pb2.SaveBacktestResultRequest(result=res_pb),
+            timeout=client.timeout_seconds,
+        )
 
     def _empty_result(self, job_id, version, start, end, rule_id):
         return BacktestResult(
-            job_id=job_id, rule_id=rule_id, ruleset_version=version,
-            start_date=start, end_date=end,
+            job_id=job_id,
+            rule_id=rule_id,
+            ruleset_version=version,
+            start_date=start,
+            end_date=end,
             metrics=BacktestMetrics(0, 0, 0.0, {}, 0.0, 0.0, 0, 0, 0, 0.0),
             completed_at=datetime.now(timezone.utc),
         )
@@ -221,7 +237,9 @@ class BacktestRunner:
         res.error = error_msg
         return res
 
-    def _compute_metrics(self, total_records, scores, matched_counts, rejected_counts) -> BacktestMetrics:
+    def _compute_metrics(
+        self, total_records, scores, matched_counts, rejected_counts
+    ) -> BacktestMetrics:
         if total_records == 0:
             return BacktestMetrics(0, 0, 0.0, {}, 0.0, 0.0, 0, 0, 0, 0.0)
 
@@ -231,11 +249,16 @@ class BacktestRunner:
 
         score_ranges = {"1-20": 0, "21-40": 0, "41-60": 0, "61-80": 0, "81-99": 0}
         for score in scores:
-            if score <= 20: score_ranges["1-20"] += 1
-            elif score <= 40: score_ranges["21-40"] += 1
-            elif score <= 60: score_ranges["41-60"] += 1
-            elif score <= 80: score_ranges["61-80"] += 1
-            else: score_ranges["81-99"] += 1
+            if score <= 20:
+                score_ranges["1-20"] += 1
+            elif score <= 40:
+                score_ranges["21-40"] += 1
+            elif score <= 60:
+                score_ranges["41-60"] += 1
+            elif score <= 80:
+                score_ranges["61-80"] += 1
+            else:
+                score_ranges["81-99"] += 1
 
         return BacktestMetrics(
             total_records=total_records,
@@ -265,34 +288,48 @@ class BacktestStore:
     def get(self, job_id: str) -> BacktestResult | None:
         """Get result from Analytics service."""
         from api.proto.proto.crud.v1 import analytics_pb2
+
         client = get_crud_client()
         try:
-            resp = client.stub.GetBacktestResult(analytics_pb2.GetBacktestResultRequest(job_id=job_id))
+            resp = client.stub.GetBacktestResult(
+                analytics_pb2.GetBacktestResultRequest(job_id=job_id),
+                timeout=client.timeout_seconds,
+            )
             return self._from_pb(resp.result)
         except Exception:
             return None
 
-    def list_results(self, rule_id=None, start_date=None, end_date=None) -> list[BacktestResult]:
+    def list_results(
+        self, rule_id=None, start_date=None, end_date=None
+    ) -> list[BacktestResult]:
         """List results from Analytics service."""
         from api.proto.proto.crud.v1 import analytics_pb2
+
         client = get_crud_client()
-        
+
         start_ts = None
         if start_date:
             start_ts = Timestamp()
-            start_ts.FromDatetime(start_date if start_date.tzinfo else start_date.replace(tzinfo=timezone.utc))
-            
+            start_ts.FromDatetime(
+                start_date
+                if start_date.tzinfo
+                else start_date.replace(tzinfo=timezone.utc)
+            )
+
         end_ts = None
         if end_date:
             end_ts = Timestamp()
-            end_ts.FromDatetime(end_date if end_date.tzinfo else end_date.replace(tzinfo=timezone.utc))
+            end_ts.FromDatetime(
+                end_date if end_date.tzinfo else end_date.replace(tzinfo=timezone.utc)
+            )
 
         req = analytics_pb2.ListBacktestResultsRequest(
-            rule_id=rule_id or "",
-            start_date=start_ts,
-            end_date=end_ts
+            rule_id=rule_id or "", start_date=start_ts, end_date=end_ts
         )
-        resp = client.stub.ListBacktestResults(req)
+        resp = client.stub.ListBacktestResults(
+            req,
+            timeout=client.timeout_seconds,
+        )
         return [self._from_pb(r) for r in resp.results]
 
     def _from_pb(self, r) -> BacktestResult:
@@ -325,7 +362,9 @@ class BacktestStore:
 class BacktestComparator:
     """Compare backtest results and compute deltas."""
 
-    def compute_delta(self, base: BacktestMetrics, candidate: BacktestMetrics) -> BacktestDelta:
+    def compute_delta(
+        self, base: BacktestMetrics, candidate: BacktestMetrics
+    ) -> BacktestDelta:
         return BacktestDelta(
             match_rate_delta=candidate.match_rate - base.match_rate,
             rejected_rate_delta=candidate.rejected_rate - base.rejected_rate,

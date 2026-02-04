@@ -16,19 +16,19 @@ flowchart TB
         UI1[Rule Inspector]
         UI2[Model Lab]
     end
-    
+
     subgraph API[FastAPI]
         API1[POST /rules/id/publish]
         API2[POST /models/deploy]
         API3[Audit Logger]
     end
-    
+
     subgraph Storage
         S1[DraftRuleStore]
         S2[ModelManager]
         S3[MLflow Registry]
     end
-    
+
     UI1 --> API1
     UI2 --> API2
     API1 --> S1
@@ -84,8 +84,8 @@ stateDiagram-v2
 
 ## Quick Start
 
-1) Copy `.env.example` to `.env` and adjust ports or credentials as needed.  
-2) Start the stack with `docker compose up -d`.  
+1) Copy `.env.example` to `.env` and adjust ports or credentials as needed.
+2) Start the stack with `docker compose up -d`.
 3) Open the dashboard at `http://localhost:8601` and verify Live Scoring renders.
 
 ## Detailed Architecture Breakdown

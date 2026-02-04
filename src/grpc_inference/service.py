@@ -15,7 +15,6 @@ from api.schemas import SignalRequest
 from api.services import SignalEvaluator
 from grpc_inference.config import GRPCInferenceConfig
 from grpc_inference.proto.inference.v1 import inference_pb2, inference_pb2_grpc
-from synthetic_pipeline.db.session import DatabaseSession
 
 logger = logging.getLogger(__name__)
 
@@ -23,12 +22,7 @@ logger = logging.getLogger(__name__)
 class InferenceService(inference_pb2_grpc.InferenceServiceServicer):
     def __init__(self, config: GRPCInferenceConfig):
         self._config = config
-        self._db_session = (
-            DatabaseSession(database_url=config.db_dsn)
-            if config.db_dsn
-            else DatabaseSession()
-        )
-        self._evaluator = SignalEvaluator(db_session=self._db_session)
+        self._evaluator = SignalEvaluator()
         self._manager = get_model_manager()
 
     def score(self, request, context):

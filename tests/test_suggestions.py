@@ -280,12 +280,33 @@ class TestModelAssistedSuggestionEngine:
         # Return sample feature data
         mock_to_dict.return_value = {
             "samples": [
-                {"velocity_24h": 10.0, "amount_to_avg_ratio_30d": 2.0, "balance_volatility_z_score": 0.5},
-                {"velocity_24h": 5.0, "amount_to_avg_ratio_30d": 1.5, "balance_volatility_z_score": 0.3},
-                {"velocity_24h": 15.0, "amount_to_avg_ratio_30d": 3.0, "balance_volatility_z_score": 0.8},
-                {"velocity_24h": 8.0, "amount_to_avg_ratio_30d": 2.5, "balance_volatility_z_score": 0.6},
-                {"velocity_24h": 20.0, "amount_to_avg_ratio_30d": 4.0, "balance_volatility_z_score": 1.0},
-            ] * 20  # 100 samples
+                {
+                    "velocity_24h": 10.0,
+                    "amount_to_avg_ratio_30d": 2.0,
+                    "balance_volatility_z_score": 0.5,
+                },
+                {
+                    "velocity_24h": 5.0,
+                    "amount_to_avg_ratio_30d": 1.5,
+                    "balance_volatility_z_score": 0.3,
+                },
+                {
+                    "velocity_24h": 15.0,
+                    "amount_to_avg_ratio_30d": 3.0,
+                    "balance_volatility_z_score": 0.8,
+                },
+                {
+                    "velocity_24h": 8.0,
+                    "amount_to_avg_ratio_30d": 2.5,
+                    "balance_volatility_z_score": 0.6,
+                },
+                {
+                    "velocity_24h": 20.0,
+                    "amount_to_avg_ratio_30d": 4.0,
+                    "balance_volatility_z_score": 1.0,
+                },
+            ]
+            * 20  # 100 samples
         }
 
         engine = ModelAssistedSuggestionEngine()
@@ -305,8 +326,13 @@ class TestModelAssistedSuggestionEngine:
         mock_get_manager.return_value = mock_model_manager
         mock_to_dict.return_value = {
             "samples": [
-                {"velocity_24h": 10.0, "amount_to_avg_ratio_30d": 2.0, "balance_volatility_z_score": 0.5},
-            ] * 100
+                {
+                    "velocity_24h": 10.0,
+                    "amount_to_avg_ratio_30d": 2.0,
+                    "balance_volatility_z_score": 0.5,
+                },
+            ]
+            * 100
         }
 
         engine = ModelAssistedSuggestionEngine(min_importance=0.3)

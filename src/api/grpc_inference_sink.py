@@ -1,7 +1,7 @@
 """Inference event sink using Analytics gRPC service."""
 
 import logging
-from datetime import datetime, timezone
+from datetime import timezone
 
 from google.protobuf.timestamp_pb2 import Timestamp
 
@@ -23,17 +23,23 @@ class GrpcInferenceSink:
         """Log an inference event via Analytics service."""
         try:
             client = get_crud_client()
-            
+
             ts = Timestamp()
-            ts.FromDatetime(event.timestamp if event.timestamp.tzinfo else event.timestamp.replace(tzinfo=timezone.utc))
+            ts.FromDatetime(
+                event.timestamp
+                if event.timestamp.tzinfo
+                else event.timestamp.replace(tzinfo=timezone.utc)
+            )
 
             impacts_pb = []
             for imp in event.rule_impacts:
-                impacts_pb.append(analytics_pb2.RuleImpact(
-                    rule_id=imp.rule_id,
-                    is_shadow=imp.is_shadow,
-                    score_delta=imp.score_delta
-                ))
+                impacts_pb.append(
+                    analytics_pb2.RuleImpact(
+                        rule_id=imp.rule_id,
+                        is_shadow=imp.is_shadow,
+                        score_delta=imp.score_delta,
+                    )
+                )
 
             event_pb = analytics_pb2.InferenceEvent(
                 request_id=event.request_id,
@@ -42,11 +48,16 @@ class GrpcInferenceSink:
                 rules_version=event.rules_version,
                 model_score=event.model_score,
                 final_score=event.final_score,
-                rule_impacts=impacts_pb
+                rule_impacts=impacts_pb,
             )
 
-            client.stub.LogInferenceEvent(analytics_pb2.LogInferenceEventRequest(event=event_pb))
-            logger.debug(f"Logged inference event {event.request_id} via Analytics service")
+            client.stub.LogInferenceEvent(
+                analytics_pb2.LogInferenceEventRequest(event=event_pb),
+                timeout=client.timeout_seconds,
+            )
+            logger.debug(
+                f"Logged inference event {event.request_id} via Analytics service"
+            )
 
         except Exception as e:
             logger.error(f"Failed to log inference event via Analytics service: {e}")

@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from api.backtest import BacktestMetrics, BacktestResult, BacktestRunner, BacktestStore
+from api.backtest import BacktestMetrics, BacktestRunner, BacktestStore
 from api.rules import Rule, RuleSet
 
 
@@ -83,7 +83,7 @@ class TestBacktestRunner:
         mock_response = MagicMock()
         mock_response.features = [
             _make_mock_feature(10, 3.5, -1.5),  # velocity > 5, rule matches
-            _make_mock_feature(2, 1.0, 0.0),   # velocity <= 5, no match
+            _make_mock_feature(2, 1.0, 0.0),  # velocity <= 5, no match
         ]
         mock_client.stub.GetBacktestFeatures.return_value = mock_response
         mock_client.stub.SaveBacktestResult.return_value = MagicMock(success=True)
@@ -139,7 +139,9 @@ class TestBacktestRunner:
         assert result.metrics.matched_count == 0
         assert result.metrics.match_rate == 0.0
 
-    def test_run_backtest_computes_score_distribution(self, sample_ruleset, monkeypatch):
+    def test_run_backtest_computes_score_distribution(
+        self, sample_ruleset, monkeypatch
+    ):
         """Test that backtest computes score distribution."""
         from api import crud_client
 
@@ -147,7 +149,7 @@ class TestBacktestRunner:
         mock_response = MagicMock()
         mock_response.features = [
             _make_mock_feature(10, 3.5, -1.5),  # rule matches -> high score
-            _make_mock_feature(2, 1.0, 0.0),   # no match -> base score
+            _make_mock_feature(2, 1.0, 0.0),  # no match -> base score
         ]
         mock_client.stub.GetBacktestFeatures.return_value = mock_response
         mock_client.stub.SaveBacktestResult.return_value = MagicMock(success=True)
@@ -240,7 +242,9 @@ def _make_backtest_result_pb(
     result.rule_id = rule_id
     result.ruleset_version = "v1"
     result.start_date = MagicMock()
-    result.start_date.ToDatetime.return_value = datetime.now(timezone.utc) - timedelta(days=7)
+    result.start_date.ToDatetime.return_value = datetime.now(timezone.utc) - timedelta(
+        days=7
+    )
     result.end_date = MagicMock()
     result.end_date.ToDatetime.return_value = datetime.now(timezone.utc)
     result.completed_at = MagicMock()
@@ -308,7 +312,9 @@ class TestBacktestStore:
         mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.results = [
-            _make_backtest_result_pb("job1", "rule1", sample_metrics, base_time - timedelta(days=1)),
+            _make_backtest_result_pb(
+                "job1", "rule1", sample_metrics, base_time - timedelta(days=1)
+            ),
         ]
         mock_client.stub.ListBacktestResults.return_value = mock_response
         monkeypatch.setattr(crud_client, "_client", mock_client)

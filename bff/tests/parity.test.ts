@@ -36,14 +36,14 @@ describe.skipIf(!RUN_PARITY)('Parity: FastAPI vs Go Gateway', () => {
     // Compare fields
     expect(fastBody.score).toBeDefined();
     expect(goBody.score).toBeDefined();
-    
+
     // Allow small floating point diff if any, though scores are usually integers 0-100
     expect(Math.abs(fastBody.score - goBody.score)).toBeLessThanOrEqual(1);
 
     // Compare rules
     const fastRules = new Set((fastBody.risk_components || []).map((c: any) => c.key));
     const goRules = new Set((goBody.risk_components || []).map((c: any) => c.key));
-    
+
     // Check overlap
     for (const rule of fastRules) {
         // Go might implement fewer rules initially, but we want to know gaps

@@ -16,7 +16,7 @@ describe('Dataset Routes', () => {
 
     fastify = Fastify();
     fastify.addHook('onRequest', requestIdMiddleware);
-    
+
     const httpClient = new HttpClient({
       config: {
         fastApiBaseUrl: 'http://api:8000',

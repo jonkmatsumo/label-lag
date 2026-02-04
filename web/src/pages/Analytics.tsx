@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { analyticsApi } from '../api';
 import type { RecentAlert, TransactionSearchRequest, TransactionDetail } from '../types/api';
-import { 
-  Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart 
+import {
+  Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart
 } from 'recharts';
 import { exportToCsv } from '../utils';
 import { Download, Search, ChevronDown, ChevronRight, AlertTriangle, CheckCircle } from 'lucide-react';
@@ -23,9 +23,9 @@ export function Analytics() {
     queryKey: ['analytics', 'daily-stats', daysFilter],
     queryFn: () => analyticsApi.getDailyStats(daysFilter),
   });
-  
+
   // Sort stats by date ascending for chart
-  const chartData = dailyStatsQuery.data?.stats ? 
+  const chartData = dailyStatsQuery.data?.stats ?
     [...dailyStatsQuery.data.stats].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()) : [];
 
   // Fetch recent alerts for metric only
@@ -73,8 +73,8 @@ export function Analytics() {
             <div className="metric-card shadow-sm border-0">
               <div className="metric-label">Est. FPR</div>
               <div className="metric-value text-warning">
-                {alertsQuery.data?.alerts && overviewQuery.data ? 
-                  `${((alertsQuery.data.alerts.filter((a: RecentAlert) => a.score >= 80).length / Math.max(overviewQuery.data.total_transactions * 0.05, 1)) * 100).toFixed(1)}%` 
+                {alertsQuery.data?.alerts && overviewQuery.data ?
+                  `${((alertsQuery.data.alerts.filter((a: RecentAlert) => a.score >= 80).length / Math.max(overviewQuery.data.total_transactions * 0.05, 1)) * 100).toFixed(1)}%`
                   : '--'}
               </div>
               <div className="small text-muted mt-1" style={{fontSize: '0.7em'}}>False Positive Rate (Est)</div>
@@ -101,9 +101,9 @@ export function Analytics() {
                    <ResponsiveContainer width="100%" height="100%">
                      <ComposedChart data={chartData}>
                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                       <XAxis 
-                         dataKey="date" 
-                         tickFormatter={d => new Date(d).toLocaleDateString(undefined, {month:'short', day:'numeric'})} 
+                       <XAxis
+                         dataKey="date"
+                         tickFormatter={d => new Date(d).toLocaleDateString(undefined, {month:'short', day:'numeric'})}
                          fontSize={10}
                        />
                        <YAxis yAxisId="left" orientation="left" stroke="#8884d8" fontSize={10} />
@@ -138,7 +138,7 @@ export function Analytics() {
         <div className="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
           <h3 className="card-title h6 fw-bold mb-0">Daily Statistics</h3>
           <div className="card-actions">
-            <button 
+            <button
               className="btn btn-secondary btn-sm me-2"
               onClick={() => dailyStatsQuery.data?.stats && exportToCsv(dailyStatsQuery.data.stats, 'daily_stats.csv')}
               disabled={!dailyStatsQuery.data?.stats?.length}
@@ -214,17 +214,17 @@ function AmountDistributionChart() {
 
   const chartData = useMemo(() => {
     if (!distQuery.data?.transactions || distQuery.data.transactions.length === 0) return [];
-    
+
     const txns = distQuery.data.transactions;
     const amounts = txns.map(t => t.amount);
     const min = Math.min(...amounts);
     const max = Math.max(...amounts);
-    
+
     if (min === max) return [];
 
     const bins = 20;
     const binSize = (max - min) / bins;
-    
+
     const binData = Array.from({ length: bins }, (_, i) => ({
       range: `${(min + i * binSize).toFixed(0)}-${(min + (i + 1) * binSize).toFixed(0)}`,
       min: min + i * binSize,
@@ -239,7 +239,7 @@ function AmountDistributionChart() {
         else binData[binIdx].legit++;
       }
     });
-    
+
     return binData;
   }, [distQuery.data]);
 
@@ -266,7 +266,7 @@ function TransactionExplorer() {
     limit: 20,
     offset: 0
   });
-  
+
   const searchQuery = useQuery({
     queryKey: ['analytics', 'search', filters],
     queryFn: () => analyticsApi.searchTransactions(filters),
@@ -284,7 +284,7 @@ function TransactionExplorer() {
       </div>
       <div className="card-body">
         <TransactionFilters filters={filters} onChange={setFilters} />
-        
+
         {searchQuery.isLoading && !searchQuery.isPlaceholderData ? (
           <div className="text-center p-5"><div className="spinner-border text-primary"/></div>
         ) : searchQuery.isError ? (
@@ -292,21 +292,21 @@ function TransactionExplorer() {
         ) : (
           <>
             <TransactionTable data={searchQuery.data?.transactions || []} />
-            
+
             {/* Pagination Controls */}
             <div className="d-flex justify-content-between align-items-center mt-3">
               <div className="small text-muted">
                 Showing {filters.offset! + 1} to {Math.min(filters.offset! + (searchQuery.data?.transactions.length || 0), searchQuery.data?.total || 0)} of {searchQuery.data?.total || 0}
               </div>
               <div className="btn-group btn-group-sm">
-                <button 
-                  className="btn btn-outline-secondary" 
+                <button
+                  className="btn btn-outline-secondary"
                   disabled={filters.offset === 0}
                   onClick={() => handlePageChange(Math.max(0, filters.offset! - filters.limit!))}
                 >
                   Previous
                 </button>
-                <button 
+                <button
                   className="btn btn-outline-secondary"
                   disabled={(filters.offset! + filters.limit!) >= (searchQuery.data?.total || 0)}
                   onClick={() => handlePageChange(filters.offset! + filters.limit!)}
@@ -336,25 +336,25 @@ function TransactionFilters({ filters, onChange }: { filters: TransactionSearchR
       <div className="row g-3">
         <div className="col-md-3">
           <label className="form-label small fw-bold">User ID</label>
-          <input 
-            type="text" className="form-control form-control-sm" 
-            value={localFilters.user_id || ''} 
+          <input
+            type="text" className="form-control form-control-sm"
+            value={localFilters.user_id || ''}
             onChange={e => setLocalFilters({...localFilters, user_id: e.target.value || undefined})}
-            placeholder="Search User..." 
+            placeholder="Search User..."
           />
         </div>
         <div className="col-md-3">
           <label className="form-label small fw-bold">Transaction ID</label>
-          <input 
-            type="text" className="form-control form-control-sm" 
-            value={localFilters.transaction_id || ''} 
+          <input
+            type="text" className="form-control form-control-sm"
+            value={localFilters.transaction_id || ''}
             onChange={e => setLocalFilters({...localFilters, transaction_id: e.target.value || undefined})}
-            placeholder="Search Txn..." 
+            placeholder="Search Txn..."
           />
         </div>
         <div className="col-md-2">
           <label className="form-label small fw-bold">Status</label>
-          <select 
+          <select
             className="form-select form-select-sm"
             value={localFilters.is_fraudulent === undefined ? '' : String(localFilters.is_fraudulent)}
             onChange={e => {
@@ -425,7 +425,7 @@ function TransactionTable({ data }: { data: TransactionDetail[] }) {
         <tbody>
           {data.map(txn => (
             <React.Fragment key={txn.record_id || txn.id}>
-              <tr 
+              <tr
                 onClick={() => setExpandedRow(expandedRow === (txn.record_id || txn.id) ? null : (txn.record_id || txn.id))}
                 className={expandedRow === (txn.record_id || txn.id) ? 'table-active' : ''}
                 style={{cursor: 'pointer'}}

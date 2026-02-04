@@ -9,7 +9,7 @@ describe('Inference Routing', () => {
     config.gatewayBaseUrl = 'http://mock-gateway';
 
     const ctx = await createTestApp(config);
-    
+
     ctx.mockPool.intercept({
       path: '/evaluate/signal',
       method: 'POST'
@@ -23,7 +23,7 @@ describe('Inference Routing', () => {
 
     expect(response.statusCode).toBe(200);
     expect(JSON.parse(response.payload).score).toBe(10);
-    
+
     await ctx.app.close();
   });
 
@@ -34,7 +34,7 @@ describe('Inference Routing', () => {
     config.gatewayBaseUrl = 'http://mock-gateway';
 
     const ctx = await createTestApp(config);
-    
+
     // Intercept on the GATEWAY url
     const gatewayPool = ctx.mockAgent.get('http://mock-gateway');
     gatewayPool.intercept({

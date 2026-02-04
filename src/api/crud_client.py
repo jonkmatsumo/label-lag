@@ -5,25 +5,43 @@ import grpc
 from api.proto.proto.crud.v1 import analytics_pb2, analytics_pb2_grpc
 
 
+def _parse_timeout(value: str | None, default: float) -> float:
+    if value is None:
+        return default
+    try:
+        timeout = float(value)
+    except ValueError:
+        return default
+    if timeout <= 0:
+        return default
+    return timeout
+
+
 class AnalyticsCRUDClient:
-    def __init__(self, target: str = None):
+    def __init__(self, target: str | None = None, timeout_seconds: float | None = None):
         if target is None:
             target = os.getenv("ANALYTICS_CRUD_TARGET", "analytics-crud:50051")
+        if timeout_seconds is None:
+            timeout_seconds = _parse_timeout(
+                os.getenv("ANALYTICS_CRUD_TIMEOUT_SECONDS"),
+                default=15.0,
+            )
         self.target = target
+        self.timeout_seconds = timeout_seconds
         self.channel = grpc.insecure_channel(self.target)
         self.stub = analytics_pb2_grpc.AnalyticsServiceStub(self.channel)
 
     def get_daily_stats(self, days: int = 30):
         request = analytics_pb2.GetDailyStatsRequest(days=days)
-        return self.stub.GetDailyStats(request)
+        return self.stub.GetDailyStats(request, timeout=self.timeout_seconds)
 
     def get_transaction_details(self, days: int = 7, limit: int = 1000):
         request = analytics_pb2.GetTransactionDetailsRequest(days=days, limit=limit)
-        return self.stub.GetTransactionDetails(request)
+        return self.stub.GetTransactionDetails(request, timeout=self.timeout_seconds)
 
     def get_recent_alerts(self, limit: int = 50):
         request = analytics_pb2.GetRecentAlertsRequest(limit=limit)
-        return self.stub.GetRecentAlerts(request)
+        return self.stub.GetRecentAlerts(request, timeout=self.timeout_seconds)
 
     def search_transactions(
         self,
@@ -48,7 +66,7 @@ class AnalyticsCRUDClient:
             limit=limit,
             offset=offset,
         )
-        return self.stub.SearchTransactions(request)
+        return self.stub.SearchTransactions(request, timeout=self.timeout_seconds)
 
     def get_features(self, user_id: str):
         """Fetch latest features for a user via SearchTransactions."""
@@ -60,43 +78,45 @@ class AnalyticsCRUDClient:
     def get_training_data(self, cutoff_date):
         """Fetch training and test data via GetTrainingData."""
         request = analytics_pb2.GetTrainingDataRequest(cutoff_date=cutoff_date)
-        return self.stub.GetTrainingData(request)
+        return self.stub.GetTrainingData(request, timeout=self.timeout_seconds)
 
     def store_generated_data(self, records, metadata):
         """Store generated records and metadata via StoreGeneratedData."""
-        request = analytics_pb2.StoreGeneratedDataRequest(records=records, metadata=metadata)
-        return self.stub.StoreGeneratedData(request)
+        request = analytics_pb2.StoreGeneratedDataRequest(
+            records=records, metadata=metadata
+        )
+        return self.stub.StoreGeneratedData(request, timeout=self.timeout_seconds)
 
     def clear_all_data(self):
         """Clear all data via ClearAllData."""
         request = analytics_pb2.ClearAllDataRequest()
-        return self.stub.ClearAllData(request)
+        return self.stub.ClearAllData(request, timeout=self.timeout_seconds)
 
     def materialize_features(self, batch_size: int = 1000):
         """Materialize features via MaterializeFeatures."""
         request = analytics_pb2.MaterializeFeaturesRequest(batch_size=batch_size)
-        return self.stub.MaterializeFeatures(request)
+        return self.stub.MaterializeFeatures(request, timeout=self.timeout_seconds)
 
     def get_overview_metrics(self):
         request = analytics_pb2.GetOverviewMetricsRequest()
-        return self.stub.GetOverviewMetrics(request)
+        return self.stub.GetOverviewMetrics(request, timeout=self.timeout_seconds)
 
     def get_dataset_fingerprint(self):
         request = analytics_pb2.GetDatasetFingerprintRequest()
-        return self.stub.GetDatasetFingerprint(request)
+        return self.stub.GetDatasetFingerprint(request, timeout=self.timeout_seconds)
 
     def get_feature_sample(self, sample_size: int = 100, stratify: bool = False):
         request = analytics_pb2.GetFeatureSampleRequest(
             sample_size=sample_size,
             stratify=stratify,
         )
-        return self.stub.GetFeatureSample(request)
+        return self.stub.GetFeatureSample(request, timeout=self.timeout_seconds)
 
     def get_schema_summary(self, table_names: list[str] = None):
         if table_names is None:
             table_names = ["generated_records", "feature_snapshots"]
         request = analytics_pb2.GetSchemaSummaryRequest(table_names=table_names)
-        return self.stub.GetSchemaSummary(request)
+        return self.stub.GetSchemaSummary(request, timeout=self.timeout_seconds)
 
 
 _client = None

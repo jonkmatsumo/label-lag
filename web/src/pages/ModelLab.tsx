@@ -4,11 +4,11 @@ import { modelApi, healthApi, monitoringApi, datasetApi } from '../api';
 import { mlflowApi } from '../api/mlflow';
 import type { CvMetricsArtifact, TuningTrial, SplitManifest, MlflowModelVersion } from '../api/mlflow';
 import type { TrainRequest, TrainResponse, DeployResponse } from '../types/api';
-import { 
+import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
-import { 
-  GitBranch, Play, AlertTriangle, 
+import {
+  GitBranch, Play, AlertTriangle,
   CheckCircle, ChevronDown, ChevronRight, Terminal,
   Filter, Calendar, Image as ImageIcon, FileText as FileIcon
 } from 'lucide-react';
@@ -28,7 +28,7 @@ export function ModelLab() {
         <div className="card-header">
           <ul className="nav nav-tabs card-header-tabs">
             <li className="nav-item">
-              <button 
+              <button
                 className={`nav-link ${activeTab === 'train' ? 'active' : ''}`}
                 onClick={() => setActiveTab('train')}
               >
@@ -37,7 +37,7 @@ export function ModelLab() {
               </button>
             </li>
             <li className="nav-item">
-              <button 
+              <button
                 className={`nav-link ${activeTab === 'registry' ? 'active' : ''}`}
                 onClick={() => setActiveTab('registry')}
               >
@@ -106,7 +106,7 @@ function TrainTab() {
 
   // Deploy mutation
   const deployMutation = useMutation({
-    mutationFn: (variables: { run_id: string, actor: string, reason: string }) => 
+    mutationFn: (variables: { run_id: string, actor: string, reason: string }) =>
       modelApi.deploy({ run_id: variables.run_id, actor: variables.actor, reason: variables.reason }),
     onSuccess: (data) => {
       setDeployResult(data);
@@ -174,7 +174,7 @@ function TrainTab() {
             ) : driftQuery.data ? (
               <div>
                 <div className={`alert ${
-                  driftQuery.data.status === 'ok' ? 'alert-success' : 
+                  driftQuery.data.status === 'ok' ? 'alert-success' :
                   driftQuery.data.status === 'warn' ? 'alert-warning' : 'alert-danger'
                 } mb-3`}>
                   <div className="d-flex align-items-center">
@@ -182,7 +182,7 @@ function TrainTab() {
                     <strong className="text-uppercase">{driftQuery.data.status}</strong>
                   </div>
                 </div>
-                
+
                 {driftQuery.data.top_features && driftQuery.data.top_features.length > 0 && (
                   <div className="small">
                     <h6 className="text-muted mb-2">Top Drifted Features (PSI)</h6>
@@ -273,13 +273,13 @@ function TrainTab() {
                         {schemaQuery.data.columns.filter(c => c !== 'is_fraudulent').map(col => (
                           <div key={col} className="col-md-4 col-sm-6">
                             <div className="form-check">
-                              <input 
-                                className="form-check-input" type="checkbox" 
+                              <input
+                                className="form-check-input" type="checkbox"
                                 id={`feat-${col}`}
                                 checked={trainForm.selected_feature_columns?.includes(col)}
                                 onChange={e => {
                                   const current = trainForm.selected_feature_columns || [];
-                                  const next = e.target.checked 
+                                  const next = e.target.checked
                                     ? [...current, col]
                                     : current.filter(c => c !== col);
                                   setTrainForm({...trainForm, selected_feature_columns: next});
@@ -298,8 +298,8 @@ function TrainTab() {
                 </div>
 
                 <div className="col-12">
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     className="btn btn-link btn-sm p-0 text-decoration-none d-flex align-items-center"
                     onClick={() => setShowAdvanced(!showAdvanced)}
                   >
@@ -312,27 +312,27 @@ function TrainTab() {
                   <React.Fragment>
                     <div className="col-md-4">
                       <label className="form-label small text-muted">Max Depth</label>
-                      <input 
-                        type="range" className="form-range" min="2" max="12" 
-                        value={trainForm.max_depth} 
+                      <input
+                        type="range" className="form-range" min="2" max="12"
+                        value={trainForm.max_depth}
                         onChange={e => setTrainForm({...trainForm, max_depth: parseInt(e.target.value)})}
                       />
                       <div className="small text-center fw-bold">{trainForm.max_depth}</div>
                     </div>
                     <div className="col-md-4">
                       <label className="form-label small text-muted">Learning Rate</label>
-                      <input 
+                      <input
                         type="range" className="form-range" min="0.01" max="0.3" step="0.01"
-                        value={trainForm.learning_rate} 
+                        value={trainForm.learning_rate}
                         onChange={e => setTrainForm({...trainForm, learning_rate: parseFloat(e.target.value)})}
                       />
                       <div className="small text-center fw-bold">{trainForm.learning_rate}</div>
                     </div>
                     <div className="col-md-4">
                       <label className="form-label small text-muted">Estimators</label>
-                      <input 
+                      <input
                         type="range" className="form-range" min="50" max="500" step="25"
-                        value={trainForm.n_estimators} 
+                        value={trainForm.n_estimators}
                         onChange={e => setTrainForm({...trainForm, n_estimators: parseInt(e.target.value)})}
                       />
                       <div className="small text-center fw-bold">{trainForm.n_estimators}</div>
@@ -341,19 +341,19 @@ function TrainTab() {
                     <div className="col-12 mt-3">
                       <div className="p-3 bg-light rounded border">
                         <div className="form-check form-switch mb-3">
-                          <input 
+                          <input
                             className="form-check-input" type="checkbox" role="switch" id="tuningEnabled"
                             checked={trainForm.tuning_config?.enabled}
                             onChange={e => setTrainForm({...trainForm, tuning_config: {...trainForm.tuning_config!, enabled: e.target.checked}})}
                           />
                           <label className="form-check-label fw-bold small" htmlFor="tuningEnabled">Enable Optuna Tuning</label>
                         </div>
-                        
+
                         {trainForm.tuning_config?.enabled && (
                           <div className="row g-3">
                             <div className="col-md-4">
                               <label className="form-label small text-muted">Trials</label>
-                              <input 
+                              <input
                                 type="number" className="form-control form-control-sm"
                                 value={trainForm.tuning_config.n_trials}
                                 onChange={e => setTrainForm({...trainForm, tuning_config: {...trainForm.tuning_config!, n_trials: parseInt(e.target.value)}})}
@@ -361,7 +361,7 @@ function TrainTab() {
                             </div>
                             <div className="col-md-4">
                               <label className="form-label small text-muted">Timeout (min)</label>
-                              <input 
+                              <input
                                 type="number" className="form-control form-control-sm"
                                 value={trainForm.tuning_config.timeout_minutes}
                                 onChange={e => setTrainForm({...trainForm, tuning_config: {...trainForm.tuning_config!, timeout_minutes: parseInt(e.target.value)}})}
@@ -369,7 +369,7 @@ function TrainTab() {
                             </div>
                             <div className="col-md-4">
                               <label className="form-label small text-muted">Metric</label>
-                              <select 
+                              <select
                                 className="form-select form-select-sm"
                                 value={trainForm.tuning_config.metric}
                                 onChange={e => setTrainForm({...trainForm, tuning_config: {...trainForm.tuning_config!, metric: e.target.value as any}})}
@@ -403,14 +403,14 @@ function TrainTab() {
                <div className={`alert ${trainResult.success ? 'alert-success' : 'alert-danger'}`}>
                  {trainResult.success ? 'Training completed successfully!' : `Training failed: ${trainResult.error}`}
                </div>
-               
+
                {trainResult.run_id && (
                  <div>
                    <div className="mb-3">
                      <strong>Run ID:</strong> <code className="ms-2">{trainResult.run_id}</code>
                    </div>
-                   
-                   <button 
+
+                   <button
                      className="btn btn-success d-flex align-items-center"
                      onClick={() => setShowDeployModal(true)}
                      disabled={deployMutation.isPending}
@@ -423,8 +423,8 @@ function TrainTab() {
 
                {deployResult && (
                   <div className={`alert mt-3 ${deployResult.success ? 'alert-success' : 'alert-danger'}`}>
-                    {deployResult.success ? 
-                      `Deployed version ${deployResult.model_version} at ${deployResult.deployed_at ? new Date(deployResult.deployed_at).toLocaleTimeString() : 'Unknown Time'}` : 
+                    {deployResult.success ?
+                      `Deployed version ${deployResult.model_version} at ${deployResult.deployed_at ? new Date(deployResult.deployed_at).toLocaleTimeString() : 'Unknown Time'}` :
                       `Deployment failed: ${deployResult.error}`}
                   </div>
                )}
@@ -434,7 +434,7 @@ function TrainTab() {
       </div>
 
       {showDeployModal && (
-        <DeployModelModal 
+        <DeployModelModal
           onClose={() => setShowDeployModal(false)}
           onConfirm={onDeploySubmit}
           isLoading={deployMutation.isPending}
@@ -469,15 +469,15 @@ function DeployModelModal({ onClose, onConfirm, isLoading }: { onClose: () => vo
               <p className="text-muted small mb-4">
                 This will route live traffic to the new model version. An audit trail is required.
               </p>
-              
+
               <div className="mb-3">
                 <label className="form-label small fw-bold d-flex align-items-center">
                   <User size={14} className="me-1" /> Authorized Actor
                 </label>
-                <input 
-                  type="text" 
-                  className="form-control" 
-                  placeholder="name@example.com" 
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="name@example.com"
                   value={actor}
                   onChange={e => setActor(e.target.value)}
                   required
@@ -488,9 +488,9 @@ function DeployModelModal({ onClose, onConfirm, isLoading }: { onClose: () => vo
                 <label className="form-label small fw-bold d-flex align-items-center">
                   <FileText size={14} className="me-1" /> Deployment Reason
                 </label>
-                <textarea 
-                  className="form-control" 
-                  rows={3} 
+                <textarea
+                  className="form-control"
+                  rows={3}
                   placeholder="Explain why this model is being deployed..."
                   value={reason}
                   onChange={e => setReason(e.target.value)}
@@ -500,9 +500,9 @@ function DeployModelModal({ onClose, onConfirm, isLoading }: { onClose: () => vo
             </div>
             <div className="modal-footer border-0 pt-0">
               <button type="button" className="btn btn-light" onClick={onClose}>Cancel</button>
-              <button 
-                type="submit" 
-                className="btn btn-primary px-4" 
+              <button
+                type="submit"
+                className="btn btn-primary px-4"
                 disabled={isLoading || !actor || !reason}
               >
                 {isLoading ? 'Deploying...' : 'Confirm Deployment'}
@@ -538,7 +538,7 @@ function RegistryTab() {
   const [selectedForCompare, setSelectedForCompare] = useState<string[]>([]);
 
   if (isLoading) return <div className="text-center p-5"><div className="spinner-border text-primary"/></div>;
-  
+
   const versions = data?.model_versions || [];
   versions.sort((a,b) => parseInt(b.version) - parseInt(a.version));
 
@@ -555,7 +555,7 @@ function RegistryTab() {
       <div className="d-flex justify-content-between align-items-center mb-3">
         <h5 className="fw-bold mb-0">Model Versions</h5>
         <div className="form-check form-switch">
-          <input 
+          <input
             className="form-check-input" type="checkbox" role="switch" id="compareMode"
             checked={compareMode} onChange={e => setCompareMode(e.target.checked)}
           />
@@ -591,7 +591,7 @@ function RegistryTab() {
           <tbody>
             {versions.map(v => (
               <React.Fragment key={v.version}>
-                <tr 
+                <tr
                   onClick={() => !compareMode && setExpandedVersion(expandedVersion === v.version ? null : v.version)}
                   style={{cursor: compareMode ? 'default' : 'pointer'}}
                   className={expandedVersion === v.version ? 'table-active' : ''}
@@ -601,7 +601,7 @@ function RegistryTab() {
                   </td>
                   {compareMode && (
                     <td>
-                      <input 
+                      <input
                         type="checkbox" className="form-check-input"
                         checked={selectedForCompare.includes(v.version)}
                         onChange={() => handleSelectForCompare(v.version)}
@@ -628,7 +628,7 @@ function RegistryTab() {
                       <div className="p-4">
                          <div className="d-flex justify-content-end gap-2 mb-3">
                             {v.current_stage !== 'Staging' && (
-                              <button 
+                              <button
                                 className="btn btn-sm btn-outline-warning"
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -640,7 +640,7 @@ function RegistryTab() {
                               </button>
                             )}
                             {v.current_stage !== 'Production' && (
-                              <button 
+                              <button
                                 className="btn btn-sm btn-outline-success"
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -652,7 +652,7 @@ function RegistryTab() {
                               </button>
                             )}
                             {v.current_stage !== 'Archived' && (
-                              <button 
+                              <button
                                 className="btn btn-sm btn-outline-secondary"
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -689,7 +689,7 @@ function ModelCompareChart({ selectedVersions }: { selectedVersions: MlflowModel
 
   const isLoading = runQueries.some(q => q.isLoading);
   const isError = runQueries.some(q => q.isError);
-  
+
   if (isLoading) return <div className="text-center p-5"><div className="spinner-border text-primary"/></div>;
   if (isError) return <ErrorBanner error={runQueries.find(q => q.isError)?.error} title="Failed to load run data" />;
 
@@ -754,7 +754,7 @@ function RunDetail({ runId }: { runId: string }) {
     // Transform { precision: [0.1, 0.2] } to [{fold: 1, precision: 0.1}, {fold: 2, precision: 0.2}]
     const metrics = ['precision', 'recall', 'f1', 'pr_auc'];
     const numFolds = cvMetrics[metrics[0]]?.length || 0;
-    
+
     return Array.from({length: numFolds}, (_, i) => {
       const point: any = { fold: `Fold ${i+1}` };
       metrics.forEach(m => {
@@ -859,7 +859,7 @@ function ArtifactImage({ runId, path, title }: { runId: string, path: string, ti
   });
 
   const [url, setUrl] = useState<string | null>(null);
-  
+
   useEffect(() => {
     if (blob) {
       const u = URL.createObjectURL(blob);

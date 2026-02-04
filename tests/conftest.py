@@ -44,7 +44,11 @@ class FakeAnalyticsClient:
         response = MagicMock()
         transactions = self.data.get("transactions", [])
         if kwargs.get("user_id"):
-            transactions = [t for t in transactions if getattr(t, "user_id", "") == kwargs["user_id"]]
+            transactions = [
+                t
+                for t in transactions
+                if getattr(t, "user_id", "") == kwargs["user_id"]
+            ]
         limit = kwargs.get("limit", 100)
         response.transactions = transactions[:limit]
         response.total = len(transactions)
@@ -71,7 +75,11 @@ class FakeAnalyticsClient:
     def clear_all_data(self):
         response = MagicMock()
         response.success = True
-        response.tables_cleared = ["generated_records", "evaluation_metadata", "feature_snapshots"]
+        response.tables_cleared = [
+            "generated_records",
+            "evaluation_metadata",
+            "feature_snapshots",
+        ]
         self.data = {
             "daily_stats": [],
             "transactions": [],
@@ -91,11 +99,23 @@ class FakeAnalyticsClient:
         response = MagicMock()
         transactions = self.data.get("transactions", [])
         response.total_records = len(transactions)
-        response.fraud_records = sum(1 for t in transactions if getattr(t, "is_fraudulent", False))
-        response.fraud_rate = response.fraud_records / response.total_records if response.total_records else 0.0
-        response.unique_users = len(set(getattr(t, "user_id", "") for t in transactions))
+        response.fraud_records = sum(
+            1 for t in transactions if getattr(t, "is_fraudulent", False)
+        )
+        response.fraud_rate = (
+            response.fraud_records / response.total_records
+            if response.total_records
+            else 0.0
+        )
+        response.unique_users = len(
+            set(getattr(t, "user_id", "") for t in transactions)
+        )
         response.total_amount = sum(getattr(t, "amount", 0) for t in transactions)
-        response.fraud_amount = sum(getattr(t, "amount", 0) for t in transactions if getattr(t, "is_fraudulent", False))
+        response.fraud_amount = sum(
+            getattr(t, "amount", 0)
+            for t in transactions
+            if getattr(t, "is_fraudulent", False)
+        )
         return response
 
     def get_dataset_fingerprint(self):
@@ -146,7 +166,9 @@ class FakeAnalyticsClient:
 
     def get_drift_window(self, hours):
         response = MagicMock()
-        response.transactions = self.data.get("drift_transactions", self.data.get("transactions", []))
+        response.transactions = self.data.get(
+            "drift_transactions", self.data.get("transactions", [])
+        )
         return response
 
 

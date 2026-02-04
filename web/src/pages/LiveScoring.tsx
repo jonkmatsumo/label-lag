@@ -241,7 +241,7 @@ function RiskResult({ result }: { result: SignalResponse }) {
         <div className={`badge rounded-pill px-3 py-2 ${result.risk_label === 'HIGH' ? 'bg-danger' : result.risk_label === 'MEDIUM' ? 'bg-warning text-dark' : 'bg-success'}`}>
           {result.risk_label ?? 'UNKNOWN'} RISK
         </div>
-        
+
         <div className="mt-3 d-flex justify-content-center gap-4 text-muted small">
           <div className="d-flex align-items-center">
             <Clock size={14} className="me-1" /> {(result.latency_ms ?? 0).toFixed(1)}ms
@@ -296,7 +296,7 @@ function RiskResult({ result }: { result: SignalResponse }) {
 
       {/* Debug Section */}
       <div className="pt-3 border-top">
-        <button 
+        <button
           className="btn btn-link btn-sm p-0 text-decoration-none text-muted d-flex align-items-center"
           onClick={() => setShowRaw(!showRaw)}
         >

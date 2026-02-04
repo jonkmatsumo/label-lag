@@ -4,7 +4,6 @@ import logging
 import os
 from abc import ABC, abstractmethod
 from threading import Lock
-from typing import Any
 
 from api.inference_log import InferenceEvent
 
@@ -43,6 +42,7 @@ class JsonlFileSink(InferenceEventSink):
 
     def __init__(self, log_path: str = "data/inference_events.jsonl"):
         from api.inference_log import InferenceLogger
+
         self.logger = InferenceLogger(log_path=log_path)
 
     def log_event(self, event: InferenceEvent) -> None:

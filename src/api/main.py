@@ -25,6 +25,7 @@ from api.backtest import (
 )
 from api.crud_client import get_crud_client
 from api.drift_cache import get_drift_cache
+from api.errors import analytics_http_exception
 from api.model_manager import get_model_manager
 from api.readiness import CheckStatus, ReadinessEvaluator
 from api.schemas import (
@@ -111,7 +112,7 @@ from api.schemas import (
 from api.services import get_evaluator
 
 if TYPE_CHECKING:
-    from synthetic_pipeline.models import EvaluationMetadata, GeneratedRecord
+    pass
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -595,8 +596,9 @@ async def generate_data(request: GenerateDataRequest) -> GenerateDataResponse:
         GenerateDataResponse with counts of generated records.
     """
     try:
-        from api.proto.proto.crud.v1 import analytics_pb2
         from google.protobuf.timestamp_pb2 import Timestamp
+
+        from api.proto.proto.crud.v1 import analytics_pb2
         from synthetic_pipeline.generator import DataGenerator
 
         # Generate data
@@ -656,8 +658,12 @@ async def generate_data(request: GenerateDataRequest) -> GenerateDataResponse:
                     amount_to_avg_ratio=float(r.transaction.amount_to_avg_ratio),
                     merchant_risk_score=r.transaction.merchant_risk_score,
                     is_returned=r.transaction.is_returned,
-                    email_changed_at=ec_ts if r.identity_changes.email_changed_at else None,
-                    phone_changed_at=pc_ts if r.identity_changes.phone_changed_at else None,
+                    email_changed_at=ec_ts
+                    if r.identity_changes.email_changed_at
+                    else None,
+                    phone_changed_at=pc_ts
+                    if r.identity_changes.phone_changed_at
+                    else None,
                     is_fraudulent=r.is_fraudulent,
                     fraud_type=r.fraud_type or "",
                 )
@@ -4165,7 +4171,7 @@ async def get_daily_stats(days: int = Query(default=30, ge=1, le=90)) -> dict:
         )
     except Exception as e:
         logger.error(f"Failed to get daily stats from CRUD service: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise analytics_http_exception(e)
 
 
 @app.get(
@@ -4189,7 +4195,7 @@ async def get_transaction_details(
         )
     except Exception as e:
         logger.error(f"Failed to get transaction details from CRUD service: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise analytics_http_exception(e)
 
 
 @app.get(
@@ -4212,7 +4218,7 @@ async def get_recent_alerts(
         )
     except Exception as e:
         logger.error(f"Failed to get recent alerts from CRUD service: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise analytics_http_exception(e)
 
 
 @app.get(
@@ -4233,7 +4239,7 @@ async def get_overview_metrics() -> dict:
         )
     except Exception as e:
         logger.error(f"Failed to get overview metrics from CRUD service: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise analytics_http_exception(e)
 
 
 @app.get(
@@ -4254,7 +4260,7 @@ async def get_dataset_fingerprint() -> dict:
         )
     except Exception as e:
         logger.error(f"Failed to get dataset fingerprint from CRUD service: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise analytics_http_exception(e)
 
 
 @app.get(
@@ -4279,7 +4285,7 @@ async def get_feature_sample(
         )
     except Exception as e:
         logger.error(f"Failed to get feature sample from CRUD service: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise analytics_http_exception(e)
 
 
 @app.get(
@@ -4303,7 +4309,7 @@ async def get_schema_summary(
         )
     except Exception as e:
         logger.error(f"Failed to get schema summary from CRUD service: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise analytics_http_exception(e)
 
 
 @app.get(
@@ -4433,7 +4439,7 @@ async def get_dataset_relationships(
         )
     except Exception as e:
         logger.error(f"Failed to compute dataset relationships: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise analytics_http_exception(e)
 
 
 @app.get(
@@ -4524,9 +4530,7 @@ async def get_dataset_correlations(
                 for col_b in categorical_cols:
                     if col_a == col_b:
                         cramers_pairs.append(
-                            CorrelationPair(
-                                feature_a=col_a, feature_b=col_b, value=1.0
-                            )
+                            CorrelationPair(feature_a=col_a, feature_b=col_b, value=1.0)
                         )
                         continue
 
@@ -4563,7 +4567,7 @@ async def get_dataset_correlations(
 
     except Exception as e:
         logger.error(f"Failed to compute dataset correlations: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise analytics_http_exception(e)
 
 
 @app.post(
@@ -4616,7 +4620,7 @@ async def search_transactions(
 
     except Exception as e:
         logger.error(f"Failed to search transactions via CRUD service: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise analytics_http_exception(e)
 
 
 @app.exception_handler(Exception)

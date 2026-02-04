@@ -31,7 +31,7 @@ describe('HttpClient Timeouts and Retries', () => {
   it('should timeout if upstream takes too long', async () => {
     const client = new HttpClient({ config, logger });
     const mockPool = mockAgent.get('http://api');
-    
+
     mockPool.intercept({
       path: '/slow',
       method: 'GET'
@@ -47,7 +47,7 @@ describe('HttpClient Timeouts and Retries', () => {
   it('should retry GET requests on 503', async () => {
     const client = new HttpClient({ config, logger });
     const mockPool = mockAgent.get('http://api');
-    
+
     // First attempt fails
     mockPool.intercept({
       path: '/flaky',
@@ -73,7 +73,7 @@ describe('HttpClient Timeouts and Retries', () => {
   it('should NOT retry POST requests', async () => {
     const client = new HttpClient({ config, logger });
     const mockPool = mockAgent.get('http://api');
-    
+
     mockPool.intercept({
       path: '/mutate',
       method: 'POST'
@@ -90,7 +90,7 @@ describe('HttpClient Timeouts and Retries', () => {
   it('should use override timeout if provided', async () => {
     const client = new HttpClient({ config, logger });
     const mockPool = mockAgent.get('http://api');
-    
+
     mockPool.intercept({
       path: '/long-job',
       method: 'POST'

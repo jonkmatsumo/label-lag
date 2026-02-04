@@ -1,4 +1,7 @@
-"""Drift detection monitor using Population Stability Index (PSI) via Analytics service."""
+"""Drift detection monitor using Population Stability Index (PSI).
+
+Data is loaded via the Analytics service.
+"""
 
 import argparse
 import json
@@ -6,7 +9,7 @@ import logging
 import os
 import sys
 import tempfile
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -144,7 +147,9 @@ def get_reference_data() -> pd.DataFrame | None:
 
         run_id = production_version.run_id
         logger.info(
-            f"Found production model: version={production_version.version}, run_id={run_id}"
+            "Found production model: version=%s, run_id=%s",
+            production_version.version,
+            run_id,
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -170,7 +175,8 @@ def get_live_data(hours: int = 24) -> pd.DataFrame:
     client = get_crud_client()
     try:
         resp = client.stub.GetDriftWindow(
-            analytics_pb2.GetDriftWindowRequest(hours=hours)
+            analytics_pb2.GetDriftWindowRequest(hours=hours),
+            timeout=client.timeout_seconds,
         )
         data = []
         for r in resp.transactions:
@@ -183,7 +189,11 @@ def get_live_data(hours: int = 24) -> pd.DataFrame:
                 }
             )
         df_current = pd.DataFrame(data)
-        logger.info(f"Loaded live data: {len(df_current)} records from last {hours}h via Analytics")
+        logger.info(
+            "Loaded live data: %s records from last %sh via Analytics",
+            len(df_current),
+            hours,
+        )
         return df_current
 
     except Exception as e:
@@ -261,8 +271,10 @@ def main() -> int:
     if args.json:
         print(json.dumps(results, indent=2))
 
-    if "error" in results: return 2
-    if results["drift_detected"]: return 1
+    if "error" in results:
+        return 2
+    if results["drift_detected"]:
+        return 1
     return 0
 
 

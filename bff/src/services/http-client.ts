@@ -52,9 +52,9 @@ export class HttpClient {
   async request<T>(options: RequestOptions): Promise<HttpResponse<T>> {
     const { method } = options;
     const maxRetries = method === 'GET' ? 1 : 0;
-    
+
     let lastError: Error | unknown;
-    
+
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         return await this.executeRequest<T>(options, attempt);
@@ -63,13 +63,13 @@ export class HttpClient {
         const isRetryable =
           (error instanceof UpstreamError && (error.statusCode === 503 || error.statusCode === 504)) ||
           (error instanceof Error && error.name === 'TimeoutError');
-          
+
         if (attempt < maxRetries && isRetryable) {
           const delay = 100 * (attempt + 1); // simple backoff
-          this.logger.warn({ 
-            requestId: options.requestId, 
-            attempt: attempt + 1, 
-            error: error instanceof Error ? error.message : 'Unknown' 
+          this.logger.warn({
+            requestId: options.requestId,
+            attempt: attempt + 1,
+            error: error instanceof Error ? error.message : 'Unknown'
           }, 'Retrying upstream request');
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
@@ -83,7 +83,7 @@ export class HttpClient {
   private async executeRequest<T>(options: RequestOptions, attempt: number): Promise<HttpResponse<T>> {
     const { method, path, body, requestId, timeout, target = 'fastapi', query } = options;
     const baseUrl = this.getBaseUrl(target);
-    
+
     // Construct URL with query params
     const urlObj = new URL(baseUrl + path);
     if (query) {

@@ -2,17 +2,24 @@
 
 import logging
 import os
-from typing import Any
+from typing import Any, Literal
 
 from api.crud_client import get_crud_client
 
 logger = logging.getLogger(__name__)
 
+MaterializationMode = Literal["legacy", "cursor"]
 
-def materialize_features(
-    batch_size: int = 1000,
-    **kwargs
-) -> dict[str, Any]:
+
+def get_materialization_mode() -> MaterializationMode:
+    """Get the configured feature materialization mode."""
+    mode = os.getenv("FEATURE_MATERIALIZATION_MODE", "legacy")
+    if mode not in ("legacy", "cursor"):
+        return "legacy"
+    return mode  # type: ignore[return-value]
+
+
+def materialize_features(batch_size: int = 1000, **kwargs) -> dict[str, Any]:
     """Materialize features via Analytics service.
 
     Args:

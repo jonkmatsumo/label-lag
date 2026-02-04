@@ -14,7 +14,7 @@ describe('MLflow Routes', () => {
     setGlobalDispatcher(mockAgent);
 
     fastify = Fastify();
-    
+
     const httpClient = new HttpClient({
       config: {
         fastApiBaseUrl: 'http://api:8000',
@@ -33,9 +33,9 @@ describe('MLflow Routes', () => {
       logger: fastify.log
     });
 
-    await fastify.register(mlflowRoutes, { 
-      httpClient, 
-      mlflowTrackingUri: 'http://mlflow:5000' 
+    await fastify.register(mlflowRoutes, {
+      httpClient,
+      mlflowTrackingUri: 'http://mlflow:5000'
     });
   });
 
@@ -86,19 +86,19 @@ describe('MLflow Routes', () => {
       method: 'POST'
     }).reply(200, {
       runs: [
-        { 
-          info: { run_id: "run1" }, 
-          data: { 
+        {
+          info: { run_id: "run1" },
+          data: {
             metrics: [{ key: "pr_auc", value: 0.85 }],
             tags: [{ key: "mlflow.runName", value: "v1" }]
-          } 
+          }
         },
-        { 
-          info: { run_id: "run2" }, 
-          data: { 
+        {
+          info: { run_id: "run2" },
+          data: {
             metrics: [{ key: "pr_auc", value: 0.88 }],
             tags: [{ key: "mlflow.runName", value: "v2" }]
-          } 
+          }
         }
       ]
     });
