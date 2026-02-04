@@ -14,7 +14,7 @@ import (
 
 func TestHandleEvaluateRules(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, nil, nil, rules.NewEmptyProvider(), nil, false, 1024)
+	handler := NewHandler(logger, nil, nil, rules.NewEmptyProvider(), 1024)
 
 	payload := EvaluateRulesRequest{
 		Features:  map[string]any{"velocity_24h": 10},

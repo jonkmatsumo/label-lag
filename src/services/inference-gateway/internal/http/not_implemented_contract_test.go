@@ -14,7 +14,7 @@ import (
 
 func TestNotImplementedContractIsFlat(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, nil, nil, rules.NewEmptyProvider(), nil, false, 1024)
+	handler := NewHandler(logger, nil, nil, rules.NewEmptyProvider(), 1024)
 
 	req := httptest.NewRequest(http.MethodPost, "/analytics/attribution", nil)
 	req = req.WithContext(requestid.WithRequestID(req.Context(), "req-501"))

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"hash/fnv"
 	"io"
 	"log/slog"
@@ -29,32 +28,24 @@ type InferenceClient interface {
 	Ready(ctx context.Context) error
 }
 
-type LegacyDecisionClient interface {
-	Evaluate(ctx context.Context, req *gatewayv1.SignalRequest) (*gatewayv1.SignalResponse, error)
-}
-
 type Handler struct {
-	logger           *slog.Logger
-	inferenceClient  InferenceClient
-	analyticsClient  AnalyticsClient
-	rulesProvider    rules.Provider
-	legacyClient     LegacyDecisionClient
-	enableShadowMode bool
-	maxBodyBytes     int64
+	logger          *slog.Logger
+	inferenceClient InferenceClient
+	analyticsClient AnalyticsClient
+	rulesProvider   rules.Provider
+	maxBodyBytes    int64
 }
 
-func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient AnalyticsClient, provider rules.Provider, legacyClient LegacyDecisionClient, enableShadowMode bool, maxBodyBytes int64) *Handler {
+func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient AnalyticsClient, provider rules.Provider, maxBodyBytes int64) *Handler {
 	if maxBodyBytes <= 0 {
 		maxBodyBytes = 1 << 20
 	}
 	return &Handler{
-		logger:           logger,
+		logger:          logger,
 		inferenceClient:  client,
 		analyticsClient:  analyticsClient,
 		rulesProvider:    provider,
-		legacyClient:     legacyClient,
-		enableShadowMode: enableShadowMode,
-		maxBodyBytes:     maxBodyBytes,
+		maxBodyBytes:    maxBodyBytes,
 	}
 }
 
@@ -272,7 +263,6 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 		attribute.Int("app.model_score", int(rawScore)),
 		attribute.Int("app.final_score", ruleResult.FinalScore),
 		attribute.Int("app.rule_matches", len(ruleResult.MatchedRules)),
-		attribute.Bool("app.shadow_mode_enabled", h.enableShadowMode),
 	)
 
 	riskComponents := buildRiskComponents(features)
@@ -310,68 +300,7 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 		response.RulesVersion = wrapperspb.String(ruleset.Version)
 	}
 
-	// Shadow Mode: Compare Go decision with Python legacy decision
-	if h.enableShadowMode && h.legacyClient != nil {
-		go h.runShadowComparison(requestID, &req, response)
-	}
-
 	writeProtoJSON(w, response)
-}
-
-func (h *Handler) runShadowComparison(requestID string, req *gatewayv1.SignalRequest, goResponse *gatewayv1.SignalResponse) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	legacyResponse, err := h.legacyClient.Evaluate(ctx, req)
-	if err != nil {
-		h.logger.Warn("shadow comparison failed: legacy client error", "request_id", requestID, "error", err)
-		return
-	}
-
-	// Compare decisions
-	diffs := []string{}
-	if goResponse.Score != legacyResponse.Score {
-		diffs = append(diffs, fmt.Sprintf("score: go=%d, legacy=%d", goResponse.Score, legacyResponse.Score))
-	}
-	if goResponse.RiskLabel != legacyResponse.RiskLabel {
-		diffs = append(diffs, fmt.Sprintf("risk_label: go=%s, legacy=%s", goResponse.RiskLabel, legacyResponse.RiskLabel))
-	}
-
-	// Compare matched rules (unordered)
-	goRules := make(map[string]bool)
-	for _, r := range goResponse.MatchedRules {
-		goRules[r.RuleId] = true
-	}
-	legacyRules := make(map[string]bool)
-	for _, r := range legacyResponse.MatchedRules {
-		legacyRules[r.RuleId] = true
-	}
-
-	if len(goRules) != len(legacyRules) {
-		diffs = append(diffs, fmt.Sprintf("matched_rules_count: go=%d, legacy=%d", len(goRules), len(legacyRules)))
-	} else {
-		for rid := range goRules {
-			if !legacyRules[rid] {
-				diffs = append(diffs, fmt.Sprintf("rule_mismatch: rule %s only in Go", rid))
-			}
-		}
-		for rid := range legacyRules {
-			if !goRules[rid] {
-				diffs = append(diffs, fmt.Sprintf("rule_mismatch: rule %s only in Legacy", rid))
-			}
-		}
-	}
-
-	if len(diffs) > 0 {
-		h.logger.Warn("ParityMismatch",
-			"request_id", requestID,
-			"diffs", diffs,
-			"go_score", goResponse.Score,
-			"legacy_score", legacyResponse.Score,
-		)
-	} else {
-		h.logger.Info("ParityMatch", "request_id", requestID)
-	}
 }
 
 func normalizeSignalRequest(req *gatewayv1.SignalRequest) {
