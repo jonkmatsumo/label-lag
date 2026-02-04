@@ -271,6 +271,7 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 		attribute.Int("app.model_score", int(rawScore)),
 		attribute.Int("app.final_score", ruleResult.FinalScore),
 		attribute.Int("app.rule_matches", len(ruleResult.MatchedRules)),
+		attribute.Bool("app.shadow_mode_enabled", h.enableShadowMode),
 	)
 
 	riskComponents := buildRiskComponents(features)
