@@ -52,6 +52,7 @@ func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient Ana
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/evaluate/signal", h.handleEvaluateSignal)
 	mux.HandleFunc("/evaluate/rules", h.handleEvaluateRules)
+	mux.HandleFunc("/evaluate/rules/diff", h.handleEvaluateRulesDiff)
 	mux.HandleFunc("/ready", h.handleReady)
 	mux.HandleFunc("/analytics/overview", h.handleAnalyticsOverview)
 	mux.HandleFunc("/analytics/daily-stats", h.handleAnalyticsDailyStats)
