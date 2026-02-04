@@ -5,7 +5,8 @@ Usage:
     pytest tests/integration/test_gateway_core_ui_smoke.py -v
 
     # Override BFF URL
-    BFF_BASE_URL=http://localhost:3210 pytest tests/integration/test_gateway_core_ui_smoke.py
+    BFF_BASE_URL=http://localhost:3210 pytest \
+        tests/integration/test_gateway_core_ui_smoke.py
 """
 
 import os
