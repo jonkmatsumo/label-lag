@@ -1,6 +1,8 @@
 package rules
 
 import (
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -19,27 +21,46 @@ const (
 )
 
 type Rule struct {
-	ID       string
-	Field    string
-	Op       string
-	Value    any
-	Action   string
-	Score    *int
-	Severity string
-	Reason   string
-	Status   RuleStatus
+	ID       string     `json:"id"`
+	Field    string     `json:"field"`
+	Op       string     `json:"op"`
+	Value    any        `json:"value"`
+	Action   string     `json:"action"`
+	Score    *int       `json:"score,omitempty"`
+	Severity string     `json:"severity"`
+	Reason   string     `json:"reason"`
+	Status   RuleStatus `json:"status"`
 }
 
 type RuleSet struct {
-	Version string
-	Rules   []Rule
+	Version string `json:"version"`
+	Rules   []Rule `json:"rules"`
+}
+
+func (rs RuleSet) ComputeVersion() string {
+	// Canonical JSON serialization
+	data, err := json.Marshal(rs.Rules)
+	if err != nil {
+		return rs.Version // Fallback
+	}
+
+	h := sha256.New()
+	// Include explicit version in hash if present
+	if rs.Version != "" {
+		h.Write([]byte(rs.Version))
+	}
+	h.Write(data)
+	return fmt.Sprintf("sha256:%x", h.Sum(nil))[:16]
 }
 
 type Explanation struct {
-	RuleID      string
-	Severity    string
-	Reason      string
-	Explanation string
+	RuleID      string `json:"rule_id"`
+	Severity    string `json:"severity"`
+	Reason      string `json:"reason"`
+	Explanation string `json:"explanation"`
+	Action      string `json:"action"`
+	Score       *int   `json:"score,omitempty"`
+	ScoreDelta  int    `json:"score_delta"`
 }
 
 type RuleResult struct {
@@ -49,6 +70,7 @@ type RuleResult struct {
 	Rejected           bool
 	ShadowMatchedRules []string
 	ShadowExplanations []Explanation
+	RulesVersion       string
 }
 
 func EvaluateRules(features map[string]any, currentScore int, ruleset RuleSet) (RuleResult, error) {
@@ -59,6 +81,7 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset RuleSet) (
 			Explanations:       []Explanation{},
 			ShadowMatchedRules: []string{},
 			ShadowExplanations: []Explanation{},
+			RulesVersion:       ruleset.Version,
 		}, nil
 	}
 
@@ -84,12 +107,7 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset RuleSet) (
 		}
 
 		matched = append(matched, rule.ID)
-		explanations = append(explanations, Explanation{
-			RuleID:      rule.ID,
-			Severity:    defaultSeverity(rule.Severity),
-			Reason:      defaultReason(rule.Reason, fmt.Sprintf("rule_matched:%s", rule.ID)),
-			Explanation: rule.Reason,
-		})
+		beforeScore := score
 
 		switch rule.Action {
 		case "reject":
@@ -122,6 +140,16 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset RuleSet) (
 				}
 			}
 		}
+
+		explanations = append(explanations, Explanation{
+			RuleID:      rule.ID,
+			Severity:    defaultSeverity(rule.Severity),
+			Reason:      defaultReason(rule.Reason, fmt.Sprintf("rule_matched:%s", rule.ID)),
+			Explanation: rule.Reason,
+			Action:      rule.Action,
+			Score:       rule.Score,
+			ScoreDelta:  score - beforeScore,
+		})
 	}
 
 	for _, rule := range shadowRules {
@@ -136,11 +164,34 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset RuleSet) (
 		}
 
 		shadowMatched = append(shadowMatched, rule.ID)
+
+		// Compute shadow delta without modifying final score
+		shadowDelta := 0
+		switch rule.Action {
+		case "reject":
+			shadowDelta = 99 - score
+		case "override_score":
+			if rule.Score != nil {
+				shadowDelta = *rule.Score - score
+			}
+		case "clamp_min":
+			if rule.Score != nil && score < *rule.Score {
+				shadowDelta = *rule.Score - score
+			}
+		case "clamp_max":
+			if rule.Score != nil && score > *rule.Score {
+				shadowDelta = *rule.Score - score
+			}
+		}
+
 		shadowExplanations = append(shadowExplanations, Explanation{
 			RuleID:      rule.ID,
 			Severity:    defaultSeverity(rule.Severity),
 			Reason:      defaultReason(rule.Reason, fmt.Sprintf("shadow_rule_matched:%s", rule.ID)),
 			Explanation: rule.Reason,
+			Action:      rule.Action,
+			Score:       rule.Score,
+			ScoreDelta:  shadowDelta,
 		})
 	}
 
@@ -153,6 +204,7 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset RuleSet) (
 		Rejected:           rejected,
 		ShadowMatchedRules: shadowMatched,
 		ShadowExplanations: shadowExplanations,
+		RulesVersion:       ruleset.ComputeVersion(),
 	}, nil
 }
 

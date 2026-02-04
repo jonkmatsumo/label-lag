@@ -19,6 +19,110 @@ def client():
     return TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def mock_gateway_client(monkeypatch):
+    """Mock the GatewayDecisionClient for all tests."""
+    from api import gateway_client
+    from api.rules import Rule, RuleSet, evaluate_rules
+
+    mock_client = MagicMock()
+
+    def side_effect(
+        features, base_score, ruleset=None, request_id=None, shadow_mode=False
+    ):
+        if ruleset:
+            rules_obj = []
+            for r in ruleset["rules"]:
+                # Real gateway would return 400 for invalid rule
+                if r["op"] not in [">", ">=", "<", "<=", "==", "in", "not_in"]:
+                    raise ValueError(
+                        f"invalid rules: [rule {r['id']}: invalid rule op {r['op']}]"
+                    )
+                rules_obj.append(Rule(**r))
+            rs = RuleSet(version=ruleset["version"], rules=rules_obj)
+        else:
+            rs = RuleSet.empty()
+
+        result = evaluate_rules(features, base_score, rs)
+
+        # Map to gateway-like dict response
+        explanations = []
+        for e in result.explanations:
+            matching_rule = next((r for r in rs.rules if r.id == e["rule_id"]), None)
+            explanations.append(
+                {
+                    "rule_id": e["rule_id"],
+                    "severity": e["severity"],
+                    "reason": e["reason"],
+                    "explanation": e["reason"],
+                    "action": matching_rule.action if matching_rule else "",
+                    "score": matching_rule.score if matching_rule else None,
+                }
+            )
+
+        shadow_explanations = []
+        for e in result.shadow_explanations:
+            matching_rule = next((r for r in rs.rules if r.id == e["rule_id"]), None)
+            shadow_explanations.append(
+                {
+                    "rule_id": e["rule_id"],
+                    "severity": e["severity"],
+                    "reason": e["reason"],
+                    "explanation": e["reason"],
+                    "action": matching_rule.action if matching_rule else "",
+                    "score": matching_rule.score if matching_rule else None,
+                }
+            )
+
+        resp = {
+            "final_score": result.final_score,
+            "baseline_score": base_score,
+            "matched_rules": result.matched_rules,
+            "explanations": explanations,
+            "shadow_matched_rules": result.shadow_matched_rules,
+            "shadow_explanations": shadow_explanations,
+            "rejected": result.rejected,
+            "ruleset_version": rs.version or "none",
+        }
+
+        if shadow_mode:
+            resp["shadow_score"] = result.final_score
+            resp["final_score"] = base_score
+            resp["rejected"] = False
+
+        return resp
+
+    def diff_side_effect(
+        features,
+        base_score,
+        ruleset_a=None,
+        ruleset_b=None,
+        request_id=None,
+        shadow_mode=False,
+    ):
+        resp_a = side_effect(features, base_score, ruleset_a, request_id, shadow_mode)
+        resp_b = side_effect(features, base_score, ruleset_b, request_id, shadow_mode)
+
+        diff = {
+            "score_delta": resp_b["final_score"] - resp_a["final_score"],
+            "matched_rules_added": [
+                r for r in resp_b["matched_rules"] if r not in resp_a["matched_rules"]
+            ],
+            "matched_rules_removed": [
+                r for r in resp_a["matched_rules"] if r not in resp_b["matched_rules"]
+            ],
+        }
+        if shadow_mode:
+            diff["score_delta"] = resp_b["shadow_score"] - resp_a["shadow_score"]
+
+        return {"a": resp_a, "b": resp_b, "diff": diff}
+
+    mock_client.evaluate_rules.side_effect = side_effect
+    mock_client.diff_rules.side_effect = diff_side_effect
+    monkeypatch.setattr(gateway_client, "get_gateway_client", lambda: mock_client)
+    return mock_client
+
+
 class TestGetRulesEndpoint:
     """Tests for GET /rules endpoint."""
 
@@ -81,6 +185,7 @@ class TestSandboxEvaluateEndpoint:
         data = response.json()
 
         assert "final_score" in data
+        assert "baseline_score" in data
         assert "matched_rules" in data
         assert "explanations" in data
         assert "shadow_matched_rules" in data
@@ -241,6 +346,89 @@ class TestSandboxEvaluateEndpoint:
         # Score should be valid and in range
         assert isinstance(data["final_score"], int)
         assert 1 <= data["final_score"] <= 99
+
+    def test_sandbox_evaluate_with_shadow_mode(self, client):
+        """Test sandbox evaluation with shadow_mode=True."""
+        response = client.post(
+            "/rules/sandbox/evaluate",
+            json={
+                "features": {"velocity_24h": 10},
+                "base_score": 50,
+                "shadow_mode": True,
+                "ruleset": {
+                    "version": "test",
+                    "rules": [
+                        {
+                            "id": "shadow_test",
+                            "field": "velocity_24h",
+                            "op": ">",
+                            "value": 5,
+                            "action": "reject",
+                            "status": "active",
+                        }
+                    ],
+                },
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        # In shadow mode, final_score should remain base_score
+        assert data["final_score"] == 50
+        assert data["baseline_score"] == 50
+        assert data["shadow_score"] == 99
+        assert data["rejected"] is False
+        assert len(data["matched_rules"]) == 1
+        assert data["matched_rules"][0]["rule_id"] == "shadow_test"
+
+    def test_sandbox_diff_success(self, client):
+        """Test sandbox diff between two rulesets."""
+        response = client.post(
+            "/rules/sandbox/diff",
+            json={
+                "features": {"velocity_24h": 10},
+                "base_score": 50,
+                "ruleset_a": {
+                    "version": "v1",
+                    "rules": [
+                        {
+                            "id": "rule1",
+                            "field": "velocity_24h",
+                            "op": ">",
+                            "value": 5,
+                            "action": "override_score",
+                            "score": 60,
+                            "status": "active",
+                        }
+                    ],
+                },
+                "ruleset_b": {
+                    "version": "v2",
+                    "rules": [
+                        {
+                            "id": "rule1",
+                            "field": "velocity_24h",
+                            "op": ">",
+                            "value": 5,
+                            "action": "override_score",
+                            "score": 80,
+                            "status": "active",
+                        }
+                    ],
+                },
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        assert "a" in data
+        assert "b" in data
+        assert "diff" in data
+        assert data["a"]["final_score"] == 60
+        assert data["b"]["final_score"] == 80
+        assert data["diff"]["score_delta"] == 20
+        assert data["diff"]["matched_rules_added"] == []
+        assert data["diff"]["matched_rules_removed"] == []
 
 
 class TestShadowComparisonEndpoint:

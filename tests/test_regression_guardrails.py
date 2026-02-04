@@ -40,10 +40,10 @@ class TestNoMandatoryAuth:
         assert response.status_code == 200
         assert response.json()["status"] == "healthy"
 
-    def test_evaluate_signal_no_auth_required(self):
-        """Signal evaluation works without auth headers."""
+    def test_predict_signal_no_auth_required(self):
+        """Prediction signal works without auth headers."""
         response = self.client.post(
-            "/evaluate/signal",
+            "/predict/signal",
             json={
                 "user_id": "user_test_123",
                 "amount": 100.00,
@@ -55,7 +55,7 @@ class TestNoMandatoryAuth:
         assert response.status_code == 200
         data = response.json()
         # Verify synchronous response (not async job reference)
-        assert "score" in data
+        assert "model_score" in data
         assert "request_id" in data
 
     def test_stats_endpoint_no_auth_required(self):
@@ -82,10 +82,10 @@ class TestSynchronousEndpoints:
         reset_inference_event_sink()
         self.client = TestClient(app)
 
-    def test_evaluate_signal_returns_score_not_job_id(self):
-        """Signal evaluation returns score directly, not async job reference."""
+    def test_predict_signal_returns_score_not_job_id(self):
+        """Prediction signal returns score directly, not async job reference."""
         response = self.client.post(
-            "/evaluate/signal",
+            "/predict/signal",
             json={
                 "user_id": "user_sync_test",
                 "amount": 250.00,
@@ -97,9 +97,9 @@ class TestSynchronousEndpoints:
         data = response.json()
 
         # Must have immediate score, not pending job
-        assert "score" in data
-        assert isinstance(data["score"], int)
-        assert 1 <= data["score"] <= 99
+        assert "model_score" in data
+        assert isinstance(data["model_score"], int)
+        assert 1 <= data["model_score"] <= 99
 
         # Must NOT be async job response pattern
         assert "job_id" not in data or data.get("status") != "pending"

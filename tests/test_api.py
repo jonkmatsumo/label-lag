@@ -9,12 +9,9 @@ from fastapi.testclient import TestClient
 from api.main import app
 from api.schemas import Currency, SignalRequest
 from api.services import (
-    AMOUNT_RATIO_HIGH_THRESHOLD,
-    CONNECTION_BURST_THRESHOLD,
-    VELOCITY_HIGH_THRESHOLD,
     FeatureVector,
-    SignalEvaluator,
-    get_evaluator,
+    SignalForecaster,
+    get_forecaster,
 )
 
 
@@ -25,9 +22,9 @@ def client():
 
 
 @pytest.fixture
-def evaluator():
-    """Create signal evaluator."""
-    return SignalEvaluator()
+def forecaster():
+    """Create signal forecaster."""
+    return SignalForecaster()
 
 
 class TestHealthEndpoint:
@@ -57,9 +54,9 @@ class TestHealthEndpoint:
 class TestSignalEndpoint:
     """Tests for signal evaluation endpoint."""
 
-    def test_evaluate_returns_200(self, client):
+    def test_predict_returns_200(self, client):
         response = client.post(
-            "/evaluate/signal",
+            "/predict/signal",
             json={
                 "user_id": "user_123",
                 "amount": 100.00,
@@ -69,9 +66,9 @@ class TestSignalEndpoint:
         )
         assert response.status_code == 200
 
-    def test_evaluate_response_structure(self, client):
+    def test_predict_response_structure(self, client):
         response = client.post(
-            "/evaluate/signal",
+            "/predict/signal",
             json={
                 "user_id": "user_123",
                 "amount": 100.00,
@@ -82,13 +79,14 @@ class TestSignalEndpoint:
         data = response.json()
 
         assert "request_id" in data
-        assert "score" in data
-        assert "risk_components" in data
+        assert "model_score" in data
         assert "model_version" in data
+        assert "model_loaded" in data
+        assert "latency_ms" in data
 
-    def test_evaluate_score_in_range(self, client):
+    def test_predict_score_in_range(self, client):
         response = client.post(
-            "/evaluate/signal",
+            "/predict/signal",
             json={
                 "user_id": "user_456",
                 "amount": 500.00,
@@ -98,11 +96,11 @@ class TestSignalEndpoint:
         )
         data = response.json()
 
-        assert 1 <= data["score"] <= 99
+        assert 1 <= data["model_score"] <= 99
 
-    def test_evaluate_request_id_format(self, client):
+    def test_predict_request_id_format(self, client):
         response = client.post(
-            "/evaluate/signal",
+            "/predict/signal",
             json={
                 "user_id": "user_789",
                 "amount": 250.00,
@@ -115,9 +113,9 @@ class TestSignalEndpoint:
         assert data["request_id"].startswith("req_")
         assert len(data["request_id"]) == 16  # "req_" + 12 hex chars
 
-    def test_evaluate_model_version_present(self, client):
+    def test_predict_model_version_present(self, client):
         response = client.post(
-            "/evaluate/signal",
+            "/predict/signal",
             json={
                 "user_id": "user_test",
                 "amount": 100.00,
@@ -129,24 +127,8 @@ class TestSignalEndpoint:
 
         assert data["model_version"] == "v1.0.0"
 
-    def test_evaluate_risk_components_structure(self, client):
-        response = client.post(
-            "/evaluate/signal",
-            json={
-                "user_id": "user_risky",
-                "amount": 1000.00,
-                "currency": "USD",
-                "client_transaction_id": "txn_risky",
-            },
-        )
-        data = response.json()
-
-        for component in data["risk_components"]:
-            assert "key" in component
-            assert "label" in component
-
-    def test_evaluate_idempotent_same_user(self, client):
-        """Same user should get consistent scoring."""
+    def test_predict_idempotent_same_user(self, client):
+        """Same user should get consistent prediction."""
         request_data = {
             "user_id": "user_consistent",
             "amount": 200.00,
@@ -154,16 +136,11 @@ class TestSignalEndpoint:
             "client_transaction_id": "txn_1",
         }
 
-        response1 = client.post("/evaluate/signal", json=request_data)
-        response2 = client.post("/evaluate/signal", json=request_data)
+        response1 = client.post("/predict/signal", json=request_data)
+        response2 = client.post("/predict/signal", json=request_data)
 
         # Score should be the same for same user
-        assert response1.json()["score"] == response2.json()["score"]
-
-        # Risk components should be the same
-        assert (
-            response1.json()["risk_components"] == response2.json()["risk_components"]
-        )
+        assert response1.json()["model_score"] == response2.json()["model_score"]
 
         # Request IDs should be different (each request gets new ID)
         assert response1.json()["request_id"] != response2.json()["request_id"]
@@ -174,7 +151,7 @@ class TestSignalValidation:
 
     def test_missing_user_id(self, client):
         response = client.post(
-            "/evaluate/signal",
+            "/predict/signal",
             json={
                 "amount": 100.00,
                 "currency": "USD",
@@ -185,7 +162,7 @@ class TestSignalValidation:
 
     def test_missing_amount(self, client):
         response = client.post(
-            "/evaluate/signal",
+            "/predict/signal",
             json={
                 "user_id": "user_123",
                 "currency": "USD",
@@ -196,7 +173,7 @@ class TestSignalValidation:
 
     def test_negative_amount(self, client):
         response = client.post(
-            "/evaluate/signal",
+            "/predict/signal",
             json={
                 "user_id": "user_123",
                 "amount": -100.00,
@@ -208,7 +185,7 @@ class TestSignalValidation:
 
     def test_zero_amount(self, client):
         response = client.post(
-            "/evaluate/signal",
+            "/predict/signal",
             json={
                 "user_id": "user_123",
                 "amount": 0,
@@ -220,7 +197,7 @@ class TestSignalValidation:
 
     def test_invalid_currency(self, client):
         response = client.post(
-            "/evaluate/signal",
+            "/predict/signal",
             json={
                 "user_id": "user_123",
                 "amount": 100.00,
@@ -232,7 +209,7 @@ class TestSignalValidation:
 
     def test_missing_transaction_id(self, client):
         response = client.post(
-            "/evaluate/signal",
+            "/predict/signal",
             json={
                 "user_id": "user_123",
                 "amount": 100.00,
@@ -242,10 +219,10 @@ class TestSignalValidation:
         assert response.status_code == 422
 
 
-class TestSignalEvaluator:
-    """Tests for SignalEvaluator service."""
+class TestSignalForecaster:
+    """Tests for SignalForecaster service."""
 
-    def test_evaluate_returns_response(self, evaluator):
+    def test_predict_returns_response(self, forecaster):
         request = SignalRequest(
             user_id="user_test",
             amount=Decimal("100.00"),
@@ -253,13 +230,28 @@ class TestSignalEvaluator:
             client_transaction_id="txn_test",
         )
 
-        response = evaluator.evaluate(request)
+        response = forecaster.predict(request)
 
-        assert response.request_id.startswith("req_")
-        assert 1 <= response.score <= 99
-        assert response.model_version == "v1.0.0"
+        assert response["request_id"].startswith("req_")
+        assert 1 <= response["model_score"] <= 99
+        assert response["model_version"] == "v1.0.0"
+        assert "fallback_used" in response
 
-    def test_probability_calculation_base(self, evaluator):
+    def test_predict_fallback_mode_error(self, forecaster, monkeypatch):
+        """Test that fallback_mode=error raises RuntimeError when no model/history."""
+        monkeypatch.setenv("FORECASTER_FALLBACK_MODE", "error")
+        # Ensure we trigger fallback by using unknown user
+        request = SignalRequest(
+            user_id="unknown_user_for_error",
+            amount=Decimal("100.00"),
+            currency=Currency.USD,
+            client_transaction_id="txn_error",
+        )
+
+        with pytest.raises(RuntimeError, match="Forecaster fallback triggered"):
+            forecaster.predict(request)
+
+    def test_probability_calculation_base(self, forecaster):
         """Low-risk features should give low probability."""
         features = FeatureVector(
             velocity_24h=1,
@@ -270,40 +262,40 @@ class TestSignalEvaluator:
             has_history=True,
         )
 
-        prob = evaluator._calculate_probability(features)
+        prob = forecaster._calculate_probability(features)
         assert prob < 0.1
 
-    def test_probability_high_velocity(self, evaluator):
+    def test_probability_high_velocity(self, forecaster):
         """High velocity should increase probability."""
         low_velocity = FeatureVector(velocity_24h=1, has_history=True)
         high_velocity = FeatureVector(velocity_24h=10, has_history=True)
 
-        prob_low = evaluator._calculate_probability(low_velocity)
-        prob_high = evaluator._calculate_probability(high_velocity)
+        prob_low = forecaster._calculate_probability(low_velocity)
+        prob_high = forecaster._calculate_probability(high_velocity)
 
         assert prob_high > prob_low
 
-    def test_probability_high_amount_ratio(self, evaluator):
+    def test_probability_high_amount_ratio(self, forecaster):
         """High amount ratio should increase probability."""
         normal = FeatureVector(amount_to_avg_ratio_30d=1.0, has_history=True)
         high = FeatureVector(amount_to_avg_ratio_30d=5.0, has_history=True)
 
-        prob_normal = evaluator._calculate_probability(normal)
-        prob_high = evaluator._calculate_probability(high)
+        prob_normal = forecaster._calculate_probability(normal)
+        prob_high = forecaster._calculate_probability(high)
 
         assert prob_high > prob_normal
 
-    def test_probability_no_history(self, evaluator):
+    def test_probability_no_history(self, forecaster):
         """No history should increase probability."""
         with_history = FeatureVector(has_history=True)
         no_history = FeatureVector(has_history=False)
 
-        prob_with = evaluator._calculate_probability(with_history)
-        prob_without = evaluator._calculate_probability(no_history)
+        prob_with = forecaster._calculate_probability(with_history)
+        prob_without = forecaster._calculate_probability(no_history)
 
         assert prob_without > prob_with
 
-    def test_probability_capped_at_099(self, evaluator):
+    def test_probability_capped_at_099(self, forecaster):
         """Probability should be capped at 0.99."""
         extreme_features = FeatureVector(
             velocity_24h=100,
@@ -314,80 +306,21 @@ class TestSignalEvaluator:
             has_history=False,
         )
 
-        prob = evaluator._calculate_probability(extreme_features)
+        prob = forecaster._calculate_probability(extreme_features)
         assert prob <= 0.99
 
 
-class TestRiskComponents:
-    """Tests for risk component identification."""
+class TestGetForecaster:
+    """Tests for forecaster singleton."""
 
-    def test_velocity_component(self, evaluator):
-        features = FeatureVector(
-            velocity_24h=VELOCITY_HIGH_THRESHOLD + 1,
-            has_history=True,
-        )
-
-        components = evaluator._identify_risk_components(features)
-        keys = [c.key for c in components]
-
-        assert "velocity" in keys
-
-    def test_amount_ratio_component(self, evaluator):
-        features = FeatureVector(
-            amount_to_avg_ratio_30d=AMOUNT_RATIO_HIGH_THRESHOLD + 1,
-            has_history=True,
-        )
-
-        components = evaluator._identify_risk_components(features)
-        keys = [c.key for c in components]
-
-        assert "amount_ratio" in keys
-
-    def test_connection_component(self, evaluator):
-        features = FeatureVector(
-            bank_connections_24h=CONNECTION_BURST_THRESHOLD + 1,
-            has_history=True,
-        )
-
-        components = evaluator._identify_risk_components(features)
-        keys = [c.key for c in components]
-
-        assert "connections" in keys
-
-    def test_history_component(self, evaluator):
-        features = FeatureVector(has_history=False)
-
-        components = evaluator._identify_risk_components(features)
-        keys = [c.key for c in components]
-
-        assert "history" in keys
-
-    def test_no_components_low_risk(self, evaluator):
-        """Low-risk features should have no components."""
-        features = FeatureVector(
-            velocity_24h=1,
-            amount_to_avg_ratio_30d=1.0,
-            balance_volatility_z_score=0.0,
-            bank_connections_24h=1,
-            merchant_risk_score=20,
-            has_history=True,
-        )
-
-        components = evaluator._identify_risk_components(features)
-        assert len(components) == 0
-
-
-class TestGetEvaluator:
-    """Tests for evaluator singleton."""
-
-    def test_returns_evaluator(self):
-        evaluator = get_evaluator()
-        assert isinstance(evaluator, SignalEvaluator)
+    def test_returns_forecaster(self):
+        forecaster = get_forecaster()
+        assert isinstance(forecaster, SignalForecaster)
 
     def test_returns_same_instance(self):
-        evaluator1 = get_evaluator()
-        evaluator2 = get_evaluator()
-        assert evaluator1 is evaluator2
+        forecaster1 = get_forecaster()
+        forecaster2 = get_forecaster()
+        assert forecaster1 is forecaster2
 
 
 class TestGenerateDataEndpoint:
@@ -567,58 +500,3 @@ class TestTrainEndpoint:
             data = response.json()
             assert data["success"] is False
             assert "invalid_col" in data["error"]
-
-
-class TestRulesIntegration:
-    """Tests for rule integration in inference."""
-
-    def test_inference_with_no_rules_unchanged(self, client):
-        """Test that inference behavior is unchanged when no rules are present."""
-        response = client.post(
-            "/evaluate/signal",
-            json={
-                "user_id": "user_test_no_rules",
-                "amount": 100.00,
-                "currency": "USD",
-                "client_transaction_id": "txn_test",
-            },
-        )
-
-        assert response.status_code == 200
-        data = response.json()
-
-        # Response should have matched_rules field (empty)
-        assert "matched_rules" in data
-        assert data["matched_rules"] == []
-
-        # model_score and rules_version should be None when no rules
-        assert "model_score" in data
-        assert data["model_score"] is None
-        assert "rules_version" in data
-        assert data["rules_version"] is None
-
-    def test_response_includes_matched_rules_field(self, client):
-        """Test that response includes matched_rules field structure."""
-        response = client.post(
-            "/evaluate/signal",
-            json={
-                "user_id": "user_test",
-                "amount": 100.00,
-                "currency": "USD",
-                "client_transaction_id": "txn_test",
-            },
-        )
-
-        assert response.status_code == 200
-        data = response.json()
-
-        # Verify matched_rules field exists and is a list
-        assert "matched_rules" in data
-        assert isinstance(data["matched_rules"], list)
-
-        # If rules matched, verify structure
-        if data["matched_rules"]:
-            for rule in data["matched_rules"]:
-                assert "rule_id" in rule
-                assert "severity" in rule
-                assert "reason" in rule

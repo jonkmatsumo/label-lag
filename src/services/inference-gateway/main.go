@@ -86,18 +86,6 @@ func main() {
 		rulesProvider = fileProvider
 	}
 
-	legacyURL := os.Getenv("INFERENCE_GATEWAY_LEGACY_API_URL")
-	if legacyURL == "" {
-		legacyURL = "http://api:8000"
-	}
-	legacyClient := grpcclient.NewLegacyClient(legacyURL, 5*time.Second)
-
-	enableShadowMode := false
-	if val := os.Getenv("INFERENCE_GATEWAY_SHADOW_MODE_ENABLED"); val == "true" {
-		enableShadowMode = true
-		logger.Info("shadow mode enabled", "legacy_url", legacyURL)
-	}
-
 	maxBodyBytes := int64(1 << 20)
 	if maxBodyStr := os.Getenv("INFERENCE_GATEWAY_MAX_BODY_BYTES"); maxBodyStr != "" {
 		if parsed, err := strconv.ParseInt(maxBodyStr, 10, 64); err == nil && parsed > 0 {
@@ -107,7 +95,7 @@ func main() {
 		}
 	}
 
-	handler := httpserver.NewHandler(logger, inferenceClient, analyticsClient, rulesProvider, legacyClient, enableShadowMode, maxBodyBytes)
+	handler := httpserver.NewHandler(logger, inferenceClient, analyticsClient, rulesProvider, maxBodyBytes)
 	readTimeout := parseDurationEnv(logger, "INFERENCE_GATEWAY_READ_TIMEOUT", 10*time.Second)
 	writeTimeout := parseDurationEnv(logger, "INFERENCE_GATEWAY_WRITE_TIMEOUT", 30*time.Second)
 	idleTimeout := parseDurationEnv(logger, "INFERENCE_GATEWAY_IDLE_TIMEOUT", 60*time.Second)

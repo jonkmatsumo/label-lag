@@ -1,4 +1,4 @@
-"""gRPC service implementation for inference."""
+"""gRPC service implementation for forecasting."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from google.protobuf import struct_pb2
 
 from api.model_manager import get_model_manager
 from api.schemas import SignalRequest
-from api.services import SignalEvaluator
+from api.services import SignalForecaster
 from grpc_inference.config import GRPCInferenceConfig
 from grpc_inference.proto.inference.v1 import inference_pb2, inference_pb2_grpc
 
@@ -20,9 +20,11 @@ logger = logging.getLogger(__name__)
 
 
 class InferenceService(inference_pb2_grpc.InferenceServiceServicer):
+    """gRPC service for fraud signal forecasting."""
+
     def __init__(self, config: GRPCInferenceConfig):
         self._config = config
-        self._evaluator = SignalEvaluator()
+        self._forecaster = SignalForecaster()
         self._manager = get_model_manager()
 
     def score(self, request, context):
@@ -43,7 +45,7 @@ class InferenceService(inference_pb2_grpc.InferenceServiceServicer):
                 "client_transaction_id is required",
             )
 
-        request_id = request.request_id or _generate_request_id()
+        request.request_id or _generate_request_id()
         currency = request.currency or "USD"
 
         try:
@@ -56,25 +58,22 @@ class InferenceService(inference_pb2_grpc.InferenceServiceServicer):
         except Exception as exc:
             context.abort(grpc.StatusCode.INVALID_ARGUMENT, f"invalid request: {exc}")
 
-        features = self._evaluator._fetch_features(signal_request)
-        model_loaded = self._manager.model_loaded
-        if model_loaded and features.has_history:
-            raw_prob = self._evaluator._predict_with_model(self._manager, features)
-            model_version = self._manager.model_version
-        else:
-            raw_prob = self._evaluator._calculate_probability(features)
-            model_version = self._evaluator.model_version
-
-        model_score = self._evaluator._calibrate_score(raw_prob)
+        try:
+            prediction = self._forecaster.predict(signal_request)
+        except Exception as exc:
+            context.abort(grpc.StatusCode.INTERNAL, f"prediction failed: {exc}")
 
         response = inference_pb2.ScoreResponse(
-            request_id=request_id,
-            model_score=float(model_score),
-            model_version=model_version,
-            model_loaded=model_loaded,
+            request_id=prediction["request_id"],
+            model_score=float(prediction["model_score"]),
+            model_version=prediction["model_version"],
+            model_loaded=prediction["model_loaded"],
+            fallback_used=prediction["fallback_used"],
         )
 
         if self._config.include_features_used:
+            # We still need features for the features_used field
+            features = self._forecaster._fetch_features(signal_request)
             response.features_used.CopyFrom(_features_to_struct(features))
 
         return response

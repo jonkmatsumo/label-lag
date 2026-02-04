@@ -1,7 +1,7 @@
-"""FastAPI application for fraud signal evaluation.
+"""FastAPI application for fraud signal forecasting.
 
 This API provides idempotent risk assessment for transactions.
-It does not modify transaction state - it only provides an evaluation.
+It does not modify transaction state - it only provides an prediction.
 """
 
 import logging
@@ -87,6 +87,8 @@ from api.schemas import (
     RuleSuggestionResponse,
     RuleVersionListResponse,
     RuleVersionResponse,
+    SandboxDiffRequest,
+    SandboxDiffResponse,
     SandboxEvaluateRequest,
     SandboxEvaluateResponse,
     SandboxMatchedRule,
@@ -94,14 +96,13 @@ from api.schemas import (
     ShadowRuleRequest,
     ShadowRuleResponse,
     SignalRequest,
-    SignalResponse,
     SuggestionEvidence,
     SuggestionsListResponse,
     TrainRequest,
     TrainResponse,
     ValidationResult,
 )
-from api.services import get_evaluator
+from api.services import get_forecaster
 
 if TYPE_CHECKING:
     pass
@@ -150,10 +151,12 @@ async def health_check() -> HealthResponse:
         HealthResponse with status and model information.
     """
     manager = get_model_manager()
-    evaluator = get_evaluator()
+    forecaster = get_forecaster()
 
-    # Use model manager version if available, otherwise fall back to evaluator
-    version = manager.model_version if manager.model_loaded else evaluator.model_version
+    # Use model manager version if available, otherwise fall back to forecaster
+    version = (
+        manager.model_version if manager.model_loaded else forecaster.model_version
+    )
 
     return HealthResponse(
         status="healthy",
@@ -508,47 +511,9 @@ async def deploy_model(request: DeployModelRequest) -> DeployModelResponse:
 
 
 @app.post(
-    "/evaluate/signal",
-    response_model=SignalResponse,
-    tags=["Evaluation"],
-    summary="Evaluate fraud signal (DEPRECATED)",
-    deprecated=True,
-    description="""
-DEPRECATED: Use /predict/signal for model scores and Go Gateway for full evaluation.
-
-Evaluate the fraud risk signal for a transaction.
-""",
-    responses={
-        200: {
-            "description": "Successful evaluation",
-        },
-        422: {"description": "Validation error"},
-    },
-)
-async def evaluate_signal(request: SignalRequest) -> SignalResponse:
-    """Evaluate fraud signal for a transaction.
-
-    Args:
-        request: Signal evaluation request with user_id, amount, currency,
-            and client_transaction_id.
-
-    Returns:
-        SignalResponse with risk score and contributing factors.
-    """
-    try:
-        evaluator = get_evaluator()
-        return evaluator.evaluate(request)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Evaluation failed: {e!s}",
-        ) from e
-
-
-@app.post(
     "/predict/signal",
     response_model=PredictResponse,
-    tags=["Evaluation"],
+    tags=["Forecasting"],
     summary="Get model prediction only",
     description="""
 Get raw model prediction for a transaction. Does NOT apply rules.
@@ -565,8 +530,8 @@ async def predict_signal(request: SignalRequest) -> PredictResponse:
         PredictResponse with model score and version.
     """
     try:
-        evaluator = get_evaluator()
-        result = evaluator.predict(request)
+        forecaster = get_forecaster()
+        result = forecaster.predict(request)
         return PredictResponse(**result)
     except Exception as e:
         raise HTTPException(
@@ -839,7 +804,7 @@ async def sandbox_evaluate(request: SandboxEvaluateRequest) -> SandboxEvaluateRe
     Returns:
         SandboxEvaluateResponse with evaluation results.
     """
-    from api.rules import Rule, RuleSet, evaluate_rules
+    from api.gateway_client import get_gateway_client
 
     # Build feature dict from request
     features = {
@@ -852,73 +817,154 @@ async def sandbox_evaluate(request: SandboxEvaluateRequest) -> SandboxEvaluateRe
         "transaction_amount": request.features.transaction_amount,
     }
 
-    # Use custom ruleset if provided, otherwise use production
+    # Map ruleset if provided
+    ruleset_dict = None
     if request.ruleset is not None:
-        try:
-            rules = [
-                Rule(
-                    id=r.id,
-                    field=r.field,
-                    op=r.op,
-                    value=r.value,
-                    action=r.action,
-                    score=r.score,
-                    severity=r.severity,
-                    reason=r.reason,
-                    status=r.status,
-                )
-                for r in request.ruleset.rules
-            ]
-            ruleset = RuleSet(version=request.ruleset.version, rules=rules)
-        except (TypeError, ValueError) as e:
-            raise HTTPException(status_code=400, detail=f"Invalid ruleset: {e}") from e
-    else:
-        manager = get_model_manager()
-        ruleset = manager.ruleset
-        if ruleset is None:
-            ruleset = RuleSet.empty()
+        ruleset_dict = request.ruleset.model_dump()
 
-    # Evaluate rules
-    result = evaluate_rules(features, request.base_score, ruleset)
-
-    # Build matched rules with full info
-    matched_rules = []
-    for exp in result.explanations:
-        rule_id = exp["rule_id"]
-        # Find the rule to get action and score
-        matching_rule = next((r for r in ruleset.rules if r.id == rule_id), None)
-        matched_rules.append(
-            SandboxMatchedRule(
-                rule_id=rule_id,
-                severity=exp["severity"],
-                reason=exp["reason"],
-                action=matching_rule.action if matching_rule else "",
-                score=matching_rule.score if matching_rule else None,
-            )
+    # Call gateway
+    client = get_gateway_client()
+    try:
+        result = client.evaluate_rules(
+            features=features,
+            base_score=request.base_score,
+            ruleset=ruleset_dict,
+            shadow_mode=request.shadow_mode,
         )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("Sandbox evaluation failed via gateway")
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
-    # Build shadow matched rules
-    shadow_matched_rules = []
-    for exp in result.shadow_explanations or []:
-        rule_id = exp["rule_id"]
-        matching_rule = next((r for r in ruleset.rules if r.id == rule_id), None)
-        shadow_matched_rules.append(
-            SandboxMatchedRule(
-                rule_id=rule_id,
-                severity=exp["severity"],
-                reason=exp["reason"],
-                action=matching_rule.action if matching_rule else "",
-                score=matching_rule.score if matching_rule else None,
-            )
+    # Map back to SandboxEvaluateResponse
+    matched_rules = [
+        SandboxMatchedRule(
+            rule_id=exp["rule_id"],
+            severity=exp["severity"],
+            reason=exp["reason"],
+            action=exp.get("action", ""),
+            score=exp.get("score"),
         )
+        for exp in result.get("explanations", [])
+    ]
+
+    shadow_matched_rules = [
+        SandboxMatchedRule(
+            rule_id=exp["rule_id"],
+            severity=exp["severity"],
+            reason=exp["reason"],
+            action=exp.get("action", ""),
+            score=exp.get("score"),
+        )
+        for exp in result.get("shadow_explanations", [])
+    ]
 
     return SandboxEvaluateResponse(
-        final_score=result.final_score,
+        final_score=result["final_score"],
+        baseline_score=result.get("baseline_score", request.base_score),
+        shadow_score=result.get("shadow_score"),
         matched_rules=matched_rules,
-        explanations=result.explanations,
+        explanations=result.get("explanations", []),
         shadow_matched_rules=shadow_matched_rules,
-        rejected=result.rejected,
-        ruleset_version=ruleset.version,
+        rejected=result.get("rejected", False),
+        ruleset_version=result.get("ruleset_version", "unknown"),
+    )
+
+
+@app.post(
+    "/rules/sandbox/diff",
+    response_model=SandboxDiffResponse,
+    tags=["Rule Inspector"],
+    summary="Compare two rulesets in sandbox mode",
+    description="""
+Compare two rulesets (Baseline vs Proposed) on the same input.
+Shows score changes and matched rule differences.
+""",
+)
+async def sandbox_diff(request: SandboxDiffRequest) -> SandboxDiffResponse:
+    """Compare two rulesets against features in sandbox mode.
+
+    Args:
+        request: Sandbox diff request with features, base_score,
+            ruleset_a, and ruleset_b.
+
+    Returns:
+        SandboxDiffResponse with A vs B results.
+    """
+    from api.gateway_client import get_gateway_client
+
+    # Build feature dict from request
+    features = {
+        "velocity_24h": request.features.velocity_24h,
+        "amount_to_avg_ratio_30d": request.features.amount_to_avg_ratio_30d,
+        "balance_volatility_z_score": request.features.balance_volatility_z_score,
+        "bank_connections_24h": request.features.bank_connections_24h,
+        "merchant_risk_score": request.features.merchant_risk_score,
+        "has_history": request.features.has_history,
+        "transaction_amount": request.features.transaction_amount,
+    }
+
+    # Map rulesets if provided
+    ruleset_a_dict = None
+    if request.ruleset_a is not None:
+        ruleset_a_dict = request.ruleset_a.model_dump()
+
+    ruleset_b_dict = None
+    if request.ruleset_b is not None:
+        ruleset_b_dict = request.ruleset_b.model_dump()
+
+    # Call gateway diff
+    client = get_gateway_client()
+    try:
+        result = client.diff_rules(
+            features=features,
+            base_score=request.base_score,
+            ruleset_a=ruleset_a_dict,
+            ruleset_b=ruleset_b_dict,
+            shadow_mode=request.shadow_mode,
+        )
+    except Exception as e:
+        logger.exception("Sandbox diff failed via gateway")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+    # Helper to map gateway response back to SandboxEvaluateResponse
+    def map_eval(data):
+        m_rules = [
+            SandboxMatchedRule(
+                rule_id=exp["rule_id"],
+                severity=exp["severity"],
+                reason=exp["reason"],
+                action=exp.get("action", ""),
+                score=exp.get("score"),
+            )
+            for exp in data.get("explanations", [])
+        ]
+        s_rules = [
+            SandboxMatchedRule(
+                rule_id=exp["rule_id"],
+                severity=exp["severity"],
+                reason=exp["reason"],
+                action=exp.get("action", ""),
+                score=exp.get("score"),
+            )
+            for exp in data.get("shadow_explanations", [])
+        ]
+        return SandboxEvaluateResponse(
+            final_score=data["final_score"],
+            baseline_score=data.get("baseline_score", request.base_score),
+            shadow_score=data.get("shadow_score"),
+            matched_rules=m_rules,
+            explanations=data.get("explanations", []),
+            shadow_matched_rules=s_rules,
+            rejected=data.get("rejected", False),
+            ruleset_version=data.get("ruleset_version", "unknown"),
+        )
+
+    return SandboxDiffResponse(
+        a=map_eval(result["a"]),
+        b=map_eval(result["b"]),
+        diff=result["diff"],
     )
 
 

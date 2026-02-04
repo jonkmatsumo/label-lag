@@ -4,14 +4,11 @@ This document defines the shared contracts for inference and rule governance bet
 
 ## 1. Inference Response
 
-Both the API (`POST /evaluate/signal` - **DEPRECATED**) and the Gateway (`POST /evaluate/signal` - **CANONICAL**) must return this structure:
-
-...
+The Gateway (`POST /evaluate/signal` - **CANONICAL**) must return this structure:
 
 ### Forecaster Boundary (Python)
-As of Feb 2026, Python API is migrating to a **pure forecaster** role.
+Python API serves as a **pure forecaster**.
 *   **CANONICAL**: `POST /predict/signal` returns calibrated model scores only.
-*   **DEPRECATED**: `POST /evaluate/signal` remains for rollback and shadowing but will be removed.
 *   **OWNER**: Go Inference Gateway owns all rule evaluation and final decisioning.
 
 ```json
@@ -46,7 +43,7 @@ As of Feb 2026, Python API is migrating to a **pure forecaster** role.
 *   **risk_label**: LOW (<30), MEDIUM (30-79), HIGH (>=80).
 *   **latency_ms**: End-to-end processing time in milliseconds.
 *   **matched_rules**: Rules that actively modified the score or triggered a reject.
-*   **shadow_matched_rules**: Rules in 'shadow' mode that matched but did not affect the score.
+*   **shadow_matched_rules**: Rules evaluated in **Shadow Mode** (simulation/preview) that matched but did not affect the final score.
 
 ## 2. Rule Governance
 

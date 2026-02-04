@@ -1,4 +1,4 @@
-"""Business logic for signal evaluation."""
+"""Business logic for signal forecasting."""
 
 import logging
 import os
@@ -9,12 +9,8 @@ from decimal import Decimal
 import numpy as np
 
 from api.crud_client import get_crud_client
-from api.rules import RuleResult, evaluate_rules
 from api.schemas import (
-    MatchedRule,
-    RiskComponent,
     SignalRequest,
-    SignalResponse,
 )
 from model.evaluate import ScoreCalibrator
 
@@ -44,193 +40,18 @@ class FeatureVector:
 
 
 @dataclass
-class SignalEvaluator:
-    """Evaluates fraud signals for transactions.
+class SignalForecaster:
+    """Forecaster for fraud signals.
 
     This service is idempotent - it only assesses risk without modifying
-    any transaction state.
+    any transaction state. It focuses on pure ML prediction and probability
+    calculation, providing inputs for the rule-based decisioning gateway.
 
-    Uses the trained ML model when available, falls back to rule-based scoring.
+    Uses the trained ML model when available, falls back to heuristic-based scoring.
     """
 
     calibrator: ScoreCalibrator = field(default_factory=ScoreCalibrator)
     model_version: str = MODEL_VERSION
-
-    def evaluate(self, request: SignalRequest) -> SignalResponse:
-        """Evaluate fraud signal for a transaction.
-
-        Args:
-            request: The signal evaluation request.
-
-        Returns:
-            SignalResponse with score and risk components.
-        """
-        import time
-
-        from api.model_manager import get_model_manager
-
-        start_time = time.time()
-
-        # Generate unique request ID
-        request_id = f"req_{uuid.uuid4().hex[:12]}"
-
-        # Fetch features for the user from database
-        features = self._fetch_features(request)
-
-        # Get model manager
-        manager = get_model_manager()
-
-        # Use ML model if available and features were found in DB
-        if manager.model_loaded and features.has_history:
-            raw_probability = self._predict_with_model(manager, features)
-            model_version = manager.model_version
-        else:
-            # Fall back to rule-based scoring
-            if os.getenv("DISABLE_HEURISTIC_FALLBACK") == "true":
-                raw_probability = 0.05  # Base probability
-            else:
-                raw_probability = self._calculate_probability(features)
-            model_version = self.model_version
-
-        # Calibrate to 1-99 score
-        score = self._calibrate_score(raw_probability)
-
-        # Apply decision rules
-        rule_result = self._apply_rules(manager, features, score)
-        final_score = rule_result.final_score
-
-        # Log rule application if rules matched
-        if rule_result.matched_rules:
-            logger.info(
-                f"Rules applied: version={manager.rules_version}, "
-                f"matched={rule_result.matched_rules}, "
-                f"model_score={score}, final_score={final_score}"
-            )
-
-        # Log shadow rule matches (separate from production)
-        if rule_result.shadow_matched_rules:
-            logger.info(
-                f"Shadow rules matched (not applied): version={manager.rules_version}, "
-                f"matched={rule_result.shadow_matched_rules}, "
-                f"model_score={score}, would_have_been={final_score}"
-            )
-
-        # Record metrics for rule matches
-        try:
-            from api.metrics import get_metrics_collector
-
-            # Calculate individual rule impacts (approximated)
-            impacts = {}
-            impact_objects = []
-
-            if score != final_score:
-                total_delta = abs(final_score - score)
-                # Split delta among active rules (simplified)
-                if rule_result.matched_rules:
-                    per_rule_delta = total_delta / len(rule_result.matched_rules)
-                    for rid in rule_result.matched_rules:
-                        impacts[rid] = per_rule_delta
-
-            # Create impact objects for logger
-            from api.inference_log import RuleImpact
-
-            for rid in rule_result.matched_rules:
-                impact_objects.append(
-                    RuleImpact(
-                        rule_id=rid, is_shadow=False, score_delta=impacts.get(rid, 0.0)
-                    )
-                )
-            for rid in rule_result.shadow_matched_rules:
-                impact_objects.append(
-                    RuleImpact(
-                        rule_id=rid,
-                        is_shadow=True,
-                        score_delta=0.0,  # Shadow rules don't change score
-                    )
-                )
-
-            metrics_collector = get_metrics_collector()
-            metrics_collector.record_request_matches(
-                production_matched=rule_result.matched_rules,
-                shadow_matched=rule_result.shadow_matched_rules,
-                match_impacts=impacts,
-            )
-
-            # Phase 3.1: Log structured inference event
-            from datetime import datetime, timezone
-
-            from api.inference_log import InferenceEvent, InferenceLogger
-
-            event_logger = InferenceLogger()
-            event = InferenceEvent(
-                request_id=request_id,
-                timestamp=datetime.now(timezone.utc),
-                model_version=model_version,
-                rules_version=manager.rules_version or "unknown",
-                model_score=score,
-                final_score=final_score,
-                rule_impacts=impact_objects,
-            )
-            event_logger.log_event(event)
-
-        except Exception as e:
-            # Don't fail inference if metrics/logging fails
-            logger.warning(f"Failed to record metrics/logs: {e}")
-            import traceback
-
-            logger.debug(traceback.format_exc())
-
-        # Identify risk components based on feature values
-        risk_components = self._identify_risk_components(features)
-
-        # Add rule-based components
-        for explanation in rule_result.explanations:
-            risk_components.append(
-                RiskComponent(
-                    key=f"rule_{explanation['rule_id']}",
-                    label=explanation["reason"]
-                    or f"rule_matched:{explanation['rule_id']}",
-                )
-            )
-
-        latency_ms = (time.time() - start_time) * 1000
-
-        # Determine risk label
-        if final_score >= 80:
-            risk_label = "HIGH"
-        elif final_score >= 30:
-            risk_label = "MEDIUM"
-        else:
-            risk_label = "LOW"
-
-        return SignalResponse(
-            request_id=request_id,
-            score=final_score,
-            risk_label=risk_label,
-            latency_ms=latency_ms,
-            risk_components=risk_components,
-            model_version=model_version,
-            matched_rules=[
-                MatchedRule(
-                    rule_id=exp["rule_id"],
-                    severity=exp["severity"],
-                    reason=exp["reason"],
-                    explanation=exp.get("explanation"),
-                )
-                for exp in rule_result.explanations
-            ],
-            model_score=score if rule_result.matched_rules else None,
-            rules_version=manager.rules_version if manager.ruleset else None,
-            shadow_matched_rules=[
-                MatchedRule(
-                    rule_id=exp["rule_id"],
-                    severity=exp["severity"],
-                    reason=exp["reason"],
-                    explanation=exp.get("explanation"),
-                )
-                for exp in rule_result.shadow_explanations
-            ],
-        )
 
     def predict(self, request: SignalRequest) -> dict:
         """Perform prediction only, skipping rule evaluation.
@@ -251,11 +72,22 @@ class SignalEvaluator:
         features = self._fetch_features(request)
         manager = get_model_manager()
 
+        fallback_used = False
         if manager.model_loaded and features.has_history:
             raw_probability = self._predict_with_model(manager, features)
             model_version = manager.model_version
             model_loaded = True
         else:
+            fallback_mode = os.getenv("FORECASTER_FALLBACK_MODE", "probability")
+            if fallback_mode == "error":
+                reason = (
+                    "model not loaded" if not manager.model_loaded else "no history"
+                )
+                raise RuntimeError(
+                    f"Forecaster fallback triggered (mode=error): {reason}"
+                )
+
+            fallback_used = True
             if os.getenv("DISABLE_HEURISTIC_FALLBACK") == "true":
                 raw_probability = 0.05
             else:
@@ -271,10 +103,12 @@ class SignalEvaluator:
             "model_score": score,
             "model_version": model_version,
             "model_loaded": model_loaded,
+            "fallback_used": fallback_used,
             "latency_ms": latency_ms,
             "diagnostics": {
                 "has_history": features.has_history,
                 "raw_probability": float(raw_probability),
+                "fallback_used": fallback_used,
             },
         }
 
@@ -313,7 +147,7 @@ class SignalEvaluator:
             if missing_features:
                 logger.warning(
                     f"Cannot use ML model: missing features {missing_features}. "
-                    "Falling back to rule-based scoring."
+                    "Falling back to heuristic prediction."
                 )
                 return self._calculate_probability(features)
 
@@ -325,14 +159,14 @@ class SignalEvaluator:
                 # predict_single returned None due to missing features
                 logger.warning(
                     "ML model prediction failed due to missing features. "
-                    "Falling back to rule-based scoring."
+                    "Falling back to heuristic prediction."
                 )
                 return self._calculate_probability(features)
 
             logger.debug(f"ML model prediction: {probability}")
             return float(probability)
         except Exception as e:
-            logger.warning(f"ML prediction failed, falling back to rules: {e}")
+            logger.warning(f"ML prediction failed, falling back to heuristic: {e}")
             return self._calculate_probability(features)
 
     def _fetch_features(self, request: SignalRequest) -> FeatureVector:
@@ -412,7 +246,7 @@ class SignalEvaluator:
         In production, this would be an XGBoost model.
 
         Args:
-            features: The feature vector for scoring.
+            features: The feature vector for forecasting.
 
         Returns:
             Raw probability between 0.0 and 1.0.
@@ -464,117 +298,18 @@ class SignalEvaluator:
         scores = self.calibrator.transform(prob_array)
         return int(scores[0])
 
-    def _apply_rules(self, manager, features: FeatureVector, score: int) -> RuleResult:
-        """Apply decision rules to the current score.
 
-        Args:
-            manager: ModelManager instance.
-            features: Feature vector.
-            score: Current score (1-99).
-
-        Returns:
-            RuleResult with final score and matched rules.
-        """
-        if os.getenv("DISABLE_LEGACY_RULES") == "true":
-            return RuleResult(final_score=score, matched_rules=[], explanations=[])
-
-        try:
-            ruleset = manager.ruleset
-            if ruleset is None or not ruleset.rules:
-                return RuleResult(final_score=score, matched_rules=[], explanations=[])
-
-            # Build feature dict from FeatureVector
-            feature_dict = {
-                "velocity_24h": features.velocity_24h,
-                "amount_to_avg_ratio_30d": features.amount_to_avg_ratio_30d,
-                "balance_volatility_z_score": features.balance_volatility_z_score,
-                "bank_connections_24h": features.bank_connections_24h,
-                "merchant_risk_score": features.merchant_risk_score,
-                "has_history": features.has_history,
-                "transaction_amount": float(features.transaction_amount),
-            }
-
-            return evaluate_rules(feature_dict, score, ruleset)
-        except Exception as e:
-            logger.warning(f"Rule evaluation failed, using model score: {e}")
-            return RuleResult(final_score=score, matched_rules=[], explanations=[])
-
-    def _identify_risk_components(self, features: FeatureVector) -> list[RiskComponent]:
-        """Identify risk components based on feature thresholds.
-
-        This provides interpretability by flagging which features
-        contributed to a high score.
-
-        Args:
-            features: The feature vector.
-
-        Returns:
-            List of risk components that triggered.
-        """
-        components = []
-
-        if features.velocity_24h > VELOCITY_HIGH_THRESHOLD:
-            components.append(
-                RiskComponent(
-                    key="velocity",
-                    label="high_transaction_velocity",
-                )
-            )
-
-        if features.amount_to_avg_ratio_30d > AMOUNT_RATIO_HIGH_THRESHOLD:
-            components.append(
-                RiskComponent(
-                    key="amount_ratio",
-                    label="unusual_transaction_amount",
-                )
-            )
-
-        if features.balance_volatility_z_score < BALANCE_VOLATILITY_THRESHOLD:
-            components.append(
-                RiskComponent(
-                    key="balance",
-                    label="low_balance_volatility",
-                )
-            )
-
-        if features.bank_connections_24h > CONNECTION_BURST_THRESHOLD:
-            components.append(
-                RiskComponent(
-                    key="connections",
-                    label="connection_burst_detected",
-                )
-            )
-
-        if features.merchant_risk_score > MERCHANT_RISK_THRESHOLD:
-            components.append(
-                RiskComponent(
-                    key="merchant",
-                    label="high_risk_merchant",
-                )
-            )
-
-        if not features.has_history:
-            components.append(
-                RiskComponent(
-                    key="history",
-                    label="insufficient_history",
-                )
-            )
-
-        return components
+# Singleton forecaster instance
+_forecaster: SignalForecaster | None = None
 
 
-# Singleton evaluator instance
-_evaluator: SignalEvaluator | None = None
-
-
-def get_evaluator() -> SignalEvaluator:
-    """Get or create the signal evaluator singleton.
+def get_forecaster() -> SignalForecaster:
+    """Get or create the signal forecaster singleton.
 
     Returns:
-        SignalEvaluator instance.
+        SignalForecaster instance.
     """
-    global _evaluator
-    if _evaluator is None:
-        _evaluator = SignalEvaluator()
-    return _evaluator
+    global _forecaster
+    if _forecaster is None:
+        _forecaster = SignalForecaster()
+    return _forecaster

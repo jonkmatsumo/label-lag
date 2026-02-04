@@ -163,6 +163,9 @@ class PredictResponse(BaseModel):
     model_score: int = Field(..., ge=1, le=99, description="Calibrated model score")
     model_version: str = Field(..., description="Model version")
     model_loaded: bool = Field(..., description="True if a custom model was used")
+    fallback_used: bool = Field(
+        default=False, description="True if heuristic fallback was used"
+    )
     latency_ms: float = Field(..., description="Prediction latency")
     diagnostics: dict[str, Any] = Field(
         default_factory=dict, description="Diagnostic info"
@@ -468,6 +471,10 @@ class SandboxEvaluateRequest(BaseModel):
         default=None,
         description="Custom ruleset to evaluate. If None, uses production ruleset.",
     )
+    shadow_mode: bool = Field(
+        default=False,
+        description="If True, evaluate rules without applying to final_score.",
+    )
 
 
 class SandboxMatchedRule(BaseModel):
@@ -484,6 +491,10 @@ class SandboxEvaluateResponse(BaseModel):
     """Response schema for sandbox rule evaluation."""
 
     final_score: int = Field(..., description="Final score after rule application")
+    baseline_score: int = Field(..., description="Base score before rule application")
+    shadow_score: int | None = Field(
+        None, description="What the score would be if rules were applied"
+    )
     matched_rules: list[SandboxMatchedRule] = Field(
         default_factory=list,
         description="Production rules that matched",
@@ -500,6 +511,57 @@ class SandboxEvaluateResponse(BaseModel):
         default=False, description="Whether transaction was rejected"
     )
     ruleset_version: str = Field(..., description="Version of ruleset used")
+
+
+class SandboxDiffRequest(BaseModel):
+    """Request schema for sandbox ruleset comparison."""
+
+    features: SandboxFeatures = Field(
+        default_factory=SandboxFeatures,
+        description="Feature values for evaluation",
+    )
+    base_score: int = Field(
+        default=50,
+        ge=1,
+        le=99,
+        description="Base score before rule application",
+    )
+    ruleset_a: RuleSetDefinition | None = Field(
+        default=None,
+        description="Baseline ruleset. If None, uses production.",
+    )
+    ruleset_b: RuleSetDefinition | None = Field(
+        default=None,
+        description="Proposed ruleset. If None, uses production.",
+    )
+    shadow_mode: bool = Field(
+        default=False,
+        description="If True, diff based on shadow (simulated) results.",
+    )
+
+
+class RulesDiffSummary(BaseModel):
+    """Summary of differences between two ruleset evaluations."""
+
+    score_delta: int = Field(..., description="Difference in final score (B - A)")
+    matched_rules_added: list[str] = Field(
+        default_factory=list, description="Rules that matched in B but not A"
+    )
+    matched_rules_removed: list[str] = Field(
+        default_factory=list, description="Rules that matched in A but not B"
+    )
+
+
+class SandboxDiffResponse(BaseModel):
+    """Response schema for sandbox ruleset comparison."""
+
+    a: SandboxEvaluateResponse = Field(
+        ..., description="Evaluation result for ruleset A"
+    )
+    b: SandboxEvaluateResponse = Field(
+        ..., description="Evaluation result for ruleset B"
+    )
+    diff: RulesDiffSummary = Field(..., description="Summary of differences")
 
 
 class RuleMetricsItem(BaseModel):
