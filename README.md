@@ -22,7 +22,7 @@ flowchart TB
 
     subgraph Inference[Inference & ML Compute]
         GO_INF[Go Inference Gateway]
-        PY_API[Python API / ML Compute]
+        PY_API[Python Forecaster / ML Compute]
     end
 
     subgraph Analytics[Analytics Data Access]
@@ -121,37 +121,13 @@ The React UI now supports:
 - **Rule Inspector**: Full rule lifecycle management including Shadow Mode and Backtesting.
 - **Analytics**: Historical trends and alert monitoring.
 
-## Go Inference Cutover Readiness
-
-The system includes a Go-based `inference-gateway` designed to front the Python `/evaluate/signal` compute path for high-throughput inference.
-
-The gateway exposes `GET /ready` to verify rules loading and Python backend connectivity.
-
-### Gateway Default Routing
-
-The BFF routes inference and core UI reads through the gateway by default. The Python
-API remains for ML-only operations (training, rule lifecycle, backtest compare, and
-rule attribution).
-
-### Verifying Parity
-
-A parity test suite is available to compare outputs from both engines:
-
-```bash
-# Run parity integration tests (requires stack running)
-export RUN_PARITY_TESTS=1
-export BFF_PYTHON_API_BASE_URL=http://localhost:8100
-export BFF_GATEWAY_BASE_URL=http://localhost:8181
-cd bff && npm test tests/parity.test.ts
-```
-
 ## Repository / File Structure
 
 The repo is organized around data flow and runtime boundaries so services can evolve independently while sharing a common domain model.
 
 ```
 src/
-├── api/                 # FastAPI app, rule engine, evaluation services
+├── api/                 # FastAPI app, model forecaster, rule management
 ├── model/               # XGBoost training, evaluation, tuning
 ├── monitor/             # Feature distribution monitoring and drift reporting
 ├── pipeline/            # Point-in-time feature materialization (SQL window functions)
@@ -171,7 +147,7 @@ Key folders:
 
 ### API Service
 
-Responsible for live scoring, training triggers, rule lifecycle actions, and model deployment. It exposes evaluation and lifecycle endpoints (`/evaluate/signal`, `/train`, `/rules/{id}/publish`, `/models/deploy`) and serves Swagger docs at `/docs`. The API is compute-only and relies on the Go Analytics CRUD service for data access.
+Responsible for model forecasting, training triggers, rule lifecycle management, and model deployment. It exposes prediction and lifecycle endpoints (`/predict/signal`, `/train`, `/rules/{id}/publish`, `/models/deploy`) and serves Swagger docs at `/docs`. The API is compute-only and relies on the Go Analytics CRUD service for data access.
 
 ### Model Training & Registry (MLflow)
 
