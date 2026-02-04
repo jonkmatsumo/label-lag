@@ -11,7 +11,7 @@ import numpy as np
 from google.protobuf.timestamp_pb2 import Timestamp
 
 from api.crud_client import get_crud_client
-from api.rules import RuleSet, evaluate_rules
+from api.rules import RuleSet
 from api.schemas import BacktestDelta
 
 logger = logging.getLogger(__name__)
@@ -93,7 +93,6 @@ class BacktestRunner:
         job_id = f"backtest_{uuid.uuid4().hex[:12]}"
         logger.info(f"Starting backtest {job_id} for ruleset {ruleset.version}")
 
-        decision_mode = os.getenv("BACKTEST_DECISION_MODE", "gateway")
         client = get_gateway_client()
         ruleset_dict = asdict(ruleset)
 
@@ -112,21 +111,15 @@ class BacktestRunner:
             rejected_counts = []
 
             for i, feature_dict in enumerate(features_list):
-                if decision_mode == "gateway":
-                    result = client.evaluate_rules(
-                        features=feature_dict,
-                        base_score=base_score,
-                        ruleset=ruleset_dict,
-                        request_id=f"{job_id}_{i}",
-                    )
-                    scores.append(result["final_score"])
-                    matched_counts.append(len(result["matched_rules"]))
-                    rejected_counts.append(1 if result.get("rejected") else 0)
-                else:
-                    result = evaluate_rules(feature_dict, base_score, ruleset)
-                    scores.append(result.final_score)
-                    matched_counts.append(len(result.matched_rules))
-                    rejected_counts.append(1 if result.rejected else 0)
+                result = client.evaluate_rules(
+                    features=feature_dict,
+                    base_score=base_score,
+                    ruleset=ruleset_dict,
+                    request_id=f"{job_id}_{i}",
+                )
+                scores.append(result["final_score"])
+                matched_counts.append(len(result["matched_rules"]))
+                rejected_counts.append(1 if result.get("rejected") else 0)
 
             # Compute metrics
             metrics = self._compute_metrics(

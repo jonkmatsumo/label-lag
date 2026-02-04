@@ -13,6 +13,38 @@ from api.backtest import BacktestMetrics, BacktestRunner, BacktestStore
 from api.rules import Rule, RuleSet
 
 
+@pytest.fixture(autouse=True)
+def mock_gateway_client(monkeypatch):
+    """Mock the GatewayDecisionClient for all tests."""
+    from api import gateway_client
+    from api.rules import Rule, RuleSet, evaluate_rules
+
+    mock_client = MagicMock()
+
+    def side_effect(features, base_score, ruleset=None, request_id=None):
+        if ruleset:
+            rules_obj = [Rule(**r) for r in ruleset["rules"]]
+            rs = RuleSet(version=ruleset["version"], rules=rules_obj)
+        else:
+            rs = RuleSet.empty()
+
+        result = evaluate_rules(features, base_score, rs)
+
+        return {
+            "final_score": result.final_score,
+            "matched_rules": result.matched_rules,
+            "explanations": [],
+            "shadow_matched_rules": result.shadow_matched_rules,
+            "shadow_explanations": [],
+            "rejected": result.rejected,
+            "ruleset_version": rs.version or "none",
+        }
+
+    mock_client.evaluate_rules.side_effect = side_effect
+    monkeypatch.setattr(gateway_client, "get_gateway_client", lambda: mock_client)
+    return mock_client
+
+
 class TestBacktestMetrics:
     """Tests for BacktestMetrics dataclass."""
 
