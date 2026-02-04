@@ -9,13 +9,16 @@ import (
 )
 
 type EvaluateRulesRequest struct {
-	Features  map[string]any `json:"features"`
-	BaseScore int            `json:"base_score"`
-	RuleSet   *rules.RuleSet `json:"ruleset,omitempty"`
+	Features   map[string]any `json:"features"`
+	BaseScore  int            `json:"base_score"`
+	RuleSet    *rules.RuleSet `json:"ruleset,omitempty"`
+	ShadowMode bool           `json:"shadow_mode"`
 }
 
 type EvaluateRulesResponse struct {
 	FinalScore         int                 `json:"final_score"`
+	BaselineScore      int                 `json:"baseline_score"`
+	ShadowScore        int                 `json:"shadow_score,omitempty"`
 	MatchedRules       []string            `json:"matched_rules"`
 	Explanations       []rules.Explanation `json:"explanations"`
 	ShadowMatchedRules []string            `json:"shadow_matched_rules"`
@@ -62,12 +65,19 @@ func (h *Handler) handleEvaluateRules(w http.ResponseWriter, r *http.Request) {
 
 	resp := EvaluateRulesResponse{
 		FinalScore:         result.FinalScore,
+		BaselineScore:      req.BaseScore,
 		MatchedRules:       result.MatchedRules,
 		Explanations:       result.Explanations,
 		ShadowMatchedRules: result.ShadowMatchedRules,
 		ShadowExplanations: result.ShadowExplanations,
 		Rejected:           result.Rejected,
 		RuleSetVersion:     result.RulesVersion,
+	}
+
+	if req.ShadowMode {
+		resp.ShadowScore = result.FinalScore
+		resp.FinalScore = req.BaseScore
+		resp.Rejected = false
 	}
 
 	w.Header().Set("Content-Type", "application/json")
