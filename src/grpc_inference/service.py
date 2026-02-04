@@ -12,7 +12,7 @@ from google.protobuf import struct_pb2
 
 from api.model_manager import get_model_manager
 from api.schemas import SignalRequest
-from api.services import SignalEvaluator
+from api.services import SignalForecaster
 from grpc_inference.config import GRPCInferenceConfig
 from grpc_inference.proto.inference.v1 import inference_pb2, inference_pb2_grpc
 
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 class InferenceService(inference_pb2_grpc.InferenceServiceServicer):
     def __init__(self, config: GRPCInferenceConfig):
         self._config = config
-        self._evaluator = SignalEvaluator()
+        self._forecaster = SignalForecaster()
         self._manager = get_model_manager()
 
     def score(self, request, context):
@@ -56,16 +56,16 @@ class InferenceService(inference_pb2_grpc.InferenceServiceServicer):
         except Exception as exc:
             context.abort(grpc.StatusCode.INVALID_ARGUMENT, f"invalid request: {exc}")
 
-        features = self._evaluator._fetch_features(signal_request)
+        features = self._forecaster._fetch_features(signal_request)
         model_loaded = self._manager.model_loaded
         if model_loaded and features.has_history:
-            raw_prob = self._evaluator._predict_with_model(self._manager, features)
+            raw_prob = self._forecaster._predict_with_model(self._manager, features)
             model_version = self._manager.model_version
         else:
-            raw_prob = self._evaluator._calculate_probability(features)
-            model_version = self._evaluator.model_version
+            raw_prob = self._forecaster._calculate_probability(features)
+            model_version = self._forecaster.model_version
 
-        model_score = self._evaluator._calibrate_score(raw_prob)
+        model_score = self._forecaster._calibrate_score(raw_prob)
 
         response = inference_pb2.ScoreResponse(
             request_id=request_id,

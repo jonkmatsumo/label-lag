@@ -10,8 +10,8 @@ from api.main import app
 from api.schemas import Currency, SignalRequest
 from api.services import (
     FeatureVector,
-    SignalEvaluator,
-    get_evaluator,
+    SignalForecaster,
+    get_forecaster,
 )
 
 
@@ -22,9 +22,9 @@ def client():
 
 
 @pytest.fixture
-def evaluator():
-    """Create signal evaluator."""
-    return SignalEvaluator()
+def forecaster():
+    """Create signal forecaster."""
+    return SignalForecaster()
 
 
 class TestHealthEndpoint:
@@ -219,10 +219,10 @@ class TestSignalValidation:
         assert response.status_code == 422
 
 
-class TestSignalEvaluator:
-    """Tests for SignalEvaluator service."""
+class TestSignalForecaster:
+    """Tests for SignalForecaster service."""
 
-    def test_predict_returns_response(self, evaluator):
+    def test_predict_returns_response(self, forecaster):
         request = SignalRequest(
             user_id="user_test",
             amount=Decimal("100.00"),
@@ -230,13 +230,13 @@ class TestSignalEvaluator:
             client_transaction_id="txn_test",
         )
 
-        response = evaluator.predict(request)
+        response = forecaster.predict(request)
 
         assert response["request_id"].startswith("req_")
         assert 1 <= response["model_score"] <= 99
         assert response["model_version"] == "v1.0.0"
 
-    def test_probability_calculation_base(self, evaluator):
+    def test_probability_calculation_base(self, forecaster):
         """Low-risk features should give low probability."""
         features = FeatureVector(
             velocity_24h=1,
@@ -247,40 +247,40 @@ class TestSignalEvaluator:
             has_history=True,
         )
 
-        prob = evaluator._calculate_probability(features)
+        prob = forecaster._calculate_probability(features)
         assert prob < 0.1
 
-    def test_probability_high_velocity(self, evaluator):
+    def test_probability_high_velocity(self, forecaster):
         """High velocity should increase probability."""
         low_velocity = FeatureVector(velocity_24h=1, has_history=True)
         high_velocity = FeatureVector(velocity_24h=10, has_history=True)
 
-        prob_low = evaluator._calculate_probability(low_velocity)
-        prob_high = evaluator._calculate_probability(high_velocity)
+        prob_low = forecaster._calculate_probability(low_velocity)
+        prob_high = forecaster._calculate_probability(high_velocity)
 
         assert prob_high > prob_low
 
-    def test_probability_high_amount_ratio(self, evaluator):
+    def test_probability_high_amount_ratio(self, forecaster):
         """High amount ratio should increase probability."""
         normal = FeatureVector(amount_to_avg_ratio_30d=1.0, has_history=True)
         high = FeatureVector(amount_to_avg_ratio_30d=5.0, has_history=True)
 
-        prob_normal = evaluator._calculate_probability(normal)
-        prob_high = evaluator._calculate_probability(high)
+        prob_normal = forecaster._calculate_probability(normal)
+        prob_high = forecaster._calculate_probability(high)
 
         assert prob_high > prob_normal
 
-    def test_probability_no_history(self, evaluator):
+    def test_probability_no_history(self, forecaster):
         """No history should increase probability."""
         with_history = FeatureVector(has_history=True)
         no_history = FeatureVector(has_history=False)
 
-        prob_with = evaluator._calculate_probability(with_history)
-        prob_without = evaluator._calculate_probability(no_history)
+        prob_with = forecaster._calculate_probability(with_history)
+        prob_without = forecaster._calculate_probability(no_history)
 
         assert prob_without > prob_with
 
-    def test_probability_capped_at_099(self, evaluator):
+    def test_probability_capped_at_099(self, forecaster):
         """Probability should be capped at 0.99."""
         extreme_features = FeatureVector(
             velocity_24h=100,
@@ -291,21 +291,21 @@ class TestSignalEvaluator:
             has_history=False,
         )
 
-        prob = evaluator._calculate_probability(extreme_features)
+        prob = forecaster._calculate_probability(extreme_features)
         assert prob <= 0.99
 
 
-class TestGetEvaluator:
-    """Tests for evaluator singleton."""
+class TestGetForecaster:
+    """Tests for forecaster singleton."""
 
-    def test_returns_evaluator(self):
-        evaluator = get_evaluator()
-        assert isinstance(evaluator, SignalEvaluator)
+    def test_returns_forecaster(self):
+        forecaster = get_forecaster()
+        assert isinstance(forecaster, SignalForecaster)
 
     def test_returns_same_instance(self):
-        evaluator1 = get_evaluator()
-        evaluator2 = get_evaluator()
-        assert evaluator1 is evaluator2
+        forecaster1 = get_forecaster()
+        forecaster2 = get_forecaster()
+        assert forecaster1 is forecaster2
 
 
 class TestGenerateDataEndpoint:

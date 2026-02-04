@@ -40,13 +40,14 @@ class FeatureVector:
 
 
 @dataclass
-class SignalEvaluator:
-    """Evaluates fraud signals for transactions.
+class SignalForecaster:
+    """Forecaster for fraud signals.
 
     This service is idempotent - it only assesses risk without modifying
-    any transaction state.
+    any transaction state. It focuses on pure ML prediction and probability
+    calculation, providing inputs for the rule-based decisioning gateway.
 
-    Uses the trained ML model when available, falls back to rule-based scoring.
+    Uses the trained ML model when available, falls back to heuristic-based scoring.
     """
 
     calibrator: ScoreCalibrator = field(default_factory=ScoreCalibrator)
@@ -285,17 +286,17 @@ class SignalEvaluator:
         return int(scores[0])
 
 
-# Singleton evaluator instance
-_evaluator: SignalEvaluator | None = None
+# Singleton forecaster instance
+_forecaster: SignalForecaster | None = None
 
 
-def get_evaluator() -> SignalEvaluator:
-    """Get or create the signal evaluator singleton.
+def get_forecaster() -> SignalForecaster:
+    """Get or create the signal forecaster singleton.
 
     Returns:
-        SignalEvaluator instance.
+        SignalForecaster instance.
     """
-    global _evaluator
-    if _evaluator is None:
-        _evaluator = SignalEvaluator()
-    return _evaluator
+    global _forecaster
+    if _forecaster is None:
+        _forecaster = SignalForecaster()
+    return _forecaster

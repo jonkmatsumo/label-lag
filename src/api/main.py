@@ -101,7 +101,7 @@ from api.schemas import (
     TrainResponse,
     ValidationResult,
 )
-from api.services import get_evaluator
+from api.services import get_forecaster
 
 if TYPE_CHECKING:
     pass
@@ -150,10 +150,10 @@ async def health_check() -> HealthResponse:
         HealthResponse with status and model information.
     """
     manager = get_model_manager()
-    evaluator = get_evaluator()
+    forecaster = get_forecaster()
 
-    # Use model manager version if available, otherwise fall back to evaluator
-    version = manager.model_version if manager.model_loaded else evaluator.model_version
+    # Use model manager version if available, otherwise fall back to forecaster
+    version = manager.model_version if manager.model_loaded else forecaster.model_version
 
     return HealthResponse(
         status="healthy",
@@ -527,8 +527,8 @@ async def predict_signal(request: SignalRequest) -> PredictResponse:
         PredictResponse with model score and version.
     """
     try:
-        evaluator = get_evaluator()
-        result = evaluator.predict(request)
+        forecaster = get_forecaster()
+        result = forecaster.predict(request)
         return PredictResponse(**result)
     except Exception as e:
         raise HTTPException(

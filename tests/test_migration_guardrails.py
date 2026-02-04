@@ -14,7 +14,7 @@ def test_no_legacy_signal_evaluation_route():
 
 
 def test_no_legacy_decisioning_methods():
-    """Assert that SignalEvaluator no longer has legacy decisioning methods."""
+    """Assert that SignalForecaster no longer has legacy decisioning methods."""
     services_py = Path("src/api/services.py").read_text()
     assert "def evaluate(" not in services_py
     assert "def _apply_rules(" not in services_py
