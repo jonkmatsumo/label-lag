@@ -235,6 +235,21 @@ class TestSignalForecaster:
         assert response["request_id"].startswith("req_")
         assert 1 <= response["model_score"] <= 99
         assert response["model_version"] == "v1.0.0"
+        assert "fallback_used" in response
+
+    def test_predict_fallback_mode_error(self, forecaster, monkeypatch):
+        """Test that fallback_mode=error raises RuntimeError when no model/history."""
+        monkeypatch.setenv("FORECASTER_FALLBACK_MODE", "error")
+        # Ensure we trigger fallback by using unknown user
+        request = SignalRequest(
+            user_id="unknown_user_for_error",
+            amount=Decimal("100.00"),
+            currency=Currency.USD,
+            client_transaction_id="txn_error",
+        )
+
+        with pytest.raises(RuntimeError, match="Forecaster fallback triggered"):
+            forecaster.predict(request)
 
     def test_probability_calculation_base(self, forecaster):
         """Low-risk features should give low probability."""

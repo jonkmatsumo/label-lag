@@ -163,6 +163,9 @@ class PredictResponse(BaseModel):
     model_score: int = Field(..., ge=1, le=99, description="Calibrated model score")
     model_version: str = Field(..., description="Model version")
     model_loaded: bool = Field(..., description="True if a custom model was used")
+    fallback_used: bool = Field(
+        default=False, description="True if heuristic fallback was used"
+    )
     latency_ms: float = Field(..., description="Prediction latency")
     diagnostics: dict[str, Any] = Field(
         default_factory=dict, description="Diagnostic info"

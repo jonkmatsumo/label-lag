@@ -72,11 +72,18 @@ class SignalForecaster:
         features = self._fetch_features(request)
         manager = get_model_manager()
 
+        fallback_used = False
         if manager.model_loaded and features.has_history:
             raw_probability = self._predict_with_model(manager, features)
             model_version = manager.model_version
             model_loaded = True
         else:
+            fallback_mode = os.getenv("FORECASTER_FALLBACK_MODE", "probability")
+            if fallback_mode == "error":
+                reason = "model not loaded" if not manager.model_loaded else "no history"
+                raise RuntimeError(f"Forecaster fallback triggered (mode=error): {reason}")
+
+            fallback_used = True
             if os.getenv("DISABLE_HEURISTIC_FALLBACK") == "true":
                 raw_probability = 0.05
             else:
@@ -92,10 +99,12 @@ class SignalForecaster:
             "model_score": score,
             "model_version": model_version,
             "model_loaded": model_loaded,
+            "fallback_used": fallback_used,
             "latency_ms": latency_ms,
             "diagnostics": {
                 "has_history": features.has_history,
                 "raw_probability": float(raw_probability),
+                "fallback_used": fallback_used,
             },
         }
 

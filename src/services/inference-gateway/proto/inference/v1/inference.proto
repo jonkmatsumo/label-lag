@@ -25,6 +25,7 @@ message ScoreResponse {
   string model_version = 3;
   bool model_loaded = 4;
   google.protobuf.Struct features_used = 5;
+  bool fallback_used = 6;
 }
 
 message ErrorDetail {
