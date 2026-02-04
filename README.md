@@ -8,35 +8,37 @@ Label Lag is an end-to-end fraud detection system that pairs realistic label-del
 
 ### System Design Diagram
 
-This diagram shows the publish/deploy path across UI, API, and storage, emphasizing how approval and deployment are separated for both rules and models.
+This diagram shows the current runtime path for inference, analytics, and model registry.
 
 ```mermaid
 flowchart TB
-    subgraph UI[Streamlit UI]
-        UI1[Rule Inspector]
-        UI2[Model Lab]
+    subgraph UI[User Interfaces]
+        UI_REACT[React UI]
+        UI_STREAMLIT[Streamlit UI]
     end
 
-    subgraph API[FastAPI]
-        API1[POST /rules/id/publish]
-        API2[POST /models/deploy]
-        API3[Audit Logger]
+    subgraph Edge[Edge Layer]
+        BFF[Node BFF]
     end
 
-    subgraph Storage
-        S1[DraftRuleStore]
-        S2[ModelManager]
-        S3[MLflow Registry]
+    subgraph Inference[Inference & ML Compute]
+        GO_INF[Go Inference Gateway]
+        PY_API[Python API / ML Compute]
     end
 
-    UI1 --> API1
-    UI2 --> API2
-    API1 --> S1
-    API1 --> S2
-    API1 --> API3
-    API2 --> S3
-    API2 --> S2
-    API2 --> API3
+    subgraph Analytics[Analytics Data Access]
+        GO_CRUD[Go Analytics CRUD]
+        DB[(Postgres)]
+    end
+
+    subgraph Registry[Model Registry]
+        MLFLOW[MLflow Registry]
+        MINIO[MinIO Artifacts]
+    end
+
+    UI_REACT --> BFF --> GO_INF --> PY_API --> GO_CRUD --> DB
+    UI_STREAMLIT --> PY_API
+    PY_API --> MLFLOW --> MINIO
 ```
 
 ### ML / Data Pipeline Diagram
@@ -90,7 +92,7 @@ stateDiagram-v2
 
 ## Detailed Architecture Breakdown
 
-Label Lag separates infrastructure, application runtime, and lifecycle workflows so that training and deployment are explicit and observable. The publish/deploy diagram above illustrates how UI actions flow through the API into storage and registry services, while the pipeline diagram shows how models move from training to production inference. The rule state machine anchors governance, ensuring changes pass review before affecting live scoring.
+Label Lag separates infrastructure, application runtime, and lifecycle workflows so that training and deployment are explicit and observable. The system design diagram above shows the runtime path (React → BFF → Go Inference → Python ML → Go Analytics → DB) alongside Streamlit’s direct API access. The pipeline diagram shows how models move from training to production inference. The rule state machine anchors governance, ensuring changes pass review before affecting live scoring.
 
 Core flows:
 - **Data generation and feature materialization** feed training and historical analytics while preserving point-in-time correctness.
@@ -114,10 +116,11 @@ All ports are configurable via `.env`.
 | MinIO Console | 9101 | Object storage console (minioadmin/minioadmin) |
 | PostgreSQL | 5542 | Transaction and feature storage |
 | Inference Gateway | 8181 | Go-based high-throughput inference gateway |
+| Analytics CRUD | 50051 | Go analytics service (gRPC) backing compute-only data access |
 
 ### Parallel UI Operation
 
-Both Streamlit (port 8601) and React (port 5180) UIs run simultaneously. The React UI communicates with FastAPI through the BFF proxy layer (port 3210), while Streamlit connects directly to FastAPI. This allows safe migration without disrupting existing workflows.
+Both Streamlit (port 8601) and React (port 5180) UIs run simultaneously. The React UI communicates with the Go Inference Gateway through the BFF proxy layer (port 3210), and the gateway forwards compute requests to the Python ML API. Streamlit connects directly to the Python API for admin, training, and analytics workflows. This allows safe migration without disrupting existing workflows.
 
 The React UI now supports:
 - **Synthetic Dataset Management**: Generate data, view distributions, and analyze correlations.
@@ -127,9 +130,9 @@ The React UI now supports:
 
 ## Go Inference Cutover Readiness
 
-The system includes a Go-based `inference-gateway` designed to replace the FastAPI `/evaluate/signal` endpoint for high-throughput inference.
+The system includes a Go-based `inference-gateway` designed to front the Python `/evaluate/signal` compute path for high-throughput inference.
 
-The gateway exposes `GET /ready` to verify rules loading and inference backend connectivity.
+The gateway exposes `GET /ready` to verify rules loading and Python backend connectivity.
 
 ### Switching Inference Modes
 
@@ -195,7 +198,7 @@ Key folders:
 
 ### API Service
 
-Responsible for live scoring, training triggers, rule lifecycle actions, and model deployment. It exposes evaluation and lifecycle endpoints (`/evaluate/signal`, `/train`, `/rules/{id}/publish`, `/models/deploy`) and serves Swagger docs at `/docs`.
+Responsible for live scoring, training triggers, rule lifecycle actions, and model deployment. It exposes evaluation and lifecycle endpoints (`/evaluate/signal`, `/train`, `/rules/{id}/publish`, `/models/deploy`) and serves Swagger docs at `/docs`. The API is compute-only and relies on the Go Analytics CRUD service for data access.
 
 ### Dashboard (Streamlit)
 
@@ -208,6 +211,10 @@ Training runs are tracked with metrics and artifacts, then promoted through stag
 ### Rule Engine
 
 Rules evaluate transaction features using operators (`>`, `>=`, `<`, `<=`, `==`, `in`, `not_in`) and actions (`override_score`, `clamp_min`, `clamp_max`, `reject`). The lifecycle enforces draft → review → approval → publish transitions, and supports shadow evaluation and sandbox testing for safe iteration.
+
+### Analytics CRUD (Go)
+
+Provides the gRPC data access layer for compute-only services. The Python API, model training loaders, and analytics endpoints rely on this service for reads and writes, keeping direct database I/O out of ML/compute surfaces.
 
 ### Synthetic Data Generator
 
@@ -273,6 +280,9 @@ INFERENCE_GATEWAY_IDLE_TIMEOUT=60s
 ### Analytics CRUD (Go)
 
 ```
+ANALYTICS_CRUD_PORT=50051
+ANALYTICS_CRUD_TARGET=analytics-crud:50051
+ANALYTICS_CRUD_TIMEOUT_SECONDS=15
 ANALYTICS_CRUD_ALLOW_INSECURE_DEFAULTS=false
 ```
 
