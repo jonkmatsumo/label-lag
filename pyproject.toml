@@ -17,7 +17,6 @@ dependencies = [
     "scikit-learn>=1.4.0",
     "matplotlib>=3.8.0",
     "plotly>=5.18.0",
-    "streamlit>=1.32.0",
     "fastapi>=0.111.0",
     "uvicorn>=0.30.0",
     "requests>=2.31.0",
@@ -60,3 +59,8 @@ select = ["E", "F", "I", "N", "W", "UP"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+[dependency-groups]
+dev = [
+    "tenacity>=9.1.2",
+]

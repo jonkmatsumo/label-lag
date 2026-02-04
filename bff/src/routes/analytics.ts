@@ -72,6 +72,7 @@ export async function analyticsRoutes(
           method: 'GET',
           path: '/analytics/overview',
           requestId: request.requestId,
+          target: 'gateway',
         });
 
         cache.set(cacheKey, response.data);
@@ -112,6 +113,7 @@ export async function analyticsRoutes(
           method: 'GET',
           path: `/analytics/daily-stats?days=${days}`,
           requestId: request.requestId,
+          target: 'gateway',
         });
 
         cache.set(cacheKey, response.data);
@@ -150,6 +152,7 @@ export async function analyticsRoutes(
           method: 'GET',
           path: `/analytics/transactions?days=${days}&limit=${limit}`,
           requestId: request.requestId,
+          target: 'gateway',
         });
 
         return reply.status(response.statusCode).send(response.data);
@@ -186,6 +189,7 @@ export async function analyticsRoutes(
           method: 'GET',
           path: `/analytics/recent-alerts?limit=${limit}`,
           requestId: request.requestId,
+          target: 'gateway',
         });
 
         return reply.status(response.statusCode).send(response.data);
@@ -207,6 +211,7 @@ export async function analyticsRoutes(
           method: 'GET',
           path: '/analytics/fingerprint',
           requestId: request.requestId,
+          target: 'gateway',
         });
 
         return reply.status(response.statusCode).send(response.data);
@@ -244,6 +249,7 @@ export async function analyticsRoutes(
           method: 'GET',
           path: `/analytics/feature-sample?sample_size=${sample_size}&stratify=${stratify}`,
           requestId: request.requestId,
+          target: 'gateway',
         });
 
         return reply.status(response.statusCode).send(response.data);
@@ -288,6 +294,7 @@ export async function analyticsRoutes(
           method: 'GET',
           path: `/analytics/rules/${encodeURIComponent(rule_id)}?days=${days}`,
           requestId: request.requestId,
+          target: 'python',
         });
 
         return reply.status(response.statusCode).send(response.data);
@@ -326,6 +333,7 @@ export async function analyticsRoutes(
           method: 'GET',
           path: `/analytics/attribution?rule_id=${encodeURIComponent(rule_id)}&days=${days}`,
           requestId: request.requestId,
+          target: 'python',
         });
 
         return reply.status(response.statusCode).send(response.data);

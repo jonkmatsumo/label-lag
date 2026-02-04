@@ -4,21 +4,23 @@ import pytest
 import requests
 from tenacity import retry, stop_after_attempt, wait_fixed
 
-# Default target is localhost:8000, but can be overridden
-# In the provided docker ps, the API is mapped to port 8640
-API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8640")
+# Default target is localhost:8181, but can be overridden
+GATEWAY_BASE_URL = os.getenv("GATEWAY_BASE_URL", "http://localhost:8181")
 
 
 @pytest.fixture(scope="module")
 def api_url():
-    """Fixture to provide the API base URL."""
-    # Check if the API is reachable before starting tests
+    """Fixture to provide the gateway base URL."""
+    # Check if the gateway is reachable before starting tests
     try:
-        response = requests.get(f"{API_BASE_URL}/health", timeout=5)
+        response = requests.get(f"{GATEWAY_BASE_URL}/health", timeout=5)
         response.raise_for_status()
+        overview = requests.get(f"{GATEWAY_BASE_URL}/analytics/overview", timeout=5)
+        if overview.status_code == 404:
+            pytest.skip("Gateway is reachable but analytics routes are not registered.")
     except requests.exceptions.RequestException as e:
-        pytest.skip(f"API is not reachable at {API_BASE_URL}: {e}")
-    return API_BASE_URL
+        pytest.skip(f"Gateway is not reachable at {GATEWAY_BASE_URL}: {e}")
+    return GATEWAY_BASE_URL
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))

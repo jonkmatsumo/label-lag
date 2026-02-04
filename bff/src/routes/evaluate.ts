@@ -1,11 +1,9 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { HttpClient, UpstreamError } from '../services/http-client.js';
-import { Config } from '../config.js';
 import type { SignalRequest, SignalResponse } from '../types/api.js';
 
 export interface EvaluateRoutesOptions {
   httpClient: HttpClient;
-  config: Config;
 }
 
 interface EvaluateSignalBody {
@@ -22,7 +20,7 @@ export async function evaluateRoutes(
   fastify: FastifyInstance,
   options: EvaluateRoutesOptions
 ): Promise<void> {
-  const { httpClient, config } = options;
+  const { httpClient } = options;
 
   // POST /bff/v1/evaluate/signal - Risk evaluation
   fastify.post<{ Body: EvaluateSignalBody }>(
@@ -45,15 +43,12 @@ export async function evaluateRoutes(
       try {
         const signalRequest: SignalRequest = request.body;
 
-        // Route based on inference mode
-        const target = config.inferenceMode === 'gateway' ? 'gateway' : 'fastapi';
-
         const response = await httpClient.request<SignalResponse>({
           method: 'POST',
           path: '/evaluate/signal',
           body: signalRequest,
           requestId: request.requestId,
-          target,
+          target: 'gateway',
         });
 
         return reply.status(response.statusCode).send(response.data);

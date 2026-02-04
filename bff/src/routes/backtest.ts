@@ -63,6 +63,7 @@ export async function backtestRoutes(
           path: '/backtest/results',
           query,
           requestId: request.requestId,
+          target: 'gateway',
         });
 
         return reply.status(response.statusCode).send(response.data);
@@ -106,6 +107,7 @@ export async function backtestRoutes(
           body: compareRequest,
           requestId: request.requestId,
           timeout: 120000, // 2 minutes for backtest
+          target: 'python',
         });
 
         return reply.status(response.statusCode).send(response.data);

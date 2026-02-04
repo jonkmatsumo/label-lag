@@ -1,4 +1,5 @@
 services:
+  # Python API (ML-only)
   api:
     build:
       context: .
@@ -78,33 +79,18 @@ services:
       - labellag_net
     ports:
       - "${INFERENCE_GATEWAY_PORT:-8081}:8081"
-
-  dashboard:
-    build:
-      context: src/ui
-      dockerfile: Dockerfile
-    container_name: synthetic-data-dashboard
-    profiles: ["streamlit", "all"]
-    environment:
-      - API_BASE_URL=http://api:8000
-      - MLFLOW_TRACKING_URI=http://mlflow:5000
-      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
-      - AWS_ACCESS_KEY_ID=minioadmin
-      - AWS_SECRET_ACCESS_KEY=minioadmin
-    networks:
-      - labellag_net
-    ports:
-      - "${DASHBOARD_PORT:-8501}:8501"
-    restart: unless-stopped
     depends_on:
-      api:
-        condition: service_healthy
+      analytics-crud:
+        condition: service_started
+      grpc-inference:
+        condition: service_started
 
   generator:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: synthetic-data-generator
+    profiles: ["tools"]
     env_file:
       - .env
     volumes:
@@ -125,9 +111,8 @@ services:
     environment:
       - BFF_PORT=${BFF_PORT:-3210}
       - BFF_HOST=0.0.0.0
-      - BFF_FASTAPI_BASE_URL=http://api:8000
+      - BFF_PYTHON_API_BASE_URL=http://api:8000
       - BFF_MLFLOW_TRACKING_URI=http://mlflow:5000
-      - BFF_INFERENCE_MODE=${BFF_INFERENCE_MODE:-fastapi}
       - BFF_GATEWAY_BASE_URL=http://inference-gateway:8081
       - BFF_REQUEST_TIMEOUT=30000
       - BFF_LOG_LEVEL=info
@@ -146,6 +131,8 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      inference-gateway:
+        condition: service_started
 
   # React Web UI
   web:

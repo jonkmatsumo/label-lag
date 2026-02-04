@@ -19,14 +19,13 @@ describe('Dataset Routes', () => {
 
     const httpClient = new HttpClient({
       config: {
-        fastApiBaseUrl: 'http://api:8000',
+        pythonApiBaseUrl: 'http://api:8000',
         mlflowTrackingUri: 'http://mlflow:5000',
         requestTimeout: 1000,
         logLevel: 'silent',
         port: 3000,
         host: 'localhost',
-        inferenceMode: 'fastapi',
-        gatewayBaseUrl: '',
+        gatewayBaseUrl: 'http://gateway:8081',
         testMode: true,
         upstreamTimeout: 1000,
         cacheEnabled: false,
@@ -43,7 +42,7 @@ describe('Dataset Routes', () => {
   });
 
   it('GET /bff/v1/dataset/overview should return metrics', async () => {
-    const mockPool = mockAgent.get('http://api:8000');
+    const mockPool = mockAgent.get('http://gateway:8081');
     mockPool.intercept({
       path: '/analytics/overview',
       method: 'GET'
@@ -83,7 +82,7 @@ describe('Dataset Routes', () => {
   });
 
   it('GET /bff/v1/dataset/sample should return feature samples', async () => {
-    const mockPool = mockAgent.get('http://api:8000');
+    const mockPool = mockAgent.get('http://gateway:8081');
     mockPool.intercept({
       path: /\/analytics\/feature-sample.*/,
       method: 'GET'

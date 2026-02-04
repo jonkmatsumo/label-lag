@@ -19,7 +19,7 @@ describe('Analytics Routes', () => {
 
   describe('GET /bff/v1/analytics/overview', () => {
     it('returns overview metrics', async () => {
-      ctx.mockPool.intercept({
+      ctx.mockGatewayPool.intercept({
         path: '/analytics/overview',
         method: 'GET',
       }).reply(200, {
@@ -42,7 +42,7 @@ describe('Analytics Routes', () => {
     });
 
     it('handles upstream authentication required error', async () => {
-      ctx.mockPool.intercept({
+      ctx.mockGatewayPool.intercept({
         path: '/analytics/overview',
         method: 'GET',
       }).reply(500, {
@@ -65,7 +65,7 @@ describe('Analytics Routes', () => {
 
   describe('GET /bff/v1/analytics/daily-stats', () => {
     it('returns daily stats with default days', async () => {
-      ctx.mockPool.intercept({
+      ctx.mockGatewayPool.intercept({
         path: '/analytics/daily-stats?days=30',
         method: 'GET',
       }).reply(200, {
@@ -87,7 +87,7 @@ describe('Analytics Routes', () => {
     });
 
     it('accepts custom days parameter', async () => {
-      ctx.mockPool.intercept({
+      ctx.mockGatewayPool.intercept({
         path: '/analytics/daily-stats?days=7',
         method: 'GET',
       }).reply(200, {
@@ -106,7 +106,7 @@ describe('Analytics Routes', () => {
 
   describe('GET /bff/v1/analytics/recent-alerts', () => {
     it('returns recent alerts', async () => {
-      ctx.mockPool.intercept({
+      ctx.mockGatewayPool.intercept({
         path: '/analytics/recent-alerts?limit=50',
         method: 'GET',
       }).reply(200, {

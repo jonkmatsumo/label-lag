@@ -51,7 +51,17 @@ func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient Ana
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/evaluate/signal", h.handleEvaluateSignal)
 	mux.HandleFunc("/ready", h.handleReady)
+	mux.HandleFunc("/analytics/overview", h.handleAnalyticsOverview)
+	mux.HandleFunc("/analytics/daily-stats", h.handleAnalyticsDailyStats)
+	mux.HandleFunc("/analytics/transactions", h.handleAnalyticsTransactions)
+	mux.HandleFunc("/analytics/recent-alerts", h.handleAnalyticsRecentAlerts)
+	mux.HandleFunc("/analytics/fingerprint", h.handleAnalyticsFingerprint)
+	mux.HandleFunc("/analytics/feature-sample", h.handleAnalyticsFeatureSample)
+	mux.HandleFunc("/analytics/schema", h.handleAnalyticsSchema)
 	mux.HandleFunc("/analytics/transactions/search", h.handleSearchTransactions)
+	mux.HandleFunc("/monitoring/drift", h.handleMonitoringDrift)
+	mux.HandleFunc("/metrics/shadow/comparison", h.handleMetricsShadowComparison)
+	mux.HandleFunc("/backtest/results", h.handleBacktestResults)
 	for _, route := range notImplementedRoutes {
 		mux.HandleFunc(route, h.handleNotImplemented)
 	}

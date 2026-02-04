@@ -23,7 +23,7 @@ describe('Evaluate Routes', () => {
     };
 
     it('evaluates signal successfully', async () => {
-      ctx.mockPool
+      ctx.mockGatewayPool
         .intercept({ path: '/evaluate/signal', method: 'POST' })
         .reply(200, {
           request_id: 'req_123',
@@ -65,7 +65,7 @@ describe('Evaluate Routes', () => {
     });
 
     it('handles upstream error response', async () => {
-      ctx.mockPool
+      ctx.mockGatewayPool
         .intercept({ path: '/evaluate/signal', method: 'POST' })
         .reply(422, { detail: 'Invalid amount' });
 

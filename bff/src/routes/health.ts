@@ -27,7 +27,7 @@ export async function healthRoutes(
     });
   });
 
-  // Proxy to FastAPI health - provides model status
+  // Proxy to Python API health - provides model status
   fastify.get(
     '/bff/v1/health',
     async (request: FastifyRequest, reply: FastifyReply) => {
@@ -36,6 +36,7 @@ export async function healthRoutes(
           method: 'GET',
           path: '/health',
           requestId: request.requestId,
+          target: 'python',
         });
 
         return reply.status(response.statusCode).send(response.data);

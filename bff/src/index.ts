@@ -98,7 +98,7 @@ async function main(): Promise<void> {
 
   // Register routes
   await fastify.register(healthRoutes, { httpClient });
-  await fastify.register(evaluateRoutes, { httpClient, config });
+  await fastify.register(evaluateRoutes, { httpClient });
   await fastify.register(modelRoutes, { httpClient });
   await fastify.register(rulesRoutes, { httpClient });
   await fastify.register(backtestRoutes, { httpClient });
@@ -106,7 +106,7 @@ async function main(): Promise<void> {
   await fastify.register(monitoringRoutes, { httpClient });
   await fastify.register(rulesDetailRoutes, { httpClient });
   await fastify.register(datasetRoutes, { httpClient });
-  await fastify.register(mlflowRoutes, { httpClient, mlflowTrackingUri: config.mlflowTrackingUri });
+  await fastify.register(mlflowRoutes, { httpClient });
 
   // Start server
   try {
@@ -118,8 +118,7 @@ async function main(): Promise<void> {
     logger.info(
       {
         address,
-        inferenceMode: config.inferenceMode,
-        fastApiBaseUrl: config.fastApiBaseUrl,
+        pythonApiBaseUrl: config.pythonApiBaseUrl,
         mlflowUri: config.mlflowTrackingUri,
       },
       'BFF server started'

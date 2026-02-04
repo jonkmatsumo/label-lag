@@ -2,7 +2,7 @@
 
 ## Overview
 
-Label Lag is an end-to-end fraud detection system that pairs realistic label-delay simulation with hybrid model-and-rules scoring. It generates synthetic transaction data, trains and registers models, serves live inference through an API, and provides a dashboard for analysis and rule authoring.
+Label Lag is an end-to-end fraud detection system that pairs realistic label-delay simulation with hybrid model-and-rules scoring. It generates synthetic transaction data, trains and registers models, serves live inference through an API, and provides a React dashboard for analysis and rule authoring.
 
 ## Diagrams
 
@@ -14,7 +14,6 @@ This diagram shows the current runtime path for inference, analytics, and model 
 flowchart TB
     subgraph UI[User Interfaces]
         UI_REACT[React UI]
-        UI_STREAMLIT[Streamlit UI]
     end
 
     subgraph Edge[Edge Layer]
@@ -37,7 +36,6 @@ flowchart TB
     end
 
     UI_REACT --> BFF --> GO_INF --> PY_API --> GO_CRUD --> DB
-    UI_STREAMLIT --> PY_API
     PY_API --> MLFLOW --> MINIO
 ```
 
@@ -87,12 +85,12 @@ stateDiagram-v2
 ## Quick Start
 
 1) Copy `.env.example` to `.env` and adjust ports or credentials as needed.
-2) Start the stack with `docker compose up -d`.
-3) Open the dashboard at `http://localhost:8601` and verify Live Scoring renders.
+2) Start the stack with `docker compose -f docker-compose.infra.yml -f docker-compose.app.yml --profile react up -d`.
+3) Open the dashboard at `http://localhost:5180` and verify Live Scoring renders.
 
 ## Detailed Architecture Breakdown
 
-Label Lag separates infrastructure, application runtime, and lifecycle workflows so that training and deployment are explicit and observable. The system design diagram above shows the runtime path (React → BFF → Go Inference → Python ML → Go Analytics → DB) alongside Streamlit’s direct API access. The pipeline diagram shows how models move from training to production inference. The rule state machine anchors governance, ensuring changes pass review before affecting live scoring.
+Label Lag separates infrastructure, application runtime, and lifecycle workflows so that training and deployment are explicit and observable. The system design diagram above shows the runtime path (React → BFF → Go Inference → Python ML → Go Analytics → DB). The pipeline diagram shows how models move from training to production inference. The rule state machine anchors governance, ensuring changes pass review before affecting live scoring.
 
 Core flows:
 - **Data generation and feature materialization** feed training and historical analytics while preserving point-in-time correctness.
@@ -106,21 +104,16 @@ All ports are configurable via `.env`.
 
 | Service | Port | Purpose |
 |---------|------|---------|
-| Dashboard (Streamlit) | 8601 | Streamlit UI for scoring, analytics, model training, and rule authoring |
-| Web (React) | 5180 | React UI - modern alternative to Streamlit (runs in parallel) |
+| Web (React) | 5180 | React UI for scoring, analytics, model training, and rule authoring |
 | BFF | 3210 | Backend for Frontend - Node.js proxy layer for React UI |
-| API | 8100 | FastAPI fraud scoring and training endpoints |
-| API Docs | 8100 | Swagger UI served by the API |
+| API | 8100 | Python API (ML-only) for scoring and training endpoints |
+| API Docs | 8100 | Swagger UI served by the Python API |
 | MLflow | 5005 | Experiment tracking and model registry |
 | MinIO API | 9100 | Object storage API for artifacts |
 | MinIO Console | 9101 | Object storage console (minioadmin/minioadmin) |
 | PostgreSQL | 5542 | Transaction and feature storage |
 | Inference Gateway | 8181 | Go-based high-throughput inference gateway |
 | Analytics CRUD | 50051 | Go analytics service (gRPC) backing compute-only data access |
-
-### Parallel UI Operation
-
-Both Streamlit (port 8601) and React (port 5180) UIs run simultaneously. The React UI communicates with the Go Inference Gateway through the BFF proxy layer (port 3210), and the gateway forwards compute requests to the Python ML API. Streamlit connects directly to the Python API for admin, training, and analytics workflows. This allows safe migration without disrupting existing workflows.
 
 The React UI now supports:
 - **Synthetic Dataset Management**: Generate data, view distributions, and analyze correlations.
@@ -134,16 +127,11 @@ The system includes a Go-based `inference-gateway` designed to front the Python 
 
 The gateway exposes `GET /ready` to verify rules loading and Python backend connectivity.
 
-### Switching Inference Modes
+### Gateway Default Routing
 
-The BFF supports toggling between FastAPI and Go Gateway via environment variable:
-
-- **FastAPI Mode (Default)**: `BFF_INFERENCE_MODE=fastapi`
-- **Go Gateway Mode**: `BFF_INFERENCE_MODE=gateway`
-
-To switch:
-1. Update `.env`: `BFF_INFERENCE_MODE=gateway`
-2. Restart BFF: `docker compose -f docker-compose.infra.yml -f docker-compose.app.yml restart bff`
+The BFF routes inference and core UI reads through the gateway by default. The Python
+API remains for ML-only operations (training, rule lifecycle, backtest compare, and
+rule attribution).
 
 ### Verifying Parity
 
@@ -152,22 +140,9 @@ A parity test suite is available to compare outputs from both engines:
 ```bash
 # Run parity integration tests (requires stack running)
 export RUN_PARITY_TESTS=1
-export BFF_FASTAPI_BASE_URL=http://localhost:8100
+export BFF_PYTHON_API_BASE_URL=http://localhost:8100
 export BFF_GATEWAY_BASE_URL=http://localhost:8181
 cd bff && npm test tests/parity.test.ts
-```
-
-### UI Modes
-
-You can control which UIs are started using Docker Compose profiles:
-
-- `UI_MODE=streamlit` (Starts only Streamlit)
-- `UI_MODE=react` (Starts React + BFF)
-- `UI_MODE=both` (Starts all - default if unset)
-
-Example:
-```bash
-COMPOSE_PROFILES=react docker compose ... up -d
 ```
 
 ## Repository / File Structure
@@ -181,8 +156,7 @@ src/
 ├── monitor/             # Feature distribution monitoring and drift reporting
 ├── pipeline/            # Point-in-time feature materialization (SQL window functions)
 ├── generator/           # Stateful fraud profile simulation
-├── synthetic_pipeline/  # Core data generation, DB models
-└── ui/                  # Streamlit dashboard
+└── synthetic_pipeline/  # Core data generation, DB models
 bff/                     # Node.js BFF (Backend for Frontend) for React UI
 web/                     # React + TypeScript frontend
 ```
@@ -192,17 +166,12 @@ Key folders:
 - **`model/`**: Training workflows, evaluation metrics, and registry interactions.
 - **`pipeline/`**: Feature materialization and data correctness safeguards.
 - **`generator/`** and **`synthetic_pipeline/`**: Synthetic data creation, fraud patterns, and persistence.
-- **`ui/`**: Operator-facing workflows for training, evaluation, and rule management.
 
 ## Service-Level Breakdown
 
 ### API Service
 
 Responsible for live scoring, training triggers, rule lifecycle actions, and model deployment. It exposes evaluation and lifecycle endpoints (`/evaluate/signal`, `/train`, `/rules/{id}/publish`, `/models/deploy`) and serves Swagger docs at `/docs`. The API is compute-only and relies on the Go Analytics CRUD service for data access.
-
-### Dashboard (Streamlit)
-
-The UI consolidates operational workflows: live scoring, historical analytics, dataset exploration, model training and registry promotion, and rule authoring. It is the primary entry point for rule publishing, model deployment, and sandbox evaluation.
 
 ### Model Training & Registry (MLflow)
 
@@ -218,7 +187,7 @@ Provides the gRPC data access layer for compute-only services. The Python API, m
 
 ### Synthetic Data Generator
 
-Generates labeled transaction streams with controlled fraud patterns and label delay to support realistic training and backtesting. It can create data via the dashboard or CLI entrypoints.
+Generates labeled transaction streams with controlled fraud patterns and label delay to support realistic training and backtesting. It can create data via CLI entrypoints.
 
 Fraud patterns used by the generator:
 
@@ -249,7 +218,6 @@ DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5542/$
 DB_PORT=5542
 API_PORT=8100
 INFERENCE_GATEWAY_PORT=8181
-DASHBOARD_PORT=8601
 WEB_PORT=5180
 BFF_PORT=3210
 MLFLOW_PORT=5005
@@ -260,9 +228,8 @@ MINIO_CONSOLE_PORT=9101
 ### BFF Configuration
 
 ```
-BFF_FASTAPI_BASE_URL=http://api:8000
+BFF_PYTHON_API_BASE_URL=http://api:8000
 BFF_MLFLOW_TRACKING_URI=http://mlflow:5000
-BFF_INFERENCE_MODE=fastapi  # or 'gateway' to use inference-gateway
 BFF_GATEWAY_BASE_URL=http://inference-gateway:8081
 BFF_REQUEST_TIMEOUT=30000
 BFF_LOG_LEVEL=info

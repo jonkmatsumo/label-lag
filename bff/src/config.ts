@@ -5,9 +5,8 @@
 export interface Config {
   port: number;
   host: string;
-  fastApiBaseUrl: string;
+  pythonApiBaseUrl: string;
   mlflowTrackingUri: string;
-  inferenceMode: 'fastapi' | 'gateway';
   gatewayBaseUrl: string;
   requestTimeout: number;
   upstreamTimeout: number;
@@ -36,17 +35,11 @@ function getEnvAsBool(key: string, defaultValue: boolean): boolean {
 }
 
 export function loadConfig(): Config {
-  const inferenceMode = getEnvOrDefault('BFF_INFERENCE_MODE', 'fastapi');
-  if (inferenceMode !== 'fastapi' && inferenceMode !== 'gateway') {
-    throw new Error(`Invalid BFF_INFERENCE_MODE: ${inferenceMode}. Must be 'fastapi' or 'gateway'`);
-  }
-
   return {
     port: getEnvAsInt('BFF_PORT', 3210),
     host: getEnvOrDefault('BFF_HOST', '0.0.0.0'),
-    fastApiBaseUrl: getEnvOrDefault('BFF_FASTAPI_BASE_URL', 'http://api:8000'),
+    pythonApiBaseUrl: getEnvOrDefault('BFF_PYTHON_API_BASE_URL', 'http://api:8000'),
     mlflowTrackingUri: getEnvOrDefault('BFF_MLFLOW_TRACKING_URI', 'http://mlflow:5005'),
-    inferenceMode: inferenceMode as 'fastapi' | 'gateway',
     gatewayBaseUrl: getEnvOrDefault('BFF_GATEWAY_BASE_URL', 'http://inference-gateway:8081'),
     requestTimeout: getEnvAsInt('BFF_REQUEST_TIMEOUT', 30000),
     upstreamTimeout: getEnvAsInt('BFF_UPSTREAM_TIMEOUT_MS', 5000),

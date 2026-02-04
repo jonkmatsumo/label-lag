@@ -24,6 +24,7 @@ export interface TestContext {
   config: Config;
   mockAgent: MockAgent;
   mockPool: ReturnType<MockAgent['get']>;
+  mockGatewayPool: ReturnType<MockAgent['get']>;
   originalDispatcher: Dispatcher;
 }
 
@@ -31,9 +32,8 @@ export function createTestConfig(): Config {
   return {
     port: 3001,
     host: '127.0.0.1',
-    fastApiBaseUrl: 'http://mock-api:8000',
+    pythonApiBaseUrl: 'http://mock-api:8000',
     mlflowTrackingUri: 'http://mock-mlflow:5000',
-    inferenceMode: 'fastapi',
     gatewayBaseUrl: 'http://mock-gateway:8081',
     requestTimeout: 5000,
     upstreamTimeout: 1000,
@@ -53,8 +53,9 @@ export async function createTestApp(config?: Config): Promise<TestContext> {
   mockAgent.disableNetConnect();
   setGlobalDispatcher(mockAgent);
 
-  // Create a mock pool for the FastAPI backend
+  // Create a mock pool for the Python API backend
   const mockPool = mockAgent.get('http://mock-api:8000');
+  const mockGatewayPool = mockAgent.get('http://mock-gateway:8081');
 
   const logger = pino({ level: 'silent' });
 
@@ -73,7 +74,7 @@ export async function createTestApp(config?: Config): Promise<TestContext> {
   const cache = new SimpleCache(testConfig, logger);
 
   await app.register(healthRoutes, { httpClient });
-  await app.register(evaluateRoutes, { httpClient, config: testConfig });
+  await app.register(evaluateRoutes, { httpClient });
   await app.register(modelRoutes, { httpClient });
   await app.register(rulesRoutes, { httpClient });
   await app.register(backtestRoutes, { httpClient });
@@ -81,9 +82,9 @@ export async function createTestApp(config?: Config): Promise<TestContext> {
   await app.register(monitoringRoutes, { httpClient });
   await app.register(rulesDetailRoutes, { httpClient });
   await app.register(datasetRoutes, { httpClient });
-  await app.register(mlflowRoutes, { httpClient, mlflowTrackingUri: testConfig.mlflowTrackingUri });
+  await app.register(mlflowRoutes, { httpClient });
 
-  return { app, config: testConfig, mockAgent, mockPool, originalDispatcher };
+  return { app, config: testConfig, mockAgent, mockPool, mockGatewayPool, originalDispatcher };
 }
 
 export function restoreDispatcher(originalDispatcher: Dispatcher): void {

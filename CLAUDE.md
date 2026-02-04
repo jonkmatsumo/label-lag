@@ -87,7 +87,6 @@ Hierarchical composition: `AccountSnapshot` → `BehaviorMetrics` → `Connectio
 Service ports are configured via environment variables:
 - `DB_PORT`: PostgreSQL external port
 - `API_PORT`: FastAPI server external port
-- `DASHBOARD_PORT`: Streamlit dashboard external port
 - `MLFLOW_PORT`: MLflow tracking server external port
 - `MINIO_API_PORT`: MinIO API external port
 - `MINIO_CONSOLE_PORT`: MinIO web console external port
