@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/requestid"
 	"github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/rules"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type EvaluateRulesRequest struct {
@@ -113,6 +116,9 @@ func (h *Handler) handleEvaluateRulesDiff(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	requestID := requestid.FromContext(r.Context())
+	span := trace.SpanFromContext(r.Context())
+
 	// Compute diff
 	diff := RulesDiffSummary{
 		ScoreDelta: respB.FinalScore - respA.FinalScore,
@@ -144,6 +150,27 @@ func (h *Handler) handleEvaluateRulesDiff(w http.ResponseWriter, r *http.Request
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+
+	// Logging and Tracing
+	h.logger.Info("RulesDiffEvent",
+		"request_id", requestID,
+		"version_a", respA.RuleSetVersion,
+		"version_b", respB.RuleSetVersion,
+		"score_delta", diff.ScoreDelta,
+		"added_count", len(diff.MatchedRulesAdded),
+		"removed_count", len(diff.MatchedRulesRemoved),
+		"shadow_mode", req.ShadowMode,
+	)
+
+	span.SetAttributes(
+		attribute.String("rules.request_id", requestID),
+		attribute.String("rules.version.a", respA.RuleSetVersion),
+		attribute.String("rules.version.b", respB.RuleSetVersion),
+		attribute.Int("rules.score_delta", diff.ScoreDelta),
+		attribute.Bool("rules.diff", true),
+		attribute.Bool("rules.shadow_mode", req.ShadowMode),
+	)
+
 	_ = json.NewEncoder(w).Encode(EvaluateRulesDiffResponse{
 		A:    respA,
 		B:    respB,
@@ -188,6 +215,9 @@ func (h *Handler) handleEvaluateRules(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	requestID := requestid.FromContext(r.Context())
+	span := trace.SpanFromContext(r.Context())
+
 	resp := EvaluateRulesResponse{
 		FinalScore:         result.FinalScore,
 		BaselineScore:      req.BaseScore,
@@ -203,6 +233,29 @@ func (h *Handler) handleEvaluateRules(w http.ResponseWriter, r *http.Request) {
 		resp.ShadowScore = result.FinalScore
 		resp.FinalScore = req.BaseScore
 		resp.Rejected = false
+	}
+
+	// Logging and Tracing
+	h.logger.Info("RulesEvent",
+		"request_id", requestID,
+		"rules_version", result.RulesVersion,
+		"baseline_score", req.BaseScore,
+		"final_score", resp.FinalScore,
+		"shadow_mode", req.ShadowMode,
+		"shadow_score", resp.ShadowScore,
+		"matches", len(result.MatchedRules),
+	)
+
+	span.SetAttributes(
+		attribute.String("rules.request_id", requestID),
+		attribute.String("rules.version", result.RulesVersion),
+		attribute.Int("rules.baseline_score", req.BaseScore),
+		attribute.Int("rules.final_score", resp.FinalScore),
+		attribute.Int("rules.match_count", len(result.MatchedRules)),
+		attribute.Bool("rules.shadow_mode", req.ShadowMode),
+	)
+	if req.ShadowMode {
+		span.SetAttributes(attribute.Int("rules.shadow_score", resp.ShadowScore))
 	}
 
 	w.Header().Set("Content-Type", "application/json")
