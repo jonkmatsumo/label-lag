@@ -1,6 +1,7 @@
 """Business logic for signal evaluation."""
 
 import logging
+import os
 import uuid
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -465,6 +466,9 @@ class SignalEvaluator:
         Returns:
             RuleResult with final score and matched rules.
         """
+        if os.getenv("DISABLE_LEGACY_RULES") == "true":
+            return RuleResult(final_score=score, matched_rules=[], explanations=[])
+
         try:
             ruleset = manager.ruleset
             if ruleset is None or not ruleset.rules:
