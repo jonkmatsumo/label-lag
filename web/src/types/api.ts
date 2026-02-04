@@ -55,7 +55,7 @@ export interface SignalResponse {
   latency_ms: number;
   risk_components: RiskComponent[];
   model_version: string;
-  ruleset_version?: string;
+  rules_version?: string;
   matched_rules: MatchedRule[];
   shadow_matched_rules?: MatchedRule[];
   debug?: Record<string, unknown>;
