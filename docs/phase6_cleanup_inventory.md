@@ -25,6 +25,18 @@ BFF:
 Web:
 - React UI calls BFF only (no direct FastAPI).
 
+## FastAPI endpoints removed in Phase 6.4
+- Analytics proxy endpoints now served by gateway:
+  - `GET /analytics/overview`
+  - `GET /analytics/daily-stats`
+  - `GET /analytics/transactions`
+  - `GET /analytics/recent-alerts`
+  - `GET /analytics/fingerprint`
+  - `GET /analytics/feature-sample`
+  - `GET /analytics/schema`
+  - `POST /analytics/transactions/search`
+- Integration tests targeting core analytics now use `GATEWAY_BASE_URL`.
+
 ## Evidence checks (grep / code pointers)
 - Streamlit references:
   - `rg -n "streamlit|Streamlit" -S`

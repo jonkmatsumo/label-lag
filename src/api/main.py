@@ -33,7 +33,6 @@ from api.schemas import (
     AcceptSuggestionResponse,
     ActivateRuleRequest,
     ActivateRuleResponse,
-    AnalyticsOverviewResponse,
     ApprovalSignalsResponse,
     ApproveRuleRequest,
     ApproveRuleResponse,
@@ -48,9 +47,7 @@ from api.schemas import (
     CompareRulesetsRequest,
     ConflictResponse,
     CorrelationPair,
-    DailyStatsResponse,
     DatasetCorrelationsResponse,
-    DatasetFingerprintResponse,
     DatasetRelationshipsResponse,
     DeployModelRequest,
     DeployModelResponse,
@@ -68,14 +65,12 @@ from api.schemas import (
     DraftRuleValidateResponse,
     DriftStatusResponse,
     FeatureDriftDetail,
-    FeatureSampleResponse,
     GenerateDataRequest,
     GenerateDataResponse,
     HealthResponse,
     PublishRuleRequest,
     PublishRuleResponse,
     ReadinessReportResponse,
-    RecentAlertsResponse,
     RedundancyResponse,
     RejectRuleRequest,
     RejectRuleResponse,
@@ -94,7 +89,6 @@ from api.schemas import (
     SandboxEvaluateRequest,
     SandboxEvaluateResponse,
     SandboxMatchedRule,
-    SchemaSummaryResponse,
     ShadowComparisonResponse,
     ShadowRuleRequest,
     ShadowRuleResponse,
@@ -104,9 +98,6 @@ from api.schemas import (
     SuggestionsListResponse,
     TrainRequest,
     TrainResponse,
-    TransactionDetailsResponse,
-    TransactionSearchRequest,
-    TransactionSearchResponse,
     ValidationResult,
 )
 from api.services import get_evaluator
@@ -4148,170 +4139,6 @@ async def get_rule_attribution(
     )
 
 
-# =============================================================================
-# Analytics Proxy Endpoints
-# =============================================================================
-
-
-@app.get(
-    "/analytics/daily-stats",
-    response_model=DailyStatsResponse,
-    tags=["Analytics"],
-    summary="Get daily transaction statistics",
-)
-async def get_daily_stats(days: int = Query(default=30, ge=1, le=90)) -> dict:
-    """Proxy request to Go analytics service for daily stats."""
-    client = get_crud_client()
-    try:
-        resp = client.get_daily_stats(days=days)
-        return MessageToDict(
-            resp,
-            preserving_proto_field_name=True,
-            always_print_fields_with_no_presence=True,
-        )
-    except Exception as e:
-        logger.error(f"Failed to get daily stats from CRUD service: {e}")
-        raise analytics_http_exception(e)
-
-
-@app.get(
-    "/analytics/transactions",
-    response_model=TransactionDetailsResponse,
-    tags=["Analytics"],
-    summary="Get transaction details",
-)
-async def get_transaction_details(
-    days: int = Query(default=7, ge=1, le=30),
-    limit: int = Query(default=1000, ge=1, le=5000),
-) -> dict:
-    """Proxy request to Go analytics service for transaction details."""
-    client = get_crud_client()
-    try:
-        resp = client.get_transaction_details(days=days, limit=limit)
-        return MessageToDict(
-            resp,
-            preserving_proto_field_name=True,
-            always_print_fields_with_no_presence=True,
-        )
-    except Exception as e:
-        logger.error(f"Failed to get transaction details from CRUD service: {e}")
-        raise analytics_http_exception(e)
-
-
-@app.get(
-    "/analytics/recent-alerts",
-    response_model=RecentAlertsResponse,
-    tags=["Analytics"],
-    summary="Get recent high-risk alerts",
-)
-async def get_recent_alerts(
-    limit: int = Query(default=50, ge=1, le=200),
-) -> dict:
-    """Proxy request to Go analytics service for recent alerts."""
-    client = get_crud_client()
-    try:
-        resp = client.get_recent_alerts(limit=limit)
-        return MessageToDict(
-            resp,
-            preserving_proto_field_name=True,
-            always_print_fields_with_no_presence=True,
-        )
-    except Exception as e:
-        logger.error(f"Failed to get recent alerts from CRUD service: {e}")
-        raise analytics_http_exception(e)
-
-
-@app.get(
-    "/analytics/overview",
-    response_model=AnalyticsOverviewResponse,
-    tags=["Analytics"],
-    summary="Get dataset overview metrics",
-)
-async def get_overview_metrics() -> dict:
-    """Proxy request to Go analytics service for overview metrics."""
-    client = get_crud_client()
-    try:
-        resp = client.get_overview_metrics()
-        return MessageToDict(
-            resp,
-            preserving_proto_field_name=True,
-            always_print_fields_with_no_presence=True,
-        )
-    except Exception as e:
-        logger.error(f"Failed to get overview metrics from CRUD service: {e}")
-        raise analytics_http_exception(e)
-
-
-@app.get(
-    "/analytics/fingerprint",
-    response_model=DatasetFingerprintResponse,
-    tags=["Analytics"],
-    summary="Get dataset fingerprint",
-)
-async def get_dataset_fingerprint() -> dict:
-    """Proxy request to Go analytics service for dataset fingerprint."""
-    client = get_crud_client()
-    try:
-        resp = client.get_dataset_fingerprint()
-        return MessageToDict(
-            resp,
-            preserving_proto_field_name=True,
-            always_print_fields_with_no_presence=True,
-        )
-    except Exception as e:
-        logger.error(f"Failed to get dataset fingerprint from CRUD service: {e}")
-        raise analytics_http_exception(e)
-
-
-@app.get(
-    "/analytics/feature-sample",
-    response_model=FeatureSampleResponse,
-    tags=["Analytics"],
-    summary="Get sampled features for diagnostics",
-)
-async def get_feature_sample(
-    sample_size: int = Query(default=100, ge=1, le=1000),
-    stratify: bool = Query(default=True),
-) -> dict:
-    """Proxy request to Go analytics service for feature sample."""
-    client = get_crud_client()
-    try:
-        resp = client.get_feature_sample(sample_size=sample_size, stratify=stratify)
-        return MessageToDict(
-            resp,
-            preserving_proto_field_name=True,
-            always_print_fields_with_no_presence=True,
-            use_integers_for_enums=True,
-        )
-    except Exception as e:
-        logger.error(f"Failed to get feature sample from CRUD service: {e}")
-        raise analytics_http_exception(e)
-
-
-@app.get(
-    "/analytics/schema",
-    response_model=SchemaSummaryResponse,
-    tags=["Analytics"],
-    summary="Get schema summary for tables",
-)
-async def get_schema_summary(
-    table_names: list[str] = Query(default=None),
-) -> dict:
-    """Proxy request to Go analytics service for schema summary."""
-    client = get_crud_client()
-    try:
-        resp = client.get_schema_summary(table_names=table_names)
-        return MessageToDict(
-            resp,
-            preserving_proto_field_name=True,
-            always_print_fields_with_no_presence=True,
-            use_integers_for_enums=True,
-        )
-    except Exception as e:
-        logger.error(f"Failed to get schema summary from CRUD service: {e}")
-        raise analytics_http_exception(e)
-
-
 @app.get(
     "/analytics/relationships",
     response_model=DatasetRelationshipsResponse,
@@ -4567,59 +4394,6 @@ async def get_dataset_correlations(
 
     except Exception as e:
         logger.error(f"Failed to compute dataset correlations: {e}")
-        raise analytics_http_exception(e)
-
-
-@app.post(
-    "/analytics/transactions/search",
-    response_model=TransactionSearchResponse,
-    tags=["Analytics"],
-    summary="Search transactions with filters",
-)
-async def search_transactions(
-    request: TransactionSearchRequest,
-) -> TransactionSearchResponse:
-    """Search transactions with advanced filtering via Analytics service."""
-    from api.schemas import TransactionDetail
-
-    client = get_crud_client()
-    try:
-        resp = client.search_transactions(
-            user_id=request.user_id or "",
-            transaction_id=request.transaction_id or "",
-            min_amount=request.min_amount,
-            max_amount=request.max_amount,
-            start_date=request.start_date or "",
-            end_date=request.end_date or "",
-            is_fraudulent=request.is_fraudulent,
-            limit=request.limit,
-            offset=request.offset,
-        )
-
-        transactions = []
-        for r in resp.transactions:
-            transactions.append(
-                TransactionDetail(
-                    record_id=r.record_id,
-                    user_id=r.user_id,
-                    created_at=r.created_at.ToDatetime(),
-                    is_train_eligible=r.is_train_eligible,
-                    is_pre_fraud=r.is_pre_fraud,
-                    amount=r.amount,
-                    is_fraudulent=r.is_fraudulent,
-                    fraud_type=r.fraud_type,
-                    is_off_hours_txn=r.is_off_hours_txn,
-                    merchant_risk_score=r.merchant_risk_score,
-                    velocity_24h=r.velocity_24h,
-                    amount_to_avg_ratio_30d=r.amount_to_avg_ratio_30d,
-                    balance_volatility_z_score=r.balance_volatility_z_score,
-                )
-            )
-
-        return TransactionSearchResponse(transactions=transactions, total=resp.total)
-
-    except Exception as e:
-        logger.error(f"Failed to search transactions via CRUD service: {e}")
         raise analytics_http_exception(e)
 
 

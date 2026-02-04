@@ -8,8 +8,12 @@ Usage:
     # Assumes docker compose is running
     pytest tests/integration/test_analytics_smoke.py -v
 
-    # Override API URL
+    # Override FastAPI URL for rule endpoints
     API_BASE_URL=http://localhost:8100 pytest tests/integration/test_analytics_smoke.py
+
+    # Override Gateway URL for core analytics endpoints
+    GATEWAY_BASE_URL=http://localhost:8181 pytest \
+        tests/integration/test_analytics_smoke.py
 """
 
 import os
@@ -19,18 +23,33 @@ import requests
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8640")
+GATEWAY_BASE_URL = os.getenv("GATEWAY_BASE_URL", "http://localhost:8181")
 ANALYTICS_RULE_ID = os.getenv("ANALYTICS_RULE_ID")
 
 
 @pytest.fixture(scope="module")
 def api_url():
-    """Fixture to provide the API base URL and verify connectivity."""
+    """Fixture to provide the FastAPI base URL and verify connectivity."""
     try:
         response = requests.get(f"{API_BASE_URL}/health", timeout=5)
         response.raise_for_status()
     except requests.exceptions.RequestException as e:
         pytest.skip(f"API is not reachable at {API_BASE_URL}: {e}")
     return API_BASE_URL
+
+
+@pytest.fixture(scope="module")
+def gateway_url():
+    """Fixture to provide the gateway base URL and verify connectivity."""
+    try:
+        response = requests.get(f"{GATEWAY_BASE_URL}/health", timeout=5)
+        response.raise_for_status()
+        overview = requests.get(f"{GATEWAY_BASE_URL}/analytics/overview", timeout=5)
+        if overview.status_code == 404:
+            pytest.skip("Gateway is reachable but analytics routes are not registered.")
+    except requests.exceptions.RequestException as e:
+        pytest.skip(f"Gateway is not reachable at {GATEWAY_BASE_URL}: {e}")
+    return GATEWAY_BASE_URL
 
 
 # =============================================================================
@@ -117,7 +136,7 @@ def _resolve_rule_id(api_url: str) -> str | None:
     ids=[ep[0] for ep in ANALYTICS_ENDPOINTS],
 )
 def test_analytics_endpoint_smoke(
-    api_url, endpoint, params, required_fields, list_field
+    gateway_url, endpoint, params, required_fields, list_field
 ):
     """Smoke test for analytics endpoints.
 
@@ -127,7 +146,7 @@ def test_analytics_endpoint_smoke(
     - List fields are actually lists (if applicable)
     - Response is non-empty JSON
     """
-    url = f"{api_url}{endpoint}"
+    url = f"{gateway_url}{endpoint}"
     response = _make_request(url, params)
 
     assert response.status_code == 200, (
@@ -157,9 +176,9 @@ def test_analytics_endpoint_smoke(
 # =============================================================================
 
 
-def test_daily_stats_structure(api_url):
+def test_daily_stats_structure(gateway_url):
     """Verify daily stats item structure when data exists."""
-    url = f"{api_url}/analytics/daily-stats"
+    url = f"{gateway_url}/analytics/daily-stats"
     response = _make_request(url, {"days": 30})
     assert response.status_code == 200
     data = response.json()
@@ -176,9 +195,9 @@ def test_daily_stats_structure(api_url):
         assert isinstance(item["fraud_rate"], (int, float))
 
 
-def test_transactions_structure(api_url):
+def test_transactions_structure(gateway_url):
     """Verify transaction details item structure when data exists."""
-    url = f"{api_url}/analytics/transactions"
+    url = f"{gateway_url}/analytics/transactions"
     response = _make_request(url, {"days": 7, "limit": 5})
     assert response.status_code == 200
     data = response.json()
@@ -195,9 +214,9 @@ def test_transactions_structure(api_url):
             assert field in item, f"Missing field '{field}' in transaction item"
 
 
-def test_overview_numeric_fields(api_url):
+def test_overview_numeric_fields(gateway_url):
     """Verify overview metrics have valid numeric types."""
-    url = f"{api_url}/analytics/overview"
+    url = f"{gateway_url}/analytics/overview"
     response = _make_request(url, {})
     assert response.status_code == 200
     data = response.json()
@@ -211,9 +230,9 @@ def test_overview_numeric_fields(api_url):
     assert fraud_rate >= 0, f"Fraud rate is negative: {fraud_rate}"
 
 
-def test_fingerprint_structure(api_url):
+def test_fingerprint_structure(gateway_url):
     """Verify fingerprint has expected table structures."""
-    url = f"{api_url}/analytics/fingerprint"
+    url = f"{gateway_url}/analytics/fingerprint"
     response = _make_request(url, {})
     assert response.status_code == 200
     data = response.json()
@@ -225,9 +244,9 @@ def test_fingerprint_structure(api_url):
         assert isinstance(table["count"], int)
 
 
-def test_feature_sample_structure(api_url):
+def test_feature_sample_structure(gateway_url):
     """Verify feature sample item structure when data exists."""
-    url = f"{api_url}/analytics/feature-sample"
+    url = f"{gateway_url}/analytics/feature-sample"
     response = _make_request(url, {"sample_size": 5, "stratify": "true"})
     assert response.status_code == 200
     data = response.json()
@@ -245,9 +264,9 @@ def test_feature_sample_structure(api_url):
             assert field in sample, f"Missing field '{field}' in feature sample"
 
 
-def test_schema_has_expected_tables(api_url):
+def test_schema_has_expected_tables(gateway_url):
     """Verify schema summary includes expected tables."""
-    url = f"{api_url}/analytics/schema"
+    url = f"{gateway_url}/analytics/schema"
     response = _make_request(url, {})
     assert response.status_code == 200
     data = response.json()
@@ -257,9 +276,9 @@ def test_schema_has_expected_tables(api_url):
     assert "feature_snapshots" in tables, "Missing feature_snapshots table in schema"
 
 
-def test_schema_column_structure(api_url):
+def test_schema_column_structure(gateway_url):
     """Verify schema column items have required fields."""
-    url = f"{api_url}/analytics/schema"
+    url = f"{gateway_url}/analytics/schema"
     response = _make_request(url, {})
     assert response.status_code == 200
     data = response.json()
@@ -271,9 +290,9 @@ def test_schema_column_structure(api_url):
             assert field in col, f"Missing field '{field}' in column info"
 
 
-def test_alerts_risk_score(api_url):
+def test_alerts_risk_score(gateway_url):
     """Verify alerts have computed risk scores."""
-    url = f"{api_url}/analytics/recent-alerts"
+    url = f"{gateway_url}/analytics/recent-alerts"
     response = _make_request(url, {"limit": 5})
     assert response.status_code == 200
     data = response.json()
@@ -292,9 +311,9 @@ def test_alerts_risk_score(api_url):
 # =============================================================================
 
 
-def test_daily_stats_respects_days_limit(api_url):
+def test_daily_stats_respects_days_limit(gateway_url):
     """Verify daily stats respects days parameter."""
-    url = f"{api_url}/analytics/daily-stats"
+    url = f"{gateway_url}/analytics/daily-stats"
     response = _make_request(url, {"days": 3})
     assert response.status_code == 200
     data = response.json()
@@ -303,9 +322,9 @@ def test_daily_stats_respects_days_limit(api_url):
     assert len(data["stats"]) <= 3
 
 
-def test_transactions_respects_limit(api_url):
+def test_transactions_respects_limit(gateway_url):
     """Verify transactions endpoint respects limit parameter."""
-    url = f"{api_url}/analytics/transactions"
+    url = f"{gateway_url}/analytics/transactions"
     response = _make_request(url, {"days": 7, "limit": 5})
     assert response.status_code == 200
     data = response.json()
@@ -313,9 +332,9 @@ def test_transactions_respects_limit(api_url):
     assert len(data["transactions"]) <= 5
 
 
-def test_feature_sample_respects_size(api_url):
+def test_feature_sample_respects_size(gateway_url):
     """Verify feature sample respects sample_size parameter."""
-    url = f"{api_url}/analytics/feature-sample"
+    url = f"{gateway_url}/analytics/feature-sample"
     response = _make_request(url, {"sample_size": 3, "stratify": "false"})
     assert response.status_code == 200
     data = response.json()
