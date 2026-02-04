@@ -782,3 +782,75 @@ func TestHandleEvaluateSignal_ShadowMode(t *testing.T) {
 		t.Errorf("expected legacy client to be called in shadow mode")
 	}
 }
+
+func TestHandleEvaluateSignal_RulesProviderError(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	handler := NewHandler(logger, stubInferenceClient{}, nil, errProvider{}, nil, false, 1024)
+
+	payload := `{"user_id":"u1","amount":100,"currency":"USD","client_transaction_id":"t1"}`
+	req := httptest.NewRequest(http.MethodPost, "/evaluate/signal", strings.NewReader(payload))
+	rec := httptest.NewRecorder()
+
+	handler.handleEvaluateSignal(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d (fail-open), got %d", http.StatusOK, rec.Code)
+	}
+
+	var payloadResp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payloadResp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	t.Logf("Response body: %s", rec.Body.String())
+	if rv, ok := payloadResp["rules_version"]; ok && rv != nil {
+		t.Errorf("expected no rules_version (or null) in response when provider fails, got %v", rv)
+	}
+}
+
+func TestHandleEvaluateSignal_MissingFeatures(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	// Setup rules that depend on velocity_24h
+	ruleset := rules.RuleSet{
+		Version: "v1",
+		Rules: []rules.Rule{
+			{
+				ID:     "rule1",
+				Field:  "velocity_24h",
+				Op:     ">",
+				Value:  5,
+				Action: "reject",
+				Status: rules.RuleStatusActive,
+			},
+		},
+	}
+	provider := rules.NewStaticProvider(ruleset)
+
+	inference := stubInferenceClient{}
+	// Analytics returns no features
+	analytics := &stubAnalyticsClient{}
+
+	handler := NewHandler(logger, inference, analytics, provider, nil, false, 1024)
+
+	// user_id "u1" will result in a simulated velocity
+	// hash("u1") % 1000 = 327 (approx)
+	// velocity = (327 % 10) + 1 = 8
+	// 8 > 5 matches rule1
+	payload := `{"user_id":"u1","amount":100,"currency":"USD","client_transaction_id":"t1"}`
+	req := httptest.NewRequest(http.MethodPost, "/evaluate/signal", strings.NewReader(payload))
+	rec := httptest.NewRecorder()
+
+	handler.handleEvaluateSignal(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var payloadResp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payloadResp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if len(payloadResp["matched_rules"].([]any)) == 0 {
+		t.Errorf("expected rule1 to match via simulated features")
+	}
+}
