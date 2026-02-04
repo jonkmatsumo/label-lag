@@ -865,6 +865,8 @@ async def sandbox_evaluate(request: SandboxEvaluateRequest) -> SandboxEvaluateRe
             base_score=request.base_score,
             ruleset=ruleset_dict,
         )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.exception("Sandbox evaluation failed via gateway")
         raise HTTPException(status_code=500, detail=str(e)) from e

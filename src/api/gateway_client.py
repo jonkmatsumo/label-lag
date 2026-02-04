@@ -67,7 +67,9 @@ class GatewayDecisionClient:
                     pass
                 
                 logger.error(f"Gateway rule evaluation failed ({response.status_code}): {error_detail}")
-                raise RuntimeError(f"Gateway evaluation failed: {error_detail}")
+                if response.status_code == 400:
+                    raise ValueError(f"Gateway evaluation failed (400): {error_detail}")
+                raise RuntimeError(f"Gateway evaluation failed ({response.status_code}): {error_detail}")
                 
             return response.json()
             

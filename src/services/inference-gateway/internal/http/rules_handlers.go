@@ -37,7 +37,13 @@ func (h *Handler) handleEvaluateRules(w http.ResponseWriter, r *http.Request) {
 
 	ruleset := rules.RuleSet{}
 	if req.RuleSet != nil {
+		validRules, errs := rules.FilterValidRules(req.RuleSet.Rules)
+		if len(errs) > 0 {
+			writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid rules: %v", errs))
+			return
+		}
 		ruleset = *req.RuleSet
+		ruleset.Rules = validRules
 	} else {
 		// Use default ruleset if not provided
 		var err error
