@@ -85,7 +85,7 @@ stateDiagram-v2
 ## Quick Start
 
 1) Copy `.env.example` to `.env` and adjust ports or credentials as needed.
-2) Start the stack with `docker compose up -d`.
+2) Start the stack with `docker compose -f docker-compose.infra.yml -f docker-compose.app.yml --profile react up -d`.
 3) Open the dashboard at `http://localhost:5180` and verify Live Scoring renders.
 
 ## Detailed Architecture Breakdown
@@ -106,8 +106,8 @@ All ports are configurable via `.env`.
 |---------|------|---------|
 | Web (React) | 5180 | React UI for scoring, analytics, model training, and rule authoring |
 | BFF | 3210 | Backend for Frontend - Node.js proxy layer for React UI |
-| API | 8100 | FastAPI fraud scoring and training endpoints |
-| API Docs | 8100 | Swagger UI served by the API |
+| API | 8100 | Python API (ML-only) for scoring and training endpoints |
+| API Docs | 8100 | Swagger UI served by the Python API |
 | MLflow | 5005 | Experiment tracking and model registry |
 | MinIO API | 9100 | Object storage API for artifacts |
 | MinIO Console | 9101 | Object storage console (minioadmin/minioadmin) |
