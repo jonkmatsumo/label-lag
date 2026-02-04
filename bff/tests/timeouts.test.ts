@@ -18,9 +18,8 @@ describe('HttpClient Timeouts and Retries', () => {
   const config = {
     port: 3000,
     host: 'localhost',
-    fastApiBaseUrl: 'http://api',
+    pythonApiBaseUrl: 'http://api',
     mlflowTrackingUri: 'http://mlflow',
-    inferenceMode: 'fastapi' as const,
     gatewayBaseUrl: 'http://gateway',
     requestTimeout: 1000, // Long timeout
     upstreamTimeout: 50,  // Short timeout default

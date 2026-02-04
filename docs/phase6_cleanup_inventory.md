@@ -58,3 +58,4 @@ Web:
 ## Notes for Phase 7 follow-ups
 - Monitoring drift + shadow comparison still live in FastAPI via gateway proxy.
 - Backtest compare still FastAPI (compute-only path).
+- BFF config renamed to `BFF_PYTHON_API_BASE_URL` (no FastAPI mode toggle).

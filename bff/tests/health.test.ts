@@ -30,7 +30,7 @@ describe('Health Routes', () => {
   });
 
   describe('GET /bff/v1/health', () => {
-    it('proxies to FastAPI health endpoint', async () => {
+    it('proxies to Python API health endpoint', async () => {
       ctx.mockPool
         .intercept({ path: '/health', method: 'GET' })
         .reply(200, {

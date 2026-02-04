@@ -18,7 +18,7 @@ export async function datasetRoutes(
       try {
         const response = await httpClient.request({
           method: 'GET',
-          path: '/analytics/overview', // Proxies to Python API
+          path: '/analytics/overview',
           requestId: request.requestId,
           target: 'gateway',
         });
@@ -77,6 +77,7 @@ export async function datasetRoutes(
           body: request.body,
           requestId: request.requestId,
           timeout: 300000, // 5 min timeout for generation
+          target: 'python',
         });
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
@@ -98,6 +99,7 @@ export async function datasetRoutes(
           path: '/data/clear',
           requestId: request.requestId,
           timeout: 60000, // 1 min timeout
+          target: 'python',
         });
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
@@ -163,6 +165,7 @@ export async function datasetRoutes(
           path: '/analytics/relationships',
           query: request.query as Record<string, string | number | boolean>,
           requestId: request.requestId,
+          target: 'python',
         });
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
@@ -197,6 +200,7 @@ export async function datasetRoutes(
           path: '/analytics/correlations',
           query: request.query as Record<string, string | number | boolean>,
           requestId: request.requestId,
+          target: 'python',
         });
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {

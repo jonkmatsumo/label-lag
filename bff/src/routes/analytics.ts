@@ -294,6 +294,7 @@ export async function analyticsRoutes(
           method: 'GET',
           path: `/analytics/rules/${encodeURIComponent(rule_id)}?days=${days}`,
           requestId: request.requestId,
+          target: 'python',
         });
 
         return reply.status(response.statusCode).send(response.data);
@@ -332,6 +333,7 @@ export async function analyticsRoutes(
           method: 'GET',
           path: `/analytics/attribution?rule_id=${encodeURIComponent(rule_id)}&days=${days}`,
           requestId: request.requestId,
+          target: 'python',
         });
 
         return reply.status(response.statusCode).send(response.data);

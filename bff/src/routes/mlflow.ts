@@ -3,35 +3,25 @@ import { HttpClient, UpstreamError } from '../services/http-client.js';
 
 export interface MlflowRoutesOptions {
   httpClient: HttpClient;
-  mlflowTrackingUri: string;
 }
 
 export async function mlflowRoutes(
   fastify: FastifyInstance,
   options: MlflowRoutesOptions
 ): Promise<void> {
-  const { httpClient, mlflowTrackingUri } = options;
-
-  // Helper to create MLflow client specific for this route
-  // We need a separate client because the base URL is different (mlflow vs api)
-  const mlflowClient = new HttpClient({
-    config: {
-      ...httpClient.config,
-      fastApiBaseUrl: mlflowTrackingUri, // Override base URL to point to MLflow
-    },
-    logger: fastify.log as unknown as import('pino').Logger,
-  });
+  const { httpClient } = options;
 
   // GET /bff/v1/mlflow/experiments/search
   fastify.get(
     '/bff/v1/mlflow/experiments/search',
     async (request: FastifyRequest<{ Querystring: { filter?: string } }>, reply: FastifyReply) => {
       try {
-        const response = await mlflowClient.request({
+        const response = await httpClient.request({
           method: 'GET',
           path: '/api/2.0/mlflow/experiments/search',
           query: request.query as Record<string, string>,
           requestId: request.requestId,
+          target: 'mlflow',
         });
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
@@ -48,11 +38,12 @@ export async function mlflowRoutes(
     '/bff/v1/mlflow/runs/search',
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const response = await mlflowClient.request({
+        const response = await httpClient.request({
           method: 'POST',
           path: '/api/2.0/mlflow/runs/search',
           body: request.body,
           requestId: request.requestId,
+          target: 'mlflow',
         });
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
@@ -69,11 +60,12 @@ export async function mlflowRoutes(
     '/bff/v1/mlflow/model-versions/search',
     async (request: FastifyRequest<{ Querystring: { filter?: string } }>, reply: FastifyReply) => {
       try {
-        const response = await mlflowClient.request({
+        const response = await httpClient.request({
           method: 'GET',
           path: '/api/2.0/mlflow/model-versions/search',
           query: request.query as Record<string, string>,
           requestId: request.requestId,
+          target: 'mlflow',
         });
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
@@ -109,7 +101,7 @@ export async function mlflowRoutes(
            return reply.status(400).send({ error: { code: 'INVALID_INPUT', message: 'Artifact type not allowed' } });
         }
 
-        const response = await mlflowClient.request({
+        const response = await httpClient.request({
           method: 'GET',
           path: '/get-artifact',
           query: {
@@ -117,6 +109,7 @@ export async function mlflowRoutes(
             run_uuid: run_id,
           },
           requestId: request.requestId,
+          target: 'mlflow',
         });
 
         // Return raw data
@@ -150,11 +143,12 @@ export async function mlflowRoutes(
     },
     async (request: FastifyRequest<{ Body: { name: string; version: string; stage: string; archive_existing_versions?: boolean } }>, reply: FastifyReply) => {
       try {
-        const response = await mlflowClient.request({
+        const response = await httpClient.request({
           method: 'POST',
           path: '/api/2.0/mlflow/model-versions/transition-stage',
           body: request.body,
           requestId: request.requestId,
+          target: 'mlflow',
         });
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
@@ -175,11 +169,12 @@ export async function mlflowRoutes(
     ) => {
       try {
         const { run_id } = request.params;
-        const response = await mlflowClient.request({
+        const response = await httpClient.request({
           method: 'GET',
           path: '/api/2.0/mlflow/runs/get',
           query: { run_id },
           requestId: request.requestId,
+          target: 'mlflow',
         });
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {

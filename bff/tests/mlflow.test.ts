@@ -17,13 +17,12 @@ describe('MLflow Routes', () => {
 
     const httpClient = new HttpClient({
       config: {
-        fastApiBaseUrl: 'http://api:8000',
+        pythonApiBaseUrl: 'http://api:8000',
         mlflowTrackingUri: 'http://mlflow:5000',
         requestTimeout: 1000,
         logLevel: 'silent',
         port: 3000,
         host: 'localhost',
-        inferenceMode: 'fastapi',
         gatewayBaseUrl: '',
         testMode: true,
         upstreamTimeout: 1000,
@@ -34,8 +33,7 @@ describe('MLflow Routes', () => {
     });
 
     await fastify.register(mlflowRoutes, {
-      httpClient,
-      mlflowTrackingUri: 'http://mlflow:5000'
+      httpClient
     });
   });
 

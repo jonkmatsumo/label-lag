@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-// This test suite expects BFF to be running with BFF_INFERENCE_MODE=gateway
+// This test suite expects the BFF to route inference through the gateway.
 // It validates that the live scoring flow works under this configuration.
 
 test.describe('Go Inference Gateway Integration', () => {

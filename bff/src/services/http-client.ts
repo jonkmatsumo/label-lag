@@ -14,7 +14,7 @@ export interface RequestOptions {
   body?: unknown;
   requestId: string;
   timeout?: number;
-  target?: 'fastapi' | 'gateway' | 'mlflow';
+  target?: 'python' | 'gateway' | 'mlflow';
   query?: Record<string, string | number | boolean | undefined>;
 }
 
@@ -37,15 +37,14 @@ export class HttpClient {
     this.logger = options.logger.child({ service: 'http-client' });
   }
 
-  private getBaseUrl(target: 'fastapi' | 'gateway' | 'mlflow'): string {
+  private getBaseUrl(target: 'python' | 'gateway' | 'mlflow'): string {
     switch (target) {
       case 'gateway':
         return this.config.gatewayBaseUrl;
       case 'mlflow':
         return this.config.mlflowTrackingUri;
-      case 'fastapi':
       default:
-        return this.config.fastApiBaseUrl;
+        return this.config.pythonApiBaseUrl;
     }
   }
 
@@ -81,7 +80,7 @@ export class HttpClient {
   }
 
   private async executeRequest<T>(options: RequestOptions, attempt: number): Promise<HttpResponse<T>> {
-    const { method, path, body, requestId, timeout, target = 'fastapi', query } = options;
+    const { method, path, body, requestId, timeout, target = 'python', query } = options;
     const baseUrl = this.getBaseUrl(target);
 
     // Construct URL with query params
@@ -211,7 +210,7 @@ export class HttpClient {
           details: innerError.details as Record<string, unknown> | undefined,
         };
       } else if ('detail' in errorBody) {
-        // FastAPI validation error format
+        // Python API validation error format
         apiError = {
           code: 'VALIDATION_ERROR',
           message: String(errorBody.detail),

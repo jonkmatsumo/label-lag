@@ -127,16 +127,11 @@ The system includes a Go-based `inference-gateway` designed to front the Python 
 
 The gateway exposes `GET /ready` to verify rules loading and Python backend connectivity.
 
-### Switching Inference Modes
+### Gateway Default Routing
 
-The BFF supports toggling between FastAPI and Go Gateway via environment variable:
-
-- **FastAPI Mode (Default)**: `BFF_INFERENCE_MODE=fastapi`
-- **Go Gateway Mode**: `BFF_INFERENCE_MODE=gateway`
-
-To switch:
-1. Update `.env`: `BFF_INFERENCE_MODE=gateway`
-2. Restart BFF: `docker compose -f docker-compose.infra.yml -f docker-compose.app.yml restart bff`
+The BFF routes inference and core UI reads through the gateway by default. The Python
+API remains for ML-only operations (training, rule lifecycle, backtest compare, and
+rule attribution).
 
 ### Verifying Parity
 
@@ -145,7 +140,7 @@ A parity test suite is available to compare outputs from both engines:
 ```bash
 # Run parity integration tests (requires stack running)
 export RUN_PARITY_TESTS=1
-export BFF_FASTAPI_BASE_URL=http://localhost:8100
+export BFF_PYTHON_API_BASE_URL=http://localhost:8100
 export BFF_GATEWAY_BASE_URL=http://localhost:8181
 cd bff && npm test tests/parity.test.ts
 ```
@@ -233,9 +228,8 @@ MINIO_CONSOLE_PORT=9101
 ### BFF Configuration
 
 ```
-BFF_FASTAPI_BASE_URL=http://api:8000
+BFF_PYTHON_API_BASE_URL=http://api:8000
 BFF_MLFLOW_TRACKING_URI=http://mlflow:5000
-BFF_INFERENCE_MODE=fastapi  # or 'gateway' to use inference-gateway
 BFF_GATEWAY_BASE_URL=http://inference-gateway:8081
 BFF_REQUEST_TIMEOUT=30000
 BFF_LOG_LEVEL=info
