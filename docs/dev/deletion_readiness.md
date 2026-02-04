@@ -24,8 +24,7 @@ This document tracks the readiness to delete the legacy Python rules engine and 
 - [x] **Contract Parity**: `rules_version` vs `ruleset_version` consolidated.
 
 ## Ready for Deletion
-The following symbols can be safely deleted once BFF rollback is no longer required:
-- `api.rules.evaluate_rules()`
-- `SignalEvaluator.evaluate()`
-- `SignalEvaluator._apply_rules()`
-- `POST /evaluate/signal` route in `api/main.py`
+- [x] `api.rules.evaluate_rules()`: Kept for internal gateway mocking in tests, but removed from production decisioning paths.
+- [x] `SignalEvaluator.evaluate()`: DELETED.
+- [x] `SignalEvaluator._apply_rules()`: DELETED.
+- [x] `POST /evaluate/signal` route in `api/main.py`: DELETED.
