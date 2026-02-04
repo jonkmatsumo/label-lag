@@ -67,3 +67,41 @@ func (c *AnalyticsClient) SearchTransactions(ctx context.Context, req *crudv1.Se
 	}
 	return resp, nil
 }
+
+func (c *AnalyticsClient) GetDailyStats(ctx context.Context, req *crudv1.GetDailyStatsRequest) (*crudv1.GetDailyStatsResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	callCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	resp, err := c.stub.GetDailyStats(callCtx, req)
+	if err != nil {
+		return nil, mapRPCError(err)
+	}
+	return resp, nil
+}
+
+func (c *AnalyticsClient) GetOverviewMetrics(ctx context.Context, req *crudv1.GetOverviewMetricsRequest) (*crudv1.GetOverviewMetricsResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	callCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	resp, err := c.stub.GetOverviewMetrics(callCtx, req)
+	if err != nil {
+		return nil, mapRPCError(err)
+	}
+	return resp, nil
+}
