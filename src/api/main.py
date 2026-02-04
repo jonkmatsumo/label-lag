@@ -94,6 +94,7 @@ from api.schemas import (
     ShadowRuleResponse,
     SignalRequest,
     SignalResponse,
+    PredictResponse,
     SuggestionEvidence,
     SuggestionsListResponse,
     TrainRequest,
@@ -510,42 +511,16 @@ async def deploy_model(request: DeployModelRequest) -> DeployModelResponse:
     "/evaluate/signal",
     response_model=SignalResponse,
     tags=["Evaluation"],
-    summary="Evaluate fraud signal",
+    summary="Evaluate fraud signal (DEPRECATED)",
+    deprecated=True,
     description="""
+DEPRECATED: Use /predict/signal for model scores and Go Inference Gateway for full evaluation.
+
 Evaluate the fraud risk signal for a transaction.
-
-This endpoint is **idempotent** - it only provides an assessment without
-modifying any transaction state. The same input will produce consistent
-scoring (deterministic per user_id).
-
-The response includes:
-- **score**: Risk score from 1 (lowest) to 99 (highest)
-- **risk_components**: Factors contributing to the score
-- **model_version**: Version of the scoring model
-
-Scores are calibrated to match real-world fraud score distributions where:
-- Scores 1-20 are very common (low risk)
-- Scores 80+ are rare (high risk)
 """,
     responses={
         200: {
             "description": "Successful evaluation",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "request_id": "req_123xyz",
-                        "score": 85,
-                        "risk_components": [
-                            {
-                                "key": "velocity",
-                                "label": "high_transaction_velocity",
-                            },
-                            {"key": "history", "label": "insufficient_history"},
-                        ],
-                        "model_version": "v1.0.0",
-                    }
-                }
-            },
         },
         422: {"description": "Validation error"},
     },
@@ -567,6 +542,36 @@ async def evaluate_signal(request: SignalRequest) -> SignalResponse:
         raise HTTPException(
             status_code=500,
             detail=f"Evaluation failed: {e!s}",
+        ) from e
+
+
+@app.post(
+    "/predict/signal",
+    response_model=PredictResponse,
+    tags=["Evaluation"],
+    summary="Get model prediction only",
+    description="""
+Get raw model prediction for a transaction. Does NOT apply rules.
+Used by Go Inference Gateway as the forecaster component.
+""",
+)
+async def predict_signal(request: SignalRequest) -> PredictResponse:
+    """Predict fraud risk only (no rules).
+
+    Args:
+        request: Signal request.
+
+    Returns:
+        PredictResponse with model score and version.
+    """
+    try:
+        evaluator = get_evaluator()
+        result = evaluator.predict(request)
+        return PredictResponse(**result)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Prediction failed: {e!s}",
         ) from e
 
 

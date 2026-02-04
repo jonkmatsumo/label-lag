@@ -228,6 +228,49 @@ class SignalEvaluator:
             ],
         )
 
+    def predict(self, request: SignalRequest) -> dict:
+        """Perform prediction only, skipping rule evaluation.
+
+        Args:
+            request: The signal request.
+
+        Returns:
+            Dict with prediction results.
+        """
+        import time
+
+        from api.model_manager import get_model_manager
+
+        start_time = time.time()
+        request_id = f"req_{uuid.uuid4().hex[:12]}"
+
+        features = self._fetch_features(request)
+        manager = get_model_manager()
+
+        if manager.model_loaded and features.has_history:
+            raw_probability = self._predict_with_model(manager, features)
+            model_version = manager.model_version
+            model_loaded = True
+        else:
+            raw_probability = self._calculate_probability(features)
+            model_version = self.model_version
+            model_loaded = False
+
+        score = self._calibrate_score(raw_probability)
+        latency_ms = (time.time() - start_time) * 1000
+
+        return {
+            "request_id": request_id,
+            "model_score": score,
+            "model_version": model_version,
+            "model_loaded": model_loaded,
+            "latency_ms": latency_ms,
+            "diagnostics": {
+                "has_history": features.has_history,
+                "raw_probability": float(raw_probability),
+            },
+        }
+
     def _predict_with_model(self, manager, features: FeatureVector) -> float:
         """Use the ML model for prediction.
 
