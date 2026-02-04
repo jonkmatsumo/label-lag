@@ -59,3 +59,8 @@ Web:
 - Monitoring drift + shadow comparison still live in FastAPI via gateway proxy.
 - Backtest compare still FastAPI (compute-only path).
 - BFF config renamed to `BFF_PYTHON_API_BASE_URL` (no FastAPI mode toggle).
+
+## Final sweep (Phase 6.7)
+- Verified no remaining Streamlit instructions outside this inventory doc.
+- README and compose now describe the gateway-first UI path and ML-only Python API.
+- Generator moved behind the `tools` profile (no longer in the default stack).
