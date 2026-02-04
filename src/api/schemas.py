@@ -471,6 +471,10 @@ class SandboxEvaluateRequest(BaseModel):
         default=None,
         description="Custom ruleset to evaluate. If None, uses production ruleset.",
     )
+    shadow_mode: bool = Field(
+        default=False,
+        description="If True, evaluate rules without applying to final_score.",
+    )
 
 
 class SandboxMatchedRule(BaseModel):
@@ -487,6 +491,10 @@ class SandboxEvaluateResponse(BaseModel):
     """Response schema for sandbox rule evaluation."""
 
     final_score: int = Field(..., description="Final score after rule application")
+    baseline_score: int = Field(..., description="Base score before rule application")
+    shadow_score: int | None = Field(
+        None, description="What the score would be if rules were applied"
+    )
     matched_rules: list[SandboxMatchedRule] = Field(
         default_factory=list,
         description="Production rules that matched",

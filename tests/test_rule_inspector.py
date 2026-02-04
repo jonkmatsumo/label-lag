@@ -27,7 +27,7 @@ def mock_gateway_client(monkeypatch):
 
     mock_client = MagicMock()
 
-    def side_effect(features, base_score, ruleset=None, request_id=None):
+    def side_effect(features, base_score, ruleset=None, request_id=None, shadow_mode=False):
         if ruleset:
             rules_obj = []
             for r in ruleset["rules"]:
@@ -70,8 +70,9 @@ def mock_gateway_client(monkeypatch):
                 }
             )
 
-        return {
+        resp = {
             "final_score": result.final_score,
+            "baseline_score": base_score,
             "matched_rules": result.matched_rules,
             "explanations": explanations,
             "shadow_matched_rules": result.shadow_matched_rules,
@@ -79,6 +80,13 @@ def mock_gateway_client(monkeypatch):
             "rejected": result.rejected,
             "ruleset_version": rs.version or "none",
         }
+
+        if shadow_mode:
+            resp["shadow_score"] = result.final_score
+            resp["final_score"] = base_score
+            resp["rejected"] = False
+
+        return resp
 
     mock_client.evaluate_rules.side_effect = side_effect
     monkeypatch.setattr(gateway_client, "get_gateway_client", lambda: mock_client)
@@ -147,6 +155,7 @@ class TestSandboxEvaluateEndpoint:
         data = response.json()
 
         assert "final_score" in data
+        assert "baseline_score" in data
         assert "matched_rules" in data
         assert "explanations" in data
         assert "shadow_matched_rules" in data
@@ -307,6 +316,40 @@ class TestSandboxEvaluateEndpoint:
         # Score should be valid and in range
         assert isinstance(data["final_score"], int)
         assert 1 <= data["final_score"] <= 99
+
+    def test_sandbox_evaluate_with_shadow_mode(self, client):
+        """Test sandbox evaluation with shadow_mode=True."""
+        response = client.post(
+            "/rules/sandbox/evaluate",
+            json={
+                "features": {"velocity_24h": 10},
+                "base_score": 50,
+                "shadow_mode": True,
+                "ruleset": {
+                    "version": "test",
+                    "rules": [
+                        {
+                            "id": "shadow_test",
+                            "field": "velocity_24h",
+                            "op": ">",
+                            "value": 5,
+                            "action": "reject",
+                            "status": "active",
+                        }
+                    ],
+                },
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        # In shadow mode, final_score should remain base_score
+        assert data["final_score"] == 50
+        assert data["baseline_score"] == 50
+        assert data["shadow_score"] == 99
+        assert data["rejected"] is False
+        assert len(data["matched_rules"]) == 1
+        assert data["matched_rules"][0]["rule_id"] == "shadow_test"
 
 
 class TestShadowComparisonEndpoint:

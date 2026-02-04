@@ -21,7 +21,8 @@ class GatewayDecisionClient:
         features: dict[str, Any], 
         base_score: int, 
         ruleset: dict[str, Any] = None, 
-        request_id: str = None
+        request_id: str = None,
+        shadow_mode: bool = False
     ) -> dict[str, Any]:
         """
         Evaluate rules against a set of features using the Go gateway.
@@ -31,6 +32,7 @@ class GatewayDecisionClient:
             base_score: Model score (1-99) to adjust.
             ruleset: Optional custom RuleSet definition. If None, gateway uses production ruleset.
             request_id: Optional request identifier for tracing.
+            shadow_mode: If True, simulate rules without applying to final_score.
             
         Returns:
             Dictionary containing final_score, matched_rules, explanations, etc.
@@ -45,6 +47,7 @@ class GatewayDecisionClient:
         payload = {
             "features": features,
             "base_score": base_score,
+            "shadow_mode": shadow_mode,
         }
         if ruleset is not None:
             payload["ruleset"] = ruleset
@@ -79,6 +82,46 @@ class GatewayDecisionClient:
         except requests.exceptions.RequestException as e:
             logger.error(f"Gateway rule evaluation request failed: {e}")
             raise RuntimeError(f"Gateway evaluation request failed: {str(e)}")
+
+    def diff_rules(
+        self,
+        features: dict[str, Any],
+        base_score: int,
+        ruleset_a: dict[str, Any] = None,
+        ruleset_b: dict[str, Any] = None,
+        request_id: str = None,
+        shadow_mode: bool = False
+    ) -> dict[str, Any]:
+        """
+        Compare two rulesets on the same input using the Go gateway.
+        """
+        if request_id is None:
+            request_id = f"req_{uuid.uuid4().hex[:12]}"
+        
+        url = f"{self.base_url}/evaluate/rules/diff"
+        payload = {
+            "features": features,
+            "base_score": base_score,
+            "ruleset_a": ruleset_a,
+            "ruleset_b": ruleset_b,
+            "shadow_mode": shadow_mode,
+        }
+            
+        headers = {
+            "X-Request-Id": request_id,
+            "Content-Type": "application/json"
+        }
+        
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=self.timeout)
+            
+            if response.status_code != 200:
+                raise RuntimeError(f"Gateway diff failed ({response.status_code}): {response.text}")
+                
+            return response.json()
+        except Exception as e:
+            logger.error(f"Gateway ruleset diff failed: {e}")
+            raise RuntimeError(f"Gateway diff failed: {str(e)}")
 
 _client = None
 

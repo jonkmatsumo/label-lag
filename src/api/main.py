@@ -826,6 +826,7 @@ async def sandbox_evaluate(request: SandboxEvaluateRequest) -> SandboxEvaluateRe
             features=features,
             base_score=request.base_score,
             ruleset=ruleset_dict,
+            shadow_mode=request.shadow_mode,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -858,6 +859,8 @@ async def sandbox_evaluate(request: SandboxEvaluateRequest) -> SandboxEvaluateRe
 
     return SandboxEvaluateResponse(
         final_score=result["final_score"],
+        baseline_score=result.get("baseline_score", request.base_score),
+        shadow_score=result.get("shadow_score"),
         matched_rules=matched_rules,
         explanations=result.get("explanations", []),
         shadow_matched_rules=shadow_matched_rules,
