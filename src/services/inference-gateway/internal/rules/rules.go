@@ -19,27 +19,29 @@ const (
 )
 
 type Rule struct {
-	ID       string
-	Field    string
-	Op       string
-	Value    any
-	Action   string
-	Score    *int
-	Severity string
-	Reason   string
-	Status   RuleStatus
+	ID       string     `json:"id"`
+	Field    string     `json:"field"`
+	Op       string     `json:"op"`
+	Value    any        `json:"value"`
+	Action   string     `json:"action"`
+	Score    *int       `json:"score,omitempty"`
+	Severity string     `json:"severity"`
+	Reason   string     `json:"reason"`
+	Status   RuleStatus `json:"status"`
 }
 
 type RuleSet struct {
-	Version string
-	Rules   []Rule
+	Version string `json:"version"`
+	Rules   []Rule `json:"rules"`
 }
 
 type Explanation struct {
-	RuleID      string
-	Severity    string
-	Reason      string
-	Explanation string
+	RuleID      string `json:"rule_id"`
+	Severity    string `json:"severity"`
+	Reason      string `json:"reason"`
+	Explanation string `json:"explanation"`
+	Action      string `json:"action"`
+	Score       *int   `json:"score,omitempty"`
 }
 
 type RuleResult struct {
@@ -89,6 +91,8 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset RuleSet) (
 			Severity:    defaultSeverity(rule.Severity),
 			Reason:      defaultReason(rule.Reason, fmt.Sprintf("rule_matched:%s", rule.ID)),
 			Explanation: rule.Reason,
+			Action:      rule.Action,
+			Score:       rule.Score,
 		})
 
 		switch rule.Action {
@@ -141,6 +145,8 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset RuleSet) (
 			Severity:    defaultSeverity(rule.Severity),
 			Reason:      defaultReason(rule.Reason, fmt.Sprintf("shadow_rule_matched:%s", rule.ID)),
 			Explanation: rule.Reason,
+			Action:      rule.Action,
+			Score:       rule.Score,
 		})
 	}
 

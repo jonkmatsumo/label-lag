@@ -839,7 +839,7 @@ async def sandbox_evaluate(request: SandboxEvaluateRequest) -> SandboxEvaluateRe
     Returns:
         SandboxEvaluateResponse with evaluation results.
     """
-    from api.rules import Rule, RuleSet, evaluate_rules
+    from api.gateway_client import get_gateway_client
 
     # Build feature dict from request
     features = {
@@ -852,73 +852,53 @@ async def sandbox_evaluate(request: SandboxEvaluateRequest) -> SandboxEvaluateRe
         "transaction_amount": request.features.transaction_amount,
     }
 
-    # Use custom ruleset if provided, otherwise use production
+    # Map ruleset if provided
+    ruleset_dict = None
     if request.ruleset is not None:
-        try:
-            rules = [
-                Rule(
-                    id=r.id,
-                    field=r.field,
-                    op=r.op,
-                    value=r.value,
-                    action=r.action,
-                    score=r.score,
-                    severity=r.severity,
-                    reason=r.reason,
-                    status=r.status,
-                )
-                for r in request.ruleset.rules
-            ]
-            ruleset = RuleSet(version=request.ruleset.version, rules=rules)
-        except (TypeError, ValueError) as e:
-            raise HTTPException(status_code=400, detail=f"Invalid ruleset: {e}") from e
-    else:
-        manager = get_model_manager()
-        ruleset = manager.ruleset
-        if ruleset is None:
-            ruleset = RuleSet.empty()
+        ruleset_dict = request.ruleset.model_dump()
 
-    # Evaluate rules
-    result = evaluate_rules(features, request.base_score, ruleset)
-
-    # Build matched rules with full info
-    matched_rules = []
-    for exp in result.explanations:
-        rule_id = exp["rule_id"]
-        # Find the rule to get action and score
-        matching_rule = next((r for r in ruleset.rules if r.id == rule_id), None)
-        matched_rules.append(
-            SandboxMatchedRule(
-                rule_id=rule_id,
-                severity=exp["severity"],
-                reason=exp["reason"],
-                action=matching_rule.action if matching_rule else "",
-                score=matching_rule.score if matching_rule else None,
-            )
+    # Call gateway
+    client = get_gateway_client()
+    try:
+        result = client.evaluate_rules(
+            features=features,
+            base_score=request.base_score,
+            ruleset=ruleset_dict,
         )
+    except Exception as e:
+        logger.exception("Sandbox evaluation failed via gateway")
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
-    # Build shadow matched rules
-    shadow_matched_rules = []
-    for exp in result.shadow_explanations or []:
-        rule_id = exp["rule_id"]
-        matching_rule = next((r for r in ruleset.rules if r.id == rule_id), None)
-        shadow_matched_rules.append(
-            SandboxMatchedRule(
-                rule_id=rule_id,
-                severity=exp["severity"],
-                reason=exp["reason"],
-                action=matching_rule.action if matching_rule else "",
-                score=matching_rule.score if matching_rule else None,
-            )
+    # Map back to SandboxEvaluateResponse
+    matched_rules = [
+        SandboxMatchedRule(
+            rule_id=exp["rule_id"],
+            severity=exp["severity"],
+            reason=exp["reason"],
+            action=exp.get("action", ""),
+            score=exp.get("score"),
         )
+        for exp in result.get("explanations", [])
+    ]
+
+    shadow_matched_rules = [
+        SandboxMatchedRule(
+            rule_id=exp["rule_id"],
+            severity=exp["severity"],
+            reason=exp["reason"],
+            action=exp.get("action", ""),
+            score=exp.get("score"),
+        )
+        for exp in result.get("shadow_explanations", [])
+    ]
 
     return SandboxEvaluateResponse(
-        final_score=result.final_score,
+        final_score=result["final_score"],
         matched_rules=matched_rules,
-        explanations=result.explanations,
+        explanations=result.get("explanations", []),
         shadow_matched_rules=shadow_matched_rules,
-        rejected=result.rejected,
-        ruleset_version=ruleset.version,
+        rejected=result.get("rejected", False),
+        ruleset_version=result.get("ruleset_version", "unknown"),
     )
 
 
