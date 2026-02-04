@@ -248,7 +248,7 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 		"request_id":    requestID,
 		"timestamp":     time.Now().Format(time.RFC3339),
 		"model_version": inferenceResp.GetModelVersion(),
-		"rules_version": ruleset.Version,
+		"rules_version": ruleResult.RulesVersion,
 		"model_score":   rawScore,
 		"final_score":   ruleResult.FinalScore,
 		"rule_impacts":  ruleImpacts,
@@ -259,7 +259,7 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 	span.SetAttributes(
 		attribute.String("app.request_id", requestID),
 		attribute.String("app.model_version", inferenceResp.GetModelVersion()),
-		attribute.String("app.rules_version", ruleset.Version),
+		attribute.String("app.rules_version", ruleResult.RulesVersion),
 		attribute.Int("app.model_score", int(rawScore)),
 		attribute.Int("app.final_score", ruleResult.FinalScore),
 		attribute.Int("app.rule_matches", len(ruleResult.MatchedRules)),
@@ -296,8 +296,8 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 	if len(ruleResult.MatchedRules) > 0 {
 		response.ModelScore = wrapperspb.Int32(rawScore)
 	}
-	if ruleset.Version != "" {
-		response.RulesVersion = wrapperspb.String(ruleset.Version)
+	if ruleResult.RulesVersion != "" {
+		response.RulesVersion = wrapperspb.String(ruleResult.RulesVersion)
 	}
 
 	writeProtoJSON(w, response)

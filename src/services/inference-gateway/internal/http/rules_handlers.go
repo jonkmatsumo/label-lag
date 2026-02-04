@@ -67,7 +67,7 @@ func (h *Handler) handleEvaluateRules(w http.ResponseWriter, r *http.Request) {
 		ShadowMatchedRules: result.ShadowMatchedRules,
 		ShadowExplanations: result.ShadowExplanations,
 		Rejected:           result.Rejected,
-		RuleSetVersion:     ruleset.Version,
+		RuleSetVersion:     result.RulesVersion,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

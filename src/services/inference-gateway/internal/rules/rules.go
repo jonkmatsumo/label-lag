@@ -1,6 +1,8 @@
 package rules
 
 import (
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -35,6 +37,22 @@ type RuleSet struct {
 	Rules   []Rule `json:"rules"`
 }
 
+func (rs RuleSet) ComputeVersion() string {
+	// Canonical JSON serialization
+	data, err := json.Marshal(rs.Rules)
+	if err != nil {
+		return rs.Version // Fallback
+	}
+
+	h := sha256.New()
+	// Include explicit version in hash if present
+	if rs.Version != "" {
+		h.Write([]byte(rs.Version))
+	}
+	h.Write(data)
+	return fmt.Sprintf("sha256:%x", h.Sum(nil))[:16]
+}
+
 type Explanation struct {
 	RuleID      string `json:"rule_id"`
 	Severity    string `json:"severity"`
@@ -51,6 +69,7 @@ type RuleResult struct {
 	Rejected           bool
 	ShadowMatchedRules []string
 	ShadowExplanations []Explanation
+	RulesVersion       string
 }
 
 func EvaluateRules(features map[string]any, currentScore int, ruleset RuleSet) (RuleResult, error) {
@@ -61,6 +80,7 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset RuleSet) (
 			Explanations:       []Explanation{},
 			ShadowMatchedRules: []string{},
 			ShadowExplanations: []Explanation{},
+			RulesVersion:       ruleset.Version,
 		}, nil
 	}
 
@@ -159,6 +179,7 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset RuleSet) (
 		Rejected:           rejected,
 		ShadowMatchedRules: shadowMatched,
 		ShadowExplanations: shadowExplanations,
+		RulesVersion:       ruleset.ComputeVersion(),
 	}, nil
 }
 
