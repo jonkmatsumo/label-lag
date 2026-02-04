@@ -86,7 +86,10 @@ class SignalEvaluator:
             model_version = manager.model_version
         else:
             # Fall back to rule-based scoring
-            raw_probability = self._calculate_probability(features)
+            if os.getenv("DISABLE_HEURISTIC_FALLBACK") == "true":
+                raw_probability = 0.05 # Base probability
+            else:
+                raw_probability = self._calculate_probability(features)
             model_version = self.model_version
 
         # Calibrate to 1-99 score
@@ -253,7 +256,10 @@ class SignalEvaluator:
             model_version = manager.model_version
             model_loaded = True
         else:
-            raw_probability = self._calculate_probability(features)
+            if os.getenv("DISABLE_HEURISTIC_FALLBACK") == "true":
+                raw_probability = 0.05
+            else:
+                raw_probability = self._calculate_probability(features)
             model_version = self.model_version
             model_loaded = False
 
@@ -365,6 +371,9 @@ class SignalEvaluator:
             logger.warning(f"Failed to fetch features from Analytics: {e}")
 
         # Fallback: Use simulated features for unknown users
+        if os.getenv("DISABLE_FEATURE_SIMULATION") == "true":
+            return FeatureVector(has_history=False, transaction_amount=request.amount)
+
         return self._simulate_features(request)
 
     def _simulate_features(self, request: SignalRequest) -> FeatureVector:
