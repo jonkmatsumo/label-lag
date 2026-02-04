@@ -200,3 +200,22 @@ func (c *AnalyticsClient) GetSchemaSummary(ctx context.Context, req *crudv1.GetS
 	}
 	return resp, nil
 }
+
+func (c *AnalyticsClient) ListBacktestResults(ctx context.Context, req *crudv1.ListBacktestResultsRequest) (*crudv1.ListBacktestResultsResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	callCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	resp, err := c.stub.ListBacktestResults(callCtx, req)
+	if err != nil {
+		return nil, mapRPCError(err)
+	}
+	return resp, nil
+}

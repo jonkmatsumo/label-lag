@@ -555,6 +555,72 @@ func TestHandleMetricsShadowComparisonProxies(t *testing.T) {
 	}
 }
 
+func TestHandleBacktestResults(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	stub := &stubAnalyticsClient{
+		backtestResultsResp: &crudv1.ListBacktestResultsResponse{
+			Results: []*crudv1.BacktestResult{
+				{
+					JobId:          "job-1",
+					RuleId:         "rule-1",
+					RulesetVersion: "v1",
+					StartDate:      timestamppb.New(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)),
+					EndDate:        timestamppb.New(time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)),
+					Metrics: &crudv1.BacktestMetrics{
+						TotalRecords:      100,
+						MatchedCount:      10,
+						MatchRate:         0.1,
+						ScoreDistribution: map[string]int32{"0-10": 5},
+						ScoreMean:         50,
+						ScoreStd:          5,
+						ScoreMin:          10,
+						ScoreMax:          90,
+						RejectedCount:     2,
+						RejectedRate:      0.02,
+					},
+					CompletedAt: timestamppb.New(time.Date(2025, 1, 2, 1, 0, 0, 0, time.UTC)),
+				},
+				{
+					JobId:          "job-2",
+					RulesetVersion: "v2",
+					StartDate:      timestamppb.New(time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC)),
+					EndDate:        timestamppb.New(time.Date(2025, 1, 4, 0, 0, 0, 0, time.UTC)),
+					Metrics:        &crudv1.BacktestMetrics{},
+					CompletedAt:    timestamppb.New(time.Date(2025, 1, 4, 1, 0, 0, 0, time.UTC)),
+				},
+			},
+		},
+	}
+	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024)
+
+	req := httptest.NewRequest(http.MethodGet, "/backtest/results?rule_id=rule-1&start_date=2025-01-01&end_date=2025-01-31&limit=1", nil)
+	rec := httptest.NewRecorder()
+
+	handler.handleBacktestResults(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if stub.lastBacktestResultsReq == nil || stub.lastBacktestResultsReq.GetRuleId() != "rule-1" {
+		t.Fatalf("expected rule_id rule-1, got %v", stub.lastBacktestResultsReq)
+	}
+	if stub.lastBacktestResultsReq.GetStartDate() == nil || stub.lastBacktestResultsReq.GetEndDate() == nil {
+		t.Fatalf("expected start/end dates to be set")
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	results, ok := payload["results"].([]any)
+	if !ok || len(results) != 1 {
+		t.Fatalf("expected 1 result, got %v", payload["results"])
+	}
+	if payload["total"] != float64(1) {
+		t.Fatalf("expected total 1, got %v", payload["total"])
+	}
+}
+
 type stubInferenceClient struct {
 	readyErr error
 }
@@ -576,6 +642,7 @@ type stubAnalyticsClient struct {
 	fingerprintResp           *crudv1.GetDatasetFingerprintResponse
 	featureSampleResp         *crudv1.GetFeatureSampleResponse
 	schemaSummaryResp         *crudv1.GetSchemaSummaryResponse
+	backtestResultsResp       *crudv1.ListBacktestResultsResponse
 	err                       error
 	lastReq                   *crudv1.SearchTransactionsRequest
 	lastDailyStatsReq         *crudv1.GetDailyStatsRequest
@@ -585,6 +652,7 @@ type stubAnalyticsClient struct {
 	lastFingerprintReq        *crudv1.GetDatasetFingerprintRequest
 	lastFeatureSampleReq      *crudv1.GetFeatureSampleRequest
 	lastSchemaSummaryReq      *crudv1.GetSchemaSummaryRequest
+	lastBacktestResultsReq    *crudv1.ListBacktestResultsRequest
 }
 
 func (s *stubAnalyticsClient) SearchTransactions(ctx context.Context, req *crudv1.SearchTransactionsRequest) (*crudv1.SearchTransactionsResponse, error) {
@@ -625,6 +693,11 @@ func (s *stubAnalyticsClient) GetFeatureSample(ctx context.Context, req *crudv1.
 func (s *stubAnalyticsClient) GetSchemaSummary(ctx context.Context, req *crudv1.GetSchemaSummaryRequest) (*crudv1.GetSchemaSummaryResponse, error) {
 	s.lastSchemaSummaryReq = req
 	return s.schemaSummaryResp, s.err
+}
+
+func (s *stubAnalyticsClient) ListBacktestResults(ctx context.Context, req *crudv1.ListBacktestResultsRequest) (*crudv1.ListBacktestResultsResponse, error) {
+	s.lastBacktestResultsReq = req
+	return s.backtestResultsResp, s.err
 }
 
 type errProvider struct{}

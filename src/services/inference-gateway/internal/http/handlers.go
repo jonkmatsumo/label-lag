@@ -61,6 +61,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/analytics/transactions/search", h.handleSearchTransactions)
 	mux.HandleFunc("/monitoring/drift", h.handleMonitoringDrift)
 	mux.HandleFunc("/metrics/shadow/comparison", h.handleMetricsShadowComparison)
+	mux.HandleFunc("/backtest/results", h.handleBacktestResults)
 	for _, route := range notImplementedRoutes {
 		mux.HandleFunc(route, h.handleNotImplemented)
 	}
