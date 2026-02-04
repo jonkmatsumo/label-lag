@@ -8,10 +8,7 @@ import (
 )
 
 var notImplementedRoutes = []string{
-	"/analytics/fingerprint",
-	"/analytics/feature-sample",
 	"/analytics/attribution",
-	"/analytics/schema",
 	"/analytics/relationships",
 	"/analytics/correlations",
 	"/analytics/rules/",

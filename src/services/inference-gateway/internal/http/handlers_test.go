@@ -371,6 +371,112 @@ func TestHandleAnalyticsRecentAlerts(t *testing.T) {
 	}
 }
 
+func TestHandleAnalyticsFingerprint(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	stub := &stubAnalyticsClient{
+		fingerprintResp: &crudv1.GetDatasetFingerprintResponse{
+			GeneratedRecords: &crudv1.TableFingerprint{
+				Count:        10,
+				MaxCreatedAt: timestamppb.New(time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)),
+				MaxTimestamp: timestamppb.New(time.Date(2025, 2, 1, 1, 0, 0, 0, time.UTC)),
+				MaxId:        99,
+			},
+			FeatureSnapshots: &crudv1.TableFingerprint{
+				Count:        5,
+				MaxCreatedAt: timestamppb.New(time.Date(2025, 2, 2, 0, 0, 0, 0, time.UTC)),
+				MaxTimestamp: timestamppb.New(time.Date(2025, 2, 2, 1, 0, 0, 0, time.UTC)),
+				MaxId:        42,
+			},
+		},
+	}
+	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024)
+
+	req := httptest.NewRequest(http.MethodGet, "/analytics/fingerprint", nil)
+	rec := httptest.NewRecorder()
+
+	handler.handleAnalyticsFingerprint(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	generated := payload["generated_records"].(map[string]any)
+	if generated["count"] != float64(10) {
+		t.Fatalf("expected generated_records count 10, got %v", generated["count"])
+	}
+}
+
+func TestHandleAnalyticsFeatureSample(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	stub := &stubAnalyticsClient{
+		featureSampleResp: &crudv1.GetFeatureSampleResponse{
+			Samples: []*crudv1.FeatureSample{
+				{
+					RecordId:                "rec-1",
+					IsFraudulent:            true,
+					Velocity_24H:            2.1,
+					AmountToAvgRatio_30D:    1.5,
+					BalanceVolatilityZScore: 0.3,
+				},
+			},
+		},
+	}
+	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024)
+
+	req := httptest.NewRequest(http.MethodGet, "/analytics/feature-sample?sample_size=5&stratify=false", nil)
+	rec := httptest.NewRecorder()
+
+	handler.handleAnalyticsFeatureSample(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if stub.lastFeatureSampleReq == nil || stub.lastFeatureSampleReq.GetSampleSize() != 5 || stub.lastFeatureSampleReq.GetStratify() {
+		t.Fatalf("expected sample_size 5 and stratify false, got %v", stub.lastFeatureSampleReq)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	samples := payload["samples"].([]any)
+	if len(samples) != 1 {
+		t.Fatalf("expected 1 sample, got %v", payload["samples"])
+	}
+}
+
+func TestHandleAnalyticsSchema(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	stub := &stubAnalyticsClient{
+		schemaSummaryResp: &crudv1.GetSchemaSummaryResponse{
+			Columns: []*crudv1.ColumnInfo{
+				{
+					TableName:       "generated_records",
+					ColumnName:      "record_id",
+					DataType:        "text",
+					IsNullable:      "NO",
+					OrdinalPosition: 1,
+				},
+			},
+		},
+	}
+	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024)
+
+	req := httptest.NewRequest(http.MethodGet, "/analytics/schema?table_names=generated_records&table_names=feature_snapshots", nil)
+	rec := httptest.NewRecorder()
+
+	handler.handleAnalyticsSchema(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if stub.lastSchemaSummaryReq == nil || len(stub.lastSchemaSummaryReq.GetTableNames()) != 2 {
+		t.Fatalf("expected 2 table_names, got %v", stub.lastSchemaSummaryReq)
+	}
+}
+
 type stubInferenceClient struct {
 	readyErr error
 }
@@ -389,12 +495,18 @@ type stubAnalyticsClient struct {
 	overviewResp              *crudv1.GetOverviewMetricsResponse
 	transactionDetailsResp    *crudv1.GetTransactionDetailsResponse
 	recentAlertsResp          *crudv1.GetRecentAlertsResponse
+	fingerprintResp           *crudv1.GetDatasetFingerprintResponse
+	featureSampleResp         *crudv1.GetFeatureSampleResponse
+	schemaSummaryResp         *crudv1.GetSchemaSummaryResponse
 	err                       error
 	lastReq                   *crudv1.SearchTransactionsRequest
 	lastDailyStatsReq         *crudv1.GetDailyStatsRequest
 	lastOverviewReq           *crudv1.GetOverviewMetricsRequest
 	lastTransactionDetailsReq *crudv1.GetTransactionDetailsRequest
 	lastRecentAlertsReq       *crudv1.GetRecentAlertsRequest
+	lastFingerprintReq        *crudv1.GetDatasetFingerprintRequest
+	lastFeatureSampleReq      *crudv1.GetFeatureSampleRequest
+	lastSchemaSummaryReq      *crudv1.GetSchemaSummaryRequest
 }
 
 func (s *stubAnalyticsClient) SearchTransactions(ctx context.Context, req *crudv1.SearchTransactionsRequest) (*crudv1.SearchTransactionsResponse, error) {
@@ -420,6 +532,21 @@ func (s *stubAnalyticsClient) GetTransactionDetails(ctx context.Context, req *cr
 func (s *stubAnalyticsClient) GetRecentAlerts(ctx context.Context, req *crudv1.GetRecentAlertsRequest) (*crudv1.GetRecentAlertsResponse, error) {
 	s.lastRecentAlertsReq = req
 	return s.recentAlertsResp, s.err
+}
+
+func (s *stubAnalyticsClient) GetDatasetFingerprint(ctx context.Context, req *crudv1.GetDatasetFingerprintRequest) (*crudv1.GetDatasetFingerprintResponse, error) {
+	s.lastFingerprintReq = req
+	return s.fingerprintResp, s.err
+}
+
+func (s *stubAnalyticsClient) GetFeatureSample(ctx context.Context, req *crudv1.GetFeatureSampleRequest) (*crudv1.GetFeatureSampleResponse, error) {
+	s.lastFeatureSampleReq = req
+	return s.featureSampleResp, s.err
+}
+
+func (s *stubAnalyticsClient) GetSchemaSummary(ctx context.Context, req *crudv1.GetSchemaSummaryRequest) (*crudv1.GetSchemaSummaryResponse, error) {
+	s.lastSchemaSummaryReq = req
+	return s.schemaSummaryResp, s.err
 }
 
 type errProvider struct{}

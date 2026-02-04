@@ -19,6 +19,9 @@ type AnalyticsClient interface {
 	GetOverviewMetrics(ctx context.Context, req *crudv1.GetOverviewMetricsRequest) (*crudv1.GetOverviewMetricsResponse, error)
 	GetTransactionDetails(ctx context.Context, req *crudv1.GetTransactionDetailsRequest) (*crudv1.GetTransactionDetailsResponse, error)
 	GetRecentAlerts(ctx context.Context, req *crudv1.GetRecentAlertsRequest) (*crudv1.GetRecentAlertsResponse, error)
+	GetDatasetFingerprint(ctx context.Context, req *crudv1.GetDatasetFingerprintRequest) (*crudv1.GetDatasetFingerprintResponse, error)
+	GetFeatureSample(ctx context.Context, req *crudv1.GetFeatureSampleRequest) (*crudv1.GetFeatureSampleResponse, error)
+	GetSchemaSummary(ctx context.Context, req *crudv1.GetSchemaSummaryRequest) (*crudv1.GetSchemaSummaryResponse, error)
 }
 
 type searchTransactionsRequest struct {

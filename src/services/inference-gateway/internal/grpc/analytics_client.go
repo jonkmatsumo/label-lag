@@ -143,3 +143,60 @@ func (c *AnalyticsClient) GetRecentAlerts(ctx context.Context, req *crudv1.GetRe
 	}
 	return resp, nil
 }
+
+func (c *AnalyticsClient) GetDatasetFingerprint(ctx context.Context, req *crudv1.GetDatasetFingerprintRequest) (*crudv1.GetDatasetFingerprintResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	callCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	resp, err := c.stub.GetDatasetFingerprint(callCtx, req)
+	if err != nil {
+		return nil, mapRPCError(err)
+	}
+	return resp, nil
+}
+
+func (c *AnalyticsClient) GetFeatureSample(ctx context.Context, req *crudv1.GetFeatureSampleRequest) (*crudv1.GetFeatureSampleResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	callCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	resp, err := c.stub.GetFeatureSample(callCtx, req)
+	if err != nil {
+		return nil, mapRPCError(err)
+	}
+	return resp, nil
+}
+
+func (c *AnalyticsClient) GetSchemaSummary(ctx context.Context, req *crudv1.GetSchemaSummaryRequest) (*crudv1.GetSchemaSummaryResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	callCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	resp, err := c.stub.GetSchemaSummary(callCtx, req)
+	if err != nil {
+		return nil, mapRPCError(err)
+	}
+	return resp, nil
+}

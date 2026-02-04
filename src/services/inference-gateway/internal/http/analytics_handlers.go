@@ -197,11 +197,110 @@ func (h *Handler) handleAnalyticsRecentAlerts(w http.ResponseWriter, r *http.Req
 	writeAnalyticsJSON(w, recentAlertsResponse{Alerts: alerts})
 }
 
-func (h *Handler) handleAnalyticsFingerprint(w http.ResponseWriter, r *http.Request) {}
+func (h *Handler) handleAnalyticsFingerprint(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
 
-func (h *Handler) handleAnalyticsFeatureSample(w http.ResponseWriter, r *http.Request) {}
+	if h.analyticsClient == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "analytics backend unavailable")
+		return
+	}
 
-func (h *Handler) handleAnalyticsSchema(w http.ResponseWriter, r *http.Request) {}
+	resp, err := h.analyticsClient.GetDatasetFingerprint(r.Context(), &crudv1.GetDatasetFingerprintRequest{})
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	response := datasetFingerprintResponse{
+		GeneratedRecords: mapTableFingerprint(resp.GetGeneratedRecords()),
+		FeatureSnapshots: mapTableFingerprint(resp.GetFeatureSnapshots()),
+	}
+
+	writeAnalyticsJSON(w, response)
+}
+
+func (h *Handler) handleAnalyticsFeatureSample(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if h.analyticsClient == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "analytics backend unavailable")
+		return
+	}
+
+	sampleSize, err := parseIntQuery(r, "sample_size", 100, 1, 1000)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	stratify, err := parseBoolQuery(r, "stratify", true)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	resp, err := h.analyticsClient.GetFeatureSample(r.Context(), &crudv1.GetFeatureSampleRequest{
+		SampleSize: sampleSize,
+		Stratify:   stratify,
+	})
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	samples := make([]featureSampleResponse, 0, len(resp.GetSamples()))
+	for _, sample := range resp.GetSamples() {
+		samples = append(samples, featureSampleResponse{
+			RecordID:                sample.GetRecordId(),
+			IsFraudulent:            sample.GetIsFraudulent(),
+			Velocity24H:             sample.GetVelocity_24H(),
+			AmountToAvgRatio30D:     sample.GetAmountToAvgRatio_30D(),
+			BalanceVolatilityZScore: sample.GetBalanceVolatilityZScore(),
+		})
+	}
+
+	writeAnalyticsJSON(w, featureSampleEnvelope{Samples: samples})
+}
+
+func (h *Handler) handleAnalyticsSchema(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if h.analyticsClient == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "analytics backend unavailable")
+		return
+	}
+
+	tableNames := r.URL.Query()["table_names"]
+	resp, err := h.analyticsClient.GetSchemaSummary(r.Context(), &crudv1.GetSchemaSummaryRequest{
+		TableNames: tableNames,
+	})
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	columns := make([]columnInfoResponse, 0, len(resp.GetColumns()))
+	for _, column := range resp.GetColumns() {
+		columns = append(columns, columnInfoResponse{
+			TableName:       column.GetTableName(),
+			ColumnName:      column.GetColumnName(),
+			DataType:        column.GetDataType(),
+			IsNullable:      column.GetIsNullable(),
+			OrdinalPosition: column.GetOrdinalPosition(),
+		})
+	}
+
+	writeAnalyticsJSON(w, schemaSummaryResponse{Columns: columns})
+}
 
 func (h *Handler) handleAnalyticsAttribution(w http.ResponseWriter, r *http.Request) {}
 
@@ -218,6 +317,18 @@ func parseIntQuery(r *http.Request, name string, defaultValue, minValue, maxValu
 		return 0, errors.New("query parameter out of range")
 	}
 	return int32(value), nil
+}
+
+func parseBoolQuery(r *http.Request, name string, defaultValue bool) (bool, error) {
+	raw := r.URL.Query().Get(name)
+	if raw == "" {
+		return defaultValue, nil
+	}
+	value, err := strconv.ParseBool(raw)
+	if err != nil {
+		return false, errors.New("invalid query parameter")
+	}
+	return value, nil
 }
 
 func writeAnalyticsJSON(w http.ResponseWriter, payload any) {
@@ -279,4 +390,52 @@ type alertResponse struct {
 
 type recentAlertsResponse struct {
 	Alerts []alertResponse `json:"alerts"`
+}
+
+type tableFingerprintResponse struct {
+	Count        int64  `json:"count"`
+	MaxCreatedAt string `json:"max_created_at"`
+	MaxTimestamp string `json:"max_timestamp"`
+	MaxID        int64  `json:"max_id"`
+}
+
+type datasetFingerprintResponse struct {
+	GeneratedRecords tableFingerprintResponse `json:"generated_records"`
+	FeatureSnapshots tableFingerprintResponse `json:"feature_snapshots"`
+}
+
+type featureSampleResponse struct {
+	RecordID                string  `json:"record_id"`
+	IsFraudulent            bool    `json:"is_fraudulent"`
+	Velocity24H             float64 `json:"velocity_24h"`
+	AmountToAvgRatio30D     float64 `json:"amount_to_avg_ratio_30d"`
+	BalanceVolatilityZScore float64 `json:"balance_volatility_z_score"`
+}
+
+type featureSampleEnvelope struct {
+	Samples []featureSampleResponse `json:"samples"`
+}
+
+type columnInfoResponse struct {
+	TableName       string `json:"table_name"`
+	ColumnName      string `json:"column_name"`
+	DataType        string `json:"data_type"`
+	IsNullable      string `json:"is_nullable"`
+	OrdinalPosition int32  `json:"ordinal_position"`
+}
+
+type schemaSummaryResponse struct {
+	Columns []columnInfoResponse `json:"columns"`
+}
+
+func mapTableFingerprint(fingerprint *crudv1.TableFingerprint) tableFingerprintResponse {
+	if fingerprint == nil {
+		return tableFingerprintResponse{}
+	}
+	return tableFingerprintResponse{
+		Count:        fingerprint.GetCount(),
+		MaxCreatedAt: formatTimestamp(fingerprint.GetMaxCreatedAt()),
+		MaxTimestamp: formatTimestamp(fingerprint.GetMaxTimestamp()),
+		MaxID:        fingerprint.GetMaxId(),
+	}
 }
