@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"time"
 )
 
 type RuleStatus string
@@ -71,9 +72,17 @@ type RuleResult struct {
 	ShadowMatchedRules []string
 	ShadowExplanations []Explanation
 	RulesVersion       string
+	EvaluationTimeMS   float64            `json:"evaluation_time_ms"`
+	PerRuleTimingsMS   map[string]float64 `json:"per_rule_timings_ms,omitempty"`
 }
 
-func EvaluateRules(features map[string]any, currentScore int, ruleset RuleSet) (RuleResult, error) {
+type EvalOptions struct {
+	Debug bool
+}
+
+func EvaluateRules(features map[string]any, currentScore int, ruleset RuleSet, opts EvalOptions) (RuleResult, error) {
+	startTotal := time.Now()
+
 	if len(ruleset.Rules) == 0 {
 		return RuleResult{
 			FinalScore:         currentScore,
@@ -82,6 +91,7 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset RuleSet) (
 			ShadowMatchedRules: []string{},
 			ShadowExplanations: []Explanation{},
 			RulesVersion:       ruleset.Version,
+			EvaluationTimeMS:   float64(time.Since(startTotal).Nanoseconds()) / 1e6,
 		}, nil
 	}
 
@@ -93,16 +103,32 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset RuleSet) (
 	rejected := false
 	overrideApplied := false
 
+	var perRuleTimings map[string]float64
+	if opts.Debug {
+		perRuleTimings = make(map[string]float64)
+	}
+
 	activeRules, shadowRules := splitRules(ruleset.Rules)
 
 	for _, rule := range activeRules {
+		var startRule time.Time
+		if opts.Debug {
+			startRule = time.Now()
+		}
+
 		featureValue, ok := features[rule.Field]
 		if !ok {
+			if opts.Debug {
+				perRuleTimings[rule.ID] = float64(time.Since(startRule).Nanoseconds()) / 1e6
+			}
 			continue
 		}
 
 		matches, err := evaluateCondition(rule.Op, featureValue, rule.Value)
 		if err != nil || !matches {
+			if opts.Debug {
+				perRuleTimings[rule.ID] = float64(time.Since(startRule).Nanoseconds()) / 1e6
+			}
 			continue
 		}
 
@@ -150,16 +176,31 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset RuleSet) (
 			Score:       rule.Score,
 			ScoreDelta:  score - beforeScore,
 		})
+
+		if opts.Debug {
+			perRuleTimings[rule.ID] = float64(time.Since(startRule).Nanoseconds()) / 1e6
+		}
 	}
 
 	for _, rule := range shadowRules {
+		var startRule time.Time
+		if opts.Debug {
+			startRule = time.Now()
+		}
+
 		featureValue, ok := features[rule.Field]
 		if !ok {
+			if opts.Debug {
+				perRuleTimings[rule.ID] = float64(time.Since(startRule).Nanoseconds()) / 1e6
+			}
 			continue
 		}
 
 		matches, err := evaluateCondition(rule.Op, featureValue, rule.Value)
 		if err != nil || !matches {
+			if opts.Debug {
+				perRuleTimings[rule.ID] = float64(time.Since(startRule).Nanoseconds()) / 1e6
+			}
 			continue
 		}
 
@@ -193,6 +234,10 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset RuleSet) (
 			Score:       rule.Score,
 			ScoreDelta:  shadowDelta,
 		})
+
+		if opts.Debug {
+			perRuleTimings[rule.ID] = float64(time.Since(startRule).Nanoseconds()) / 1e6
+		}
 	}
 
 	score = clampScore(score)
@@ -205,6 +250,8 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset RuleSet) (
 		ShadowMatchedRules: shadowMatched,
 		ShadowExplanations: shadowExplanations,
 		RulesVersion:       ruleset.ComputeVersion(),
+		EvaluationTimeMS:   float64(time.Since(startTotal).Nanoseconds()) / 1e6,
+		PerRuleTimingsMS:   perRuleTimings,
 	}, nil
 }
 

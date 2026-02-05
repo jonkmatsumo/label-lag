@@ -29,6 +29,8 @@ type EvaluateRulesResponse struct {
 	Rejected           bool                `json:"rejected"`
 	RuleSetVersion     string              `json:"ruleset_version"`
 	Warnings           []rules.Conflict    `json:"warnings,omitempty"`
+	EvaluationTimeMS   float64             `json:"evaluation_time_ms"`
+	PerRuleTimingsMS   map[string]float64  `json:"per_rule_timings_ms,omitempty"`
 }
 
 type EvaluateRulesDiffRequest struct {
@@ -47,9 +49,10 @@ type RulesDiffSummary struct {
 }
 
 type EvaluateRulesDiffResponse struct {
-	A    EvaluateRulesResponse `json:"a"`
-	B    EvaluateRulesResponse `json:"b"`
-	Diff RulesDiffSummary      `json:"diff"`
+	A                     EvaluateRulesResponse `json:"a"`
+	B                     EvaluateRulesResponse `json:"b"`
+	Diff                  RulesDiffSummary      `json:"diff"`
+	TotalEvaluationTimeMS float64               `json:"total_evaluation_time_ms"`
 }
 
 func (h *Handler) handleEvaluateRulesDiff(w http.ResponseWriter, r *http.Request) {
@@ -57,6 +60,8 @@ func (h *Handler) handleEvaluateRulesDiff(w http.ResponseWriter, r *http.Request
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
+
+	debug := r.URL.Query().Get("debug") == "true"
 
 	var req EvaluateRulesDiffRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -84,7 +89,7 @@ func (h *Handler) handleEvaluateRulesDiff(w http.ResponseWriter, r *http.Request
 			}
 		}
 
-		result, err := rules.EvaluateRules(req.Features, req.BaseScore, ruleset)
+		result, err := rules.EvaluateRules(req.Features, req.BaseScore, ruleset, rules.EvalOptions{Debug: debug})
 		if err != nil {
 			return EvaluateRulesResponse{}, err
 		}
@@ -99,6 +104,8 @@ func (h *Handler) handleEvaluateRulesDiff(w http.ResponseWriter, r *http.Request
 			Rejected:           result.Rejected,
 			RuleSetVersion:     result.RulesVersion,
 			Warnings:           warnings,
+			EvaluationTimeMS:   result.EvaluationTimeMS,
+			PerRuleTimingsMS:   result.PerRuleTimingsMS,
 		}
 
 		if req.ShadowMode {
@@ -156,6 +163,8 @@ func (h *Handler) handleEvaluateRulesDiff(w http.ResponseWriter, r *http.Request
 	// Compute severity
 	diff.Severity = computeDiffSeverity(respA, respB, diff)
 
+	totalEvalTime := respA.EvaluationTimeMS + respB.EvaluationTimeMS
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
@@ -168,6 +177,7 @@ func (h *Handler) handleEvaluateRulesDiff(w http.ResponseWriter, r *http.Request
 		"added_count", len(diff.MatchedRulesAdded),
 		"removed_count", len(diff.MatchedRulesRemoved),
 		"shadow_mode", req.ShadowMode,
+		"total_evaluation_time_ms", totalEvalTime,
 	)
 
 	span.SetAttributes(
@@ -177,12 +187,16 @@ func (h *Handler) handleEvaluateRulesDiff(w http.ResponseWriter, r *http.Request
 		attribute.Int("rules.score_delta", diff.ScoreDelta),
 		attribute.Bool("rules.diff", true),
 		attribute.Bool("rules.shadow_mode", req.ShadowMode),
+		attribute.Float64("rules.evaluation_time_ms.total", totalEvalTime),
+		attribute.Float64("rules.evaluation_time_ms.a", respA.EvaluationTimeMS),
+		attribute.Float64("rules.evaluation_time_ms.b", respB.EvaluationTimeMS),
 	)
 
 	_ = json.NewEncoder(w).Encode(EvaluateRulesDiffResponse{
-		A:    respA,
-		B:    respB,
-		Diff: diff,
+		A:                     respA,
+		B:                     respB,
+		Diff:                  diff,
+		TotalEvaluationTimeMS: totalEvalTime,
 	})
 }
 
@@ -192,6 +206,8 @@ func (h *Handler) handleEvaluateRules(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
+
+	debug := r.URL.Query().Get("debug") == "true"
 
 	var req EvaluateRulesRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -219,7 +235,7 @@ func (h *Handler) handleEvaluateRules(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	result, err := rules.EvaluateRules(req.Features, req.BaseScore, ruleset)
+	result, err := rules.EvaluateRules(req.Features, req.BaseScore, ruleset, rules.EvalOptions{Debug: debug})
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "rule evaluation failed")
 		return
@@ -238,6 +254,8 @@ func (h *Handler) handleEvaluateRules(w http.ResponseWriter, r *http.Request) {
 		Rejected:           result.Rejected,
 		RuleSetVersion:     result.RulesVersion,
 		Warnings:           warnings,
+		EvaluationTimeMS:   result.EvaluationTimeMS,
+		PerRuleTimingsMS:   result.PerRuleTimingsMS,
 	}
 
 	if req.ShadowMode {
@@ -255,6 +273,7 @@ func (h *Handler) handleEvaluateRules(w http.ResponseWriter, r *http.Request) {
 		"shadow_mode", req.ShadowMode,
 		"shadow_score", resp.ShadowScore,
 		"matches", len(result.MatchedRules),
+		"evaluation_time_ms", result.EvaluationTimeMS,
 	)
 
 	span.SetAttributes(
@@ -264,6 +283,7 @@ func (h *Handler) handleEvaluateRules(w http.ResponseWriter, r *http.Request) {
 		attribute.Int("rules.final_score", resp.FinalScore),
 		attribute.Int("rules.match_count", len(result.MatchedRules)),
 		attribute.Bool("rules.shadow_mode", req.ShadowMode),
+		attribute.Float64("rules.evaluation_time_ms", result.EvaluationTimeMS),
 	)
 	if req.ShadowMode {
 		span.SetAttributes(attribute.Int("rules.shadow_score", resp.ShadowScore))

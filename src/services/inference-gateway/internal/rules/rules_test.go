@@ -31,7 +31,7 @@ func TestEvaluateRules_OverridePrecedence(t *testing.T) {
 	}
 
 	features := map[string]any{"velocity_24h": 10}
-	result, err := EvaluateRules(features, score, ruleset)
+	result, err := EvaluateRules(features, score, ruleset, EvalOptions{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestEvaluateRules_ShadowRulesDoNotAffectScore(t *testing.T) {
 	}
 
 	features := map[string]any{"merchant_risk_score": 90}
-	result, err := EvaluateRules(features, score, ruleset)
+	result, err := EvaluateRules(features, score, ruleset, EvalOptions{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -142,7 +142,7 @@ func TestEvaluateRules_RejectAndClamp(t *testing.T) {
 	}
 
 	features := map[string]any{"risk_score": 90}
-	result, err := EvaluateRules(features, score, ruleset)
+	result, err := EvaluateRules(features, score, ruleset, EvalOptions{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestEvaluateRules_RejectAndOverride(t *testing.T) {
 	}
 
 	features := map[string]any{"risk_score": 90}
-	result, err := EvaluateRules(features, score, ruleset)
+	result, err := EvaluateRules(features, score, ruleset, EvalOptions{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -216,14 +216,14 @@ func TestEvaluateRules_NumericCoercion(t *testing.T) {
 
 	// Test int feature vs float rule
 	features := map[string]any{"val": 10}
-	result, _ := EvaluateRules(features, score, ruleset)
+	result, _ := EvaluateRules(features, score, ruleset, EvalOptions{})
 	if result.FinalScore != 99 {
 		t.Errorf("expected match for int 10 == float 10.0")
 	}
 
 	// Test string feature (no coercion)
 	features = map[string]any{"val": "10"}
-	result, _ = EvaluateRules(features, score, ruleset)
+	result, _ = EvaluateRules(features, score, ruleset, EvalOptions{})
 	if result.FinalScore != 50 {
 		t.Errorf("expected NO match for string \"10\" == float 10.0")
 	}
@@ -246,7 +246,7 @@ func TestEvaluateRules_MissingFeature(t *testing.T) {
 	}
 
 	features := map[string]any{"other": 1}
-	result, _ := EvaluateRules(features, score, ruleset)
+	result, _ := EvaluateRules(features, score, ruleset, EvalOptions{})
 	if result.FinalScore != 50 {
 		t.Errorf("expected score to remain 50 when feature is missing")
 	}

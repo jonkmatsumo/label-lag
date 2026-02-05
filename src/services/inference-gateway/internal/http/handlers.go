@@ -209,7 +209,7 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 
 	rawScore := int32(math.Round(inferenceResp.GetModelScore()))
 
-	ruleResult, err := rules.EvaluateRules(features, int(rawScore), ruleset)
+	ruleResult, err := rules.EvaluateRules(features, int(rawScore), ruleset, rules.EvalOptions{Debug: false})
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "rule evaluation failed")
 		return
