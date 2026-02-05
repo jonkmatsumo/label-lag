@@ -28,6 +28,7 @@ type EvaluateRulesResponse struct {
 	ShadowExplanations []rules.Explanation `json:"shadow_explanations"`
 	Rejected           bool                `json:"rejected"`
 	RuleSetVersion     string              `json:"ruleset_version"`
+	Warnings           []rules.Conflict    `json:"warnings,omitempty"`
 }
 
 type EvaluateRulesDiffRequest struct {
@@ -39,8 +40,9 @@ type EvaluateRulesDiffRequest struct {
 }
 
 type RulesDiffSummary struct {
-	ScoreDelta        int      `json:"score_delta"`
-	MatchedRulesAdded []string `json:"matched_rules_added"`
+	Severity            string   `json:"severity"`
+	ScoreDelta          int      `json:"score_delta"`
+	MatchedRulesAdded   []string `json:"matched_rules_added"`
 	MatchedRulesRemoved []string `json:"matched_rules_removed"`
 }
 
@@ -65,6 +67,7 @@ func (h *Handler) handleEvaluateRulesDiff(w http.ResponseWriter, r *http.Request
 	// Helper to evaluate a single ruleset
 	eval := func(rs *rules.RuleSet) (EvaluateRulesResponse, error) {
 		ruleset := rules.RuleSet{}
+		var warnings []rules.Conflict
 		if rs != nil {
 			validRules, errs := rules.FilterValidRules(rs.Rules)
 			if len(errs) > 0 {
@@ -72,6 +75,7 @@ func (h *Handler) handleEvaluateRulesDiff(w http.ResponseWriter, r *http.Request
 			}
 			ruleset = *rs
 			ruleset.Rules = validRules
+			warnings = rules.ValidateRuleset(ruleset)
 		} else {
 			var err error
 			ruleset, err = h.rulesProvider.GetRules(r.Context())
@@ -94,6 +98,7 @@ func (h *Handler) handleEvaluateRulesDiff(w http.ResponseWriter, r *http.Request
 			ShadowExplanations: result.ShadowExplanations,
 			Rejected:           result.Rejected,
 			RuleSetVersion:     result.RulesVersion,
+			Warnings:           warnings,
 		}
 
 		if req.ShadowMode {
@@ -192,6 +197,7 @@ func (h *Handler) handleEvaluateRules(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ruleset := rules.RuleSet{}
+	var warnings []rules.Conflict
 	if req.RuleSet != nil {
 		validRules, errs := rules.FilterValidRules(req.RuleSet.Rules)
 		if len(errs) > 0 {
@@ -200,6 +206,7 @@ func (h *Handler) handleEvaluateRules(w http.ResponseWriter, r *http.Request) {
 		}
 		ruleset = *req.RuleSet
 		ruleset.Rules = validRules
+		warnings = rules.ValidateRuleset(ruleset)
 	} else {
 		// Use default ruleset if not provided
 		var err error
@@ -227,6 +234,7 @@ func (h *Handler) handleEvaluateRules(w http.ResponseWriter, r *http.Request) {
 		ShadowExplanations: result.ShadowExplanations,
 		Rejected:           result.Rejected,
 		RuleSetVersion:     result.RulesVersion,
+		Warnings:           warnings,
 	}
 
 	if req.ShadowMode {
