@@ -411,6 +411,11 @@ def train_model(
         metrics_dict = _compute_metrics(split.y_test, y_pred, y_pred_proba)
         _mlflow.log_metrics(metrics_dict)
 
+        # Fit calibrator on test set (C2)
+        from model.evaluate import ScoreCalibrator
+        calibrator = ScoreCalibrator()
+        calibrator.fit(y_pred_proba, split.y_test)
+
         signature = infer_signature(split.X_train, y_pred_proba)
         _mlflow.sklearn.log_model(clf, "model", signature=signature, input_example=split.X_train.iloc[:1])
 
@@ -419,6 +424,12 @@ def train_model(
             split.X_test.to_parquet(ref_path, index=False)
             _mlflow.log_artifact(ref_path)
             
+            # Save calibrator artifact (C2)
+            calibrator_path = os.path.join(tmpdir, "calibrator.pkl")
+            import joblib
+            joblib.dump(calibrator, calibrator_path)
+            _mlflow.log_artifact(calibrator_path)
+
             # Save feature columns list as artifact for inference
             feature_columns_path = os.path.join(tmpdir, "feature_columns.json")
             with open(feature_columns_path, "w") as f:

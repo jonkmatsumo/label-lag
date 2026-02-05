@@ -50,7 +50,6 @@ class SignalForecaster:
     Uses the trained ML model when available, falls back to heuristic-based scoring.
     """
 
-    calibrator: Any = None
     model_version: str = MODEL_VERSION
 
     def predict(
@@ -103,7 +102,10 @@ class SignalForecaster:
             model_version = self.model_version
             model_loaded = False
 
-        score = self._calibrate_score(raw_probability)
+        # Use calibrator from manager (C2)
+        calibrator = manager.calibrator
+        score = int(calibrator.transform(np.array([raw_probability]))[0])
+        
         latency_ms = (time.time() - start_time) * 1000
 
         return {
@@ -117,6 +119,7 @@ class SignalForecaster:
                 "has_history": features.has_history,
                 "raw_probability": float(raw_probability),
                 "fallback_used": fallback_used,
+                "calibrator_loaded": manager.calibrator_loaded,
             },
         }
 
@@ -319,23 +322,6 @@ class SignalForecaster:
 
         # Cap probability
         return min(prob, 0.99)
-
-    def _calibrate_score(self, probability: float) -> int:
-        """Convert probability to calibrated 1-99 score.
-
-        Args:
-            probability: Raw probability between 0.0 and 1.0.
-
-        Returns:
-            Integer score between 1 and 99.
-        """
-        if self.calibrator is None:
-            from model.evaluate import ScoreCalibrator
-            self.calibrator = ScoreCalibrator()
-            
-        prob_array = np.array([probability])
-        scores = self.calibrator.transform(prob_array)
-        return int(scores[0])
 
 
 # Singleton forecaster instance

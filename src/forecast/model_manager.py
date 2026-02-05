@@ -59,12 +59,29 @@ class ModelManager:
         self._model_version: str | None = None
         self._model_source: str = "none"
         self._required_features: list[str] | None = None
+        self._calibrator = None
+        self._calibrator_loaded = False
         self._initialized = True
 
     @property
     def model_loaded(self) -> bool:
         """Check if a model is currently loaded."""
         return self._model is not None
+
+    @property
+    def calibrator_loaded(self) -> bool:
+        """Check if a calibration artifact is loaded."""
+        return self._calibrator_loaded
+
+    @property
+    def calibrator(self):
+        """Get the loaded calibrator or a default one."""
+        if self._calibrator is not None:
+            return self._calibrator
+        
+        # Fallback to default ScoreCalibrator
+        from model.evaluate import ScoreCalibrator
+        return ScoreCalibrator()
 
     @property
     def model_version(self) -> str:
@@ -132,6 +149,9 @@ class ModelManager:
             # Try to load feature_columns.json artifact
             self._load_feature_columns_artifact()
 
+            # Try to load calibrator.pkl artifact (C2)
+            self._load_calibrator_artifact()
+
             logger.info(
                 f"Successfully loaded model version {self._model_version} from MLflow"
             )
@@ -182,6 +202,33 @@ class ModelManager:
                         break
         except Exception as e:
             logger.debug(f"Could not load feature_columns artifact: {e}")
+
+    def _load_calibrator_artifact(self) -> None:
+        """Load calibrator.pkl artifact from the model run.
+
+        Sets self._calibrator and self._calibrator_loaded if artifact is found.
+        """
+        try:
+            import mlflow
+            import joblib
+            client = mlflow.MlflowClient()
+            versions = client.search_model_versions(f"name='{MODEL_NAME}'")
+            for v in versions:
+                if v.current_stage == "Production":
+                    run_id = v.run_id
+                    try:
+                        artifact_path = client.download_artifacts(
+                            run_id, "calibrator.pkl"
+                        )
+                        self._calibrator = joblib.load(artifact_path)
+                        self._calibrator_loaded = True
+                        logger.info("Successfully loaded calibrator artifact from MLflow")
+                        return
+                    except Exception as e:
+                        logger.debug(f"calibrator.pkl artifact not found or failed to load: {e}")
+                        break
+        except Exception as e:
+            logger.debug(f"Could not load calibrator artifact: {e}")
 
     def _benchmark_inference(self, n_samples: int = 100) -> None:
         """Benchmark inference latency and log to MLflow.
