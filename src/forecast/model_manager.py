@@ -15,11 +15,8 @@ from pathlib import Path
 from threading import Lock
 from typing import Any
 
-import mlflow
 import numpy as np
 import pandas as pd
-
-from rules_management.rules import RuleSet
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -62,7 +59,6 @@ class ModelManager:
         self._model_version: str | None = None
         self._model_source: str = "none"
         self._required_features: list[str] | None = None
-        self._ruleset: RuleSet | None = None
         self._initialized = True
 
     @property
@@ -96,45 +92,6 @@ class ModelManager:
 
         return DataLoader.FEATURE_COLUMNS
 
-    @property
-    def ruleset(self) -> RuleSet | None:
-        """Get the loaded ruleset.
-
-        Returns:
-            RuleSet instance if loaded, None otherwise.
-        """
-        return self._ruleset
-
-    @property
-    def rules_version(self) -> str | None:
-        """Get the version of loaded rules.
-
-        Returns:
-            Rules version string, or None if no rules loaded.
-        """
-        if self._ruleset is None:
-            return None
-        return self._ruleset.version
-
-    def update_production_ruleset(self, ruleset: RuleSet) -> None:
-        """Update the in-memory production ruleset.
-
-        Called by /rules/{id}/publish endpoint to sync approved rules
-        to the production ruleset used for inference.
-
-        Note: This updates the in-memory ruleset only. On API restart,
-        the ruleset is reloaded from MLflow artifacts or default_rules.json.
-        Published rules in DraftRuleStore are not automatically rehydrated.
-
-        Args:
-            ruleset: RuleSet to use for production inference.
-        """
-        self._ruleset = ruleset
-        logger.info(
-            f"Production ruleset updated to version {ruleset.version} "
-            f"with {len(ruleset.rules)} rules"
-        )
-
     def load_production_model(self) -> bool:
         """Load the production model from MLflow registry.
 
@@ -162,6 +119,7 @@ class ModelManager:
             True if successful, False otherwise.
         """
         try:
+            import mlflow
             mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 
             model_uri = f"models:/{MODEL_NAME}/Production"
@@ -173,9 +131,6 @@ class ModelManager:
 
             # Try to load feature_columns.json artifact
             self._load_feature_columns_artifact()
-
-            # Try to load rules.json artifact
-            self._load_rules_artifact()
 
             logger.info(
                 f"Successfully loaded model version {self._model_version} from MLflow"
@@ -200,6 +155,7 @@ class ModelManager:
         falls back to default FEATURE_COLUMNS.
         """
         try:
+            import mlflow
             client = mlflow.MlflowClient()
             versions = client.search_model_versions(f"name='{MODEL_NAME}'")
             for v in versions:
@@ -227,53 +183,6 @@ class ModelManager:
         except Exception as e:
             logger.debug(f"Could not load feature_columns artifact: {e}")
 
-    def _load_rules_artifact(self) -> None:
-        """Load rules.json artifact from the model run.
-
-        Tries to load from MLflow artifacts first. If not found, falls back
-        to config/default_rules.json. If that also fails, uses empty RuleSet.
-        """
-        # Try loading from MLflow artifacts
-        try:
-            client = mlflow.MlflowClient()
-            versions = client.search_model_versions(f"name='{MODEL_NAME}'")
-            for v in versions:
-                if v.current_stage == "Production":
-                    run_id = v.run_id
-                    try:
-                        artifact_path = client.download_artifacts(run_id, "rules.json")
-                        with open(artifact_path) as f:
-                            data = json.load(f)
-                        self._ruleset = RuleSet.from_dict(data)
-                        logger.info(
-                            f"Loaded rules version {self._ruleset.version} "
-                            f"from MLflow artifact"
-                        )
-                        return
-                    except Exception:
-                        # Artifact not found - try fallback
-                        logger.debug(
-                            "rules.json artifact not found in MLflow, trying fallback"
-                        )
-                        break
-        except Exception as e:
-            logger.debug(f"Could not load rules from MLflow: {e}")
-
-        # Fallback to default rules file
-        try:
-            default_rules_path = (
-                Path(__file__).parent.parent / "config" / "default_rules.json"
-            )
-            self._ruleset = RuleSet.load_from_file(default_rules_path)
-            logger.info(
-                f"Loaded rules version {self._ruleset.version} from default file"
-            )
-        except (FileNotFoundError, ValueError) as e:
-            # Use empty ruleset if default file also fails
-            logger.debug(f"Could not load default rules file: {e}")
-            self._ruleset = RuleSet.empty()
-            logger.debug("Using empty ruleset")
-
     def _benchmark_inference(self, n_samples: int = 100) -> None:
         """Benchmark inference latency and log to MLflow.
 
@@ -284,6 +193,7 @@ class ModelManager:
             return
 
         try:
+            import mlflow
             # Create sample data matching required features
             required = self.required_features
             sample_data = pd.DataFrame(
@@ -364,6 +274,7 @@ class ModelManager:
             Version string or 'unknown'.
         """
         try:
+            import mlflow
             client = mlflow.MlflowClient()
             versions = client.search_model_versions(f"name='{MODEL_NAME}'")
             for v in versions:

@@ -3,8 +3,9 @@
 import logging
 import os
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from decimal import Decimal
+from typing import Any
 
 import numpy as np
 
@@ -12,7 +13,6 @@ from api.crud_client import get_crud_client
 from api.schemas import (
     SignalRequest,
 )
-from model.evaluate import ScoreCalibrator
 
 logger = logging.getLogger(__name__)
 
@@ -50,14 +50,17 @@ class SignalForecaster:
     Uses the trained ML model when available, falls back to heuristic-based scoring.
     """
 
-    calibrator: ScoreCalibrator = field(default_factory=ScoreCalibrator)
+    calibrator: Any = None
     model_version: str = MODEL_VERSION
 
-    def predict(self, request: SignalRequest) -> dict:
+    def predict(
+        self, request: SignalRequest, features_override: dict[str, Any] | None = None
+    ) -> dict:
         """Perform prediction only, skipping rule evaluation.
 
         Args:
             request: The signal request.
+            features_override: Optional pre-hydrated features to use.
 
         Returns:
             Dict with prediction results.
@@ -69,7 +72,12 @@ class SignalForecaster:
         start_time = time.time()
         request_id = f"req_{uuid.uuid4().hex[:12]}"
 
-        features = self._fetch_features(request)
+        if features_override:
+            logger.debug(f"Using pre-hydrated features for user {request.user_id}")
+            features = self._map_to_feature_vector(request, features_override)
+        else:
+            features = self._fetch_features(request)
+
         manager = get_model_manager()
 
         fallback_used = False
@@ -169,6 +177,30 @@ class SignalForecaster:
             logger.warning(f"ML prediction failed, falling back to heuristic: {e}")
             return self._calculate_probability(features)
 
+    def _map_to_feature_vector(
+        self, request: SignalRequest, feature_dict: dict[str, Any]
+    ) -> FeatureVector:
+        """Map a raw dictionary of features to a FeatureVector.
+
+        Args:
+            request: The original request.
+            feature_dict: Raw feature dictionary.
+
+        Returns:
+            Populated FeatureVector.
+        """
+        return FeatureVector(
+            velocity_24h=int(feature_dict.get("velocity_24h", 0)),
+            amount_to_avg_ratio_30d=float(feature_dict.get("amount_to_avg_ratio_30d", 1.0)),
+            balance_volatility_z_score=float(
+                feature_dict.get("balance_volatility_z_score", 0.0)
+            ),
+            bank_connections_24h=int(feature_dict.get("bank_connections_24h", 0)),
+            merchant_risk_score=int(feature_dict.get("merchant_risk_score", 0)),
+            has_history=feature_dict.get("has_history", True),
+            transaction_amount=request.amount,
+        )
+
     def _fetch_features(self, request: SignalRequest) -> FeatureVector:
         """Fetch features for the user from feature store via Analytics service.
 
@@ -204,8 +236,11 @@ class SignalForecaster:
         except Exception as e:
             logger.warning(f"Failed to fetch features from Analytics: {e}")
 
-        # Fallback: Use simulated features for unknown users
-        if os.getenv("DISABLE_FEATURE_SIMULATION") == "true":
+        # Fallback: mark as no history. Do NOT simulate by default.
+        # Unknown user behavior is now Go-aligned (either Go hydrates/simulates,
+        # or Python uses model fallback logic without features).
+        disable_sim = os.getenv("DISABLE_FEATURE_SIMULATION", "true").lower() == "true"
+        if disable_sim:
             return FeatureVector(has_history=False, transaction_amount=request.amount)
 
         return self._simulate_features(request)
@@ -294,6 +329,10 @@ class SignalForecaster:
         Returns:
             Integer score between 1 and 99.
         """
+        if self.calibrator is None:
+            from model.evaluate import ScoreCalibrator
+            self.calibrator = ScoreCalibrator()
+            
         prob_array = np.array([probability])
         scores = self.calibrator.transform(prob_array)
         return int(scores[0])
