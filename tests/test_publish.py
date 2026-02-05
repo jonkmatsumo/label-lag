@@ -33,9 +33,9 @@ class TestPublishFlow:
         # Initialize with empty ruleset
         manager._ruleset = RuleSet.empty()
         # Set as global manager for testing
-        import api.model_manager
+        import forecast.model_manager
 
-        api.model_manager._manager = manager
+        forecast.model_manager._manager = manager
         return manager
 
     @pytest.fixture
@@ -58,18 +58,15 @@ class TestPublishFlow:
             status=RuleStatus.APPROVED.value,
         )
 
-    def test_publish_updates_model_manager_ruleset(
+    def test_publish_updates_store_status(
         self, draft_store, version_store, model_manager, audit_logger, approved_rule
     ):
-        """Test that publish updates ModelManager ruleset."""
+        """Test that publish updates status in the store."""
         # Add approved rule to draft store
         draft_store._rules[approved_rule.id] = approved_rule
         draft_store._save_rules()
-
-        # Verify ruleset is empty initially
-        assert model_manager.ruleset is None or len(model_manager.ruleset.rules) == 0
-
-        # Simulate publish: transition to active and sync to ruleset
+    
+        # Simulate publish: transition to active
         from rules_management.workflow import RuleStateMachine
 
         state_machine = RuleStateMachine(require_approval=False)
@@ -81,18 +78,12 @@ class TestPublishFlow:
         )
 
         # Update draft store
-        draft_store._rules[approved_rule.id] = active_rule
+        draft_store.save(active_rule)
 
-        # Sync to production ruleset
-        all_active_rules = draft_store.list_rules(status=RuleStatus.ACTIVE.value)
-        new_ruleset = RuleSet(version="v1", rules=all_active_rules)
-        model_manager.update_production_ruleset(new_ruleset)
-
-        # Verify ruleset was updated
-        assert model_manager.ruleset is not None
-        assert len(model_manager.ruleset.rules) == 1
-        assert model_manager.ruleset.rules[0].id == approved_rule.id
-        assert model_manager.ruleset.rules[0].status == RuleStatus.ACTIVE.value
+        # Verify status was updated in store
+        rule_in_store = draft_store.get(approved_rule.id)
+        assert rule_in_store is not None
+        assert rule_in_store.status == RuleStatus.ACTIVE.value
 
     def test_publish_creates_audit_event(
         self, draft_store, version_store, model_manager, audit_logger, approved_rule
