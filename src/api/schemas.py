@@ -1181,6 +1181,16 @@ class FeatureDriftDetail(BaseModel):
     status: str = Field(..., description="OK | WARNING | CRITICAL")
 
 
+class AlertItem(BaseModel):
+    """Structured alert for drift or monitoring events."""
+
+    severity: Literal["warning", "critical"] = Field(..., description="Alert severity")
+    feature: str = Field(..., description="Feature name or component")
+    psi: float = Field(..., description="PSI value")
+    threshold: float = Field(..., description="Threshold exceeded")
+    recommendation: str = Field(..., description="Recommended action")
+
+
 class DriftStatusResponse(BaseModel):
     """Response schema for drift status endpoint."""
 
@@ -1203,6 +1213,10 @@ class DriftStatusResponse(BaseModel):
     top_features: list[FeatureDriftDetail] = Field(
         default_factory=list,
         description="Features sorted by PSI descending",
+    )
+    alerts: list[AlertItem] = Field(
+        default_factory=list,
+        description="List of structured alerts based on drift thresholds",
     )
     thresholds: dict[str, float] = Field(
         default_factory=dict,

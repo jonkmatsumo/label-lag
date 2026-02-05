@@ -189,6 +189,16 @@ def _build_drift_response(
     if result.get("live_size", 0) > 0:
         current_window = f"Last {hours_analyzed} hours ({result['live_size']} samples)"
 
+    # C1: Structured logging for alerts
+    alerts = result.get("alerts", [])
+    for alert in alerts:
+        log_level = logging.ERROR if alert["severity"] == "critical" else logging.WARNING
+        logger.log(
+            log_level,
+            f"DRIFT ALERT: {alert['severity'].upper()} drift detected for feature '{alert['feature']}' "
+            f"(PSI={alert['psi']}, threshold={alert['threshold']})"
+        )
+
     return DriftStatusResponse(
         status=overall_status,
         computed_at=result.get("timestamp", datetime.now(timezone.utc).isoformat()),
@@ -198,6 +208,7 @@ def _build_drift_response(
         reference_size=result.get("reference_size", 0),
         live_size=result.get("live_size", 0),
         top_features=top_features,
+        alerts=alerts,
         thresholds={
             "warn": PSI_THRESHOLD_WARNING,
             "fail": PSI_THRESHOLD_CRITICAL,
