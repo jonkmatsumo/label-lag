@@ -77,7 +77,7 @@ func main() {
 		logger.Info("using API rules provider", "url", apiURL, "ttl", ttl)
 		rulesProvider = rules.NewAPIProvider(apiURL, ttl)
 	} else if rulesPath := os.Getenv("INFERENCE_GATEWAY_RULES_PATH"); rulesPath != "" {
-		fileProvider, err := rules.NewFileProvider(rulesPath)
+		fileProvider, err := rules.NewFileProvider(rulesPath, logger)
 		if err != nil {
 			logger.Error("failed to load rules file", "error", err)
 			os.Exit(1)

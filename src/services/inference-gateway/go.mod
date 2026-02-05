@@ -3,6 +3,7 @@ module github.com/jonkmatsumo/label-lag/src/services/inference-gateway
 go 1.25.5
 
 require (
+	github.com/fsnotify/fsnotify v1.8.0
 	github.com/jonkmatsumo/label-lag/src/services/analytics-crud v0.0.0-00010101000000-000000000000
 	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.64.0
