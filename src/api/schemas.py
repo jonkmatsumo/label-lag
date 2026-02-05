@@ -41,6 +41,10 @@ class SignalRequest(BaseModel):
         description="Client-provided transaction identifier for idempotency",
         examples=["txn_xyz789"],
     )
+    fallback_mode: Literal["probability", "error", "zero"] | None = Field(
+        default=None,
+        description="Override default fallback behavior for this request",
+    )
 
 
 class RiskComponent(BaseModel):

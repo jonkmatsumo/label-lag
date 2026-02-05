@@ -85,7 +85,9 @@ class SignalForecaster:
             model_version = manager.model_version
             model_loaded = True
         else:
-            fallback_mode = os.getenv("FORECASTER_FALLBACK_MODE", "probability")
+            # Determine fallback mode: request value -> env var -> default "probability"
+            fallback_mode = request.fallback_mode or os.getenv("FORECASTER_FALLBACK_MODE", "probability")
+            
             if fallback_mode == "error":
                 reason = (
                     "model not loaded" if not manager.model_loaded else "no history"
@@ -95,18 +97,31 @@ class SignalForecaster:
                 )
 
             fallback_used = True
-            if os.getenv("DISABLE_HEURISTIC_FALLBACK") == "true":
+            if fallback_mode == "zero":
+                raw_probability = 0.0
+            elif os.getenv("DISABLE_HEURISTIC_FALLBACK") == "true":
                 raw_probability = 0.05
             else:
                 raw_probability = self._calculate_probability(features)
+            
             model_version = self.model_version
             model_loaded = False
-
+            effective_fallback_mode = fallback_mode
+        
         # Use calibrator from manager (C2)
         calibrator = manager.calibrator
         score = int(calibrator.transform(np.array([raw_probability]))[0])
         
         latency_ms = (time.time() - start_time) * 1000
+        
+        diagnostics = {
+            "has_history": features.has_history,
+            "raw_probability": float(raw_probability),
+            "fallback_used": fallback_used,
+            "calibrator_loaded": manager.calibrator_loaded,
+        }
+        if fallback_used:
+            diagnostics["fallback_mode_effective"] = effective_fallback_mode
 
         return {
             "request_id": request_id,
@@ -115,12 +130,7 @@ class SignalForecaster:
             "model_loaded": model_loaded,
             "fallback_used": fallback_used,
             "latency_ms": latency_ms,
-            "diagnostics": {
-                "has_history": features.has_history,
-                "raw_probability": float(raw_probability),
-                "fallback_used": fallback_used,
-                "calibrator_loaded": manager.calibrator_loaded,
-            },
+            "diagnostics": diagnostics,
         }
 
     def _predict_with_model(self, manager, features: FeatureVector) -> float:
