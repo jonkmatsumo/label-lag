@@ -13,10 +13,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import mlflow
 import numpy as np
 import pandas as pd
-from mlflow import MlflowClient
 
 from api.crud_client import get_crud_client
 
@@ -130,6 +128,9 @@ def calculate_psi(
 def get_reference_data() -> pd.DataFrame | None:
     """Load reference data from MLflow model artifacts."""
     try:
+        import mlflow
+        from mlflow import MlflowClient
+        
         mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
         client = MlflowClient()
 
