@@ -270,8 +270,8 @@ class TestModelAssistedSuggestionEngine:
         monkeypatch.setattr(crud_client, "_client", mock_client)
         return mock_client
 
-    @patch("api.suggestions.get_model_manager")
-    @patch("api.suggestions.MessageToDict")
+    @patch("rules_management.suggestions.get_model_manager")
+    @patch("rules_management.suggestions.MessageToDict")
     def test_generate_suggestions_from_model(
         self, mock_to_dict, mock_get_manager, mock_model_manager, mock_analytics_client
     ):
@@ -317,8 +317,8 @@ class TestModelAssistedSuggestionEngine:
         assert len(suggestions) > 0
         assert all("feature_importance" in s.evidence for s in suggestions)
 
-    @patch("api.suggestions.get_model_manager")
-    @patch("api.suggestions.MessageToDict")
+    @patch("rules_management.suggestions.get_model_manager")
+    @patch("rules_management.suggestions.MessageToDict")
     def test_suggestions_filtered_by_importance(
         self, mock_to_dict, mock_get_manager, mock_model_manager, mock_analytics_client
     ):
@@ -342,7 +342,7 @@ class TestModelAssistedSuggestionEngine:
         # Should only include features with importance >= 0.3
         assert all(s.evidence.get("feature_importance", 0) >= 0.3 for s in suggestions)
 
-    @patch("api.suggestions.get_model_manager")
+    @patch("rules_management.suggestions.get_model_manager")
     def test_no_suggestions_when_model_not_loaded(self, mock_get_manager):
         """Test that no suggestions are generated when model is not loaded."""
         mock_manager = MagicMock()

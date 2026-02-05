@@ -14,14 +14,14 @@ def client():
 
 
 class TestDatasetCorrelations:
-    @patch("api.main.get_crud_client")
+    @patch("rules_management.routes.get_crud_client")
     def test_correlations_numeric(self, mock_get_client, client):
         mock_client = MagicMock()
         mock_get_client.return_value = mock_client
 
         # Mock feature sample response structure
         # The endpoint calls MessageToDict on the response
-        with patch("api.main.MessageToDict") as mock_to_dict:
+        with patch("rules_management.routes.MessageToDict") as mock_to_dict:
             mock_to_dict.return_value = {
                 "samples": [
                     {"velocity_24h": 1.0, "amount_to_avg_ratio_30d": 2.0},
@@ -56,9 +56,9 @@ class TestDatasetCorrelations:
             assert corr is not None
             assert corr["value"] > 0.99
 
-    @patch("api.main.get_crud_client")
+    @patch("rules_management.routes.get_crud_client")
     def test_correlations_categorical(self, mock_get_client, client):
-        with patch("api.main.MessageToDict") as mock_to_dict:
+        with patch("rules_management.routes.MessageToDict") as mock_to_dict:
             # Create a larger perfect correlation dataset
             samples = []
             for _ in range(50):

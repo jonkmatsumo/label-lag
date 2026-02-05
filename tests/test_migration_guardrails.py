@@ -16,24 +16,24 @@ def test_no_legacy_signal_evaluation_route():
 
 def test_no_legacy_decisioning_methods():
     """Assert that SignalForecaster no longer has legacy decisioning methods."""
-    services_py = Path("src/api/services.py").read_text()
+    services_py = Path("src/forecast/services.py").read_text()
     assert "def evaluate(" not in services_py
     assert "def _apply_rules(" not in services_py
     assert "def _identify_risk_components(" not in services_py
 
 
 def test_sandbox_no_python_decisioning():
-    """Assert that sandbox implementation doesn't use api.rules.evaluate_rules."""
+    """Assert that sandbox implementation doesn't use rules_management.rules.evaluate_rules."""
     main_py = Path("src/api/main.py").read_text()
 
     # Verify evaluate_rules is NOT imported in main.py from rules_management.rules
     assert "from rules_management.rules import evaluate_rules" not in main_py
-    assert "import api.rules.evaluate_rules" not in main_py
+    assert "import rules_management.rules.evaluate_rules" not in main_py
 
 
 def test_backtest_no_python_decisioning():
-    """Assert that backtest implementation doesn't use api.rules.evaluate_rules."""
-    backtest_py = Path("src/api/backtest.py").read_text()
+    """Assert that backtest implementation doesn't use rules_management.rules.evaluate_rules."""
+    backtest_py = Path("src/rules_management/backtest.py").read_text()
 
     # Assert no import of evaluate_rules from rules_management.rules
     assert "from rules_management.rules import evaluate_rules" not in backtest_py
@@ -58,14 +58,14 @@ def test_no_remaining_decisioning_calls():
         # Check if evaluate_rules is imported from rules_management.rules
         forbidden_import = (
             "from rules_management.rules import evaluate_rules" in content
-            or "import api.rules.evaluate_rules" in content
+            or "import rules_management.rules.evaluate_rules" in content
         )
 
         if forbidden_import:
             pytest.fail(f"Forbidden import of evaluate_rules found in {py_file}")
 
-        # Also check for direct calls if api.rules was imported as a whole
-        if "api.rules.evaluate_rules(" in content:
+        # Also check for direct calls if rules_management.rules was imported as a whole
+        if "rules_management.rules.evaluate_rules(" in content:
             pytest.fail(
-                f"Forbidden call to api.rules.evaluate_rules found in {py_file}"
+                f"Forbidden call to rules_management.rules.evaluate_rules found in {py_file}"
             )
