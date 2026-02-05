@@ -153,6 +153,9 @@ func (h *Handler) handleEvaluateRulesDiff(w http.ResponseWriter, r *http.Request
 		}
 	}
 
+	// Compute severity
+	diff.Severity = computeDiffSeverity(respA, respB, diff)
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
@@ -269,4 +272,48 @@ func (h *Handler) handleEvaluateRules(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func computeDiffSeverity(respA, respB EvaluateRulesResponse, diff RulesDiffSummary) string {
+	// Breaking rules:
+	// 1. reject added/removed
+	if respA.Rejected != respB.Rejected {
+		return "breaking"
+	}
+
+	// 2. action type change for same rule_id
+	actionMapA := make(map[string]string)
+	for _, exp := range respA.Explanations {
+		actionMapA[exp.RuleID] = exp.Action
+	}
+	for _, exp := range respB.Explanations {
+		if oldAction, ok := actionMapA[exp.RuleID]; ok && oldAction != exp.Action {
+			return "breaking"
+		}
+	}
+
+	// 3. |score_delta| > 20
+	if abs(diff.ScoreDelta) > 20 {
+		return "breaking"
+	}
+
+	// Behavioral rules:
+	// 1. any score change
+	if diff.ScoreDelta != 0 {
+		return "behavioral"
+	}
+	// 2. matched rules added/removed
+	if len(diff.MatchedRulesAdded) > 0 || len(diff.MatchedRulesRemoved) > 0 {
+		return "behavioral"
+	}
+
+	// Cosmetic: no effective change
+	return "cosmetic"
+}
+
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
 }
