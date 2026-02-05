@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from api.rules import Rule, RuleSet, evaluate_rules
+from rules_management.rules import Rule, RuleSet, evaluate_rules
 
 
 class RuleTestCase:

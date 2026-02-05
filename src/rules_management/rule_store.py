@@ -12,7 +12,7 @@ The default backend is determined by the RULE_STORE_BACKEND environment variable
 import os
 from typing import Protocol
 
-from api.rules import Rule
+from rules_management.rules import Rule
 
 
 class RuleStore(Protocol):

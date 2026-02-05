@@ -3,12 +3,12 @@
 import json
 from unittest.mock import patch
 
-from api.llm_rules import (
+from rules_management.llm_rules import (
     LLMRuleGenerator,
     get_llm_generator,
     set_llm_generator,
 )
-from api.rules import Rule, RuleSet
+from rules_management.rules import Rule, RuleSet
 
 
 class TestLLMRuleGenerator:

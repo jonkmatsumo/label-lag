@@ -2,8 +2,8 @@
 
 import pytest
 
-from api.rules import Rule, RuleSet
-from api.validation import (
+from rules_management.rules import Rule, RuleSet
+from rules_management.validation import (
     detect_conflicts,
     detect_redundancies,
     validate_ruleset,

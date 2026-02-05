@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from api.audit import AuditLogger, set_audit_logger
-from api.model_manager import ModelManager
+from forecast.model_manager import ModelManager
 
 
 class TestModelDeploy:

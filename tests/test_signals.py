@@ -5,9 +5,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from api.backtest import BacktestMetrics, BacktestResult, BacktestStore
-from api.metrics import MetricsCollector, RuleMetrics
-from api.rules import Rule, RuleSet, RuleStatus
+from rules_management.backtest import BacktestMetrics, BacktestResult, BacktestStore
+from rules_management.metrics import MetricsCollector, RuleMetrics
+from rules_management.rules import Rule, RuleSet, RuleStatus
 from api.signals import (
     compute_approval_signals,
     compute_coverage_signals,

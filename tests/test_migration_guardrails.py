@@ -26,8 +26,8 @@ def test_sandbox_no_python_decisioning():
     """Assert that sandbox implementation doesn't use api.rules.evaluate_rules."""
     main_py = Path("src/api/main.py").read_text()
 
-    # Verify evaluate_rules is NOT imported in main.py from api.rules
-    assert "from api.rules import evaluate_rules" not in main_py
+    # Verify evaluate_rules is NOT imported in main.py from rules_management.rules
+    assert "from rules_management.rules import evaluate_rules" not in main_py
     assert "import api.rules.evaluate_rules" not in main_py
 
 
@@ -35,8 +35,8 @@ def test_backtest_no_python_decisioning():
     """Assert that backtest implementation doesn't use api.rules.evaluate_rules."""
     backtest_py = Path("src/api/backtest.py").read_text()
 
-    # Assert no import of evaluate_rules from api.rules
-    assert "from api.rules import evaluate_rules" not in backtest_py
+    # Assert no import of evaluate_rules from rules_management.rules
+    assert "from rules_management.rules import evaluate_rules" not in backtest_py
 
     # Assert it uses gateway_client
     assert "get_gateway_client" in backtest_py
@@ -55,9 +55,9 @@ def test_no_remaining_decisioning_calls():
 
         content = py_file.read_text()
 
-        # Check if evaluate_rules is imported from api.rules
+        # Check if evaluate_rules is imported from rules_management.rules
         forbidden_import = (
-            "from api.rules import evaluate_rules" in content
+            "from rules_management.rules import evaluate_rules" in content
             or "import api.rules.evaluate_rules" in content
         )
 

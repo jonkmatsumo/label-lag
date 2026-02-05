@@ -3,8 +3,8 @@
 import pytest
 
 from api.audit import AuditLogger, set_audit_logger
-from api.rules import Rule
-from api.workflow import RuleStateMachine, TransitionError, create_state_machine
+from rules_management.rules import Rule
+from rules_management.workflow import RuleStateMachine, TransitionError, create_state_machine
 
 
 class TestStateMachineTransitions:

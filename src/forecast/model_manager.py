@@ -19,7 +19,7 @@ import mlflow
 import numpy as np
 import pandas as pd
 
-from api.rules import RuleSet
+from rules_management.rules import RuleSet
 
 # Configure logging
 logger = logging.getLogger(__name__)

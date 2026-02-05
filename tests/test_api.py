@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from api.main import app
 from api.schemas import Currency, SignalRequest
-from api.services import (
+from forecast.services import (
     FeatureVector,
     SignalForecaster,
     get_forecaster,

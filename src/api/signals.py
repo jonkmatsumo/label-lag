@@ -3,17 +3,17 @@
 import logging
 from datetime import datetime, timezone
 
-from api.backtest import BacktestStore
-from api.draft_store import get_draft_store
-from api.metrics import get_metrics_collector
-from api.rules import Rule, RuleSet, RuleStatus
+from rules_management.backtest import BacktestStore
+from rules_management.draft_store import get_draft_store
+from rules_management.metrics import get_metrics_collector
+from rules_management.rules import Rule, RuleSet, RuleStatus
 from api.schemas import (
     ApprovalSignalItem,
     ApprovalSignalsResponse,
     ApprovalSignalsSummary,
 )
-from api.validation import detect_conflicts, detect_redundancies
-from api.versioning import get_version_store
+from rules_management.validation import detect_conflicts, detect_redundancies
+from rules_management.versioning import get_version_store
 
 logger = logging.getLogger(__name__)
 

@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 
 from api.audit import AuditLogger, set_audit_logger
-from api.rules import Rule
-from api.versioning import (
+from rules_management.rules import Rule
+from rules_management.versioning import (
     RuleVersion,
     RuleVersionStore,
     diff_rule_versions,

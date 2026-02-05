@@ -10,8 +10,8 @@ Run with:
 
 import pytest
 
-from api.rule_store import is_postgres_backend_enabled
-from api.rules import Rule, RuleStatus
+from rules_management.rule_store import is_postgres_backend_enabled
+from rules_management.rules import Rule, RuleStatus
 
 # Skip entire module unless postgres backend is enabled
 pytestmark = pytest.mark.skipif(

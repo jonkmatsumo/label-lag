@@ -20,7 +20,7 @@ def main() -> None:
     config = load_config()
     _apply_env_overrides(config)
 
-    from api.model_manager import get_model_manager
+    from forecast.model_manager import get_model_manager
     from grpc_inference.service import InferenceService
 
     manager = get_model_manager()

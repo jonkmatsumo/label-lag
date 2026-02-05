@@ -7,8 +7,8 @@ from enum import Enum
 from typing import Any
 
 from api.audit import AuditLogger
-from api.metrics import RuleMetrics
-from api.rules import Rule
+from rules_management.metrics import RuleMetrics
+from rules_management.rules import Rule
 
 logger = logging.getLogger(__name__)
 

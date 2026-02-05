@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Any
 
-from api.rules import Rule, RuleSet
+from rules_management.rules import Rule, RuleSet
 
 
 @dataclass

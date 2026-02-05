@@ -10,14 +10,14 @@ Per BRANCH_PROTOCOL.md, these guardrails protect against regression.
 
 from fastapi.testclient import TestClient
 
-from api.draft_store import get_draft_store, reset_draft_store
+from rules_management.draft_store import get_draft_store, reset_draft_store
 from api.inference_backend_config import get_inference_backend
 from api.inference_event_sink import (
     get_inference_event_sink,
     reset_inference_event_sink,
 )
 from api.main import app
-from api.rule_store import get_rule_store_backend
+from rules_management.rule_store import get_rule_store_backend
 from pipeline.materialize_features import get_materialization_mode
 
 

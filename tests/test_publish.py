@@ -3,10 +3,10 @@
 import pytest
 
 from api.audit import AuditLogger, set_audit_logger
-from api.draft_store import DraftRuleStore, set_draft_store
-from api.model_manager import ModelManager
-from api.rules import Rule, RuleSet, RuleStatus
-from api.versioning import RuleVersionStore, set_version_store
+from rules_management.draft_store import DraftRuleStore, set_draft_store
+from forecast.model_manager import ModelManager
+from rules_management.rules import Rule, RuleSet, RuleStatus
+from rules_management.versioning import RuleVersionStore, set_version_store
 
 
 class TestPublishFlow:
@@ -70,7 +70,7 @@ class TestPublishFlow:
         assert model_manager.ruleset is None or len(model_manager.ruleset.rules) == 0
 
         # Simulate publish: transition to active and sync to ruleset
-        from api.workflow import RuleStateMachine
+        from rules_management.workflow import RuleStateMachine
 
         state_machine = RuleStateMachine(require_approval=False)
         active_rule = state_machine.transition(
@@ -125,7 +125,7 @@ class TestPublishFlow:
         draft_store._rules[approved_rule.id] = approved_rule
 
         # Create version snapshot
-        from api.workflow import RuleStateMachine
+        from rules_management.workflow import RuleStateMachine
 
         state_machine = RuleStateMachine(require_approval=False)
         active_rule = state_machine.transition(
@@ -162,7 +162,7 @@ class TestPublishFlow:
 
         draft_store._rules[draft_rule.id] = draft_rule
 
-        from api.workflow import RuleStateMachine, TransitionError
+        from rules_management.workflow import RuleStateMachine, TransitionError
 
         state_machine = RuleStateMachine(require_approval=False)
 

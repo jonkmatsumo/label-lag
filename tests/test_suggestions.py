@@ -4,8 +4,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from api.rules import RuleStatus
-from api.suggestions import (
+from rules_management.rules import RuleStatus
+from rules_management.suggestions import (
     ModelAssistedSuggestionEngine,
     RuleSuggestion,
     SuggestionEngine,

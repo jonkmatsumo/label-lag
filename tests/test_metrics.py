@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from api.metrics import (
+from rules_management.metrics import (
     MetricsCollector,
     RuleMetrics,
     get_metrics_collector,

@@ -14,19 +14,19 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 from google.protobuf.json_format import MessageToDict
 
-from api.analytics import RuleHealthEvaluator
-from api.attribution import AttributionService
+from rules_management.analytics import RuleHealthEvaluator
+from rules_management.attribution import AttributionService
 from api.audit import get_audit_logger
-from api.backtest import (
+from rules_management.backtest import (
     BacktestComparator,
     BacktestRunner,
     BacktestStore,
     get_backtest_store,
 )
 from api.crud_client import get_crud_client
-from api.drift_cache import get_drift_cache
+from forecast.drift_cache import get_drift_cache
 from api.errors import analytics_http_exception
-from api.model_manager import get_model_manager
+from forecast.model_manager import get_model_manager
 from api.readiness import CheckStatus, ReadinessEvaluator
 from api.schemas import (
     AcceptSuggestionRequest,
@@ -102,7 +102,7 @@ from api.schemas import (
     TrainResponse,
     ValidationResult,
 )
-from api.services import get_forecaster
+from forecast.services import get_forecaster
 
 if TYPE_CHECKING:
     pass
@@ -429,7 +429,7 @@ async def deploy_model(request: DeployModelRequest) -> DeployModelResponse:
     import mlflow
 
     from api.audit import get_audit_logger
-    from api.model_manager import get_model_manager
+    from forecast.model_manager import get_model_manager
 
     manager = get_model_manager()
     audit_logger = get_audit_logger()
@@ -1004,7 +1004,7 @@ async def get_shadow_comparison(
     Returns:
         ShadowComparisonResponse with comparison metrics.
     """
-    from api.metrics import get_metrics_collector
+    from rules_management.metrics import get_metrics_collector
 
     try:
         start_dt = datetime.fromisoformat(start_date)
@@ -1251,7 +1251,7 @@ async def get_heuristic_suggestions(
     Returns:
         SuggestionsListResponse with list of suggestions.
     """
-    from api.suggestions import SuggestionEngine
+    from rules_management.suggestions import SuggestionEngine
 
     try:
         engine = SuggestionEngine(min_confidence=min_confidence)
@@ -1340,9 +1340,9 @@ async def accept_suggestion(
         HTTPException: If rule creation fails or rule ID already exists.
     """
     from api.audit import get_audit_logger
-    from api.draft_store import get_draft_store
-    from api.suggestions import RuleSuggestion
-    from api.versioning import get_version_store
+    from rules_management.draft_store import get_draft_store
+    from rules_management.suggestions import RuleSuggestion
+    from rules_management.versioning import get_version_store
 
     store = get_draft_store()
     version_store = get_version_store()
@@ -1493,9 +1493,9 @@ async def create_draft_rule(request: DraftRuleCreateRequest) -> DraftRuleCreateR
     Raises:
         HTTPException: If rule creation fails or rule ID already exists.
     """
-    from api.draft_store import get_draft_store
-    from api.rules import Rule, RuleStatus
-    from api.validation import validate_ruleset
+    from rules_management.draft_store import get_draft_store
+    from rules_management.rules import Rule, RuleStatus
+    from rules_management.validation import validate_ruleset
 
     store = get_draft_store()
 
@@ -1529,7 +1529,7 @@ async def create_draft_rule(request: DraftRuleCreateRequest) -> DraftRuleCreateR
         raise HTTPException(status_code=400, detail=str(e)) from e
 
     # Create version snapshot
-    from api.versioning import get_version_store
+    from rules_management.versioning import get_version_store
 
     version_store = get_version_store()
     version_store.save(
@@ -1564,7 +1564,7 @@ async def create_draft_rule(request: DraftRuleCreateRequest) -> DraftRuleCreateR
     )
 
     # Run validation against all draft rules and production ruleset
-    from api.rules import RuleSet
+    from rules_management.rules import RuleSet
 
     draft_rules = store.list_rules(include_archived=False)
     manager = get_model_manager()
@@ -1653,7 +1653,7 @@ async def list_draft_rules(
     Returns:
         DraftRuleListResponse with list of draft rules.
     """
-    from api.draft_store import get_draft_store
+    from rules_management.draft_store import get_draft_store
 
     store = get_draft_store()
     rules = store.list_rules(status=status, include_archived=include_archived)
@@ -1701,7 +1701,7 @@ async def get_draft_rule(rule_id: str) -> DraftRuleResponse:
     Raises:
         HTTPException: If rule not found.
     """
-    from api.draft_store import get_draft_store
+    from rules_management.draft_store import get_draft_store
 
     store = get_draft_store()
     rule = store.get(rule_id)
@@ -1754,10 +1754,10 @@ async def update_draft_rule(
         HTTPException: If rule not found, not in draft status, or update fails.
     """
     from api.audit import get_audit_logger
-    from api.draft_store import get_draft_store
-    from api.rules import Rule, RuleSet, RuleStatus
-    from api.validation import validate_ruleset
-    from api.versioning import get_version_store
+    from rules_management.draft_store import get_draft_store
+    from rules_management.rules import Rule, RuleSet, RuleStatus
+    from rules_management.validation import validate_ruleset
+    from rules_management.versioning import get_version_store
 
     store = get_draft_store()
     version_store = get_version_store()
@@ -1935,8 +1935,8 @@ async def delete_draft_rule(
         HTTPException: If rule not found or not in draft status.
     """
     from api.audit import get_audit_logger
-    from api.draft_store import get_draft_store
-    from api.rules import RuleStatus
+    from rules_management.draft_store import get_draft_store
+    from rules_management.rules import RuleStatus
 
     store = get_draft_store()
     audit_logger = get_audit_logger()
@@ -2013,9 +2013,9 @@ async def validate_draft_rule(
     Raises:
         HTTPException: If rule not found.
     """
-    from api.draft_store import get_draft_store
-    from api.rules import RuleSet, RuleStatus
-    from api.validation import validate_ruleset
+    from rules_management.draft_store import get_draft_store
+    from rules_management.rules import RuleSet, RuleStatus
+    from rules_management.validation import validate_ruleset
 
     store = get_draft_store()
 
@@ -2139,11 +2139,11 @@ async def submit_draft_rule(
         HTTPException: If rule not found, not in draft status, validation fails,
             or transition fails.
     """
-    from api.draft_store import get_draft_store
-    from api.rules import RuleSet, RuleStatus
-    from api.validation import validate_ruleset
-    from api.versioning import get_version_store
-    from api.workflow import RuleStateMachine, TransitionError
+    from rules_management.draft_store import get_draft_store
+    from rules_management.rules import RuleSet, RuleStatus
+    from rules_management.validation import validate_ruleset
+    from rules_management.versioning import get_version_store
+    from rules_management.workflow import RuleStateMachine, TransitionError
 
     store = get_draft_store()
     version_store = get_version_store()
@@ -2296,8 +2296,8 @@ async def get_approval_signals(rule_id: str) -> ApprovalSignalsResponse:
     Raises:
         HTTPException: If rule not found.
     """
-    from api.draft_store import get_draft_store
-    from api.rules import RuleSet
+    from rules_management.draft_store import get_draft_store
+    from rules_management.rules import RuleSet
     from api.signals import compute_approval_signals
 
     store = get_draft_store()
@@ -2368,10 +2368,10 @@ async def approve_draft_rule(
     from dataclasses import asdict
 
     from api.audit import get_audit_logger
-    from api.draft_store import get_draft_store
-    from api.rules import Rule, RuleStatus
-    from api.versioning import get_version_store
-    from api.workflow import TransitionError, create_state_machine
+    from rules_management.draft_store import get_draft_store
+    from rules_management.rules import Rule, RuleStatus
+    from rules_management.versioning import get_version_store
+    from rules_management.workflow import TransitionError, create_state_machine
 
     store = get_draft_store()
     version_store = get_version_store()
@@ -2413,7 +2413,7 @@ async def approve_draft_rule(
     # Fetch approval signals before approval
     approval_signals_data = None
     try:
-        from api.rules import RuleSet
+        from rules_management.rules import RuleSet
         from api.signals import compute_approval_signals
 
         # Get production ruleset
@@ -2535,11 +2535,11 @@ async def publish_rule(
     from dataclasses import asdict
 
     from api.audit import get_audit_logger
-    from api.draft_store import get_draft_store
-    from api.model_manager import get_model_manager
-    from api.rules import Rule, RuleSet, RuleStatus
-    from api.versioning import get_version_store
-    from api.workflow import TransitionError, create_state_machine
+    from rules_management.draft_store import get_draft_store
+    from forecast.model_manager import get_model_manager
+    from rules_management.rules import Rule, RuleSet, RuleStatus
+    from rules_management.versioning import get_version_store
+    from rules_management.workflow import TransitionError, create_state_machine
 
     store = get_draft_store()
     version_store = get_version_store()
@@ -2569,7 +2569,7 @@ async def publish_rule(
         end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=7)
 
-        from api.metrics import get_metrics_collector
+        from rules_management.metrics import get_metrics_collector
 
         collector = get_metrics_collector()
         metrics = collector.get_rule_metrics(rule_id, start_date, end_date)
@@ -2701,10 +2701,10 @@ async def reject_draft_rule(
         HTTPException: If rule not found, not in pending_review status,
             or transition fails.
     """
-    from api.draft_store import get_draft_store
-    from api.rules import RuleStatus
-    from api.versioning import get_version_store
-    from api.workflow import TransitionError, create_state_machine
+    from rules_management.draft_store import get_draft_store
+    from rules_management.rules import RuleStatus
+    from rules_management.versioning import get_version_store
+    from rules_management.workflow import TransitionError, create_state_machine
 
     store = get_draft_store()
     version_store = get_version_store()
@@ -2801,11 +2801,11 @@ async def activate_rule(
     from dataclasses import asdict
 
     from api.audit import get_audit_logger
-    from api.draft_store import get_draft_store
-    from api.model_manager import get_model_manager
-    from api.rules import Rule, RuleStatus
-    from api.versioning import get_version_store
-    from api.workflow import TransitionError, create_state_machine
+    from rules_management.draft_store import get_draft_store
+    from forecast.model_manager import get_model_manager
+    from rules_management.rules import Rule, RuleStatus
+    from rules_management.versioning import get_version_store
+    from rules_management.workflow import TransitionError, create_state_machine
 
     store = get_draft_store()
     version_store = get_version_store()
@@ -2968,11 +2968,11 @@ async def disable_rule(
     """
     from dataclasses import asdict
 
-    from api.draft_store import get_draft_store
-    from api.model_manager import get_model_manager
-    from api.rules import Rule, RuleStatus
-    from api.versioning import get_version_store
-    from api.workflow import TransitionError, create_state_machine
+    from rules_management.draft_store import get_draft_store
+    from forecast.model_manager import get_model_manager
+    from rules_management.rules import Rule, RuleStatus
+    from rules_management.versioning import get_version_store
+    from rules_management.workflow import TransitionError, create_state_machine
 
     store = get_draft_store()
     version_store = get_version_store()
@@ -3080,11 +3080,11 @@ async def shadow_rule(rule_id: str, request: ShadowRuleRequest) -> ShadowRuleRes
     """
     from dataclasses import asdict
 
-    from api.draft_store import get_draft_store
-    from api.model_manager import get_model_manager
-    from api.rules import Rule, RuleStatus
-    from api.versioning import get_version_store
-    from api.workflow import TransitionError, create_state_machine
+    from rules_management.draft_store import get_draft_store
+    from forecast.model_manager import get_model_manager
+    from rules_management.rules import Rule, RuleStatus
+    from rules_management.versioning import get_version_store
+    from rules_management.workflow import TransitionError, create_state_machine
 
     store = get_draft_store()
     version_store = get_version_store()
@@ -3176,7 +3176,7 @@ async def list_rule_versions(rule_id: str) -> RuleVersionListResponse:
     Returns:
         RuleVersionListResponse with list of versions.
     """
-    from api.versioning import get_version_store
+    from rules_management.versioning import get_version_store
 
     version_store = get_version_store()
     versions = version_store.list_versions(rule_id)
@@ -3229,7 +3229,7 @@ async def get_rule_version(rule_id: str, version_id: str) -> RuleVersionResponse
     Raises:
         HTTPException: If version not found.
     """
-    from api.versioning import get_version_store
+    from rules_management.versioning import get_version_store
 
     version_store = get_version_store()
     version = version_store.get_version(rule_id, version_id)
@@ -3308,7 +3308,7 @@ async def get_rule_diff(
     Raises:
         HTTPException: If rule/version not found or insufficient versions.
     """
-    from api.versioning import diff_rule_versions, get_version_store
+    from rules_management.versioning import diff_rule_versions, get_version_store
 
     version_store = get_version_store()
     versions = version_store.list_versions(rule_id)
@@ -3423,8 +3423,8 @@ async def rollback_rule_version(
     Raises:
         HTTPException: If rule or version not found, or rollback fails.
     """
-    from api.draft_store import get_draft_store
-    from api.versioning import get_version_store
+    from rules_management.draft_store import get_draft_store
+    from rules_management.versioning import get_version_store
 
     store = get_draft_store()
     version_store = get_version_store()
@@ -3750,9 +3750,9 @@ def _resolve_ruleset_for_backtest(version_id: str | None, rule_id: str | None = 
     Raises:
         HTTPException: If resolution fails.
     """
-    from api.model_manager import get_model_manager
-    from api.rules import RuleSet
-    from api.versioning import get_version_store
+    from forecast.model_manager import get_model_manager
+    from rules_management.rules import RuleSet
+    from rules_management.versioning import get_version_store
 
     # Case 1: Production (current)
     if not version_id or version_id.lower() == "production":
@@ -4000,8 +4000,8 @@ async def get_rule_analytics(
     """Get rule analytics."""
     from datetime import timedelta
 
-    from api.metrics import get_metrics_collector
-    from api.model_manager import get_model_manager
+    from rules_management.metrics import get_metrics_collector
+    from forecast.model_manager import get_model_manager
 
     # Get stats
     end_date = datetime.now(timezone.utc)
@@ -4089,8 +4089,8 @@ async def check_rule_readiness(
     """Check rule readiness."""
     from datetime import timedelta
 
-    from api.metrics import get_metrics_collector
-    from api.model_manager import get_model_manager
+    from rules_management.metrics import get_metrics_collector
+    from forecast.model_manager import get_model_manager
 
     # Get active draft/shadow/prod rule
     # Ideally checking DRAFT rules for promotion, but could be SHADOW

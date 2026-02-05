@@ -10,9 +10,9 @@ from typing import Any
 import grpc
 from google.protobuf import struct_pb2
 
-from api.model_manager import get_model_manager
+from forecast.model_manager import get_model_manager
 from api.schemas import SignalRequest
-from api.services import SignalForecaster
+from forecast.services import SignalForecaster
 from grpc_inference.config import GRPCInferenceConfig
 from grpc_inference.proto.inference.v1 import inference_pb2, inference_pb2_grpc
 

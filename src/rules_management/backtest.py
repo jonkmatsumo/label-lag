@@ -11,7 +11,7 @@ import numpy as np
 from google.protobuf.timestamp_pb2 import Timestamp
 
 from api.crud_client import get_crud_client
-from api.rules import RuleSet
+from rules_management.rules import RuleSet
 from api.schemas import BacktestDelta
 
 logger = logging.getLogger(__name__)

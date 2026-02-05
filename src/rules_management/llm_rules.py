@@ -4,8 +4,8 @@ import json
 import logging
 from dataclasses import dataclass
 
-from api.rules import Rule, RuleSet
-from api.validation import validate_ruleset
+from rules_management.rules import Rule, RuleSet
+from rules_management.validation import validate_ruleset
 
 logger = logging.getLogger(__name__)
 

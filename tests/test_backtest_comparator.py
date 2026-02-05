@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from api.backtest import BacktestComparator, BacktestMetrics, BacktestResult
+from rules_management.backtest import BacktestComparator, BacktestMetrics, BacktestResult
 from api.schemas import BacktestComparisonResult, BacktestDelta, BacktestResultResponse
 
 
