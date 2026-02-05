@@ -59,7 +59,16 @@ class InferenceService(inference_pb2_grpc.InferenceServiceServicer):
             context.abort(grpc.StatusCode.INVALID_ARGUMENT, f"invalid request: {exc}")
 
         try:
-            prediction = self._forecaster.predict(signal_request)
+            # Extract features from context if provided
+            features_override = None
+            if request.context and request.context.fields:
+                from google.protobuf.json_format import MessageToDict
+                features_override = MessageToDict(request.context)
+                logger.debug(f"Received context features: {list(features_override.keys())}")
+
+            prediction = self._forecaster.predict(
+                signal_request, features_override=features_override
+            )
         except Exception as exc:
             context.abort(grpc.StatusCode.INTERNAL, f"prediction failed: {exc}")
 
