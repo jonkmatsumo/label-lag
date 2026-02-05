@@ -218,7 +218,20 @@ INFERENCE_GATEWAY_MAX_BODY_BYTES=1048576
 INFERENCE_GATEWAY_READ_TIMEOUT=10s
 INFERENCE_GATEWAY_WRITE_TIMEOUT=30s
 INFERENCE_GATEWAY_IDLE_TIMEOUT=60s
+INFERENCE_GATEWAY_RULES_PATH=config/default_rules.json
+INFERENCE_GATEWAY_RULES_WATCH=true
 ```
+
+The Inference Gateway provides high-throughput rule evaluation and supports several advanced features:
+- **Rule Conflict Detection**: Automatically identifies overlapping or clashing rules (e.g., same-field same-op, range overlaps, reject vs override clashes). Conflicts are returned as `warnings` in the `/evaluate/rules` and `/evaluate/rules/diff` endpoints.
+- **Diff Severity Categorization**: The `/evaluate/rules/diff` endpoint classifies ruleset changes as `breaking`, `behavioral`, or `cosmetic` based on score deltas and action changes.
+- **Performance Metrics**: Evaluation responses include `evaluation_time_ms`. Enabling `debug=true` query parameter provides granular `per_rule_timings_ms`.
+- **Hot-Reload (Dev)**: When `INFERENCE_GATEWAY_RULES_WATCH=true`, the gateway watches the rules file for changes and reloads it automatically with a last-known-good fallback.
+- **Rules CLI**: A command-line tool for offline rule validation, evaluation, and diffing.
+  - `rules-cli validate --rules rules.json`
+  - `rules-cli evaluate --features features.json --base-score 50 --rules rules.json`
+  - `rules-cli diff --features features.json --base-score 50 --a rules_a.json --b rules_b.json`
+- **Shadow Mode**: In all evaluation paths, `shadow_mode=true` performs rule simulation (dry-run) to preview effects without affecting the final production decision.
 
 ### Analytics CRUD (Go)
 
