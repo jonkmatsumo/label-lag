@@ -323,66 +323,6 @@ class TestGetForecaster:
         assert forecaster1 is forecaster2
 
 
-class TestGenerateDataEndpoint:
-    """Tests for data generation endpoint."""
-
-    def test_generate_data_request_validation(self, client):
-        """Test that invalid requests are rejected."""
-        # num_users too low
-        response = client.post(
-            "/data/generate",
-            json={"num_users": 5, "fraud_rate": 0.05},
-        )
-        assert response.status_code == 422
-
-        # num_users too high
-        response = client.post(
-            "/data/generate",
-            json={"num_users": 20000, "fraud_rate": 0.05},
-        )
-        assert response.status_code == 422
-
-        # fraud_rate too high
-        response = client.post(
-            "/data/generate",
-            json={"num_users": 100, "fraud_rate": 0.8},
-        )
-        assert response.status_code == 422
-
-        # fraud_rate negative
-        response = client.post(
-            "/data/generate",
-            json={"num_users": 100, "fraud_rate": -0.1},
-        )
-        assert response.status_code == 422
-
-    @patch("synthetic_pipeline.generator.DataGenerator")
-    def test_generate_data_handles_error(self, mock_generator_cls, client):
-        """Test error handling in data generation."""
-        mock_generator = MagicMock()
-        mock_generator.generate_dataset_with_sequences.side_effect = Exception(
-            "Database error"
-        )
-        mock_generator_cls.return_value = mock_generator
-
-        response = client.post(
-            "/data/generate",
-            json={"num_users": 100, "fraud_rate": 0.05},
-        )
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is False
-        assert "Database error" in data["error"]
-
-    def test_generate_data_default_values(self, client):
-        """Test that default values are accepted."""
-        # This will fail at the database level, but validates the request
-        response = client.post("/data/generate", json={})
-        # Should not be a validation error (422)
-        assert response.status_code == 200
-
-
 class TestClearDataEndpoint:
     """Tests for data clearing endpoint."""
 

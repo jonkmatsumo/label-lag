@@ -87,6 +87,22 @@ class AnalyticsCRUDClient:
         )
         return self.stub.StoreGeneratedData(request, timeout=self.timeout_seconds)
 
+    def generate_data(
+        self,
+        num_users: int,
+        fraud_rate: float,
+        drop_existing: bool = False,
+        seed: int = None,
+    ):
+        """Generate synthetic data via GenerateData RPC (Go implementation)."""
+        request = analytics_pb2.GenerateDataRequest(
+            num_users=num_users,
+            fraud_rate=fraud_rate,
+            drop_existing=drop_existing,
+            seed=seed,
+        )
+        return self.stub.GenerateData(request, timeout=300.0)  # 5 min timeout
+
     def clear_all_data(self):
         """Clear all data via ClearAllData."""
         request = analytics_pb2.ClearAllDataRequest()
