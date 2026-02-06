@@ -301,12 +301,19 @@ export async function analyticsRoutes(
         const { rule_id } = request.params;
         const { days = 7 } = request.query;
 
-        const response = await httpClient.request<RuleAnalyticsResponse>({
+        const options: any = {
           method: 'GET',
           path: `/analytics/rules/${encodeURIComponent(rule_id)}?days=${days}`,
           requestId: request.requestId,
-          target: 'python',
-        });
+        };
+
+        if (httpClient.config.enableGoRulesControlPlane) {
+          options.target = 'gateway';
+        } else {
+          options.target = 'python';
+        }
+
+        const response = await httpClient.request<RuleAnalyticsResponse>(options);
 
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
@@ -340,12 +347,19 @@ export async function analyticsRoutes(
       try {
         const { rule_id, days = 7 } = request.query;
 
-        const response = await httpClient.request<RuleAttributionResponse>({
+        const options: any = {
           method: 'GET',
           path: `/analytics/attribution?rule_id=${encodeURIComponent(rule_id)}&days=${days}`,
           requestId: request.requestId,
-          target: 'python',
-        });
+        };
+
+        if (httpClient.config.enableGoRulesControlPlane) {
+          options.target = 'gateway';
+        } else {
+          options.target = 'python';
+        }
+
+        const response = await httpClient.request<RuleAttributionResponse>(options);
 
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {

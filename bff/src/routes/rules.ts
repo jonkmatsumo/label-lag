@@ -44,11 +44,22 @@ export async function rulesRoutes(
     '/bff/v1/rules/draft',
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const response = await httpClient.request<DraftRulesResponse>({
-          method: 'GET',
-          path: '/rules/draft',
-          requestId: request.requestId,
-        });
+        let response;
+        if (httpClient.config.enableGoRulesControlPlane) {
+          response = await httpClient.request<DraftRulesResponse>({
+            method: 'GET',
+            path: '/rules',
+            query: { status: 'DRAFT' },
+            requestId: request.requestId,
+            target: 'gateway',
+          });
+        } else {
+          response = await httpClient.request<DraftRulesResponse>({
+            method: 'GET',
+            path: '/rules/draft',
+            requestId: request.requestId,
+          });
+        }
 
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
@@ -123,12 +134,18 @@ export async function rulesRoutes(
         const { id } = request.params;
         const publishRequest: PublishRuleRequest = request.body;
 
-        const response = await httpClient.request<PublishRuleResponse>({
+        const options: any = {
           method: 'POST',
           path: `/rules/${id}/publish`,
           body: publishRequest,
           requestId: request.requestId,
-        });
+        };
+
+        if (httpClient.config.enableGoRulesControlPlane) {
+          options.target = 'gateway';
+        }
+
+        const response = await httpClient.request<PublishRuleResponse>(options);
 
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
