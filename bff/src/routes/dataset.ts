@@ -56,6 +56,7 @@ export async function datasetRoutes(
   );
 
   // POST /bff/v1/dataset/generate
+  // Uses Go generator directly (Python generator deprecated)
   fastify.post(
     '/bff/v1/dataset/generate',
     {
@@ -74,36 +75,15 @@ export async function datasetRoutes(
     },
     async (request: FastifyRequest<{ Body: { num_users: number; fraud_rate: number; drop_existing?: boolean; seed?: number } }>, reply: FastifyReply) => {
       try {
-        const goRequest: RequestOptions = {
+        const response = await httpClient.request({
           method: 'POST',
           path: '/analytics/generate',
           body: request.body,
           requestId: request.requestId,
           timeout: 300000, // 5 min timeout for generation
           target: 'gateway',
-        };
-
-        const pythonRequest: RequestOptions = {
-          method: 'POST',
-          path: '/data/generate',
-          body: request.body,
-          requestId: request.requestId,
-          timeout: 300000,
-          target: 'python',
-        };
-
-        if (httpClient.config.enableGoDatasetGenerate) {
-          const response = await shadowService.executeWithShadow(
-            {
-              primary: goRequest,
-              shadow: pythonRequest,
-            }
-          );
-          return reply.status(response.statusCode).send(response.data);
-        } else {
-          const response = await httpClient.request(pythonRequest);
-          return reply.status(response.statusCode).send(response.data);
-        }
+        });
+        return reply.status(response.statusCode).send(response.data);
       } catch (error) {
         if (error instanceof UpstreamError) {
           return reply.status(error.statusCode).send(error.toResponse());

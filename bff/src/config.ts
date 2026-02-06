@@ -55,7 +55,7 @@ export function loadConfig(): Config {
     logLevel: getEnvOrDefault('BFF_LOG_LEVEL', 'info'),
     testMode: getEnvAsBool('BFF_TEST_MODE', false),
     enableGoDatasetClear: getEnvAsBool('ENABLE_GO_DATASET_CLEAR', false),
-    enableGoDatasetGenerate: getEnvAsBool('ENABLE_GO_DATASET_GENERATE', false),
+    enableGoDatasetGenerate: getEnvAsBool('ENABLE_GO_DATASET_GENERATE', true),
     enableGoRulesSandbox: getEnvAsBool('ENABLE_GO_RULES_SANDBOX', false),
     enableGoRulesControlPlane: getEnvAsBool('ENABLE_GO_RULES_CONTROL_PLANE', false),
     shadowModeEnabled: getEnvAsBool('SHADOW_MODE_ENABLED', false),

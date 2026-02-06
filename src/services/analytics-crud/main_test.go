@@ -274,8 +274,8 @@ func TestGenerateDataReturnsUnimplementedWhenDisabled(t *testing.T) {
 
 	s := &server{db: db}
 
-	// Ensure env var is not set (or cleared)
-	t.Setenv("ENABLE_GO_DATASET_GENERATE", "")
+	// Explicitly disable via env var
+	t.Setenv("ENABLE_GO_DATASET_GENERATE", "false")
 
 	req := &pb.GenerateDataRequest{
 		NumUsers:  10,

@@ -1141,13 +1141,12 @@ func (s *server) StoreGeneratedData(ctx context.Context, req *pb.StoreGeneratedD
 }
 
 // GenerateData generates synthetic transaction data using the Go implementation.
-// This is currently disabled and returns Unimplemented.
-// Enable via ENABLE_GO_DATASET_GENERATE=true environment variable when ready.
+// This is now the default implementation. Set ENABLE_GO_DATASET_GENERATE=false to disable.
 func (s *server) GenerateData(ctx context.Context, req *pb.GenerateDataRequest) (*pb.GenerateDataResponse, error) {
-	// Feature flag check - disabled by default
+	// Feature flag check - enabled by default
 	enableGoGenerate := os.Getenv("ENABLE_GO_DATASET_GENERATE")
-	if enableGoGenerate != "true" && enableGoGenerate != "1" {
-		return nil, status.Error(codes.Unimplemented, "Go data generation is disabled. Set ENABLE_GO_DATASET_GENERATE=true to enable.")
+	if enableGoGenerate == "false" || enableGoGenerate == "0" {
+		return nil, status.Error(codes.Unimplemented, "Go data generation is disabled. Remove ENABLE_GO_DATASET_GENERATE=false to re-enable.")
 	}
 
 	// Optionally clear existing data
