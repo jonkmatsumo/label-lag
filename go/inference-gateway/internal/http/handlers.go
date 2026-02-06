@@ -69,6 +69,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /analytics/rules/{rule_id}", h.handleAnalyticsRuleStats)
 	mux.HandleFunc("/analytics/transactions/search", h.handleSearchTransactions)
 	mux.HandleFunc("/data/clear", h.handleDatasetClear)
+	mux.HandleFunc("POST /data/generate", h.handleDatasetGenerate)
 	mux.HandleFunc("/monitoring/drift", h.handleMonitoringDrift)
 	mux.HandleFunc("/metrics/shadow/comparison", h.handleMetricsShadowComparison)
 	mux.HandleFunc("/backtest/results", h.handleBacktestResults)
@@ -483,4 +484,84 @@ func simulateFeatures(userID string, amount float64) map[string]any {
 		"has_history":                false,
 		"transaction_amount":         amount,
 	}
+}
+
+type generateDataRequest struct {
+	NumUsers     int32   `json:"num_users"`
+	FraudRate    float64 `json:"fraud_rate"`
+	DropExisting bool    `json:"drop_existing"`
+	Seed         *int64  `json:"seed"`
+}
+
+type generateDataResponse struct {
+	Success              bool   `json:"success"`
+	TotalRecords         int64  `json:"total_records"`
+	FraudRecords         int64  `json:"fraud_records"`
+	FeaturesMaterialized int64  `json:"features_materialized"`
+	Error                string `json:"error,omitempty"`
+}
+
+func (h *Handler) handleDatasetGenerate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if h.analyticsClient == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "analytics backend unavailable")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, h.maxBodyBytes)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	defer r.Body.Close()
+
+	var req generateDataRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
+		return
+	}
+
+	// Validate (basic)
+	if req.NumUsers <= 0 {
+		writeJSONError(w, http.StatusBadRequest, "num_users must be > 0")
+		return
+	}
+	if req.FraudRate < 0 || req.FraudRate > 1.0 {
+		writeJSONError(w, http.StatusBadRequest, "fraud_rate must be between 0 and 1")
+		return
+	}
+
+	grpcReq := &crudv1.GenerateDataRequest{
+		NumUsers:     req.NumUsers,
+		FraudRate:    req.FraudRate,
+		DropExisting: req.DropExisting,
+		Seed:         req.Seed,
+	}
+
+	// Long timeout context handling should be in client or here?
+	// The client implementation uses a 5x timeout multiplier.
+	// But the handler context comes from request, which might be canceled by value in http.Server ReadTimeout/WriteTimeout?
+	// We'll rely on client to handle logic, but we should make sure request context doesn't time out prematurely if set.
+	// For now pass r.Context()
+
+	resp, err := h.analyticsClient.GenerateData(r.Context(), grpcReq)
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(generateDataResponse{
+		Success:              resp.Success,
+		TotalRecords:         resp.TotalRecords,
+		FraudRecords:         resp.FraudRecords,
+		FeaturesMaterialized: resp.FeaturesMaterialized,
+		Error:                resp.Error,
+	})
 }

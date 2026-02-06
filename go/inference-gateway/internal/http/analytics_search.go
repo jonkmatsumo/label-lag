@@ -38,6 +38,7 @@ type AnalyticsClient interface {
 	GetAttribution(ctx context.Context, req *crudv1.GetAttributionRequest) (*crudv1.GetAttributionResponse, error)
 	LogInferenceEvent(ctx context.Context, req *crudv1.LogInferenceEventRequest) (*crudv1.LogInferenceEventResponse, error)
 	CompareBacktests(ctx context.Context, req *crudv1.CompareBacktestsRequest) (*crudv1.CompareBacktestsResponse, error)
+	GenerateData(ctx context.Context, req *crudv1.GenerateDataRequest) (*crudv1.GenerateDataResponse, error)
 }
 
 type searchTransactionsRequest struct {
