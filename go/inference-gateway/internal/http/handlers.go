@@ -101,9 +101,6 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("/ajax-api/2.0/mlflow/", proxy.NewHandler(h.mlflowURL, h.logger)) // MLflow UI often uses this
 	mux.Handle("/static-files/", proxy.NewHandler(h.mlflowURL, h.logger))        // MLflow UI static files
 
-	for _, route := range notImplementedRoutes {
-		mux.HandleFunc(route, h.handleNotImplemented)
-	}
 }
 
 func (h *Handler) handleReady(w http.ResponseWriter, r *http.Request) {
