@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jonkmatsumo/label-lag/src/services/analytics-crud/generator"
 	pb "github.com/jonkmatsumo/label-lag/src/services/analytics-crud/proto/crud/v1"
 	_ "github.com/lib/pq"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
@@ -1149,11 +1150,87 @@ func (s *server) GenerateData(ctx context.Context, req *pb.GenerateDataRequest) 
 		return nil, status.Error(codes.Unimplemented, "Go data generation is disabled. Set ENABLE_GO_DATASET_GENERATE=true to enable.")
 	}
 
-	// TODO: Implement full generation when feature is enabled
-	// For now, return placeholder response
+	// Optionally clear existing data
+	if req.DropExisting {
+		clearResp, err := s.ClearAllData(ctx, &pb.ClearAllDataRequest{})
+		if err != nil {
+			return &pb.GenerateDataResponse{
+				Success: false,
+				Error:   fmt.Sprintf("failed to clear existing data: %v", err),
+			}, nil
+		}
+		slog.Info("cleared existing data", "tables", clearResp.TablesCleared)
+	}
+
+	// Create generator with optional seed
+	var seed *int64
+	if req.Seed != nil {
+		s := *req.Seed
+		seed = &s
+	}
+	gen := generator.NewGenerator(seed)
+
+	// Generate dataset
+	fraudRate := req.FraudRate
+	if fraudRate < 0 {
+		fraudRate = 0
+	}
+	if fraudRate > 1 {
+		fraudRate = 1
+	}
+
+	numUsers := int(req.NumUsers)
+	if numUsers < 1 {
+		numUsers = 1
+	}
+
+	slog.Info("generating synthetic data", "num_users", numUsers, "fraud_rate", fraudRate)
+	result := gen.GenerateDatasetWithSequences(numUsers, fraudRate)
+
+	// Store via existing StoreGeneratedData mechanism
+	storeReq := &pb.StoreGeneratedDataRequest{
+		Records:  result.Records,
+		Metadata: result.Metadata,
+	}
+
+	storeResp, err := s.StoreGeneratedData(ctx, storeReq)
+	if err != nil {
+		return &pb.GenerateDataResponse{
+			Success: false,
+			Error:   fmt.Sprintf("failed to store generated data: %v", err),
+		}, nil
+	}
+
+	// Count fraud records
+	var fraudCount int64
+	for _, r := range result.Records {
+		if r.IsFraudulent {
+			fraudCount++
+		}
+	}
+
+	// Materialize features
+	materializeResp, err := s.MaterializeFeatures(ctx, &pb.MaterializeFeaturesRequest{
+		BatchSize: 1000,
+	})
+	var featuresCount int64
+	if err != nil {
+		slog.Warn("feature materialization failed", "error", err)
+	} else if materializeResp != nil {
+		featuresCount = materializeResp.TotalProcessed
+	}
+
+	slog.Info("data generation complete",
+		"total_records", storeResp.RecordsSaved,
+		"fraud_records", fraudCount,
+		"features_materialized", featuresCount,
+	)
+
 	return &pb.GenerateDataResponse{
-		Success: false,
-		Error:   "Full implementation pending Phase 2 completion",
+		Success:              true,
+		TotalRecords:         storeResp.RecordsSaved,
+		FraudRecords:         fraudCount,
+		FeaturesMaterialized: featuresCount,
 	}, nil
 }
 
