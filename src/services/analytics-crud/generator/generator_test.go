@@ -122,3 +122,48 @@ func TestGenerateLegitimateAmountDistribution(t *testing.T) {
 		t.Errorf("Mean amount %f is outside expected range [50, 2000]", mean)
 	}
 }
+
+func TestGenerateDatasetWithSequences(t *testing.T) {
+	seed := int64(42)
+	gen := NewGenerator(&seed)
+
+	result := gen.GenerateDatasetWithSequences(10, 0.10) // 10 users, 10% fraud
+
+	// Should have records
+	if len(result.Records) == 0 {
+		t.Fatal("Expected records, got none")
+	}
+
+	// Should have matching metadata
+	if len(result.Metadata) != len(result.Records) {
+		t.Errorf("Records (%d) and Metadata (%d) count mismatch",
+			len(result.Records), len(result.Metadata))
+	}
+
+	// Count fraud records
+	fraudCount := 0
+	for _, r := range result.Records {
+		if r.IsFraudulent {
+			fraudCount++
+		}
+	}
+
+	// Should have approximately 1 fraudulent user (10% of 10)
+	// Each fraud user has 1 fraud record at end of sequence
+	if fraudCount == 0 {
+		t.Error("Expected at least some fraud records")
+	}
+
+	// Verify metadata has correct user IDs
+	for i, m := range result.Metadata {
+		if m.UserId != result.Records[i].UserId {
+			t.Errorf("Metadata %d: UserId mismatch", i)
+		}
+		if m.RecordId != result.Records[i].RecordId {
+			t.Errorf("Metadata %d: RecordId mismatch", i)
+		}
+		if m.SequenceNumber < 1 {
+			t.Errorf("Metadata %d: SequenceNumber should be >= 1", i)
+		}
+	}
+}

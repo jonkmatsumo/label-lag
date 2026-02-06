@@ -151,3 +151,171 @@ func (g *Generator) GenerateLegitimate(count int) []*pb.GeneratedRecord {
 
 	return records
 }
+
+// DatasetResult contains the generated records and their evaluation metadata.
+type DatasetResult struct {
+	Records  []*pb.GeneratedRecord
+	Metadata []*pb.EvaluationMetadata
+}
+
+// GenerateDatasetWithSequences creates a complete dataset with user sequences.
+// numUsers: total number of users to generate
+// fraudRate: fraction of users that are fraudulent (0.0 to 1.0)
+// Returns records and evaluation metadata for training.
+func (g *Generator) GenerateDatasetWithSequences(numUsers int, fraudRate float64) *DatasetResult {
+	var allRecords []*pb.GeneratedRecord
+	var allMetadata []*pb.EvaluationMetadata
+
+	fraudUserCount := int(float64(numUsers) * fraudRate)
+	legitUserCount := numUsers - fraudUserCount
+
+	// Generate legitimate user sequences
+	for i := 0; i < legitUserCount; i++ {
+		userRecords := g.generateUserSequence(false)
+		for seq, r := range userRecords {
+			allRecords = append(allRecords, r)
+			allMetadata = append(allMetadata, &pb.EvaluationMetadata{
+				UserId:          r.UserId,
+				RecordId:        r.RecordId,
+				SequenceNumber:  int32(seq + 1),
+				IsPreFraud:      true, // Always true for legitimate users
+				IsTrainEligible: true,
+			})
+		}
+	}
+
+	// Generate fraudulent user sequences
+	for i := 0; i < fraudUserCount; i++ {
+		userRecords := g.generateUserSequence(true)
+		fraudConfirmedAt := userRecords[len(userRecords)-1].TransactionTimestamp
+
+		for seq, r := range userRecords {
+			isPreFraud := seq < len(userRecords)-1 // Last record is the fraud
+			daysToFraud := int32(len(userRecords) - 1 - seq)
+
+			allRecords = append(allRecords, r)
+			allMetadata = append(allMetadata, &pb.EvaluationMetadata{
+				UserId:           r.UserId,
+				RecordId:         r.RecordId,
+				SequenceNumber:   int32(seq + 1),
+				FraudConfirmedAt: fraudConfirmedAt,
+				IsPreFraud:       isPreFraud,
+				DaysToFraud:      daysToFraud,
+				IsTrainEligible:  isPreFraud, // Only pre-fraud records are train eligible
+			})
+		}
+	}
+
+	return &DatasetResult{
+		Records:  allRecords,
+		Metadata: allMetadata,
+	}
+}
+
+// generateUserSequence creates a sequence of transactions for a single user.
+// If isFraudulent, the last transaction is fraudulent.
+func (g *Generator) generateUserSequence(isFraudulent bool) []*pb.GeneratedRecord {
+	// Each user has 5-15 transactions
+	numTransactions := g.rng.IntRange(5, 16)
+	records := make([]*pb.GeneratedRecord, 0, numTransactions)
+
+	userID := g.generateUserID()
+	pii := g.pii.Generate()
+
+	if isFraudulent {
+		// Generate legitimate transactions first, then fraud at end
+		for i := 0; i < numTransactions-1; i++ {
+			r := g.generateLegitimateForUser(userID, pii)
+			records = append(records, r)
+		}
+		// Final transaction is fraudulent
+		fraudType := g.randomFraudType()
+		r := g.generateFraudForUser(userID, pii, fraudType)
+		records = append(records, r)
+	} else {
+		// All legitimate transactions
+		for i := 0; i < numTransactions; i++ {
+			r := g.generateLegitimateForUser(userID, pii)
+			records = append(records, r)
+		}
+	}
+
+	return records
+}
+
+// randomFraudType selects a random fraud type.
+func (g *Generator) randomFraudType() FraudType {
+	types := []FraudType{FraudTypeLiquidityCrunch, FraudTypeLinkBurst, FraudTypeATO}
+	return types[g.rng.IntN(len(types))]
+}
+
+// generateLegitimateForUser creates a legitimate record for a specific user.
+func (g *Generator) generateLegitimateForUser(userID string, pii PII) *pb.GeneratedRecord {
+	timestamp := g.generateTimestamp(false)
+	amount := g.sampleLogNormalAmount()
+
+	availableBalance := g.rng.Float64Range(500, 15000)
+	availableBalance = float64(int(availableBalance*100+0.5)) / 100
+
+	avgBalance30d := g.rng.Float64Range(400, 12000)
+	avgBalance30d = float64(int(avgBalance30d*100+0.5)) / 100
+
+	volatilityZ := g.rng.Float64Range(-1.0, 1.0)
+	connections24h := g.rng.IntRange(0, 3)
+	connections7d := g.rng.IntRange(0, 10)
+	connectionsAvg30d := g.rng.Float64Range(0.5, 2.0)
+	amountToAvg := g.rng.Float64Range(0.3, 2.5)
+	merchantRisk := g.rng.IntRange(5, 45)
+
+	balanceToTxnRatio := 0.0
+	if amount > 0 {
+		balanceToTxnRatio = availableBalance / amount
+	}
+
+	return &pb.GeneratedRecord{
+		RecordId:                  uuid.New().String()[:8],
+		UserId:                    userID,
+		FullName:                  pii.FullName,
+		Email:                     pii.Email,
+		Phone:                     pii.Phone,
+		TransactionTimestamp:      timestamppb.New(timestamp),
+		IsOffHoursTxn:             false,
+		AvailableBalance:          availableBalance,
+		BalanceToTransactionRatio: balanceToTxnRatio,
+		AvgAvailableBalance_30D:   avgBalance30d,
+		BalanceVolatilityZScore:   volatilityZ,
+		BankConnectionsCount_24H:  int32(connections24h),
+		BankConnectionsCount_7D:   int32(connections7d),
+		BankConnectionsAvg_30D:    connectionsAvg30d,
+		Amount:                    amount,
+		AmountToAvgRatio:          amountToAvg,
+		MerchantRiskScore:         int32(merchantRisk),
+		IsReturned:                false,
+		IsFraudulent:              false,
+		FraudType:                 "",
+	}
+}
+
+// generateFraudForUser creates a fraudulent record for a specific user.
+func (g *Generator) generateFraudForUser(userID string, pii PII, fraudType FraudType) *pb.GeneratedRecord {
+	var record *pb.GeneratedRecord
+
+	switch fraudType {
+	case FraudTypeLiquidityCrunch:
+		record = g.generateLiquidityCrunch()
+	case FraudTypeLinkBurst:
+		record = g.generateLinkBurst()
+	case FraudTypeATO:
+		record = g.generateATO()
+	default:
+		record = g.generateLiquidityCrunch()
+	}
+
+	// Override user ID and PII to match the user's sequence
+	record.UserId = userID
+	record.FullName = pii.FullName
+	record.Email = pii.Email
+	record.Phone = pii.Phone
+
+	return record
+}
