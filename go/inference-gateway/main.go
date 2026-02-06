@@ -95,7 +95,10 @@ func main() {
 		}
 	}
 
-	handler := httpserver.NewHandler(logger, inferenceClient, analyticsClient, rulesProvider, maxBodyBytes)
+	handler := httpserver.NewHandler(logger, inferenceClient, analyticsClient, rulesProvider, maxBodyBytes,
+		getEnv("PYTHON_API_URL", "http://api:8000"),
+		getEnv("MLFLOW_TRACKING_URI", "http://mlflow:5000"),
+	)
 	readTimeout := parseDurationEnv(logger, "INFERENCE_GATEWAY_READ_TIMEOUT", 10*time.Second)
 	writeTimeout := parseDurationEnv(logger, "INFERENCE_GATEWAY_WRITE_TIMEOUT", 30*time.Second)
 	idleTimeout := parseDurationEnv(logger, "INFERENCE_GATEWAY_IDLE_TIMEOUT", 60*time.Second)
@@ -175,4 +178,11 @@ func parseDurationEnv(logger *slog.Logger, key string, fallback time.Duration) t
 		return fallback
 	}
 	return parsed
+}
+
+func getEnv(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
 }
