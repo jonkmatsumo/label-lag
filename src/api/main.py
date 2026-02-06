@@ -14,7 +14,6 @@ from api.schemas import HealthResponse
 from forecast.model_manager import get_model_manager
 from forecast.routes import router as forecast_router
 from forecast.services import get_forecaster
-from rules_management.routes import router as rules_router
 from training.routes import router as training_router
 
 # Configure logging
@@ -54,7 +53,6 @@ app = FastAPI(
 
 # Include domain routers
 app.include_router(forecast_router)
-app.include_router(rules_router)
 app.include_router(training_router)
 
 
