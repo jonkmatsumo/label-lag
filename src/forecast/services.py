@@ -123,7 +123,7 @@ class SignalForecaster:
         if fallback_used:
             diagnostics["fallback_mode_effective"] = effective_fallback_mode
 
-        return {
+        response = {
             "request_id": request_id,
             "model_score": score,
             "model_version": model_version,
@@ -132,6 +132,15 @@ class SignalForecaster:
             "latency_ms": latency_ms,
             "diagnostics": diagnostics,
         }
+        
+        if request.include_importance:
+            importance = manager.cached_feature_importance
+            if importance:
+                response["feature_importance"] = importance
+            else:
+                diagnostics["importance_unavailable"] = True
+
+        return response
 
     def _predict_with_model(self, manager, features: FeatureVector) -> float:
         """Use the ML model for prediction.

@@ -45,6 +45,10 @@ class SignalRequest(BaseModel):
         default=None,
         description="Override default fallback behavior for this request",
     )
+    include_importance: bool = Field(
+        default=False,
+        description="Whether to include feature importance in the response",
+    )
 
 
 class RiskComponent(BaseModel):
@@ -171,6 +175,9 @@ class PredictResponse(BaseModel):
         default=False, description="True if heuristic fallback was used"
     )
     latency_ms: float = Field(..., description="Prediction latency")
+    feature_importance: dict[str, float] | None = Field(
+        None, description="Feature importance scores"
+    )
     diagnostics: dict[str, Any] = Field(
         default_factory=dict, description="Diagnostic info"
     )

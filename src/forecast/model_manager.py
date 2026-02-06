@@ -62,6 +62,7 @@ class ModelManager:
         self._calibrator = None
         self._calibrator_loaded = False
         self._baseline_distribution = None
+        self._cached_feature_importance = None
         self._initialized = True
 
     @property
@@ -155,6 +156,9 @@ class ModelManager:
 
             # Try to load score_distribution.json artifact (C3)
             self._load_baseline_distribution_artifact()
+
+            # Cache feature importance (C4)
+            self._cached_feature_importance = self.get_feature_importance()
 
             logger.info(
                 f"Successfully loaded model version {self._model_version} from MLflow"
@@ -264,6 +268,11 @@ class ModelManager:
     def baseline_distribution(self) -> dict | None:
         """Get the baseline score distribution."""
         return self._baseline_distribution
+
+    @property
+    def cached_feature_importance(self) -> dict[str, float] | None:
+        """Get the cached feature importance."""
+        return self._cached_feature_importance
 
     def _benchmark_inference(self, n_samples: int = 100) -> None:
         """Benchmark inference latency and log to MLflow.
