@@ -1741,8 +1741,7 @@ async def get_rule_diff(
         raise HTTPException(
             status_code=400,
             detail=(
-                "Cannot compare a version to itself. "
-                "Provide two different versions."
+                "Cannot compare a version to itself. Provide two different versions."
             ),
         )
     diff_result = diff_rule_versions(ver_a, ver_b)
