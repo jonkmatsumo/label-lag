@@ -63,3 +63,6 @@ data/
 
 # Go binaries
 rules-cli
+
+# Node
+node_modules/
