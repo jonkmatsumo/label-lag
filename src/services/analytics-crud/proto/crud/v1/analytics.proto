@@ -296,6 +296,9 @@ message StoreGeneratedDataRequest {
   repeated EvaluationMetadata metadata = 2;
 }
 
+// GeneratedRecord represents a synthetic transaction record.
+// FROZEN: This message is under contract freeze for Python-to-Go migration.
+// Do not add, remove, or renumber fields without coordinating with both implementations.
 message GeneratedRecord {
   string record_id = 1;
   string user_id = 2;
@@ -321,6 +324,9 @@ message GeneratedRecord {
   string fraud_type = 22;
 }
 
+// EvaluationMetadata tracks temporal relationships for model evaluation.
+// FROZEN: This message is under contract freeze for Python-to-Go migration.
+// Do not add, remove, or renumber fields without coordinating with both implementations.
 message EvaluationMetadata {
   string user_id = 1;
   string record_id = 2;
