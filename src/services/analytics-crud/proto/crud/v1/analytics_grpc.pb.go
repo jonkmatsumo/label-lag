@@ -36,6 +36,7 @@ const (
 	AnalyticsService_StoreGeneratedData_FullMethodName         = "/crud.v1.AnalyticsService/StoreGeneratedData"
 	AnalyticsService_ClearAllData_FullMethodName               = "/crud.v1.AnalyticsService/ClearAllData"
 	AnalyticsService_MaterializeFeatures_FullMethodName        = "/crud.v1.AnalyticsService/MaterializeFeatures"
+	AnalyticsService_GenerateData_FullMethodName               = "/crud.v1.AnalyticsService/GenerateData"
 	AnalyticsService_GetInferenceScores_FullMethodName         = "/crud.v1.AnalyticsService/GetInferenceScores"
 	AnalyticsService_SaveRule_FullMethodName                   = "/crud.v1.AnalyticsService/SaveRule"
 	AnalyticsService_GetRule_FullMethodName                    = "/crud.v1.AnalyticsService/GetRule"
@@ -75,6 +76,8 @@ type AnalyticsServiceClient interface {
 	StoreGeneratedData(ctx context.Context, in *StoreGeneratedDataRequest, opts ...grpc.CallOption) (*StoreGeneratedDataResponse, error)
 	ClearAllData(ctx context.Context, in *ClearAllDataRequest, opts ...grpc.CallOption) (*ClearAllDataResponse, error)
 	MaterializeFeatures(ctx context.Context, in *MaterializeFeaturesRequest, opts ...grpc.CallOption) (*MaterializeFeaturesResponse, error)
+	// Synthetic Data Generation (Go implementation)
+	GenerateData(ctx context.Context, in *GenerateDataRequest, opts ...grpc.CallOption) (*GenerateDataResponse, error)
 	// Score Monitoring (C3)
 	GetInferenceScores(ctx context.Context, in *GetInferenceScoresRequest, opts ...grpc.CallOption) (*GetInferenceScoresResponse, error)
 	// Rule Management
@@ -277,6 +280,16 @@ func (c *analyticsServiceClient) MaterializeFeatures(ctx context.Context, in *Ma
 	return out, nil
 }
 
+func (c *analyticsServiceClient) GenerateData(ctx context.Context, in *GenerateDataRequest, opts ...grpc.CallOption) (*GenerateDataResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GenerateDataResponse)
+	err := c.cc.Invoke(ctx, AnalyticsService_GenerateData_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *analyticsServiceClient) GetInferenceScores(ctx context.Context, in *GetInferenceScoresRequest, opts ...grpc.CallOption) (*GetInferenceScoresResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetInferenceScoresResponse)
@@ -458,6 +471,8 @@ type AnalyticsServiceServer interface {
 	StoreGeneratedData(context.Context, *StoreGeneratedDataRequest) (*StoreGeneratedDataResponse, error)
 	ClearAllData(context.Context, *ClearAllDataRequest) (*ClearAllDataResponse, error)
 	MaterializeFeatures(context.Context, *MaterializeFeaturesRequest) (*MaterializeFeaturesResponse, error)
+	// Synthetic Data Generation (Go implementation)
+	GenerateData(context.Context, *GenerateDataRequest) (*GenerateDataResponse, error)
 	// Score Monitoring (C3)
 	GetInferenceScores(context.Context, *GetInferenceScoresRequest) (*GetInferenceScoresResponse, error)
 	// Rule Management
@@ -540,6 +555,9 @@ func (UnimplementedAnalyticsServiceServer) ClearAllData(context.Context, *ClearA
 }
 func (UnimplementedAnalyticsServiceServer) MaterializeFeatures(context.Context, *MaterializeFeaturesRequest) (*MaterializeFeaturesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method MaterializeFeatures not implemented")
+}
+func (UnimplementedAnalyticsServiceServer) GenerateData(context.Context, *GenerateDataRequest) (*GenerateDataResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GenerateData not implemented")
 }
 func (UnimplementedAnalyticsServiceServer) GetInferenceScores(context.Context, *GetInferenceScoresRequest) (*GetInferenceScoresResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetInferenceScores not implemented")
@@ -916,6 +934,24 @@ func _AnalyticsService_MaterializeFeatures_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AnalyticsService_GenerateData_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GenerateDataRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AnalyticsServiceServer).GenerateData(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AnalyticsService_GenerateData_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AnalyticsServiceServer).GenerateData(ctx, req.(*GenerateDataRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AnalyticsService_GetInferenceScores_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetInferenceScoresRequest)
 	if err := dec(in); err != nil {
@@ -1278,6 +1314,10 @@ var AnalyticsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MaterializeFeatures",
 			Handler:    _AnalyticsService_MaterializeFeatures_Handler,
+		},
+		{
+			MethodName: "GenerateData",
+			Handler:    _AnalyticsService_GenerateData_Handler,
 		},
 		{
 			MethodName: "GetInferenceScores",
