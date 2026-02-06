@@ -91,8 +91,6 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /rules/{rule_id}/readiness", h.handleRuleReadiness)
 	mux.HandleFunc("GET /rules/{rule_id}/diff", h.handleRuleDiff)
 
-	mux.HandleFunc("GET /rules/{rule_id}/diff", h.handleRuleDiff)
-
 	// Proxied Routes
 	mux.HandleFunc("POST /train", proxy.NewHandler(h.pythonURL, h.logger))
 	mux.HandleFunc("POST /models/deploy", proxy.NewHandler(h.pythonURL, h.logger))

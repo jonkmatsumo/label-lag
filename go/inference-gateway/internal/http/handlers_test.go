@@ -23,7 +23,7 @@ import (
 
 func TestHandleEvaluateSignal_RejectsLargeBody(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, nil, nil, rules.NewEmptyProvider(), 32)
+	handler := NewHandler(logger, nil, nil, rules.NewEmptyProvider(), 32, "", "")
 
 	body := strings.Repeat("a", 64)
 	req := httptest.NewRequest(http.MethodPost, "/evaluate/signal", strings.NewReader(body))
@@ -38,7 +38,7 @@ func TestHandleEvaluateSignal_RejectsLargeBody(t *testing.T) {
 
 func TestHandleEvaluateSignal_RejectsUnknownFields(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, nil, nil, rules.NewEmptyProvider(), 1024)
+	handler := NewHandler(logger, nil, nil, rules.NewEmptyProvider(), 1024, "", "")
 
 	payload := `{"user_id":"u1","amount":12.3,"currency":"USD","client_transaction_id":"t1","unknown":"x"}`
 	req := httptest.NewRequest(http.MethodPost, "/evaluate/signal", strings.NewReader(payload))
@@ -53,7 +53,7 @@ func TestHandleEvaluateSignal_RejectsUnknownFields(t *testing.T) {
 
 func TestHandleReadyReportsHealthy(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, stubInferenceClient{}, nil, rules.NewEmptyProvider(), 1024)
+	handler := NewHandler(logger, stubInferenceClient{}, nil, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
 	rec := httptest.NewRecorder()
@@ -75,7 +75,7 @@ func TestHandleReadyReportsHealthy(t *testing.T) {
 
 func TestHandleReadyReportsUnhealthy(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, stubInferenceClient{readyErr: errors.New("not ready")}, nil, errProvider{}, 1024)
+	handler := NewHandler(logger, stubInferenceClient{readyErr: errors.New("not ready")}, nil, errProvider{}, 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
 	rec := httptest.NewRecorder()
@@ -84,32 +84,6 @@ func TestHandleReadyReportsUnhealthy(t *testing.T) {
 
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
-	}
-}
-
-func TestHandleNotImplemented(t *testing.T) {
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, nil, nil, rules.NewEmptyProvider(), 1024)
-
-	req := httptest.NewRequest(http.MethodGet, "/analytics/overview", nil)
-	req = req.WithContext(requestid.WithRequestID(req.Context(), "test-req-id"))
-	rec := httptest.NewRecorder()
-
-	handler.handleNotImplemented(rec, req)
-
-	if rec.Code != http.StatusNotImplemented {
-		t.Fatalf("expected status %d, got %d", http.StatusNotImplemented, rec.Code)
-	}
-
-	var payload map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	if payload["error"] != "not_implemented" {
-		t.Fatalf("expected not_implemented error, got %v", payload["error"])
-	}
-	if payload["request_id"] != "test-req-id" {
-		t.Fatalf("expected request_id test-req-id, got %v", payload["request_id"])
 	}
 }
 
@@ -137,7 +111,7 @@ func TestHandleSearchTransactions(t *testing.T) {
 			Total: 1,
 		},
 	}
-	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024)
+	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodPost, "/analytics/transactions/search", strings.NewReader(`{"user_id":"user-1","limit":10}`))
 	rec := httptest.NewRecorder()
@@ -184,7 +158,7 @@ func TestHandleAnalyticsOverview(t *testing.T) {
 			FraudAmount:             6.78,
 		},
 	}
-	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024)
+	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/analytics/overview", nil)
 	rec := httptest.NewRecorder()
@@ -215,7 +189,7 @@ func TestHandleAnalyticsOverviewPropagatesErrors(t *testing.T) {
 	stub := &stubAnalyticsClient{
 		err: &grpcclient.RPCError{Code: codes.Unavailable, Message: "downstream unavailable"},
 	}
-	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024)
+	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/analytics/overview", nil)
 	rec := httptest.NewRecorder()
@@ -243,7 +217,7 @@ func TestHandleAnalyticsDailyStats(t *testing.T) {
 			},
 		},
 	}
-	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024)
+	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/analytics/daily-stats?days=7", nil)
 	rec := httptest.NewRecorder()
@@ -294,7 +268,7 @@ func TestHandleAnalyticsTransactions(t *testing.T) {
 			},
 		},
 	}
-	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024)
+	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/analytics/transactions", nil)
 	rec := httptest.NewRecorder()
@@ -343,7 +317,7 @@ func TestHandleAnalyticsRecentAlerts(t *testing.T) {
 			},
 		},
 	}
-	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024)
+	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/analytics/recent-alerts", nil)
 	rec := httptest.NewRecorder()
@@ -389,7 +363,7 @@ func TestHandleAnalyticsFingerprint(t *testing.T) {
 			},
 		},
 	}
-	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024)
+	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/analytics/fingerprint", nil)
 	rec := httptest.NewRecorder()
@@ -424,7 +398,7 @@ func TestHandleAnalyticsFeatureSample(t *testing.T) {
 			},
 		},
 	}
-	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024)
+	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/analytics/feature-sample?sample_size=5&stratify=false", nil)
 	rec := httptest.NewRecorder()
@@ -462,7 +436,7 @@ func TestHandleAnalyticsSchema(t *testing.T) {
 			},
 		},
 	}
-	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024)
+	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/analytics/schema?table_names=generated_records&table_names=feature_snapshots", nil)
 	rec := httptest.NewRecorder()
@@ -494,7 +468,7 @@ func TestHandleMonitoringDriftProxies(t *testing.T) {
 	t.Setenv("INFERENCE_GATEWAY_API_URL", upstream.URL)
 
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, nil, nil, rules.NewEmptyProvider(), 1024)
+	handler := NewHandler(logger, nil, nil, rules.NewEmptyProvider(), 1024, upstream.URL, "")
 
 	req := httptest.NewRequest(http.MethodGet, "/monitoring/drift?hours=24&threshold=0.25&force_refresh=false", nil)
 	req = req.WithContext(requestid.WithRequestID(req.Context(), "req-1"))
@@ -533,7 +507,7 @@ func TestHandleMetricsShadowComparisonProxies(t *testing.T) {
 	t.Setenv("INFERENCE_GATEWAY_API_URL", upstream.URL)
 
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, nil, nil, rules.NewEmptyProvider(), 1024)
+	handler := NewHandler(logger, nil, nil, rules.NewEmptyProvider(), 1024, upstream.URL, "")
 
 	req := httptest.NewRequest(http.MethodGet, "/metrics/shadow/comparison?start_date=2025-01-01&end_date=2025-01-31&rule_ids=r1,r2", nil)
 	req = req.WithContext(requestid.WithRequestID(req.Context(), "req-2"))
@@ -591,7 +565,7 @@ func TestHandleBacktestResults(t *testing.T) {
 			},
 		},
 	}
-	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024)
+	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/backtest/results?rule_id=rule-1&start_date=2025-01-01&end_date=2025-01-31&limit=1", nil)
 	rec := httptest.NewRecorder()
@@ -639,6 +613,7 @@ type stubAnalyticsClient struct {
 	overviewResp              *crudv1.GetOverviewMetricsResponse
 	transactionDetailsResp    *crudv1.GetTransactionDetailsResponse
 	recentAlertsResp          *crudv1.GetRecentAlertsResponse
+	generateDataResp          *crudv1.GenerateDataResponse
 	fingerprintResp           *crudv1.GetDatasetFingerprintResponse
 	featureSampleResp         *crudv1.GetFeatureSampleResponse
 	schemaSummaryResp         *crudv1.GetSchemaSummaryResponse
@@ -771,6 +746,10 @@ func (s *stubAnalyticsClient) CompareBacktests(ctx context.Context, req *crudv1.
 	return &crudv1.CompareBacktestsResponse{}, s.err
 }
 
+func (s *stubAnalyticsClient) GenerateData(ctx context.Context, req *crudv1.GenerateDataRequest) (*crudv1.GenerateDataResponse, error) {
+	return s.generateDataResp, s.err
+}
+
 type errProvider struct{}
 
 func (errProvider) GetRules(context.Context) (rules.RuleSet, error) {
@@ -779,7 +758,7 @@ func (errProvider) GetRules(context.Context) (rules.RuleSet, error) {
 
 func TestHandleEvaluateSignal_RulesProviderError(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, stubInferenceClient{}, nil, errProvider{}, 1024)
+	handler := NewHandler(logger, stubInferenceClient{}, nil, errProvider{}, 1024, "", "")
 
 	payload := `{"user_id":"u1","amount":100,"currency":"USD","client_transaction_id":"t1"}`
 	req := httptest.NewRequest(http.MethodPost, "/evaluate/signal", strings.NewReader(payload))
@@ -823,7 +802,7 @@ func TestHandleEvaluateSignal_MissingFeatures(t *testing.T) {
 	// Analytics returns no features
 	analytics := &stubAnalyticsClient{}
 
-	handler := NewHandler(logger, inference, analytics, provider, 1024)
+	handler := NewHandler(logger, inference, analytics, provider, 1024, "", "")
 
 	// user_id "u1" will result in a simulated velocity
 	// hash("u1") % 1000 = 327 (approx)
