@@ -31,6 +31,34 @@ jobs:
       - name: Run tests
         run: uv run pytest --cov=src/synthetic_pipeline --cov-report=xml
 
+  node-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: '**/package-lock.json'
+
+      - name: Install BFF dependencies
+        working-directory: node/bff
+        run: npm ci
+
+      - name: Test BFF
+        working-directory: node/bff
+        run: npm test
+
+      - name: Install UI dependencies
+        working-directory: node/ui
+        run: npm ci
+
+      - name: Lint UI
+        working-directory: node/ui
+        run: npm run lint
+
   lint:
     runs-on: ubuntu-latest
     steps:

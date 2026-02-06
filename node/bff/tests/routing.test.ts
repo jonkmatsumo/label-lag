@@ -8,7 +8,7 @@ describe('Inference Routing', () => {
 
     const ctx = await createTestApp(config);
 
-    const gatewayPool = ctx.mockAgent.get('http://mock-gateway');
+    const gatewayPool = ctx.mockAgent.get('http://mock-gateway:8081');
     gatewayPool.intercept({
       path: '/evaluate/signal',
       method: 'POST'

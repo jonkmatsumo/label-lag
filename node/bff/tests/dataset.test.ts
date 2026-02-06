@@ -62,9 +62,9 @@ describe('Dataset Routes', () => {
   });
 
   it('POST /bff/v1/dataset/generate should trigger generation', async () => {
-    const mockPool = mockAgent.get('http://api:8000');
+    const mockPool = mockAgent.get('http://gateway:8081');
     mockPool.intercept({
-      path: '/data/generate',
+      path: '/analytics/generate',
       method: 'POST'
     }).reply(200, {
       success: true,
