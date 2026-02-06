@@ -4,6 +4,7 @@ import pino from 'pino';
 import { loadConfig } from './config.js';
 import { requestIdMiddleware } from './middleware/request-id.js';
 import { HttpClient, UpstreamError } from './services/http-client.js';
+import { ShadowService } from './services/shadow.js';
 import { SimpleCache } from './services/cache.js';
 import {
   healthRoutes,
@@ -62,6 +63,7 @@ async function main(): Promise<void> {
 
   // Create HTTP client for upstream calls
   const httpClient = new HttpClient({ config, logger });
+  const shadowService = new ShadowService(logger, httpClient);
   const cache = new SimpleCache(config, logger);
 
   // Global error handler
@@ -100,12 +102,12 @@ async function main(): Promise<void> {
   await fastify.register(healthRoutes, { httpClient });
   await fastify.register(evaluateRoutes, { httpClient });
   await fastify.register(modelRoutes, { httpClient });
-  await fastify.register(rulesRoutes, { httpClient });
+  await fastify.register(rulesRoutes, { httpClient, shadowService });
   await fastify.register(backtestRoutes, { httpClient });
   await fastify.register(analyticsRoutes, { httpClient, cache });
   await fastify.register(monitoringRoutes, { httpClient });
   await fastify.register(rulesDetailRoutes, { httpClient });
-  await fastify.register(datasetRoutes, { httpClient });
+  await fastify.register(datasetRoutes, { httpClient, shadowService });
   await fastify.register(mlflowRoutes, { httpClient });
 
   // Start server

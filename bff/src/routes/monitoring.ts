@@ -62,7 +62,7 @@ export async function monitoringRoutes(
           method: 'GET',
           path: `/monitoring/drift?${queryParams.toString()}`,
           requestId: request.requestId,
-          target: 'api',
+          target: 'python',
         });
 
         return reply.status(response.statusCode).send(response.data);
@@ -111,7 +111,7 @@ export async function monitoringRoutes(
           method: 'GET',
           path: `/metrics/shadow/comparison?${queryParams.toString()}`,
           requestId: request.requestId,
-          target: 'api',
+          target: 'python',
         });
 
         return reply.status(response.statusCode).send(response.data);
