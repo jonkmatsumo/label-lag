@@ -42,9 +42,9 @@ func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient Ana
 	}
 	return &Handler{
 		logger:          logger,
-		inferenceClient:  client,
-		analyticsClient:  analyticsClient,
-		rulesProvider:    provider,
+		inferenceClient: client,
+		analyticsClient: analyticsClient,
+		rulesProvider:   provider,
 		maxBodyBytes:    maxBodyBytes,
 	}
 }
@@ -68,6 +68,18 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/monitoring/drift", h.handleMonitoringDrift)
 	mux.HandleFunc("/metrics/shadow/comparison", h.handleMetricsShadowComparison)
 	mux.HandleFunc("/backtest/results", h.handleBacktestResults)
+	mux.HandleFunc("GET /rules", h.handleListRules)
+	mux.HandleFunc("POST /rules", h.handleCreateRule)
+	mux.HandleFunc("GET /rules/{rule_id}", h.handleGetRule)
+	mux.HandleFunc("PUT /rules/{rule_id}", h.handleUpdateRule)
+	mux.HandleFunc("DELETE /rules/{rule_id}", h.handleDeleteRule)
+	// Routes for later commits
+	// mux.HandleFunc("GET /rules/{rule_id}/history", h.handleListRuleVersions)
+	// mux.HandleFunc("GET /rules/{rule_id}/versions/{version_id}", h.handleGetRuleVersion)
+	// mux.HandleFunc("POST /rules/{rule_id}/publish", h.handlePublishRule)
+	// mux.HandleFunc("GET /rules/{rule_id}/readiness", h.handleRuleReadiness)
+	// mux.HandleFunc("GET /rules/{rule_id}/diff", h.handleRuleDiff)
+
 	for _, route := range notImplementedRoutes {
 		mux.HandleFunc(route, h.handleNotImplemented)
 	}

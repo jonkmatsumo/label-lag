@@ -15,8 +15,8 @@ var notImplementedRoutes = []string{
 	"/backtest/compare",
 	"/train",
 	"/models/deploy",
-	"/rules",
-	"/rules/",
+	// "/rules",  // Implemented
+	// "/rules/", // Implemented
 	"/suggestions/heuristic",
 	"/suggestions/accept",
 	"/data/generate",

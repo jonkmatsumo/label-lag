@@ -6,10 +6,12 @@ import (
 	"net/http"
 	"sort"
 
+	crudv1 "github.com/jonkmatsumo/label-lag/src/services/analytics-crud/proto/crud/v1"
 	"github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/requestid"
 	"github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/rules"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 type EvaluateRulesRequest struct {
@@ -427,7 +429,6 @@ func (h *Handler) handleEvaluateRulesDiff(w http.ResponseWriter, r *http.Request
 	})
 }
 
-
 func (h *Handler) handleEvaluateRules(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -561,9 +562,146 @@ func computeDiffSeverity(respA, respB EvaluateRulesResponse, diff RulesDiffSumma
 	return "cosmetic"
 }
 
-func abs(x int) int {
-	if x < 0 {
-		return -x
+func (h *Handler) handleListRules(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
 	}
-	return x
+
+	statusFilter := r.URL.Query().Get("status")
+	includeArchived := r.URL.Query().Get("include_archived") == "true"
+
+	resp, err := h.analyticsClient.ListRules(r.Context(), &crudv1.ListRulesRequest{
+		Status:          statusFilter,
+		IncludeArchived: includeArchived,
+	})
+	if err != nil {
+		writeRPCError(w, err)
+		return
+	}
+
+	// Wrap response to match current API contract if needed, or just return list
+	// Python returned: {"version": "live", "rules": [...]}
+	// We'll mimic this structure using a map for now or define a struct
+	response := map[string]any{
+		"version": "live",
+		"rules":   resp.Rules,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "failed to encode response")
+	}
 }
+
+func (h *Handler) handleCreateRule(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var rule crudv1.Rule
+	if err := json.NewDecoder(r.Body).Decode(&rule); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
+		return
+	}
+
+	// Force default status if not set
+	if rule.Status == "" {
+		rule.Status = "draft"
+	}
+
+	// Reuse SaveRule
+	_, err := h.analyticsClient.SaveRule(r.Context(), &crudv1.SaveRuleRequest{Rule: &rule})
+	if err != nil {
+		writeRPCError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+}
+
+func (h *Handler) handleGetRule(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	ruleID := r.PathValue("rule_id")
+	if ruleID == "" {
+		writeJSONError(w, http.StatusBadRequest, "rule_id required")
+		return
+	}
+
+	resp, err := h.analyticsClient.GetRule(r.Context(), &crudv1.GetRuleRequest{RuleId: ruleID})
+	if err != nil {
+		writeRPCError(w, err)
+		return
+	}
+
+	// Unwrap rule
+	w.Header().Set("Content-Type", "application/json")
+	// Use protojson for proper proto marshalling
+	payload, _ := protojson.MarshalOptions{EmitUnpopulated: true, UseProtoNames: true}.Marshal(resp.Rule)
+	w.Write(payload)
+}
+
+func (h *Handler) handleUpdateRule(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	ruleID := r.PathValue("rule_id")
+	if ruleID == "" {
+		writeJSONError(w, http.StatusBadRequest, "rule_id required")
+		return
+	}
+
+	var rule crudv1.Rule
+	if err := json.NewDecoder(r.Body).Decode(&rule); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
+		return
+	}
+
+	// Ensure ID matches path
+	if rule.Id != "" && rule.Id != ruleID {
+		writeJSONError(w, http.StatusBadRequest, "rule_id mismatch")
+		return
+	}
+	rule.Id = ruleID
+
+	_, err := h.analyticsClient.SaveRule(r.Context(), &crudv1.SaveRuleRequest{Rule: &rule})
+	if err != nil {
+		writeRPCError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+}
+
+func (h *Handler) handleDeleteRule(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	ruleID := r.PathValue("rule_id")
+	if ruleID == "" {
+		writeJSONError(w, http.StatusBadRequest, "rule_id required")
+		return
+	}
+
+	_, err := h.analyticsClient.DeleteRule(r.Context(), &crudv1.DeleteRuleRequest{RuleId: ruleID})
+	if err != nil {
+		writeRPCError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+}
+
+// version/readiness/diff handlers temporarily removed for commit splitting
