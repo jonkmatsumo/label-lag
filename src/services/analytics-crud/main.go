@@ -27,10 +27,32 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+type contextKey string
+
+const (
+	requestIDKey contextKey = "x-request-id"
+)
+
+func requestIDInterceptor(
+	ctx context.Context,
+	req interface{},
+	info *grpc.UnaryServerInfo,
+	handler grpc.UnaryHandler,
+) (interface{}, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if ok {
+		if ids := md.Get("x-request-id"); len(ids) > 0 {
+			ctx = context.WithValue(ctx, requestIDKey, ids[0])
+		}
+	}
+	return handler(ctx, req)
+}
 
 type server struct {
 	pb.UnimplementedAnalyticsServiceServer
@@ -1631,7 +1653,10 @@ func main() {
 
 	// Add interceptors: logging and otel tracing
 	opts := []grpc.ServerOption{
-		grpc.UnaryInterceptor(loggingInterceptor),
+		grpc.ChainUnaryInterceptor(
+			requestIDInterceptor,
+			loggingInterceptor,
+		),
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
 	}
 	s := grpc.NewServer(opts...)

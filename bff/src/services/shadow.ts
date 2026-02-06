@@ -33,13 +33,19 @@ export class ShadowService {
 
     if (!primaryOk) {
       this.logger.error({
+        metric: 'gateway_error_rate',
+        target: primary.target,
         requestId: primary.requestId,
         path: primary.path,
         error: primaryResult.reason instanceof Error ? primaryResult.reason.message : String(primaryResult.reason)
       }, 'Primary request failed');
       
       if (shadowOk) {
-        this.logger.info({ requestId: primary.requestId, path: primary.path }, 'Falling back to shadow result due to primary failure');
+        this.logger.info({
+          metric: 'fallback_rate',
+          requestId: primary.requestId,
+          path: primary.path
+        }, 'Falling back to shadow result due to primary failure');
         return shadowResult.value;
       }
       throw primaryResult.reason;
@@ -63,6 +69,7 @@ export class ShadowService {
 
     if (!statusMatch || !bodyMatch) {
       this.logger.info({
+        metric: 'shadow_mismatch_rate',
         requestId: primary.requestId,
         path: primary.path,
         statusMatch,

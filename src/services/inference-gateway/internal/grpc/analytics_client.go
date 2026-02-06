@@ -7,8 +7,10 @@ import (
 	"time"
 
 	crudv1 "github.com/jonkmatsumo/label-lag/src/services/analytics-crud/proto/crud/v1"
+	"github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/requestid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 )
 
 type AnalyticsClient struct {
@@ -49,6 +51,13 @@ func (c *AnalyticsClient) Close() error {
 	return c.conn.Close()
 }
 
+func (c *AnalyticsClient) withMetadata(ctx context.Context) context.Context {
+	if rid := requestid.FromContext(ctx); rid != "" {
+		return metadata.AppendToOutgoingContext(ctx, "x-request-id", rid)
+	}
+	return ctx
+}
+
 func (c *AnalyticsClient) SearchTransactions(ctx context.Context, req *crudv1.SearchTransactionsRequest) (*crudv1.SearchTransactionsResponse, error) {
 	if req == nil {
 		return nil, fmt.Errorf("nil request")
@@ -61,7 +70,7 @@ func (c *AnalyticsClient) SearchTransactions(ctx context.Context, req *crudv1.Se
 		defer cancel()
 	}
 
-	resp, err := c.stub.SearchTransactions(callCtx, req)
+	resp, err := c.stub.SearchTransactions(c.withMetadata(callCtx), req)
 	if err != nil {
 		return nil, mapRPCError(err)
 	}
@@ -80,7 +89,7 @@ func (c *AnalyticsClient) GetDailyStats(ctx context.Context, req *crudv1.GetDail
 		defer cancel()
 	}
 
-	resp, err := c.stub.GetDailyStats(callCtx, req)
+	resp, err := c.stub.GetDailyStats(c.withMetadata(callCtx), req)
 	if err != nil {
 		return nil, mapRPCError(err)
 	}
@@ -99,7 +108,7 @@ func (c *AnalyticsClient) GetOverviewMetrics(ctx context.Context, req *crudv1.Ge
 		defer cancel()
 	}
 
-	resp, err := c.stub.GetOverviewMetrics(callCtx, req)
+	resp, err := c.stub.GetOverviewMetrics(c.withMetadata(callCtx), req)
 	if err != nil {
 		return nil, mapRPCError(err)
 	}
@@ -118,7 +127,7 @@ func (c *AnalyticsClient) GetTransactionDetails(ctx context.Context, req *crudv1
 		defer cancel()
 	}
 
-	resp, err := c.stub.GetTransactionDetails(callCtx, req)
+	resp, err := c.stub.GetTransactionDetails(c.withMetadata(callCtx), req)
 	if err != nil {
 		return nil, mapRPCError(err)
 	}
@@ -137,7 +146,7 @@ func (c *AnalyticsClient) GetRecentAlerts(ctx context.Context, req *crudv1.GetRe
 		defer cancel()
 	}
 
-	resp, err := c.stub.GetRecentAlerts(callCtx, req)
+	resp, err := c.stub.GetRecentAlerts(c.withMetadata(callCtx), req)
 	if err != nil {
 		return nil, mapRPCError(err)
 	}
@@ -156,7 +165,7 @@ func (c *AnalyticsClient) GetDatasetFingerprint(ctx context.Context, req *crudv1
 		defer cancel()
 	}
 
-	resp, err := c.stub.GetDatasetFingerprint(callCtx, req)
+	resp, err := c.stub.GetDatasetFingerprint(c.withMetadata(callCtx), req)
 	if err != nil {
 		return nil, mapRPCError(err)
 	}
@@ -175,7 +184,7 @@ func (c *AnalyticsClient) GetFeatureSample(ctx context.Context, req *crudv1.GetF
 		defer cancel()
 	}
 
-	resp, err := c.stub.GetFeatureSample(callCtx, req)
+	resp, err := c.stub.GetFeatureSample(c.withMetadata(callCtx), req)
 	if err != nil {
 		return nil, mapRPCError(err)
 	}
@@ -194,7 +203,7 @@ func (c *AnalyticsClient) GetSchemaSummary(ctx context.Context, req *crudv1.GetS
 		defer cancel()
 	}
 
-	resp, err := c.stub.GetSchemaSummary(callCtx, req)
+	resp, err := c.stub.GetSchemaSummary(c.withMetadata(callCtx), req)
 	if err != nil {
 		return nil, mapRPCError(err)
 	}
@@ -213,7 +222,7 @@ func (c *AnalyticsClient) ListBacktestResults(ctx context.Context, req *crudv1.L
 		defer cancel()
 	}
 
-	resp, err := c.stub.ListBacktestResults(callCtx, req)
+	resp, err := c.stub.ListBacktestResults(c.withMetadata(callCtx), req)
 	if err != nil {
 		return nil, mapRPCError(err)
 	}
@@ -232,7 +241,7 @@ func (c *AnalyticsClient) ClearAllData(ctx context.Context, req *crudv1.ClearAll
 		defer cancel()
 	}
 
-	resp, err := c.stub.ClearAllData(callCtx, req)
+	resp, err := c.stub.ClearAllData(c.withMetadata(callCtx), req)
 	if err != nil {
 		return nil, mapRPCError(err)
 	}
