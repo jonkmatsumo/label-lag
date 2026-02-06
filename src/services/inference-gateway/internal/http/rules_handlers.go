@@ -55,6 +55,210 @@ type EvaluateRulesDiffResponse struct {
 	TotalEvaluationTimeMS float64               `json:"total_evaluation_time_ms"`
 }
 
+type SandboxMatchedRule struct {
+	RuleID   string `json:"rule_id"`
+	Severity string `json:"severity"`
+	Reason   string `json:"reason"`
+	Action   string `json:"action"`
+	Score    *int   `json:"score"`
+}
+
+type SandboxEvaluateResponse struct {
+	FinalScore         int                  `json:"final_score"`
+	BaselineScore      int                  `json:"baseline_score"`
+	ShadowScore        *int                 `json:"shadow_score"`
+	MatchedRules       []SandboxMatchedRule `json:"matched_rules"`
+	Explanations       []rules.Explanation  `json:"explanations"`
+	ShadowMatchedRules []SandboxMatchedRule `json:"shadow_matched_rules"`
+	Rejected           bool                 `json:"rejected"`
+	RuleSetVersion     string               `json:"ruleset_version"`
+}
+
+type SandboxDiffResponse struct {
+	A    SandboxEvaluateResponse `json:"a"`
+	B    SandboxEvaluateResponse `json:"b"`
+	Diff RulesDiffSummary        `json:"diff"`
+}
+
+func (h *Handler) handleSandboxEvaluate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	debug := r.URL.Query().Get("debug") == "true"
+
+	var req EvaluateRulesRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
+		return
+	}
+
+	ruleset := rules.RuleSet{}
+	if req.RuleSet != nil {
+		validRules, errs := rules.FilterValidRules(req.RuleSet.Rules)
+		if len(errs) > 0 {
+			writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid rules: %v", errs))
+			return
+		}
+		ruleset = *req.RuleSet
+		ruleset.Rules = validRules
+	} else {
+		var err error
+		ruleset, err = h.rulesProvider.GetRules(r.Context())
+		if err != nil {
+			h.logger.Warn("failed to load default ruleset", "error", err)
+		}
+	}
+
+	result, err := rules.EvaluateRules(req.Features, req.BaseScore, &ruleset, rules.EvalOptions{Debug: debug})
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "rule evaluation failed")
+		return
+	}
+
+	resp := mapToSandboxEvaluateResponse(result, req.BaseScore, req.ShadowMode)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func (h *Handler) handleSandboxDiff(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	debug := r.URL.Query().Get("debug") == "true"
+
+	var req EvaluateRulesDiffRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
+		return
+	}
+
+	// Helper to evaluate a single ruleset
+	eval := func(rs *rules.RuleSet) (rules.RuleResult, error) {
+		ruleset := rules.RuleSet{}
+		if rs != nil {
+			validRules, errs := rules.FilterValidRules(rs.Rules)
+			if len(errs) > 0 {
+				return rules.RuleResult{}, fmt.Errorf("invalid rules: %v", errs)
+			}
+			ruleset = *rs
+			ruleset.Rules = validRules
+		} else {
+			var err error
+			ruleset, err = h.rulesProvider.GetRules(r.Context())
+			if err != nil {
+				h.logger.Warn("failed to load default ruleset", "error", err)
+			}
+		}
+
+		return rules.EvaluateRules(req.Features, req.BaseScore, &ruleset, rules.EvalOptions{Debug: debug})
+	}
+
+	resA, err := eval(req.RuleSetA)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	resB, err := eval(req.RuleSetB)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// Compute diff summary (reusing existing logic from EvaluateRulesDiff but returning Sandbox version)
+	diff := RulesDiffSummary{
+		ScoreDelta: resB.FinalScore - resA.FinalScore,
+	}
+	if req.ShadowMode {
+		// Use internal FinalScore from results which is the adjusted score even in shadow mode
+		diff.ScoreDelta = resB.FinalScore - resA.FinalScore
+	}
+
+	mapA := make(map[string]bool)
+	for _, r := range resA.MatchedRules {
+		mapA[r] = true
+	}
+	mapB := make(map[string]bool)
+	for _, r := range resB.MatchedRules {
+		mapB[r] = true
+	}
+
+	for r := range mapB {
+		if !mapA[r] {
+			diff.MatchedRulesAdded = append(diff.MatchedRulesAdded, r)
+		}
+	}
+	for r := range mapA {
+		if !mapB[r] {
+			diff.MatchedRulesRemoved = append(diff.MatchedRulesRemoved, r)
+		}
+	}
+
+	// Use temporary EvaluateRulesResponse for severity computation
+	tempRespA := EvaluateRulesResponse{Rejected: resA.Rejected, Explanations: resA.Explanations}
+	tempRespB := EvaluateRulesResponse{Rejected: resB.Rejected, Explanations: resB.Explanations}
+	diff.Severity = computeDiffSeverity(tempRespA, tempRespB, diff)
+
+	resp := SandboxDiffResponse{
+		A:    mapToSandboxEvaluateResponse(resA, req.BaseScore, req.ShadowMode),
+		B:    mapToSandboxEvaluateResponse(resB, req.BaseScore, req.ShadowMode),
+		Diff: diff,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func mapToSandboxEvaluateResponse(result rules.RuleResult, baseScore int, shadowMode bool) SandboxEvaluateResponse {
+	matchedRules := make([]SandboxMatchedRule, 0, len(result.Explanations))
+	for _, exp := range result.Explanations {
+		matchedRules = append(matchedRules, SandboxMatchedRule{
+			RuleID:   exp.RuleID,
+			Severity: exp.Severity,
+			Reason:   exp.Reason,
+			Action:   exp.Action,
+			Score:    exp.Score,
+		})
+	}
+
+	shadowMatchedRules := make([]SandboxMatchedRule, 0, len(result.ShadowExplanations))
+	for _, exp := range result.ShadowExplanations {
+		shadowMatchedRules = append(shadowMatchedRules, SandboxMatchedRule{
+			RuleID:   exp.RuleID,
+			Severity: exp.Severity,
+			Reason:   exp.Reason,
+			Action:   exp.Action,
+			Score:    exp.Score,
+		})
+	}
+
+	finalScore := result.FinalScore
+	var shadowScore *int
+	if shadowMode {
+		sScore := result.FinalScore
+		shadowScore = &sScore
+		finalScore = baseScore
+	}
+
+	return SandboxEvaluateResponse{
+		FinalScore:         finalScore,
+		BaselineScore:      baseScore,
+		ShadowScore:        shadowScore,
+		MatchedRules:       matchedRules,
+		Explanations:       result.Explanations,
+		ShadowMatchedRules: shadowMatchedRules,
+		Rejected:           result.Rejected && !shadowMode,
+		RuleSetVersion:     result.RulesVersion,
+	}
+}
+
 func (h *Handler) handleEvaluateRulesDiff(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
