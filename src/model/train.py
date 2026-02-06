@@ -430,6 +430,22 @@ def train_model(
             joblib.dump(calibrator, calibrator_path)
             _mlflow.log_artifact(calibrator_path)
 
+            # Save score distribution baseline (C3)
+            calibrated_scores = calibrator.transform(y_pred_proba)
+            buckets = [1, 11, 31, 71, 91, 100]
+            counts, _ = np.histogram(calibrated_scores, bins=buckets)
+            ratios = counts / len(calibrated_scores)
+            baseline_dist = {
+                "buckets": [[buckets[i], buckets[i+1]-1] for i in range(len(buckets)-1)],
+                "ratios": ratios.tolist(),
+                "counts": counts.tolist(),
+                "total": int(len(calibrated_scores))
+            }
+            dist_path = os.path.join(tmpdir, "score_distribution.json")
+            with open(dist_path, "w") as f:
+                json.dump(baseline_dist, f, indent=2)
+            _mlflow.log_artifact(dist_path)
+
             # Save feature columns list as artifact for inference
             feature_columns_path = os.path.join(tmpdir, "feature_columns.json")
             with open(feature_columns_path, "w") as f:

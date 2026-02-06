@@ -1225,6 +1225,27 @@ class DriftStatusResponse(BaseModel):
     error: str | None = Field(None, description="Error message if status=unknown")
 
 
+class ScoreDistributionItem(BaseModel):
+    """Per-bucket score distribution info."""
+
+    bucket: list[int] = Field(..., description="Bucket range [min, max]")
+    baseline_ratio: float = Field(..., description="Ratio in baseline data")
+    observed_ratio: float = Field(..., description="Ratio in observed live data")
+    observed_count: int = Field(..., description="Count in observed live data")
+
+
+class ScoreDistributionResponse(BaseModel):
+    """Response schema for score distribution monitoring."""
+
+    computed_at: str = Field(..., description="ISO timestamp of computation")
+    observed_size: int = Field(..., description="Number of live samples")
+    baseline_size: int | None = Field(None, description="Number of baseline samples")
+    divergence: float = Field(..., description="Divergence metric value")
+    divergence_metric: str = Field(default="JS", description="Metric used (JS for Jensen-Shannon)")
+    distribution: list[ScoreDistributionItem] = Field(default_factory=list)
+    shift_detected: bool = Field(..., description="True if any bucket exceeded 2x baseline")
+
+
 # =============================================================================
 # Analytics Schemas
 # =============================================================================

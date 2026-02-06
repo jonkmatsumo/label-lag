@@ -61,6 +61,7 @@ class ModelManager:
         self._required_features: list[str] | None = None
         self._calibrator = None
         self._calibrator_loaded = False
+        self._baseline_distribution = None
         self._initialized = True
 
     @property
@@ -152,6 +153,9 @@ class ModelManager:
             # Try to load calibrator.pkl artifact (C2)
             self._load_calibrator_artifact()
 
+            # Try to load score_distribution.json artifact (C3)
+            self._load_baseline_distribution_artifact()
+
             logger.info(
                 f"Successfully loaded model version {self._model_version} from MLflow"
             )
@@ -229,6 +233,37 @@ class ModelManager:
                         break
         except Exception as e:
             logger.debug(f"Could not load calibrator artifact: {e}")
+
+    def _load_baseline_distribution_artifact(self) -> None:
+        """Load score_distribution.json artifact from the model run.
+
+        Sets self._baseline_distribution if artifact is found.
+        """
+        try:
+            import mlflow
+            client = mlflow.MlflowClient()
+            versions = client.search_model_versions(f"name='{MODEL_NAME}'")
+            for v in versions:
+                if v.current_stage == "Production":
+                    run_id = v.run_id
+                    try:
+                        artifact_path = client.download_artifacts(
+                            run_id, "score_distribution.json"
+                        )
+                        with open(artifact_path) as f:
+                            self._baseline_distribution = json.load(f)
+                        logger.info("Successfully loaded baseline score distribution from MLflow")
+                        return
+                    except Exception as e:
+                        logger.debug(f"score_distribution.json artifact not found: {e}")
+                        break
+        except Exception as e:
+            logger.debug(f"Could not load baseline distribution artifact: {e}")
+
+    @property
+    def baseline_distribution(self) -> dict | None:
+        """Get the baseline score distribution."""
+        return self._baseline_distribution
 
     def _benchmark_inference(self, n_samples: int = 100) -> None:
         """Benchmark inference latency and log to MLflow.

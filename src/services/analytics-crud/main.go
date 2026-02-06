@@ -953,6 +953,37 @@ func (s *server) GetDriftWindow(ctx context.Context, req *pb.GetDriftWindowReque
 	return &pb.GetDriftWindowResponse{Transactions: txs}, nil
 }
 
+func (s *server) GetInferenceScores(ctx context.Context, req *pb.GetInferenceScoresRequest) (*pb.GetInferenceScoresResponse, error) {
+	if req == nil || req.Hours <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "hours > 0 required")
+	}
+	cutoff := time.Now().Add(-time.Duration(req.Hours) * time.Hour)
+
+	query := `
+		SELECT final_score
+		FROM inference_events
+		WHERE timestamp >= $1
+		ORDER BY timestamp DESC
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, cutoff)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query inference scores: %v", err)
+	}
+	defer rows.Close()
+
+	var scores []int32
+	for rows.Next() {
+		var score int32
+		if err := rows.Scan(&score); err != nil {
+			return nil, fmt.Errorf("failed to scan score: %v", err)
+		}
+		scores = append(scores, score)
+	}
+
+	return &pb.GetInferenceScoresResponse{Scores: scores}, nil
+}
+
 func (s *server) StoreGeneratedData(ctx context.Context, req *pb.StoreGeneratedDataRequest) (*pb.StoreGeneratedDataResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request required")

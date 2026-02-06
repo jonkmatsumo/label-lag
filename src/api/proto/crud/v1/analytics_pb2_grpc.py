@@ -119,6 +119,11 @@ class AnalyticsServiceStub(object):
                 request_serializer=crud_dot_v1_dot_analytics__pb2.MaterializeFeaturesRequest.SerializeToString,
                 response_deserializer=crud_dot_v1_dot_analytics__pb2.MaterializeFeaturesResponse.FromString,
                 _registered_method=True)
+        self.GetInferenceScores = channel.unary_unary(
+                '/crud.v1.AnalyticsService/GetInferenceScores',
+                request_serializer=crud_dot_v1_dot_analytics__pb2.GetInferenceScoresRequest.SerializeToString,
+                response_deserializer=crud_dot_v1_dot_analytics__pb2.GetInferenceScoresResponse.FromString,
+                _registered_method=True)
         self.SaveRule = channel.unary_unary(
                 '/crud.v1.AnalyticsService/SaveRule',
                 request_serializer=crud_dot_v1_dot_analytics__pb2.SaveRuleRequest.SerializeToString,
@@ -251,6 +256,13 @@ class AnalyticsServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetInferenceScores(self, request, context):
+        """Score Monitoring (C3)
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def SaveRule(self, request, context):
         """Rule Management
         """
@@ -370,6 +382,11 @@ def add_AnalyticsServiceServicer_to_server(servicer, server):
                     servicer.MaterializeFeatures,
                     request_deserializer=crud_dot_v1_dot_analytics__pb2.MaterializeFeaturesRequest.FromString,
                     response_serializer=crud_dot_v1_dot_analytics__pb2.MaterializeFeaturesResponse.SerializeToString,
+            ),
+            'GetInferenceScores': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetInferenceScores,
+                    request_deserializer=crud_dot_v1_dot_analytics__pb2.GetInferenceScoresRequest.FromString,
+                    response_serializer=crud_dot_v1_dot_analytics__pb2.GetInferenceScoresResponse.SerializeToString,
             ),
             'SaveRule': grpc.unary_unary_rpc_method_handler(
                     servicer.SaveRule,
@@ -856,6 +873,33 @@ class AnalyticsService(object):
             '/crud.v1.AnalyticsService/MaterializeFeatures',
             crud_dot_v1_dot_analytics__pb2.MaterializeFeaturesRequest.SerializeToString,
             crud_dot_v1_dot_analytics__pb2.MaterializeFeaturesResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetInferenceScores(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/crud.v1.AnalyticsService/GetInferenceScores',
+            crud_dot_v1_dot_analytics__pb2.GetInferenceScoresRequest.SerializeToString,
+            crud_dot_v1_dot_analytics__pb2.GetInferenceScoresResponse.FromString,
             options,
             channel_credentials,
             insecure,
