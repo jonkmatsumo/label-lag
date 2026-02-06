@@ -40,6 +40,8 @@ service AnalyticsService {
   rpc PublishRuleVersion(PublishRuleVersionRequest) returns (PublishRuleVersionResponse);
   rpc GetRuleReadiness(GetRuleReadinessRequest) returns (GetRuleReadinessResponse);
   rpc DiffRuleVersions(DiffRuleVersionsRequest) returns (DiffRuleVersionsResponse);
+  rpc GetRuleStats(GetRuleStatsRequest) returns (GetRuleStatsResponse);
+  rpc GetAttribution(GetAttributionRequest) returns (GetAttributionResponse);
 
   // Inference Events
   rpc LogInferenceEvent(LogInferenceEventRequest) returns (LogInferenceEventResponse);
@@ -479,4 +481,36 @@ message DiffRuleVersionsResponse {
   string version_a = 2;
   string version_b = 3;
   repeated RuleDiffChange changes = 4;
+}
+
+message GetRuleStatsRequest {
+  string rule_id = 1; // Optional, if empty returns all
+  int32 days = 2;
+}
+
+message RuleStats {
+  string rule_id = 1;
+  int64 triggered_count = 2;
+  int64 shadow_triggered_count = 3;
+  double approval_rate = 4;
+}
+
+message GetRuleStatsResponse {
+  repeated RuleStats stats = 1;
+}
+
+message GetAttributionRequest {
+  int32 days = 1;
+  int32 limit = 2;
+}
+
+message DailyAttribution {
+  string date = 1;
+  string rule_id = 2;
+  int64 contribution_score = 3; // Total score contributed
+  int64 volume = 4;
+}
+
+message GetAttributionResponse {
+  repeated DailyAttribution items = 1;
 }

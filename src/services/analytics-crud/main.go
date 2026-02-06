@@ -929,6 +929,21 @@ func (s *server) GetBacktestResult(ctx context.Context, req *pb.GetBacktestResul
 	return &pb.GetBacktestResultResponse{Result: &res}, nil
 }
 
+func (s *server) GetRuleStats(ctx context.Context, req *pb.GetRuleStatsRequest) (*pb.GetRuleStatsResponse, error) {
+	// Stub implementation: return empty or mocked stats
+	// In real implementation, query daily_stats or rule_stats table
+	return &pb.GetRuleStatsResponse{
+		Stats: []*pb.RuleStats{
+			{
+				RuleId:               req.RuleId,
+				TriggeredCount:       0,
+				ShadowTriggeredCount: 0,
+				ApprovalRate:         0.0,
+			},
+		},
+	}, nil
+}
+
 func (s *server) GetDriftWindow(ctx context.Context, req *pb.GetDriftWindowRequest) (*pb.GetDriftWindowResponse, error) {
 	if req == nil || req.Hours <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "hours > 0 required")

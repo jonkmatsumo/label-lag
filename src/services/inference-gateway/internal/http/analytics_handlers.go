@@ -325,6 +325,47 @@ func (h *Handler) handleDatasetClear(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+	writeAnalyticsJSON(w, clearDataResponse{
+		Success:       resp.GetSuccess(),
+		TablesCleared: resp.GetTablesCleared(),
+	})
+}
+
+func (h *Handler) handleAnalyticsRuleStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	ruleID := r.PathValue("rule_id")
+	if ruleID == "" {
+		writeJSONError(w, http.StatusBadRequest, "rule_id required")
+		return
+	}
+
+	days, err := parseIntQuery(r, "days", 30, 1, 90)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if h.analyticsClient == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "analytics backend unavailable")
+		return
+	}
+
+	resp, err := h.analyticsClient.GetRuleStats(r.Context(), &crudv1.GetRuleStatsRequest{
+		RuleId: ruleID,
+		Days:   days,
+	})
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	writeAnalyticsJSON(w, resp)
+}
+
 func (h *Handler) handleAnalyticsAttribution(w http.ResponseWriter, r *http.Request) {}
 
 func parseIntQuery(r *http.Request, name string, defaultValue, minValue, maxValue int32) (int32, error) {

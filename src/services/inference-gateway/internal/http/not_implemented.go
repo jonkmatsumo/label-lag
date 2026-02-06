@@ -11,7 +11,7 @@ var notImplementedRoutes = []string{
 	"/analytics/attribution",
 	"/analytics/relationships",
 	"/analytics/correlations",
-	"/analytics/rules/",
+	// "/analytics/rules/", // Implemented
 	"/backtest/compare",
 	"/train",
 	"/models/deploy",
