@@ -323,8 +323,6 @@ class TestGetForecaster:
         assert forecaster1 is forecaster2
 
 
-
-
 class TestClearDataEndpoint:
     """Tests for data clearing endpoint."""
 

@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-
 @router.delete(
     "/data/clear",
     response_model=ClearDataResponse,

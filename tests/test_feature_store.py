@@ -1,5 +1,6 @@
 """Tests for the feature store and materialization pipeline."""
 
+
 class TestFeatureMaterializer:
     """Tests for feature materialization via Analytics service."""
 
@@ -58,4 +59,3 @@ class TestFeatureMaterializer:
         assert result["success"] is False
         assert "error" in result
         assert "Analytics error" in result["error"]
-
