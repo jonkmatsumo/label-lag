@@ -4,6 +4,7 @@ import { MockAgent, setGlobalDispatcher, getGlobalDispatcher, Dispatcher } from 
 import { requestIdMiddleware } from '../src/middleware/request-id.js';
 import { HttpClient } from '../src/services/http-client.js';
 import { SimpleCache } from '../src/services/cache.js';
+import { ShadowService } from '../src/services/shadow.js';
 import { Config } from '../src/config.js';
 import {
   healthRoutes,
@@ -42,6 +43,12 @@ export function createTestConfig(): Config {
     cacheTtlMs: 1000,
     logLevel: 'silent',
     testMode: true,
+    enableGoDatasetClear: false,
+    enableGoDatasetGenerate: true,
+    enableGoRulesSandbox: false,
+    enableGoRulesControlPlane: false,
+    shadowModeEnabled: false,
+    corsOrigin: 'true',
   };
 }
 
@@ -74,13 +81,14 @@ export async function createTestApp(config?: Config): Promise<TestContext> {
 
   const httpClient = new HttpClient({ config: testConfig, logger });
   const cache = new SimpleCache(testConfig, logger);
+  const shadowService = new ShadowService(logger, httpClient);
 
   await app.register(healthRoutes, { httpClient });
   await app.register(evaluateRoutes, { httpClient });
   await app.register(modelRoutes, { httpClient });
   await app.register(rulesRoutes, { httpClient });
   await app.register(backtestRoutes, { httpClient });
-  await app.register(analyticsRoutes, { httpClient, cache });
+  await app.register(analyticsRoutes, { httpClient, cache, shadowService });
   await app.register(monitoringRoutes, { httpClient });
   await app.register(rulesDetailRoutes, { httpClient });
   await app.register(datasetRoutes, { httpClient });
