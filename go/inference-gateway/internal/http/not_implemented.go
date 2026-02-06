@@ -7,18 +7,8 @@ import (
 	"github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/requestid"
 )
 
-var notImplementedRoutes = []string{
-	// "/analytics/attribution", // Implemented
-	"/analytics/relationships",
-	"/analytics/correlations",
-	// "/analytics/rules/", // Implemented
-	// "/backtest/compare", // Implemented in Phase 8
 	"/train",
 	"/models/deploy",
-	// "/rules",  // Implemented
-	// "/rules/", // Implemented
-	"/suggestions/heuristic",
-	"/suggestions/accept",
 	"/data/generate",
 	"/mlflow/experiments/search",
 	"/mlflow/runs/search",
