@@ -62,6 +62,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/analytics/feature-sample", h.handleAnalyticsFeatureSample)
 	mux.HandleFunc("/analytics/schema", h.handleAnalyticsSchema)
 	mux.HandleFunc("/analytics/transactions/search", h.handleSearchTransactions)
+	mux.HandleFunc("/data/clear", h.handleDatasetClear)
 	mux.HandleFunc("/monitoring/drift", h.handleMonitoringDrift)
 	mux.HandleFunc("/metrics/shadow/comparison", h.handleMetricsShadowComparison)
 	mux.HandleFunc("/backtest/results", h.handleBacktestResults)

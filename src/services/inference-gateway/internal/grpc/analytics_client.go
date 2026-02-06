@@ -220,6 +220,25 @@ func (c *AnalyticsClient) ListBacktestResults(ctx context.Context, req *crudv1.L
 	return resp, nil
 }
 
+func (c *AnalyticsClient) ClearAllData(ctx context.Context, req *crudv1.ClearAllDataRequest) (*crudv1.ClearAllDataResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	callCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	resp, err := c.stub.ClearAllData(callCtx, req)
+	if err != nil {
+		return nil, mapRPCError(err)
+	}
+	return resp, nil
+}
+
 func (c *AnalyticsClient) GetFeatures(ctx context.Context, userID string) (map[string]any, error) {
 	resp, err := c.SearchTransactions(ctx, &crudv1.SearchTransactionsRequest{
 		UserId: userID,

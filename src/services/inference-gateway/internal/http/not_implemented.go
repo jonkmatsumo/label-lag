@@ -20,7 +20,6 @@ var notImplementedRoutes = []string{
 	"/suggestions/heuristic",
 	"/suggestions/accept",
 	"/data/generate",
-	"/data/clear",
 	"/mlflow/experiments/search",
 	"/mlflow/runs/search",
 	"/mlflow/model-versions/search",
