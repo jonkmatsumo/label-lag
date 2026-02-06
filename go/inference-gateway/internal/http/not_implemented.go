@@ -7,15 +7,7 @@ import (
 	"github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/requestid"
 )
 
-	"/train",
-	"/models/deploy",
-	"/data/generate",
-	"/mlflow/experiments/search",
-	"/mlflow/runs/search",
-	"/mlflow/model-versions/search",
-	"/mlflow/model-versions/transition-stage",
-	"/mlflow/runs/",
-}
+var notImplementedRoutes = []string{}
 
 type notImplementedResponse struct {
 	Error     string `json:"error"`

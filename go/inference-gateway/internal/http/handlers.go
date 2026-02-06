@@ -15,6 +15,7 @@ import (
 	grpcclient "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/grpc"
 	inferencev1 "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/grpc/inferencev1/inference/v1"
 	gatewayv1 "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/http/gatewayv1/gateway/v1"
+	"github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/http/proxy"
 	"github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/requestid"
 	"github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/rules"
 	"go.opentelemetry.io/otel/attribute"
@@ -89,6 +90,16 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /rules/{rule_id}/publish", h.handlePublishRule)
 	mux.HandleFunc("GET /rules/{rule_id}/readiness", h.handleRuleReadiness)
 	mux.HandleFunc("GET /rules/{rule_id}/diff", h.handleRuleDiff)
+
+	mux.HandleFunc("GET /rules/{rule_id}/diff", h.handleRuleDiff)
+
+	// Proxied Routes
+	mux.HandleFunc("POST /train", proxy.NewHandler(h.pythonURL, h.logger))
+	mux.HandleFunc("POST /models/deploy", proxy.NewHandler(h.pythonURL, h.logger))
+	// MLflow Proxy (prefix matching)
+	mux.Handle("/api/2.0/mlflow/", proxy.NewHandler(h.mlflowURL, h.logger))
+	mux.Handle("/ajax-api/2.0/mlflow/", proxy.NewHandler(h.mlflowURL, h.logger)) // MLflow UI often uses this
+	mux.Handle("/static-files/", proxy.NewHandler(h.mlflowURL, h.logger))        // MLflow UI static files
 
 	for _, route := range notImplementedRoutes {
 		mux.HandleFunc(route, h.handleNotImplemented)
