@@ -15,6 +15,7 @@ require (
 )
 
 require (
+	github.com/brianvoe/gofakeit/v6 v6.28.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
