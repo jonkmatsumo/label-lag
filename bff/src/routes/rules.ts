@@ -1,16 +1,20 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { HttpClient, UpstreamError } from '../services/http-client.js';
+import { HttpClient, UpstreamError, RequestOptions } from '../services/http-client.js';
+import { ShadowService } from '../services/shadow.js';
 import type {
   DraftRulesResponse,
   PublishRuleResponse,
   SandboxEvaluateRequest,
   SandboxEvaluateResponse,
+  SandboxDiffRequest,
+  SandboxDiffResponse,
   PublishRuleRequest,
   ApprovalSignalsResponse,
 } from '../types/api.js';
 
 export interface RulesRoutesOptions {
   httpClient: HttpClient;
+  shadowService: ShadowService;
 }
 
 interface PublishRuleParams {
@@ -26,13 +30,6 @@ interface PublishRuleBody {
   reason: string;
 }
 
-interface SandboxEvaluateBody {
-  base_score: number;
-  features: Record<string, unknown>;
-  rule_ids?: string[];
-  custom_ruleset?: unknown;
-}
-
 /**
  * Rules management routes
  */
@@ -40,7 +37,7 @@ export async function rulesRoutes(
   fastify: FastifyInstance,
   options: RulesRoutesOptions
 ): Promise<void> {
-  const { httpClient } = options;
+  const { httpClient, shadowService } = options;
 
   // GET /bff/v1/rules/draft - List draft rules
   fastify.get(
@@ -144,7 +141,7 @@ export async function rulesRoutes(
   );
 
   // POST /bff/v1/rules/sandbox/evaluate - Evaluate rules in sandbox mode
-  fastify.post<{ Body: SandboxEvaluateBody }>(
+  fastify.post<{ Body: SandboxEvaluateRequest }>(
     '/bff/v1/rules/sandbox/evaluate',
     {
       schema: {
@@ -154,27 +151,109 @@ export async function rulesRoutes(
           properties: {
             base_score: { type: 'number' },
             features: { type: 'object' },
-            rule_ids: { type: 'array', items: { type: 'string' } },
-            custom_ruleset: { type: 'object', additionalProperties: true },
+            ruleset: { type: 'object', additionalProperties: true },
+            shadow_mode: { type: 'boolean' },
           },
         },
       },
     },
     async (
-      request: FastifyRequest<{ Body: SandboxEvaluateBody }>,
+      request: FastifyRequest<{ Body: SandboxEvaluateRequest }>,
       reply: FastifyReply
     ) => {
       try {
         const sandboxRequest: SandboxEvaluateRequest = request.body;
 
-        const response = await httpClient.request<SandboxEvaluateResponse>({
+        const goRequest: RequestOptions = {
           method: 'POST',
           path: '/rules/sandbox/evaluate',
           body: sandboxRequest,
           requestId: request.requestId,
-        });
+          target: 'gateway',
+        };
 
-        return reply.status(response.statusCode).send(response.data);
+        const pythonRequest: RequestOptions = {
+          method: 'POST',
+          path: '/rules/sandbox/evaluate',
+          body: sandboxRequest,
+          requestId: request.requestId,
+          target: 'python',
+        };
+
+        if (httpClient.config.enableGoRulesSandbox) {
+          const response = await shadowService.executeWithShadow<SandboxEvaluateResponse>(
+            {
+              primary: goRequest,
+              shadow: pythonRequest,
+            }
+          );
+          return reply.status(response.statusCode).send(response.data);
+        } else {
+          const response = await httpClient.request<SandboxEvaluateResponse>(pythonRequest);
+          return reply.status(response.statusCode).send(response.data);
+        }
+      } catch (error) {
+        if (error instanceof UpstreamError) {
+          return reply.status(error.statusCode).send(error.toResponse());
+        }
+        throw error;
+      }
+    }
+  );
+
+  // POST /bff/v1/rules/sandbox/diff - Compare rulesets in sandbox mode
+  fastify.post<{ Body: SandboxDiffRequest }>(
+    '/bff/v1/rules/sandbox/diff',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['base_score', 'features'],
+          properties: {
+            base_score: { type: 'number' },
+            features: { type: 'object' },
+            ruleset_a: { type: 'object', additionalProperties: true },
+            ruleset_b: { type: 'object', additionalProperties: true },
+            shadow_mode: { type: 'boolean' },
+          },
+        },
+      },
+    },
+    async (
+      request: FastifyRequest<{ Body: SandboxDiffRequest }>,
+      reply: FastifyReply
+    ) => {
+      try {
+        const diffRequest: SandboxDiffRequest = request.body;
+
+        const goRequest: RequestOptions = {
+          method: 'POST',
+          path: '/rules/sandbox/diff',
+          body: diffRequest,
+          requestId: request.requestId,
+          target: 'gateway',
+        };
+
+        const pythonRequest: RequestOptions = {
+          method: 'POST',
+          path: '/rules/sandbox/diff',
+          body: diffRequest,
+          requestId: request.requestId,
+          target: 'python',
+        };
+
+        if (httpClient.config.enableGoRulesSandbox) {
+          const response = await shadowService.executeWithShadow<SandboxDiffResponse>(
+            {
+              primary: goRequest,
+              shadow: pythonRequest,
+            }
+          );
+          return reply.status(response.statusCode).send(response.data);
+        } else {
+          const response = await httpClient.request<SandboxDiffResponse>(pythonRequest);
+          return reply.status(response.statusCode).send(response.data);
+        }
       } catch (error) {
         if (error instanceof UpstreamError) {
           return reply.status(error.statusCode).send(error.toResponse());

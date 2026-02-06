@@ -7,12 +7,11 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-import numpy as np
 from google.protobuf.timestamp_pb2 import Timestamp
 
 from api.crud_client import get_crud_client
-from api.rules import RuleSet
 from api.schemas import BacktestDelta
+from rules_management.rules import RuleSet
 
 logger = logging.getLogger(__name__)
 
@@ -69,11 +68,7 @@ class BacktestRunner:
     """Runs backtests by replaying historical features from Analytics service."""
 
     def __init__(self, db_session=None):
-        """Initialize backtest runner.
-
-        Args:
-            db_session: Ignored in compute-only mode.
-        """
+        """Initialize backtest runner."""
         pass
 
     def run_backtest(
@@ -96,7 +91,6 @@ class BacktestRunner:
         ruleset_dict = asdict(ruleset)
 
         try:
-            # Fetch historical features via Analytics service
             features_list = self._fetch_historical_features(start_date, end_date)
 
             if not features_list:
@@ -104,7 +98,6 @@ class BacktestRunner:
                     job_id, ruleset.version, start_date, end_date, rule_id
                 )
 
-            # Replay features through rules
             scores = []
             matched_counts = []
             rejected_counts = []
@@ -120,7 +113,6 @@ class BacktestRunner:
                 matched_counts.append(len(result["matched_rules"]))
                 rejected_counts.append(1 if result.get("rejected") else 0)
 
-            # Compute metrics
             metrics = self._compute_metrics(
                 total_records=len(features_list),
                 scores=scores,
@@ -138,10 +130,7 @@ class BacktestRunner:
                 completed_at=datetime.now(timezone.utc),
             )
 
-            # Persist result via Analytics service
             self._save_result(result)
-
-            logger.info(f"Backtest {job_id} completed and saved to Analytics service")
             return result
 
         except Exception as e:
@@ -160,16 +149,13 @@ class BacktestRunner:
         start_ts.FromDatetime(start_date)
         end_ts = Timestamp()
         end_ts.FromDatetime(end_date)
-
         client = get_crud_client()
         resp = client.stub.GetBacktestFeatures(
             analytics_pb2.GetBacktestFeaturesRequest(
-                start_date=start_ts,
-                end_date=end_ts,
+                start_date=start_ts, end_date=end_ts
             ),
             timeout=client.timeout_seconds,
         )
-
         features_list = []
         for f in resp.features:
             feature_dict = {
@@ -192,42 +178,37 @@ class BacktestRunner:
         from api.proto.proto.crud.v1 import analytics_pb2
 
         client = get_crud_client()
-
-        start_ts = Timestamp()
+        start_ts, end_ts, comp_ts = Timestamp(), Timestamp(), Timestamp()
         start_ts.FromDatetime(result.start_date)
-        end_ts = Timestamp()
         end_ts.FromDatetime(result.end_date)
-        comp_ts = Timestamp()
-        completed_at = result.completed_at
-        if completed_at.tzinfo is None:
-            completed_at = completed_at.replace(tzinfo=timezone.utc)
-        comp_ts.FromDatetime(completed_at)
-
-        m = result.metrics
-        metrics_pb = analytics_pb2.BacktestMetrics(
-            total_records=m.total_records,
-            matched_count=m.matched_count,
-            match_rate=m.match_rate,
-            score_distribution=m.score_distribution,
-            score_mean=m.score_mean,
-            score_std=m.score_std,
-            score_min=m.score_min,
-            score_max=m.score_max,
-            rejected_count=m.rejected_count,
-            rejected_rate=m.rejected_rate,
+        completed_at = (
+            result.completed_at
+            if result.completed_at.tzinfo
+            else result.completed_at.replace(tzinfo=timezone.utc)
         )
-
+        comp_ts.FromDatetime(completed_at)
+        m = result.metrics
         res_pb = analytics_pb2.BacktestResult(
             job_id=result.job_id,
             rule_id=result.rule_id or "",
             ruleset_version=result.ruleset_version,
             start_date=start_ts,
             end_date=end_ts,
-            metrics=metrics_pb,
+            metrics=analytics_pb2.BacktestMetrics(
+                total_records=m.total_records,
+                matched_count=m.matched_count,
+                match_rate=m.match_rate,
+                score_distribution=m.score_distribution,
+                score_mean=m.score_mean,
+                score_std=m.score_std,
+                score_min=m.score_min,
+                score_max=m.score_max,
+                rejected_count=m.rejected_count,
+                rejected_rate=m.rejected_rate,
+            ),
             completed_at=comp_ts,
             error=result.error or "",
         )
-
         client.stub.SaveBacktestResult(
             analytics_pb2.SaveBacktestResultRequest(result=res_pb),
             timeout=client.timeout_seconds,
@@ -254,11 +235,11 @@ class BacktestRunner:
     ) -> BacktestMetrics:
         if total_records == 0:
             return BacktestMetrics(0, 0, 0.0, {}, 0.0, 0.0, 0, 0, 0, 0.0)
+        import numpy as np
 
         scores_array = np.array(scores)
         matched_count = sum(1 for c in matched_counts if c > 0)
         rejected_count = sum(rejected_counts)
-
         score_ranges = {"1-20": 0, "21-40": 0, "41-60": 0, "61-80": 0, "81-99": 0}
         for score in scores:
             if score <= 20:
@@ -271,7 +252,6 @@ class BacktestRunner:
                 score_ranges["61-80"] += 1
             else:
                 score_ranges["81-99"] += 1
-
         return BacktestMetrics(
             total_records=total_records,
             matched_count=matched_count,
@@ -290,15 +270,12 @@ class BacktestStore:
     """Retrieves backtest results from Analytics service."""
 
     def __init__(self, storage_path=None):
-        """Initialize. storage_path is ignored."""
         pass
 
     def save(self, result: BacktestResult) -> None:
-        """Save is handled by BacktestRunner directly via Analytics service."""
         pass
 
     def get(self, job_id: str) -> BacktestResult | None:
-        """Get result from Analytics service."""
         from api.proto.proto.crud.v1 import analytics_pb2
 
         client = get_crud_client()
@@ -314,11 +291,9 @@ class BacktestStore:
     def list_results(
         self, rule_id=None, start_date=None, end_date=None
     ) -> list[BacktestResult]:
-        """List results from Analytics service."""
         from api.proto.proto.crud.v1 import analytics_pb2
 
         client = get_crud_client()
-
         start_ts = None
         if start_date:
             start_ts = Timestamp()
@@ -327,25 +302,19 @@ class BacktestStore:
                 if start_date.tzinfo
                 else start_date.replace(tzinfo=timezone.utc)
             )
-
         end_ts = None
         if end_date:
             end_ts = Timestamp()
             end_ts.FromDatetime(
                 end_date if end_date.tzinfo else end_date.replace(tzinfo=timezone.utc)
             )
-
         req = analytics_pb2.ListBacktestResultsRequest(
             rule_id=rule_id or "", start_date=start_ts, end_date=end_ts
         )
-        resp = client.stub.ListBacktestResults(
-            req,
-            timeout=client.timeout_seconds,
-        )
+        resp = client.stub.ListBacktestResults(req, timeout=client.timeout_seconds)
         return [self._from_pb(r) for r in resp.results]
 
     def _from_pb(self, r) -> BacktestResult:
-        """Convert proto BacktestResult to local dataclass."""
         m = r.metrics
         metrics = BacktestMetrics(
             total_records=m.total_records,

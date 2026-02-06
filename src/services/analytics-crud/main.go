@@ -27,10 +27,32 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+type contextKey string
+
+const (
+	requestIDKey contextKey = "x-request-id"
+)
+
+func requestIDInterceptor(
+	ctx context.Context,
+	req interface{},
+	info *grpc.UnaryServerInfo,
+	handler grpc.UnaryHandler,
+) (interface{}, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if ok {
+		if ids := md.Get("x-request-id"); len(ids) > 0 {
+			ctx = context.WithValue(ctx, requestIDKey, ids[0])
+		}
+	}
+	return handler(ctx, req)
+}
 
 type server struct {
 	pb.UnimplementedAnalyticsServiceServer
@@ -366,7 +388,7 @@ func (s *server) GetOverviewMetrics(ctx context.Context, req *pb.GetOverviewMetr
 	query := `
 		SELECT
 			COUNT(*) as total_records,
-			SUM(CASE WHEN is_fraudulent THEN 1 ELSE 0 END) as fraud_records,
+			COALESCE(SUM(CASE WHEN is_fraudulent THEN 1 ELSE 0 END), 0) as fraud_records,
 			COUNT(DISTINCT user_id) as unique_users,
 			MIN(transaction_timestamp) as min_transaction_timestamp,
 			MAX(transaction_timestamp) as max_transaction_timestamp,
@@ -513,7 +535,7 @@ type tableStats struct {
 
 func getTableStats(ctx context.Context, db *sql.DB, table string) (tableStats, error) {
 	var stats tableStats
-	query := fmt.Sprintf("SELECT MIN(id), MAX(id), COUNT(*) FROM %s", table)
+	query := fmt.Sprintf("SELECT COALESCE(MIN(id), 0), COALESCE(MAX(id), 0), COUNT(*) FROM %s", table)
 	err := db.QueryRowContext(ctx, query).Scan(&stats.minID, &stats.maxID, &stats.totalCount)
 	if err != nil {
 		return stats, err
@@ -953,6 +975,37 @@ func (s *server) GetDriftWindow(ctx context.Context, req *pb.GetDriftWindowReque
 	return &pb.GetDriftWindowResponse{Transactions: txs}, nil
 }
 
+func (s *server) GetInferenceScores(ctx context.Context, req *pb.GetInferenceScoresRequest) (*pb.GetInferenceScoresResponse, error) {
+	if req == nil || req.Hours <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "hours > 0 required")
+	}
+	cutoff := time.Now().Add(-time.Duration(req.Hours) * time.Hour)
+
+	query := `
+		SELECT final_score
+		FROM inference_events
+		WHERE ts >= $1
+		ORDER BY ts DESC
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, cutoff)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query inference scores: %v", err)
+	}
+	defer rows.Close()
+
+	var scores []int32
+	for rows.Next() {
+		var score int32
+		if err := rows.Scan(&score); err != nil {
+			return nil, fmt.Errorf("failed to scan score: %v", err)
+		}
+		scores = append(scores, score)
+	}
+
+	return &pb.GetInferenceScoresResponse{Scores: scores}, nil
+}
+
 func (s *server) StoreGeneratedData(ctx context.Context, req *pb.StoreGeneratedDataRequest) (*pb.StoreGeneratedDataResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request required")
@@ -1260,7 +1313,7 @@ func (s *server) LogInferenceEvent(ctx context.Context, req *pb.LogInferenceEven
 
 	query := `
 		INSERT INTO inference_events (
-			request_id, timestamp, model_version, rules_version,
+			request_id, ts, model_version, rules_version,
 			model_score, final_score, rule_impacts
 		) VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`
@@ -1600,7 +1653,10 @@ func main() {
 
 	// Add interceptors: logging and otel tracing
 	opts := []grpc.ServerOption{
-		grpc.UnaryInterceptor(loggingInterceptor),
+		grpc.ChainUnaryInterceptor(
+			requestIDInterceptor,
+			loggingInterceptor,
+		),
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
 	}
 	s := grpc.NewServer(opts...)
@@ -1683,8 +1739,9 @@ func initDB(db *sql.DB) error {
 			status TEXT NOT NULL
 		)`,
 		`CREATE TABLE IF NOT EXISTS inference_events (
-			request_id TEXT PRIMARY KEY,
-			timestamp TIMESTAMP NOT NULL,
+			id SERIAL PRIMARY KEY,
+			ts TIMESTAMP NOT NULL DEFAULT NOW(),
+			request_id TEXT NOT NULL,
 			model_version TEXT NOT NULL,
 			rules_version TEXT NOT NULL,
 			model_score INTEGER NOT NULL,
@@ -1694,7 +1751,7 @@ func initDB(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_backtest_results_rule_id ON backtest_results(rule_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_backtest_results_completed_at ON backtest_results(completed_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_rules_status ON rules(status)`,
-		`CREATE INDEX IF NOT EXISTS idx_inference_events_timestamp ON inference_events(timestamp)`,
+		`CREATE INDEX IF NOT EXISTS idx_inference_events_ts ON inference_events(ts)`,
 	}
 
 	for _, q := range queries {

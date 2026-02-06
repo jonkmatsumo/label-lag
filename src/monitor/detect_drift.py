@@ -13,10 +13,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import mlflow
 import numpy as np
 import pandas as pd
-from mlflow import MlflowClient
 
 from api.crud_client import get_crud_client
 
@@ -46,9 +44,10 @@ def _load_drift_thresholds() -> dict[str, float]:
     config_path = (
         Path(__file__).parent.parent.parent / "config" / "model_thresholds.json"
     )
+    # C1: thresholds from env vars
     default_thresholds = {
-        "psi_warning": 0.1,
-        "psi_critical": 0.2,
+        "psi_warning": float(os.getenv("DRIFT_PSI_WARN_THRESHOLD", 0.1)),
+        "psi_critical": float(os.getenv("DRIFT_PSI_CRIT_THRESHOLD", 0.25)),
         "cache_ttl_seconds": 300,
     }
 
@@ -58,11 +57,21 @@ def _load_drift_thresholds() -> dict[str, float]:
                 config = json.load(f)
                 drift_config = config.get("drift_thresholds", {})
                 return {
-                    "psi_warning": drift_config.get(
-                        "psi_warning", default_thresholds["psi_warning"]
+                    "psi_warning": float(
+                        os.getenv(
+                            "DRIFT_PSI_WARN_THRESHOLD",
+                            drift_config.get(
+                                "psi_warning", default_thresholds["psi_warning"]
+                            ),
+                        )
                     ),
-                    "psi_critical": drift_config.get(
-                        "psi_critical", default_thresholds["psi_critical"]
+                    "psi_critical": float(
+                        os.getenv(
+                            "DRIFT_PSI_CRIT_THRESHOLD",
+                            drift_config.get(
+                                "psi_critical", default_thresholds["psi_critical"]
+                            ),
+                        )
                     ),
                     "cache_ttl_seconds": drift_config.get(
                         "cache_ttl_seconds",
@@ -130,6 +139,9 @@ def calculate_psi(
 def get_reference_data() -> pd.DataFrame | None:
     """Load reference data from MLflow model artifacts."""
     try:
+        import mlflow
+        from mlflow import MlflowClient
+
         mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
         client = MlflowClient()
 
@@ -215,6 +227,7 @@ def detect_drift(
         "features": {},
         "drift_detected": False,
         "drifted_features": [],
+        "alerts": [],
     }
 
     df_reference = get_reference_data()
@@ -242,8 +255,34 @@ def detect_drift(
 
         if psi >= PSI_THRESHOLD_CRITICAL:
             status = "CRITICAL"
+            results["alerts"].append(
+                {
+                    "severity": "critical",
+                    "feature": feature,
+                    "psi": round(psi, 4),
+                    "threshold": PSI_THRESHOLD_CRITICAL,
+                    "recommendation": (
+                        f"Feature '{feature}' shows critical drift "
+                        f"(PSI={psi:.4f}). Immediate model retraining or "
+                        "data quality audit recommended."
+                    ),
+                }
+            )
         elif psi >= PSI_THRESHOLD_WARNING:
             status = "WARNING"
+            results["alerts"].append(
+                {
+                    "severity": "warning",
+                    "feature": feature,
+                    "psi": round(psi, 4),
+                    "threshold": PSI_THRESHOLD_WARNING,
+                    "recommendation": (
+                        f"Feature '{feature}' shows moderate drift "
+                        f"(PSI={psi:.4f}). Monitor closely and consider "
+                        "retraining if trend continues."
+                    ),
+                }
+            )
         else:
             status = "OK"
 

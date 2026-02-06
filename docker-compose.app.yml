@@ -29,8 +29,8 @@ services:
 
   analytics-crud:
     build:
-      context: src/services/analytics-crud
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: src/services/analytics-crud/Dockerfile
     container_name: analytics-crud
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-synthetic}:${POSTGRES_PASSWORD:-synthetic_dev_password}@db:5432/${POSTGRES_DB:-synthetic_data}?sslmode=disable
@@ -69,8 +69,8 @@ services:
 
   inference-gateway:
     build:
-      context: src/services/inference-gateway
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: src/services/inference-gateway/Dockerfile
     container_name: inference-gateway
     environment:
       - PORT=8081

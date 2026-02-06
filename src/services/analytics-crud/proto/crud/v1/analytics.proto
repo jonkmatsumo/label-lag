@@ -25,6 +25,9 @@ service AnalyticsService {
   rpc ClearAllData(ClearAllDataRequest) returns (ClearAllDataResponse);
   rpc MaterializeFeatures(MaterializeFeaturesRequest) returns (MaterializeFeaturesResponse);
 
+  // Score Monitoring (C3)
+  rpc GetInferenceScores(GetInferenceScoresRequest) returns (GetInferenceScoresResponse);
+
   // Rule Management
   rpc SaveRule(SaveRuleRequest) returns (SaveRuleResponse);
   rpc GetRule(GetRuleRequest) returns (GetRuleResponse);
@@ -262,6 +265,14 @@ message GetDriftWindowRequest {
 
 message GetDriftWindowResponse {
   repeated TransactionDetail transactions = 1;
+}
+
+message GetInferenceScoresRequest {
+  int32 hours = 1;
+}
+
+message GetInferenceScoresResponse {
+  repeated int32 scores = 1;
 }
 
 message StoreGeneratedDataRequest {

@@ -1,15 +1,17 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { HttpClient, UpstreamError } from '../services/http-client.js';
+import { HttpClient, UpstreamError, RequestOptions } from '../services/http-client.js';
+import { ShadowService } from '../services/shadow.js';
 
 export interface DatasetRoutesOptions {
   httpClient: HttpClient;
+  shadowService: ShadowService;
 }
 
 export async function datasetRoutes(
   fastify: FastifyInstance,
   options: DatasetRoutesOptions
 ): Promise<void> {
-  const { httpClient } = options;
+  const { httpClient, shadowService } = options;
 
   // GET /bff/v1/dataset/overview
   fastify.get(
@@ -94,14 +96,34 @@ export async function datasetRoutes(
     '/bff/v1/dataset/clear',
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const response = await httpClient.request({
+        const goRequest: RequestOptions = {
           method: 'DELETE',
           path: '/data/clear',
           requestId: request.requestId,
-          timeout: 60000, // 1 min timeout
+          timeout: 60000,
+          target: 'gateway',
+        };
+
+        const pythonRequest: RequestOptions = {
+          method: 'DELETE',
+          path: '/data/clear',
+          requestId: request.requestId,
+          timeout: 60000,
           target: 'python',
-        });
-        return reply.status(response.statusCode).send(response.data);
+        };
+
+        if (httpClient.config.enableGoDatasetClear) {
+          const response = await shadowService.executeWithShadow(
+            {
+              primary: goRequest,
+              shadow: pythonRequest,
+            }
+          );
+          return reply.status(response.statusCode).send(response.data);
+        } else {
+          const response = await httpClient.request(pythonRequest);
+          return reply.status(response.statusCode).send(response.data);
+        }
       } catch (error) {
         if (error instanceof UpstreamError) {
           return reply.status(error.statusCode).send(error.toResponse());

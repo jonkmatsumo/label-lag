@@ -5,7 +5,7 @@ import logging
 
 from api.crud_client import get_crud_client
 from api.proto.proto.crud.v1 import analytics_pb2
-from api.rules import Rule
+from rules_management.rules import Rule
 
 logger = logging.getLogger(__name__)
 

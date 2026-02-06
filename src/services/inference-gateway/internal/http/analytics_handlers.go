@@ -302,6 +302,29 @@ func (h *Handler) handleAnalyticsSchema(w http.ResponseWriter, r *http.Request) 
 	writeAnalyticsJSON(w, schemaSummaryResponse{Columns: columns})
 }
 
+func (h *Handler) handleDatasetClear(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if h.analyticsClient == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "analytics backend unavailable")
+		return
+	}
+
+	resp, err := h.analyticsClient.ClearAllData(r.Context(), &crudv1.ClearAllDataRequest{})
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	writeAnalyticsJSON(w, clearDataResponse{
+		Success:       resp.GetSuccess(),
+		TablesCleared: resp.GetTablesCleared(),
+	})
+}
+
 func (h *Handler) handleAnalyticsAttribution(w http.ResponseWriter, r *http.Request) {}
 
 func parseIntQuery(r *http.Request, name string, defaultValue, minValue, maxValue int32) (int32, error) {
@@ -426,6 +449,12 @@ type columnInfoResponse struct {
 
 type schemaSummaryResponse struct {
 	Columns []columnInfoResponse `json:"columns"`
+}
+
+type clearDataResponse struct {
+	Success       bool     `json:"success"`
+	TablesCleared []string `json:"tables_cleared"`
+	Error         *string  `json:"error,omitempty"`
 }
 
 func mapTableFingerprint(fingerprint *crudv1.TableFingerprint) tableFingerprintResponse {

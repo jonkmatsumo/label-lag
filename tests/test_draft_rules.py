@@ -3,9 +3,13 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from api.draft_store import DraftRuleStore, get_draft_store, set_draft_store
 from api.main import app
-from api.rules import Rule, RuleStatus
+from rules_management.draft_store import (
+    DraftRuleStore,
+    get_draft_store,
+    set_draft_store,
+)
+from rules_management.rules import Rule, RuleStatus
 
 
 @pytest.fixture

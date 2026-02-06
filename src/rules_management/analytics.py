@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from api.metrics import RuleMetrics
-from api.rules import Rule, RuleStatus
+from rules_management.metrics import RuleMetrics
+from rules_management.rules import Rule, RuleStatus
 
 logger = logging.getLogger(__name__)
 

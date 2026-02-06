@@ -183,19 +183,50 @@ export interface PublishRuleResponse {
 }
 
 // Sandbox evaluation types
+export interface SandboxMatchedRule {
+  rule_id: string;
+  severity: string;
+  reason: string;
+  action: string;
+  score?: number;
+}
+
 export interface SandboxEvaluateRequest {
   base_score: number;
   features: Record<string, unknown>;
-  rule_ids?: string[];
-  custom_ruleset?: unknown;
+  ruleset?: unknown;
+  shadow_mode?: boolean;
 }
 
 export interface SandboxEvaluateResponse {
   final_score: number;
-  risk_label: 'LOW' | 'MEDIUM' | 'HIGH';
-  matched_rules: MatchedRule[];
-  shadow_matched_rules: MatchedRule[];
-  evaluation_details: Record<string, unknown>;
+  baseline_score: number;
+  shadow_score?: number;
+  matched_rules: SandboxMatchedRule[];
+  explanations: Record<string, unknown>[];
+  shadow_matched_rules: SandboxMatchedRule[];
+  rejected: boolean;
+  ruleset_version: string;
+}
+
+export interface SandboxDiffRequest {
+  features: Record<string, unknown>;
+  base_score: number;
+  ruleset_a?: unknown;
+  ruleset_b?: unknown;
+  shadow_mode?: boolean;
+}
+
+export interface RulesDiffSummary {
+  score_delta: number;
+  matched_rules_added: string[];
+  matched_rules_removed: string[];
+}
+
+export interface SandboxDiffResponse {
+  a: SandboxEvaluateResponse;
+  b: SandboxEvaluateResponse;
+  diff: RulesDiffSummary;
 }
 
 // Backtest comparison types

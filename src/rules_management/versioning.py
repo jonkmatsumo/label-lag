@@ -10,7 +10,7 @@ from threading import Lock
 from typing import Any
 
 from api.audit import get_audit_logger
-from api.rules import Rule, RuleSet
+from rules_management.rules import Rule, RuleSet
 
 logger = logging.getLogger(__name__)
 

@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { HttpClient, UpstreamError } from '../services/http-client.js';
 import { SimpleCache } from '../services/cache.js';
+import { ShadowService } from '../services/shadow.js';
 import type {
   AnalyticsOverviewResponse,
   DailyStatsResponse,
@@ -17,6 +18,7 @@ import type {
 export interface AnalyticsRoutesOptions {
   httpClient: HttpClient;
   cache: SimpleCache;
+  shadowService: ShadowService;
 }
 
 interface DailyStatsQuery {
@@ -57,7 +59,7 @@ export async function analyticsRoutes(
   fastify: FastifyInstance,
   options: AnalyticsRoutesOptions
 ): Promise<void> {
-  const { httpClient, cache } = options;
+  const { httpClient, cache, shadowService } = options;
 
   // GET /bff/v1/analytics/overview - Get dataset overview metrics
   fastify.get(
@@ -68,11 +70,20 @@ export async function analyticsRoutes(
       if (cached) return reply.send(cached);
 
       try {
-        const response = await httpClient.request<AnalyticsOverviewResponse>({
-          method: 'GET',
-          path: '/analytics/overview',
-          requestId: request.requestId,
-          target: 'gateway',
+        // Shadow Mode: Gateway (Primary) vs Python (Shadow)
+        const response = await shadowService.executeWithShadow<AnalyticsOverviewResponse>({
+          primary: {
+            method: 'GET',
+            path: '/analytics/overview',
+            requestId: request.requestId,
+            target: 'gateway',
+          },
+          shadow: {
+            method: 'GET',
+            path: '/analytics/overview',
+            requestId: request.requestId,
+            target: 'python',
+          },
         });
 
         cache.set(cacheKey, response.data);

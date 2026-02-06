@@ -24,6 +24,7 @@ export interface TestContext {
   config: Config;
   mockAgent: MockAgent;
   mockPool: ReturnType<MockAgent['get']>;
+  mockApiPool: ReturnType<MockAgent['get']>;
   mockGatewayPool: ReturnType<MockAgent['get']>;
   originalDispatcher: Dispatcher;
 }
@@ -55,6 +56,7 @@ export async function createTestApp(config?: Config): Promise<TestContext> {
 
   // Create a mock pool for the Python API backend
   const mockPool = mockAgent.get('http://mock-api:8000');
+  const mockApiPool = mockPool;
   const mockGatewayPool = mockAgent.get('http://mock-gateway:8081');
 
   const logger = pino({ level: 'silent' });
@@ -84,7 +86,7 @@ export async function createTestApp(config?: Config): Promise<TestContext> {
   await app.register(datasetRoutes, { httpClient });
   await app.register(mlflowRoutes, { httpClient });
 
-  return { app, config: testConfig, mockAgent, mockPool, mockGatewayPool, originalDispatcher };
+  return { app, config: testConfig, mockAgent, mockPool, mockApiPool, mockGatewayPool, originalDispatcher };
 }
 
 export function restoreDispatcher(originalDispatcher: Dispatcher): void {

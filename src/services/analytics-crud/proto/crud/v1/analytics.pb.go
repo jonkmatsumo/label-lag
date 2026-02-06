@@ -2314,6 +2314,94 @@ func (x *GetDriftWindowResponse) GetTransactions() []*TransactionDetail {
 	return nil
 }
 
+type GetInferenceScoresRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Hours         int32                  `protobuf:"varint,1,opt,name=hours,proto3" json:"hours,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetInferenceScoresRequest) Reset() {
+	*x = GetInferenceScoresRequest{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetInferenceScoresRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetInferenceScoresRequest) ProtoMessage() {}
+
+func (x *GetInferenceScoresRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetInferenceScoresRequest.ProtoReflect.Descriptor instead.
+func (*GetInferenceScoresRequest) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *GetInferenceScoresRequest) GetHours() int32 {
+	if x != nil {
+		return x.Hours
+	}
+	return 0
+}
+
+type GetInferenceScoresResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Scores        []int32                `protobuf:"varint,1,rep,packed,name=scores,proto3" json:"scores,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetInferenceScoresResponse) Reset() {
+	*x = GetInferenceScoresResponse{}
+	mi := &file_crud_v1_analytics_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetInferenceScoresResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetInferenceScoresResponse) ProtoMessage() {}
+
+func (x *GetInferenceScoresResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_crud_v1_analytics_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetInferenceScoresResponse.ProtoReflect.Descriptor instead.
+func (*GetInferenceScoresResponse) Descriptor() ([]byte, []int) {
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *GetInferenceScoresResponse) GetScores() []int32 {
+	if x != nil {
+		return x.Scores
+	}
+	return nil
+}
+
 type StoreGeneratedDataRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Records       []*GeneratedRecord     `protobuf:"bytes,1,rep,name=records,proto3" json:"records,omitempty"`
@@ -2324,7 +2412,7 @@ type StoreGeneratedDataRequest struct {
 
 func (x *StoreGeneratedDataRequest) Reset() {
 	*x = StoreGeneratedDataRequest{}
-	mi := &file_crud_v1_analytics_proto_msgTypes[37]
+	mi := &file_crud_v1_analytics_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2336,7 +2424,7 @@ func (x *StoreGeneratedDataRequest) String() string {
 func (*StoreGeneratedDataRequest) ProtoMessage() {}
 
 func (x *StoreGeneratedDataRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_crud_v1_analytics_proto_msgTypes[37]
+	mi := &file_crud_v1_analytics_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2349,7 +2437,7 @@ func (x *StoreGeneratedDataRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StoreGeneratedDataRequest.ProtoReflect.Descriptor instead.
 func (*StoreGeneratedDataRequest) Descriptor() ([]byte, []int) {
-	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{37}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *StoreGeneratedDataRequest) GetRecords() []*GeneratedRecord {
@@ -2396,7 +2484,7 @@ type GeneratedRecord struct {
 
 func (x *GeneratedRecord) Reset() {
 	*x = GeneratedRecord{}
-	mi := &file_crud_v1_analytics_proto_msgTypes[38]
+	mi := &file_crud_v1_analytics_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2408,7 +2496,7 @@ func (x *GeneratedRecord) String() string {
 func (*GeneratedRecord) ProtoMessage() {}
 
 func (x *GeneratedRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_crud_v1_analytics_proto_msgTypes[38]
+	mi := &file_crud_v1_analytics_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2421,7 +2509,7 @@ func (x *GeneratedRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GeneratedRecord.ProtoReflect.Descriptor instead.
 func (*GeneratedRecord) Descriptor() ([]byte, []int) {
-	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{38}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *GeneratedRecord) GetRecordId() string {
@@ -2593,7 +2681,7 @@ type EvaluationMetadata struct {
 
 func (x *EvaluationMetadata) Reset() {
 	*x = EvaluationMetadata{}
-	mi := &file_crud_v1_analytics_proto_msgTypes[39]
+	mi := &file_crud_v1_analytics_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2605,7 +2693,7 @@ func (x *EvaluationMetadata) String() string {
 func (*EvaluationMetadata) ProtoMessage() {}
 
 func (x *EvaluationMetadata) ProtoReflect() protoreflect.Message {
-	mi := &file_crud_v1_analytics_proto_msgTypes[39]
+	mi := &file_crud_v1_analytics_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2618,7 +2706,7 @@ func (x *EvaluationMetadata) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvaluationMetadata.ProtoReflect.Descriptor instead.
 func (*EvaluationMetadata) Descriptor() ([]byte, []int) {
-	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{39}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *EvaluationMetadata) GetUserId() string {
@@ -2680,7 +2768,7 @@ type StoreGeneratedDataResponse struct {
 
 func (x *StoreGeneratedDataResponse) Reset() {
 	*x = StoreGeneratedDataResponse{}
-	mi := &file_crud_v1_analytics_proto_msgTypes[40]
+	mi := &file_crud_v1_analytics_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2692,7 +2780,7 @@ func (x *StoreGeneratedDataResponse) String() string {
 func (*StoreGeneratedDataResponse) ProtoMessage() {}
 
 func (x *StoreGeneratedDataResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_crud_v1_analytics_proto_msgTypes[40]
+	mi := &file_crud_v1_analytics_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2705,7 +2793,7 @@ func (x *StoreGeneratedDataResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StoreGeneratedDataResponse.ProtoReflect.Descriptor instead.
 func (*StoreGeneratedDataResponse) Descriptor() ([]byte, []int) {
-	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{40}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *StoreGeneratedDataResponse) GetSuccess() bool {
@@ -2730,7 +2818,7 @@ type ClearAllDataRequest struct {
 
 func (x *ClearAllDataRequest) Reset() {
 	*x = ClearAllDataRequest{}
-	mi := &file_crud_v1_analytics_proto_msgTypes[41]
+	mi := &file_crud_v1_analytics_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2742,7 +2830,7 @@ func (x *ClearAllDataRequest) String() string {
 func (*ClearAllDataRequest) ProtoMessage() {}
 
 func (x *ClearAllDataRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_crud_v1_analytics_proto_msgTypes[41]
+	mi := &file_crud_v1_analytics_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2755,7 +2843,7 @@ func (x *ClearAllDataRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClearAllDataRequest.ProtoReflect.Descriptor instead.
 func (*ClearAllDataRequest) Descriptor() ([]byte, []int) {
-	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{41}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{43}
 }
 
 type ClearAllDataResponse struct {
@@ -2768,7 +2856,7 @@ type ClearAllDataResponse struct {
 
 func (x *ClearAllDataResponse) Reset() {
 	*x = ClearAllDataResponse{}
-	mi := &file_crud_v1_analytics_proto_msgTypes[42]
+	mi := &file_crud_v1_analytics_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2780,7 +2868,7 @@ func (x *ClearAllDataResponse) String() string {
 func (*ClearAllDataResponse) ProtoMessage() {}
 
 func (x *ClearAllDataResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_crud_v1_analytics_proto_msgTypes[42]
+	mi := &file_crud_v1_analytics_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2793,7 +2881,7 @@ func (x *ClearAllDataResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClearAllDataResponse.ProtoReflect.Descriptor instead.
 func (*ClearAllDataResponse) Descriptor() ([]byte, []int) {
-	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{42}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *ClearAllDataResponse) GetSuccess() bool {
@@ -2819,7 +2907,7 @@ type MaterializeFeaturesRequest struct {
 
 func (x *MaterializeFeaturesRequest) Reset() {
 	*x = MaterializeFeaturesRequest{}
-	mi := &file_crud_v1_analytics_proto_msgTypes[43]
+	mi := &file_crud_v1_analytics_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2831,7 +2919,7 @@ func (x *MaterializeFeaturesRequest) String() string {
 func (*MaterializeFeaturesRequest) ProtoMessage() {}
 
 func (x *MaterializeFeaturesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_crud_v1_analytics_proto_msgTypes[43]
+	mi := &file_crud_v1_analytics_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2844,7 +2932,7 @@ func (x *MaterializeFeaturesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MaterializeFeaturesRequest.ProtoReflect.Descriptor instead.
 func (*MaterializeFeaturesRequest) Descriptor() ([]byte, []int) {
-	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{43}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *MaterializeFeaturesRequest) GetBatchSize() int32 {
@@ -2864,7 +2952,7 @@ type MaterializeFeaturesResponse struct {
 
 func (x *MaterializeFeaturesResponse) Reset() {
 	*x = MaterializeFeaturesResponse{}
-	mi := &file_crud_v1_analytics_proto_msgTypes[44]
+	mi := &file_crud_v1_analytics_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2876,7 +2964,7 @@ func (x *MaterializeFeaturesResponse) String() string {
 func (*MaterializeFeaturesResponse) ProtoMessage() {}
 
 func (x *MaterializeFeaturesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_crud_v1_analytics_proto_msgTypes[44]
+	mi := &file_crud_v1_analytics_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2889,7 +2977,7 @@ func (x *MaterializeFeaturesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MaterializeFeaturesResponse.ProtoReflect.Descriptor instead.
 func (*MaterializeFeaturesResponse) Descriptor() ([]byte, []int) {
-	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{44}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *MaterializeFeaturesResponse) GetSuccess() bool {
@@ -2923,7 +3011,7 @@ type Rule struct {
 
 func (x *Rule) Reset() {
 	*x = Rule{}
-	mi := &file_crud_v1_analytics_proto_msgTypes[45]
+	mi := &file_crud_v1_analytics_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2935,7 +3023,7 @@ func (x *Rule) String() string {
 func (*Rule) ProtoMessage() {}
 
 func (x *Rule) ProtoReflect() protoreflect.Message {
-	mi := &file_crud_v1_analytics_proto_msgTypes[45]
+	mi := &file_crud_v1_analytics_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2948,7 +3036,7 @@ func (x *Rule) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Rule.ProtoReflect.Descriptor instead.
 func (*Rule) Descriptor() ([]byte, []int) {
-	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{45}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *Rule) GetId() string {
@@ -3023,7 +3111,7 @@ type SaveRuleRequest struct {
 
 func (x *SaveRuleRequest) Reset() {
 	*x = SaveRuleRequest{}
-	mi := &file_crud_v1_analytics_proto_msgTypes[46]
+	mi := &file_crud_v1_analytics_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3035,7 +3123,7 @@ func (x *SaveRuleRequest) String() string {
 func (*SaveRuleRequest) ProtoMessage() {}
 
 func (x *SaveRuleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_crud_v1_analytics_proto_msgTypes[46]
+	mi := &file_crud_v1_analytics_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3048,7 +3136,7 @@ func (x *SaveRuleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SaveRuleRequest.ProtoReflect.Descriptor instead.
 func (*SaveRuleRequest) Descriptor() ([]byte, []int) {
-	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{46}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *SaveRuleRequest) GetRule() *Rule {
@@ -3067,7 +3155,7 @@ type SaveRuleResponse struct {
 
 func (x *SaveRuleResponse) Reset() {
 	*x = SaveRuleResponse{}
-	mi := &file_crud_v1_analytics_proto_msgTypes[47]
+	mi := &file_crud_v1_analytics_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3079,7 +3167,7 @@ func (x *SaveRuleResponse) String() string {
 func (*SaveRuleResponse) ProtoMessage() {}
 
 func (x *SaveRuleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_crud_v1_analytics_proto_msgTypes[47]
+	mi := &file_crud_v1_analytics_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3092,7 +3180,7 @@ func (x *SaveRuleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SaveRuleResponse.ProtoReflect.Descriptor instead.
 func (*SaveRuleResponse) Descriptor() ([]byte, []int) {
-	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{47}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *SaveRuleResponse) GetSuccess() bool {
@@ -3111,7 +3199,7 @@ type GetRuleRequest struct {
 
 func (x *GetRuleRequest) Reset() {
 	*x = GetRuleRequest{}
-	mi := &file_crud_v1_analytics_proto_msgTypes[48]
+	mi := &file_crud_v1_analytics_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3123,7 +3211,7 @@ func (x *GetRuleRequest) String() string {
 func (*GetRuleRequest) ProtoMessage() {}
 
 func (x *GetRuleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_crud_v1_analytics_proto_msgTypes[48]
+	mi := &file_crud_v1_analytics_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3136,7 +3224,7 @@ func (x *GetRuleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRuleRequest.ProtoReflect.Descriptor instead.
 func (*GetRuleRequest) Descriptor() ([]byte, []int) {
-	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{48}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *GetRuleRequest) GetRuleId() string {
@@ -3155,7 +3243,7 @@ type GetRuleResponse struct {
 
 func (x *GetRuleResponse) Reset() {
 	*x = GetRuleResponse{}
-	mi := &file_crud_v1_analytics_proto_msgTypes[49]
+	mi := &file_crud_v1_analytics_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3167,7 +3255,7 @@ func (x *GetRuleResponse) String() string {
 func (*GetRuleResponse) ProtoMessage() {}
 
 func (x *GetRuleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_crud_v1_analytics_proto_msgTypes[49]
+	mi := &file_crud_v1_analytics_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3180,7 +3268,7 @@ func (x *GetRuleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRuleResponse.ProtoReflect.Descriptor instead.
 func (*GetRuleResponse) Descriptor() ([]byte, []int) {
-	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{49}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *GetRuleResponse) GetRule() *Rule {
@@ -3200,7 +3288,7 @@ type ListRulesRequest struct {
 
 func (x *ListRulesRequest) Reset() {
 	*x = ListRulesRequest{}
-	mi := &file_crud_v1_analytics_proto_msgTypes[50]
+	mi := &file_crud_v1_analytics_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3212,7 +3300,7 @@ func (x *ListRulesRequest) String() string {
 func (*ListRulesRequest) ProtoMessage() {}
 
 func (x *ListRulesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_crud_v1_analytics_proto_msgTypes[50]
+	mi := &file_crud_v1_analytics_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3225,7 +3313,7 @@ func (x *ListRulesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRulesRequest.ProtoReflect.Descriptor instead.
 func (*ListRulesRequest) Descriptor() ([]byte, []int) {
-	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{50}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *ListRulesRequest) GetStatus() string {
@@ -3251,7 +3339,7 @@ type ListRulesResponse struct {
 
 func (x *ListRulesResponse) Reset() {
 	*x = ListRulesResponse{}
-	mi := &file_crud_v1_analytics_proto_msgTypes[51]
+	mi := &file_crud_v1_analytics_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3263,7 +3351,7 @@ func (x *ListRulesResponse) String() string {
 func (*ListRulesResponse) ProtoMessage() {}
 
 func (x *ListRulesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_crud_v1_analytics_proto_msgTypes[51]
+	mi := &file_crud_v1_analytics_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3276,7 +3364,7 @@ func (x *ListRulesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRulesResponse.ProtoReflect.Descriptor instead.
 func (*ListRulesResponse) Descriptor() ([]byte, []int) {
-	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{51}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *ListRulesResponse) GetRules() []*Rule {
@@ -3295,7 +3383,7 @@ type DeleteRuleRequest struct {
 
 func (x *DeleteRuleRequest) Reset() {
 	*x = DeleteRuleRequest{}
-	mi := &file_crud_v1_analytics_proto_msgTypes[52]
+	mi := &file_crud_v1_analytics_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3307,7 +3395,7 @@ func (x *DeleteRuleRequest) String() string {
 func (*DeleteRuleRequest) ProtoMessage() {}
 
 func (x *DeleteRuleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_crud_v1_analytics_proto_msgTypes[52]
+	mi := &file_crud_v1_analytics_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3320,7 +3408,7 @@ func (x *DeleteRuleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteRuleRequest.ProtoReflect.Descriptor instead.
 func (*DeleteRuleRequest) Descriptor() ([]byte, []int) {
-	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{52}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *DeleteRuleRequest) GetRuleId() string {
@@ -3339,7 +3427,7 @@ type DeleteRuleResponse struct {
 
 func (x *DeleteRuleResponse) Reset() {
 	*x = DeleteRuleResponse{}
-	mi := &file_crud_v1_analytics_proto_msgTypes[53]
+	mi := &file_crud_v1_analytics_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3351,7 +3439,7 @@ func (x *DeleteRuleResponse) String() string {
 func (*DeleteRuleResponse) ProtoMessage() {}
 
 func (x *DeleteRuleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_crud_v1_analytics_proto_msgTypes[53]
+	mi := &file_crud_v1_analytics_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3364,7 +3452,7 @@ func (x *DeleteRuleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteRuleResponse.ProtoReflect.Descriptor instead.
 func (*DeleteRuleResponse) Descriptor() ([]byte, []int) {
-	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{53}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *DeleteRuleResponse) GetSuccess() bool {
@@ -3385,7 +3473,7 @@ type RuleImpact struct {
 
 func (x *RuleImpact) Reset() {
 	*x = RuleImpact{}
-	mi := &file_crud_v1_analytics_proto_msgTypes[54]
+	mi := &file_crud_v1_analytics_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3397,7 +3485,7 @@ func (x *RuleImpact) String() string {
 func (*RuleImpact) ProtoMessage() {}
 
 func (x *RuleImpact) ProtoReflect() protoreflect.Message {
-	mi := &file_crud_v1_analytics_proto_msgTypes[54]
+	mi := &file_crud_v1_analytics_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3410,7 +3498,7 @@ func (x *RuleImpact) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RuleImpact.ProtoReflect.Descriptor instead.
 func (*RuleImpact) Descriptor() ([]byte, []int) {
-	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{54}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *RuleImpact) GetRuleId() string {
@@ -3449,7 +3537,7 @@ type InferenceEvent struct {
 
 func (x *InferenceEvent) Reset() {
 	*x = InferenceEvent{}
-	mi := &file_crud_v1_analytics_proto_msgTypes[55]
+	mi := &file_crud_v1_analytics_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3461,7 +3549,7 @@ func (x *InferenceEvent) String() string {
 func (*InferenceEvent) ProtoMessage() {}
 
 func (x *InferenceEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_crud_v1_analytics_proto_msgTypes[55]
+	mi := &file_crud_v1_analytics_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3474,7 +3562,7 @@ func (x *InferenceEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InferenceEvent.ProtoReflect.Descriptor instead.
 func (*InferenceEvent) Descriptor() ([]byte, []int) {
-	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{55}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *InferenceEvent) GetRequestId() string {
@@ -3535,7 +3623,7 @@ type LogInferenceEventRequest struct {
 
 func (x *LogInferenceEventRequest) Reset() {
 	*x = LogInferenceEventRequest{}
-	mi := &file_crud_v1_analytics_proto_msgTypes[56]
+	mi := &file_crud_v1_analytics_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3547,7 +3635,7 @@ func (x *LogInferenceEventRequest) String() string {
 func (*LogInferenceEventRequest) ProtoMessage() {}
 
 func (x *LogInferenceEventRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_crud_v1_analytics_proto_msgTypes[56]
+	mi := &file_crud_v1_analytics_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3560,7 +3648,7 @@ func (x *LogInferenceEventRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogInferenceEventRequest.ProtoReflect.Descriptor instead.
 func (*LogInferenceEventRequest) Descriptor() ([]byte, []int) {
-	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{56}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *LogInferenceEventRequest) GetEvent() *InferenceEvent {
@@ -3579,7 +3667,7 @@ type LogInferenceEventResponse struct {
 
 func (x *LogInferenceEventResponse) Reset() {
 	*x = LogInferenceEventResponse{}
-	mi := &file_crud_v1_analytics_proto_msgTypes[57]
+	mi := &file_crud_v1_analytics_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3591,7 +3679,7 @@ func (x *LogInferenceEventResponse) String() string {
 func (*LogInferenceEventResponse) ProtoMessage() {}
 
 func (x *LogInferenceEventResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_crud_v1_analytics_proto_msgTypes[57]
+	mi := &file_crud_v1_analytics_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3604,7 +3692,7 @@ func (x *LogInferenceEventResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogInferenceEventResponse.ProtoReflect.Descriptor instead.
 func (*LogInferenceEventResponse) Descriptor() ([]byte, []int) {
-	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{57}
+	return file_crud_v1_analytics_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *LogInferenceEventResponse) GetSuccess() bool {
@@ -3813,7 +3901,11 @@ const file_crud_v1_analytics_proto_rawDesc = "" +
 	"\x15GetDriftWindowRequest\x12\x14\n" +
 	"\x05hours\x18\x01 \x01(\x05R\x05hours\"X\n" +
 	"\x16GetDriftWindowResponse\x12>\n" +
-	"\ftransactions\x18\x01 \x03(\v2\x1a.crud.v1.TransactionDetailR\ftransactions\"\x88\x01\n" +
+	"\ftransactions\x18\x01 \x03(\v2\x1a.crud.v1.TransactionDetailR\ftransactions\"1\n" +
+	"\x19GetInferenceScoresRequest\x12\x14\n" +
+	"\x05hours\x18\x01 \x01(\x05R\x05hours\"4\n" +
+	"\x1aGetInferenceScoresResponse\x12\x16\n" +
+	"\x06scores\x18\x01 \x03(\x05R\x06scores\"\x88\x01\n" +
 	"\x19StoreGeneratedDataRequest\x122\n" +
 	"\arecords\x18\x01 \x03(\v2\x18.crud.v1.GeneratedRecordR\arecords\x127\n" +
 	"\bmetadata\x18\x02 \x03(\v2\x1b.crud.v1.EvaluationMetadataR\bmetadata\"\x89\b\n" +
@@ -3913,7 +4005,7 @@ const file_crud_v1_analytics_proto_rawDesc = "" +
 	"\x18LogInferenceEventRequest\x12-\n" +
 	"\x05event\x18\x01 \x01(\v2\x17.crud.v1.InferenceEventR\x05event\"5\n" +
 	"\x19LogInferenceEventResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess2\x94\x0f\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess2\xf3\x0f\n" +
 	"\x10AnalyticsService\x12N\n" +
 	"\rGetDailyStats\x12\x1d.crud.v1.GetDailyStatsRequest\x1a\x1e.crud.v1.GetDailyStatsResponse\x12f\n" +
 	"\x15GetTransactionDetails\x12%.crud.v1.GetTransactionDetailsRequest\x1a&.crud.v1.GetTransactionDetailsResponse\x12]\n" +
@@ -3931,7 +4023,8 @@ const file_crud_v1_analytics_proto_rawDesc = "" +
 	"\x0eGetDriftWindow\x12\x1e.crud.v1.GetDriftWindowRequest\x1a\x1f.crud.v1.GetDriftWindowResponse\x12]\n" +
 	"\x12StoreGeneratedData\x12\".crud.v1.StoreGeneratedDataRequest\x1a#.crud.v1.StoreGeneratedDataResponse\x12K\n" +
 	"\fClearAllData\x12\x1c.crud.v1.ClearAllDataRequest\x1a\x1d.crud.v1.ClearAllDataResponse\x12`\n" +
-	"\x13MaterializeFeatures\x12#.crud.v1.MaterializeFeaturesRequest\x1a$.crud.v1.MaterializeFeaturesResponse\x12?\n" +
+	"\x13MaterializeFeatures\x12#.crud.v1.MaterializeFeaturesRequest\x1a$.crud.v1.MaterializeFeaturesResponse\x12]\n" +
+	"\x12GetInferenceScores\x12\".crud.v1.GetInferenceScoresRequest\x1a#.crud.v1.GetInferenceScoresResponse\x12?\n" +
 	"\bSaveRule\x12\x18.crud.v1.SaveRuleRequest\x1a\x19.crud.v1.SaveRuleResponse\x12<\n" +
 	"\aGetRule\x12\x17.crud.v1.GetRuleRequest\x1a\x18.crud.v1.GetRuleResponse\x12B\n" +
 	"\tListRules\x12\x19.crud.v1.ListRulesRequest\x1a\x1a.crud.v1.ListRulesResponse\x12E\n" +
@@ -3951,7 +4044,7 @@ func file_crud_v1_analytics_proto_rawDescGZIP() []byte {
 	return file_crud_v1_analytics_proto_rawDescData
 }
 
-var file_crud_v1_analytics_proto_msgTypes = make([]protoimpl.MessageInfo, 59)
+var file_crud_v1_analytics_proto_msgTypes = make([]protoimpl.MessageInfo, 61)
 var file_crud_v1_analytics_proto_goTypes = []any{
 	(*GetDailyStatsRequest)(nil),          // 0: crud.v1.GetDailyStatsRequest
 	(*DailyStat)(nil),                     // 1: crud.v1.DailyStat
@@ -3990,76 +4083,78 @@ var file_crud_v1_analytics_proto_goTypes = []any{
 	(*GetBacktestResultResponse)(nil),     // 34: crud.v1.GetBacktestResultResponse
 	(*GetDriftWindowRequest)(nil),         // 35: crud.v1.GetDriftWindowRequest
 	(*GetDriftWindowResponse)(nil),        // 36: crud.v1.GetDriftWindowResponse
-	(*StoreGeneratedDataRequest)(nil),     // 37: crud.v1.StoreGeneratedDataRequest
-	(*GeneratedRecord)(nil),               // 38: crud.v1.GeneratedRecord
-	(*EvaluationMetadata)(nil),            // 39: crud.v1.EvaluationMetadata
-	(*StoreGeneratedDataResponse)(nil),    // 40: crud.v1.StoreGeneratedDataResponse
-	(*ClearAllDataRequest)(nil),           // 41: crud.v1.ClearAllDataRequest
-	(*ClearAllDataResponse)(nil),          // 42: crud.v1.ClearAllDataResponse
-	(*MaterializeFeaturesRequest)(nil),    // 43: crud.v1.MaterializeFeaturesRequest
-	(*MaterializeFeaturesResponse)(nil),   // 44: crud.v1.MaterializeFeaturesResponse
-	(*Rule)(nil),                          // 45: crud.v1.Rule
-	(*SaveRuleRequest)(nil),               // 46: crud.v1.SaveRuleRequest
-	(*SaveRuleResponse)(nil),              // 47: crud.v1.SaveRuleResponse
-	(*GetRuleRequest)(nil),                // 48: crud.v1.GetRuleRequest
-	(*GetRuleResponse)(nil),               // 49: crud.v1.GetRuleResponse
-	(*ListRulesRequest)(nil),              // 50: crud.v1.ListRulesRequest
-	(*ListRulesResponse)(nil),             // 51: crud.v1.ListRulesResponse
-	(*DeleteRuleRequest)(nil),             // 52: crud.v1.DeleteRuleRequest
-	(*DeleteRuleResponse)(nil),            // 53: crud.v1.DeleteRuleResponse
-	(*RuleImpact)(nil),                    // 54: crud.v1.RuleImpact
-	(*InferenceEvent)(nil),                // 55: crud.v1.InferenceEvent
-	(*LogInferenceEventRequest)(nil),      // 56: crud.v1.LogInferenceEventRequest
-	(*LogInferenceEventResponse)(nil),     // 57: crud.v1.LogInferenceEventResponse
-	nil,                                   // 58: crud.v1.BacktestMetrics.ScoreDistributionEntry
-	(*timestamppb.Timestamp)(nil),         // 59: google.protobuf.Timestamp
+	(*GetInferenceScoresRequest)(nil),     // 37: crud.v1.GetInferenceScoresRequest
+	(*GetInferenceScoresResponse)(nil),    // 38: crud.v1.GetInferenceScoresResponse
+	(*StoreGeneratedDataRequest)(nil),     // 39: crud.v1.StoreGeneratedDataRequest
+	(*GeneratedRecord)(nil),               // 40: crud.v1.GeneratedRecord
+	(*EvaluationMetadata)(nil),            // 41: crud.v1.EvaluationMetadata
+	(*StoreGeneratedDataResponse)(nil),    // 42: crud.v1.StoreGeneratedDataResponse
+	(*ClearAllDataRequest)(nil),           // 43: crud.v1.ClearAllDataRequest
+	(*ClearAllDataResponse)(nil),          // 44: crud.v1.ClearAllDataResponse
+	(*MaterializeFeaturesRequest)(nil),    // 45: crud.v1.MaterializeFeaturesRequest
+	(*MaterializeFeaturesResponse)(nil),   // 46: crud.v1.MaterializeFeaturesResponse
+	(*Rule)(nil),                          // 47: crud.v1.Rule
+	(*SaveRuleRequest)(nil),               // 48: crud.v1.SaveRuleRequest
+	(*SaveRuleResponse)(nil),              // 49: crud.v1.SaveRuleResponse
+	(*GetRuleRequest)(nil),                // 50: crud.v1.GetRuleRequest
+	(*GetRuleResponse)(nil),               // 51: crud.v1.GetRuleResponse
+	(*ListRulesRequest)(nil),              // 52: crud.v1.ListRulesRequest
+	(*ListRulesResponse)(nil),             // 53: crud.v1.ListRulesResponse
+	(*DeleteRuleRequest)(nil),             // 54: crud.v1.DeleteRuleRequest
+	(*DeleteRuleResponse)(nil),            // 55: crud.v1.DeleteRuleResponse
+	(*RuleImpact)(nil),                    // 56: crud.v1.RuleImpact
+	(*InferenceEvent)(nil),                // 57: crud.v1.InferenceEvent
+	(*LogInferenceEventRequest)(nil),      // 58: crud.v1.LogInferenceEventRequest
+	(*LogInferenceEventResponse)(nil),     // 59: crud.v1.LogInferenceEventResponse
+	nil,                                   // 60: crud.v1.BacktestMetrics.ScoreDistributionEntry
+	(*timestamppb.Timestamp)(nil),         // 61: google.protobuf.Timestamp
 }
 var file_crud_v1_analytics_proto_depIdxs = []int32{
 	1,  // 0: crud.v1.GetDailyStatsResponse.stats:type_name -> crud.v1.DailyStat
-	59, // 1: crud.v1.TransactionDetail.created_at:type_name -> google.protobuf.Timestamp
+	61, // 1: crud.v1.TransactionDetail.created_at:type_name -> google.protobuf.Timestamp
 	4,  // 2: crud.v1.GetTransactionDetailsResponse.transactions:type_name -> crud.v1.TransactionDetail
 	4,  // 3: crud.v1.SearchTransactionsResponse.transactions:type_name -> crud.v1.TransactionDetail
-	59, // 4: crud.v1.Alert.created_at:type_name -> google.protobuf.Timestamp
+	61, // 4: crud.v1.Alert.created_at:type_name -> google.protobuf.Timestamp
 	9,  // 5: crud.v1.GetRecentAlertsResponse.alerts:type_name -> crud.v1.Alert
-	59, // 6: crud.v1.GetOverviewMetricsResponse.min_transaction_timestamp:type_name -> google.protobuf.Timestamp
-	59, // 7: crud.v1.GetOverviewMetricsResponse.max_transaction_timestamp:type_name -> google.protobuf.Timestamp
-	59, // 8: crud.v1.GetOverviewMetricsResponse.min_created_at:type_name -> google.protobuf.Timestamp
-	59, // 9: crud.v1.GetOverviewMetricsResponse.max_created_at:type_name -> google.protobuf.Timestamp
-	59, // 10: crud.v1.TableFingerprint.max_created_at:type_name -> google.protobuf.Timestamp
-	59, // 11: crud.v1.TableFingerprint.max_timestamp:type_name -> google.protobuf.Timestamp
+	61, // 6: crud.v1.GetOverviewMetricsResponse.min_transaction_timestamp:type_name -> google.protobuf.Timestamp
+	61, // 7: crud.v1.GetOverviewMetricsResponse.max_transaction_timestamp:type_name -> google.protobuf.Timestamp
+	61, // 8: crud.v1.GetOverviewMetricsResponse.min_created_at:type_name -> google.protobuf.Timestamp
+	61, // 9: crud.v1.GetOverviewMetricsResponse.max_created_at:type_name -> google.protobuf.Timestamp
+	61, // 10: crud.v1.TableFingerprint.max_created_at:type_name -> google.protobuf.Timestamp
+	61, // 11: crud.v1.TableFingerprint.max_timestamp:type_name -> google.protobuf.Timestamp
 	14, // 12: crud.v1.GetDatasetFingerprintResponse.generated_records:type_name -> crud.v1.TableFingerprint
 	14, // 13: crud.v1.GetDatasetFingerprintResponse.feature_snapshots:type_name -> crud.v1.TableFingerprint
 	17, // 14: crud.v1.GetFeatureSampleResponse.samples:type_name -> crud.v1.FeatureSample
 	20, // 15: crud.v1.GetSchemaSummaryResponse.columns:type_name -> crud.v1.ColumnInfo
-	59, // 16: crud.v1.GetTrainingDataRequest.cutoff_date:type_name -> google.protobuf.Timestamp
+	61, // 16: crud.v1.GetTrainingDataRequest.cutoff_date:type_name -> google.protobuf.Timestamp
 	4,  // 17: crud.v1.GetTrainingDataResponse.train_records:type_name -> crud.v1.TransactionDetail
 	4,  // 18: crud.v1.GetTrainingDataResponse.test_records:type_name -> crud.v1.TransactionDetail
-	59, // 19: crud.v1.GetBacktestFeaturesRequest.start_date:type_name -> google.protobuf.Timestamp
-	59, // 20: crud.v1.GetBacktestFeaturesRequest.end_date:type_name -> google.protobuf.Timestamp
+	61, // 19: crud.v1.GetBacktestFeaturesRequest.start_date:type_name -> google.protobuf.Timestamp
+	61, // 20: crud.v1.GetBacktestFeaturesRequest.end_date:type_name -> google.protobuf.Timestamp
 	25, // 21: crud.v1.GetBacktestFeaturesResponse.features:type_name -> crud.v1.BacktestFeatureVector
-	58, // 22: crud.v1.BacktestMetrics.score_distribution:type_name -> crud.v1.BacktestMetrics.ScoreDistributionEntry
-	59, // 23: crud.v1.BacktestResult.start_date:type_name -> google.protobuf.Timestamp
-	59, // 24: crud.v1.BacktestResult.end_date:type_name -> google.protobuf.Timestamp
+	60, // 22: crud.v1.BacktestMetrics.score_distribution:type_name -> crud.v1.BacktestMetrics.ScoreDistributionEntry
+	61, // 23: crud.v1.BacktestResult.start_date:type_name -> google.protobuf.Timestamp
+	61, // 24: crud.v1.BacktestResult.end_date:type_name -> google.protobuf.Timestamp
 	27, // 25: crud.v1.BacktestResult.metrics:type_name -> crud.v1.BacktestMetrics
-	59, // 26: crud.v1.BacktestResult.completed_at:type_name -> google.protobuf.Timestamp
+	61, // 26: crud.v1.BacktestResult.completed_at:type_name -> google.protobuf.Timestamp
 	28, // 27: crud.v1.SaveBacktestResultRequest.result:type_name -> crud.v1.BacktestResult
-	59, // 28: crud.v1.ListBacktestResultsRequest.start_date:type_name -> google.protobuf.Timestamp
-	59, // 29: crud.v1.ListBacktestResultsRequest.end_date:type_name -> google.protobuf.Timestamp
+	61, // 28: crud.v1.ListBacktestResultsRequest.start_date:type_name -> google.protobuf.Timestamp
+	61, // 29: crud.v1.ListBacktestResultsRequest.end_date:type_name -> google.protobuf.Timestamp
 	28, // 30: crud.v1.ListBacktestResultsResponse.results:type_name -> crud.v1.BacktestResult
 	28, // 31: crud.v1.GetBacktestResultResponse.result:type_name -> crud.v1.BacktestResult
 	4,  // 32: crud.v1.GetDriftWindowResponse.transactions:type_name -> crud.v1.TransactionDetail
-	38, // 33: crud.v1.StoreGeneratedDataRequest.records:type_name -> crud.v1.GeneratedRecord
-	39, // 34: crud.v1.StoreGeneratedDataRequest.metadata:type_name -> crud.v1.EvaluationMetadata
-	59, // 35: crud.v1.GeneratedRecord.transaction_timestamp:type_name -> google.protobuf.Timestamp
-	59, // 36: crud.v1.GeneratedRecord.email_changed_at:type_name -> google.protobuf.Timestamp
-	59, // 37: crud.v1.GeneratedRecord.phone_changed_at:type_name -> google.protobuf.Timestamp
-	59, // 38: crud.v1.EvaluationMetadata.fraud_confirmed_at:type_name -> google.protobuf.Timestamp
-	45, // 39: crud.v1.SaveRuleRequest.rule:type_name -> crud.v1.Rule
-	45, // 40: crud.v1.GetRuleResponse.rule:type_name -> crud.v1.Rule
-	45, // 41: crud.v1.ListRulesResponse.rules:type_name -> crud.v1.Rule
-	59, // 42: crud.v1.InferenceEvent.timestamp:type_name -> google.protobuf.Timestamp
-	54, // 43: crud.v1.InferenceEvent.rule_impacts:type_name -> crud.v1.RuleImpact
-	55, // 44: crud.v1.LogInferenceEventRequest.event:type_name -> crud.v1.InferenceEvent
+	40, // 33: crud.v1.StoreGeneratedDataRequest.records:type_name -> crud.v1.GeneratedRecord
+	41, // 34: crud.v1.StoreGeneratedDataRequest.metadata:type_name -> crud.v1.EvaluationMetadata
+	61, // 35: crud.v1.GeneratedRecord.transaction_timestamp:type_name -> google.protobuf.Timestamp
+	61, // 36: crud.v1.GeneratedRecord.email_changed_at:type_name -> google.protobuf.Timestamp
+	61, // 37: crud.v1.GeneratedRecord.phone_changed_at:type_name -> google.protobuf.Timestamp
+	61, // 38: crud.v1.EvaluationMetadata.fraud_confirmed_at:type_name -> google.protobuf.Timestamp
+	47, // 39: crud.v1.SaveRuleRequest.rule:type_name -> crud.v1.Rule
+	47, // 40: crud.v1.GetRuleResponse.rule:type_name -> crud.v1.Rule
+	47, // 41: crud.v1.ListRulesResponse.rules:type_name -> crud.v1.Rule
+	61, // 42: crud.v1.InferenceEvent.timestamp:type_name -> google.protobuf.Timestamp
+	56, // 43: crud.v1.InferenceEvent.rule_impacts:type_name -> crud.v1.RuleImpact
+	57, // 44: crud.v1.LogInferenceEventRequest.event:type_name -> crud.v1.InferenceEvent
 	0,  // 45: crud.v1.AnalyticsService.GetDailyStats:input_type -> crud.v1.GetDailyStatsRequest
 	3,  // 46: crud.v1.AnalyticsService.GetTransactionDetails:input_type -> crud.v1.GetTransactionDetailsRequest
 	6,  // 47: crud.v1.AnalyticsService.SearchTransactions:input_type -> crud.v1.SearchTransactionsRequest
@@ -4074,38 +4169,40 @@ var file_crud_v1_analytics_proto_depIdxs = []int32{
 	31, // 56: crud.v1.AnalyticsService.ListBacktestResults:input_type -> crud.v1.ListBacktestResultsRequest
 	33, // 57: crud.v1.AnalyticsService.GetBacktestResult:input_type -> crud.v1.GetBacktestResultRequest
 	35, // 58: crud.v1.AnalyticsService.GetDriftWindow:input_type -> crud.v1.GetDriftWindowRequest
-	37, // 59: crud.v1.AnalyticsService.StoreGeneratedData:input_type -> crud.v1.StoreGeneratedDataRequest
-	41, // 60: crud.v1.AnalyticsService.ClearAllData:input_type -> crud.v1.ClearAllDataRequest
-	43, // 61: crud.v1.AnalyticsService.MaterializeFeatures:input_type -> crud.v1.MaterializeFeaturesRequest
-	46, // 62: crud.v1.AnalyticsService.SaveRule:input_type -> crud.v1.SaveRuleRequest
-	48, // 63: crud.v1.AnalyticsService.GetRule:input_type -> crud.v1.GetRuleRequest
-	50, // 64: crud.v1.AnalyticsService.ListRules:input_type -> crud.v1.ListRulesRequest
-	52, // 65: crud.v1.AnalyticsService.DeleteRule:input_type -> crud.v1.DeleteRuleRequest
-	56, // 66: crud.v1.AnalyticsService.LogInferenceEvent:input_type -> crud.v1.LogInferenceEventRequest
-	2,  // 67: crud.v1.AnalyticsService.GetDailyStats:output_type -> crud.v1.GetDailyStatsResponse
-	5,  // 68: crud.v1.AnalyticsService.GetTransactionDetails:output_type -> crud.v1.GetTransactionDetailsResponse
-	7,  // 69: crud.v1.AnalyticsService.SearchTransactions:output_type -> crud.v1.SearchTransactionsResponse
-	10, // 70: crud.v1.AnalyticsService.GetRecentAlerts:output_type -> crud.v1.GetRecentAlertsResponse
-	12, // 71: crud.v1.AnalyticsService.GetOverviewMetrics:output_type -> crud.v1.GetOverviewMetricsResponse
-	15, // 72: crud.v1.AnalyticsService.GetDatasetFingerprint:output_type -> crud.v1.GetDatasetFingerprintResponse
-	18, // 73: crud.v1.AnalyticsService.GetFeatureSample:output_type -> crud.v1.GetFeatureSampleResponse
-	21, // 74: crud.v1.AnalyticsService.GetSchemaSummary:output_type -> crud.v1.GetSchemaSummaryResponse
-	23, // 75: crud.v1.AnalyticsService.GetTrainingData:output_type -> crud.v1.GetTrainingDataResponse
-	26, // 76: crud.v1.AnalyticsService.GetBacktestFeatures:output_type -> crud.v1.GetBacktestFeaturesResponse
-	30, // 77: crud.v1.AnalyticsService.SaveBacktestResult:output_type -> crud.v1.SaveBacktestResultResponse
-	32, // 78: crud.v1.AnalyticsService.ListBacktestResults:output_type -> crud.v1.ListBacktestResultsResponse
-	34, // 79: crud.v1.AnalyticsService.GetBacktestResult:output_type -> crud.v1.GetBacktestResultResponse
-	36, // 80: crud.v1.AnalyticsService.GetDriftWindow:output_type -> crud.v1.GetDriftWindowResponse
-	40, // 81: crud.v1.AnalyticsService.StoreGeneratedData:output_type -> crud.v1.StoreGeneratedDataResponse
-	42, // 82: crud.v1.AnalyticsService.ClearAllData:output_type -> crud.v1.ClearAllDataResponse
-	44, // 83: crud.v1.AnalyticsService.MaterializeFeatures:output_type -> crud.v1.MaterializeFeaturesResponse
-	47, // 84: crud.v1.AnalyticsService.SaveRule:output_type -> crud.v1.SaveRuleResponse
-	49, // 85: crud.v1.AnalyticsService.GetRule:output_type -> crud.v1.GetRuleResponse
-	51, // 86: crud.v1.AnalyticsService.ListRules:output_type -> crud.v1.ListRulesResponse
-	53, // 87: crud.v1.AnalyticsService.DeleteRule:output_type -> crud.v1.DeleteRuleResponse
-	57, // 88: crud.v1.AnalyticsService.LogInferenceEvent:output_type -> crud.v1.LogInferenceEventResponse
-	67, // [67:89] is the sub-list for method output_type
-	45, // [45:67] is the sub-list for method input_type
+	39, // 59: crud.v1.AnalyticsService.StoreGeneratedData:input_type -> crud.v1.StoreGeneratedDataRequest
+	43, // 60: crud.v1.AnalyticsService.ClearAllData:input_type -> crud.v1.ClearAllDataRequest
+	45, // 61: crud.v1.AnalyticsService.MaterializeFeatures:input_type -> crud.v1.MaterializeFeaturesRequest
+	37, // 62: crud.v1.AnalyticsService.GetInferenceScores:input_type -> crud.v1.GetInferenceScoresRequest
+	48, // 63: crud.v1.AnalyticsService.SaveRule:input_type -> crud.v1.SaveRuleRequest
+	50, // 64: crud.v1.AnalyticsService.GetRule:input_type -> crud.v1.GetRuleRequest
+	52, // 65: crud.v1.AnalyticsService.ListRules:input_type -> crud.v1.ListRulesRequest
+	54, // 66: crud.v1.AnalyticsService.DeleteRule:input_type -> crud.v1.DeleteRuleRequest
+	58, // 67: crud.v1.AnalyticsService.LogInferenceEvent:input_type -> crud.v1.LogInferenceEventRequest
+	2,  // 68: crud.v1.AnalyticsService.GetDailyStats:output_type -> crud.v1.GetDailyStatsResponse
+	5,  // 69: crud.v1.AnalyticsService.GetTransactionDetails:output_type -> crud.v1.GetTransactionDetailsResponse
+	7,  // 70: crud.v1.AnalyticsService.SearchTransactions:output_type -> crud.v1.SearchTransactionsResponse
+	10, // 71: crud.v1.AnalyticsService.GetRecentAlerts:output_type -> crud.v1.GetRecentAlertsResponse
+	12, // 72: crud.v1.AnalyticsService.GetOverviewMetrics:output_type -> crud.v1.GetOverviewMetricsResponse
+	15, // 73: crud.v1.AnalyticsService.GetDatasetFingerprint:output_type -> crud.v1.GetDatasetFingerprintResponse
+	18, // 74: crud.v1.AnalyticsService.GetFeatureSample:output_type -> crud.v1.GetFeatureSampleResponse
+	21, // 75: crud.v1.AnalyticsService.GetSchemaSummary:output_type -> crud.v1.GetSchemaSummaryResponse
+	23, // 76: crud.v1.AnalyticsService.GetTrainingData:output_type -> crud.v1.GetTrainingDataResponse
+	26, // 77: crud.v1.AnalyticsService.GetBacktestFeatures:output_type -> crud.v1.GetBacktestFeaturesResponse
+	30, // 78: crud.v1.AnalyticsService.SaveBacktestResult:output_type -> crud.v1.SaveBacktestResultResponse
+	32, // 79: crud.v1.AnalyticsService.ListBacktestResults:output_type -> crud.v1.ListBacktestResultsResponse
+	34, // 80: crud.v1.AnalyticsService.GetBacktestResult:output_type -> crud.v1.GetBacktestResultResponse
+	36, // 81: crud.v1.AnalyticsService.GetDriftWindow:output_type -> crud.v1.GetDriftWindowResponse
+	42, // 82: crud.v1.AnalyticsService.StoreGeneratedData:output_type -> crud.v1.StoreGeneratedDataResponse
+	44, // 83: crud.v1.AnalyticsService.ClearAllData:output_type -> crud.v1.ClearAllDataResponse
+	46, // 84: crud.v1.AnalyticsService.MaterializeFeatures:output_type -> crud.v1.MaterializeFeaturesResponse
+	38, // 85: crud.v1.AnalyticsService.GetInferenceScores:output_type -> crud.v1.GetInferenceScoresResponse
+	49, // 86: crud.v1.AnalyticsService.SaveRule:output_type -> crud.v1.SaveRuleResponse
+	51, // 87: crud.v1.AnalyticsService.GetRule:output_type -> crud.v1.GetRuleResponse
+	53, // 88: crud.v1.AnalyticsService.ListRules:output_type -> crud.v1.ListRulesResponse
+	55, // 89: crud.v1.AnalyticsService.DeleteRule:output_type -> crud.v1.DeleteRuleResponse
+	59, // 90: crud.v1.AnalyticsService.LogInferenceEvent:output_type -> crud.v1.LogInferenceEventResponse
+	68, // [68:91] is the sub-list for method output_type
+	45, // [45:68] is the sub-list for method input_type
 	45, // [45:45] is the sub-list for extension type_name
 	45, // [45:45] is the sub-list for extension extendee
 	0,  // [0:45] is the sub-list for field type_name
@@ -4123,7 +4220,7 @@ func file_crud_v1_analytics_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_crud_v1_analytics_proto_rawDesc), len(file_crud_v1_analytics_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   59,
+			NumMessages:   61,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

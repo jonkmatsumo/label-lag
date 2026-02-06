@@ -270,7 +270,7 @@ interface MetricsDisplayProps {
     precision: number;
     recall: number;
     f1_score: number;
-    total_transactions: number;
+    total_records: number;
     flagged_transactions: number;
     true_positives: number;
     false_positives: number;
@@ -296,7 +296,7 @@ function MetricsDisplay({ metrics }: MetricsDisplayProps) {
       </div>
       <div className="metric-row separator">
         <span className="metric-name">Total Transactions</span>
-        <span className="metric-val">{metrics.total_transactions.toLocaleString()}</span>
+        <span className="metric-val">{metrics.total_records.toLocaleString()}</span>
       </div>
       <div className="metric-row">
         <span className="metric-name">Flagged</span>

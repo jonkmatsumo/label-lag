@@ -97,6 +97,16 @@ class AnalyticsCRUDClient:
         request = analytics_pb2.MaterializeFeaturesRequest(batch_size=batch_size)
         return self.stub.MaterializeFeatures(request, timeout=self.timeout_seconds)
 
+    def get_drift_window(self, hours: int = 24):
+        """Fetch drift window data via GetDriftWindow."""
+        request = analytics_pb2.GetDriftWindowRequest(hours=hours)
+        return self.stub.GetDriftWindow(request, timeout=self.timeout_seconds)
+
+    def get_inference_scores(self, hours: int = 24):
+        """Fetch inference scores via GetInferenceScores."""
+        request = analytics_pb2.GetInferenceScoresRequest(hours=hours)
+        return self.stub.GetInferenceScores(request, timeout=self.timeout_seconds)
+
     def get_overview_metrics(self):
         request = analytics_pb2.GetOverviewMetricsRequest()
         return self.stub.GetOverviewMetrics(request, timeout=self.timeout_seconds)

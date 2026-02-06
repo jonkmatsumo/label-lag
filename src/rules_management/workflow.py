@@ -6,7 +6,7 @@ from dataclasses import asdict
 from typing import Any
 
 from api.audit import get_audit_logger
-from api.rules import Rule
+from rules_management.rules import Rule
 
 logger = logging.getLogger(__name__)
 

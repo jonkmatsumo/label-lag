@@ -1,6 +1,6 @@
 """Tests for shadow mode rule evaluation."""
 
-from api.rules import Rule, RuleSet, evaluate_rules
+from rules_management.rules import Rule, RuleSet, evaluate_rules
 
 
 class TestShadowModeEvaluation:

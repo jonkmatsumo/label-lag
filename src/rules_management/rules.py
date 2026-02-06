@@ -140,7 +140,7 @@ class RuleSet:
 
         # Run validation if requested
         if validate:
-            from api.validation import validate_ruleset
+            from rules_management.validation import validate_ruleset
 
             validate_ruleset(ruleset, strict=strict)
 

@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from api.rules import Rule, RuleSet
+from rules_management.rules import Rule, RuleSet
 
 
 class FakeAnalyticsClient:

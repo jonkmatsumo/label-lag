@@ -41,6 +41,14 @@ class SignalRequest(BaseModel):
         description="Client-provided transaction identifier for idempotency",
         examples=["txn_xyz789"],
     )
+    fallback_mode: Literal["probability", "error", "zero"] | None = Field(
+        default=None,
+        description="Override default fallback behavior for this request",
+    )
+    include_importance: bool = Field(
+        default=False,
+        description="Whether to include feature importance in the response",
+    )
 
 
 class RiskComponent(BaseModel):
@@ -167,6 +175,9 @@ class PredictResponse(BaseModel):
         default=False, description="True if heuristic fallback was used"
     )
     latency_ms: float = Field(..., description="Prediction latency")
+    feature_importance: dict[str, float] | None = Field(
+        None, description="Feature importance scores"
+    )
     diagnostics: dict[str, Any] = Field(
         default_factory=dict, description="Diagnostic info"
     )
@@ -1177,6 +1188,16 @@ class FeatureDriftDetail(BaseModel):
     status: str = Field(..., description="OK | WARNING | CRITICAL")
 
 
+class AlertItem(BaseModel):
+    """Structured alert for drift or monitoring events."""
+
+    severity: Literal["warning", "critical"] = Field(..., description="Alert severity")
+    feature: str = Field(..., description="Feature name or component")
+    psi: float = Field(..., description="PSI value")
+    threshold: float = Field(..., description="Threshold exceeded")
+    recommendation: str = Field(..., description="Recommended action")
+
+
 class DriftStatusResponse(BaseModel):
     """Response schema for drift status endpoint."""
 
@@ -1200,11 +1221,40 @@ class DriftStatusResponse(BaseModel):
         default_factory=list,
         description="Features sorted by PSI descending",
     )
+    alerts: list[AlertItem] = Field(
+        default_factory=list,
+        description="List of structured alerts based on drift thresholds",
+    )
     thresholds: dict[str, float] = Field(
         default_factory=dict,
         description="Threshold values (warn, fail)",
     )
     error: str | None = Field(None, description="Error message if status=unknown")
+
+
+class ScoreDistributionItem(BaseModel):
+    """Per-bucket score distribution info."""
+
+    bucket: list[int] = Field(..., description="Bucket range [min, max]")
+    baseline_ratio: float = Field(..., description="Ratio in baseline data")
+    observed_ratio: float = Field(..., description="Ratio in observed live data")
+    observed_count: int = Field(..., description="Count in observed live data")
+
+
+class ScoreDistributionResponse(BaseModel):
+    """Response schema for score distribution monitoring."""
+
+    computed_at: str = Field(..., description="ISO timestamp of computation")
+    observed_size: int = Field(..., description="Number of live samples")
+    baseline_size: int | None = Field(None, description="Number of baseline samples")
+    divergence: float = Field(..., description="Divergence metric value")
+    divergence_metric: str = Field(
+        default="JS", description="Metric used (JS for Jensen-Shannon)"
+    )
+    distribution: list[ScoreDistributionItem] = Field(default_factory=list)
+    shift_detected: bool = Field(
+        ..., description="True if any bucket exceeded 2x baseline"
+    )
 
 
 # =============================================================================

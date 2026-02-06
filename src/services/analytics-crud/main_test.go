@@ -79,7 +79,7 @@ func TestGetFeatureSample_Stratified(t *testing.T) {
 	mock.ExpectQuery("SELECT version").WillReturnRows(sqlmock.NewRows([]string{"version"}).AddRow("PostgreSQL 16.1"))
 
 	// 2. Stats query
-	mock.ExpectQuery("SELECT MIN").
+	mock.ExpectQuery("SELECT COALESCE\\(MIN\\(id\\), 0\\), COALESCE\\(MAX\\(id\\), 0\\), COUNT\\(\\*\\) FROM generated_records").
 		WillReturnRows(sqlmock.NewRows([]string{"min", "max", "count"}).AddRow(1, 1000, 1000))
 
 	// 3. Fraud rate query

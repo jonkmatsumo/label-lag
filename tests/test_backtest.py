@@ -9,15 +9,15 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from api.backtest import BacktestMetrics, BacktestRunner, BacktestStore
-from api.rules import Rule, RuleSet
+from rules_management.backtest import BacktestMetrics, BacktestRunner, BacktestStore
+from rules_management.rules import Rule, RuleSet
 
 
 @pytest.fixture(autouse=True)
 def mock_gateway_client(monkeypatch):
     """Mock the GatewayDecisionClient for all tests."""
     from api import gateway_client
-    from api.rules import Rule, RuleSet, evaluate_rules
+    from rules_management.rules import Rule, RuleSet, evaluate_rules
 
     mock_client = MagicMock()
 

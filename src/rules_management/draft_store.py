@@ -11,7 +11,7 @@ from dataclasses import asdict
 from pathlib import Path
 from threading import Lock
 
-from api.rules import Rule, RuleStatus
+from rules_management.rules import Rule, RuleStatus
 
 logger = logging.getLogger(__name__)
 
@@ -231,14 +231,14 @@ def get_draft_store() -> DraftRuleStore:
     """
     global _global_draft_store
     if _global_draft_store is None:
-        from api.rule_store import get_rule_store_backend
+        from rules_management.rule_store import get_rule_store_backend
 
         backend = get_rule_store_backend()
 
         if backend == "postgres":
             # Only import GrpcRuleStore when postgres backend is enabled
             # This avoids database dependencies in unit tests
-            from api.grpc_rule_store import GrpcRuleStore
+            from rules_management.grpc_rule_store import GrpcRuleStore
 
             _global_draft_store = GrpcRuleStore()  # type: ignore[assignment]
             logger.info("Using gRPC rule store backend (via Analytics service)")

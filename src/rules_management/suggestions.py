@@ -8,8 +8,8 @@ import numpy as np
 from google.protobuf.json_format import MessageToDict
 
 from api.crud_client import get_crud_client
-from api.model_manager import get_model_manager
-from api.rules import Rule, RuleSet, RuleStatus
+from forecast.model_manager import get_model_manager
+from rules_management.rules import Rule, RuleSet, RuleStatus
 
 logger = logging.getLogger(__name__)
 

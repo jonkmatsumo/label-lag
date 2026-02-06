@@ -104,6 +104,58 @@ func TestHandleEvaluateRulesDiff(t *testing.T) {
 	}
 }
 
+func TestHandleEvaluateRules_Debug(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	handler := NewHandler(logger, nil, nil, rules.NewEmptyProvider(), 1024)
+
+	payload := EvaluateRulesRequest{
+		Features:  map[string]any{"velocity_24h": 10},
+		BaseScore: 50,
+		RuleSet: &rules.RuleSet{
+			Version: "test_v1",
+			Rules: []rules.Rule{
+				{
+					ID:     "rule1",
+					Field:  "velocity_24h",
+					Op:     ">",
+					Value:  5,
+					Action: "reject",
+					Status: rules.RuleStatusActive,
+				},
+			},
+		},
+	}
+
+	body, _ := json.Marshal(payload)
+	req := httptest.NewRequest(http.MethodPost, "/evaluate/rules?debug=true", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.handleEvaluateRules(rec, req)
+
+	assertStatus(t, rec.Code, http.StatusOK)
+
+	var resp EvaluateRulesResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.EvaluationTimeMS < 0 {
+		t.Errorf("expected evaluation_time_ms >= 0, got %f", resp.EvaluationTimeMS)
+	}
+	if len(resp.PerRuleTimingsMS) != 1 {
+		t.Errorf("expected 1 per_rule_timings_ms entry, got %v", resp.PerRuleTimingsMS)
+	}
+	if _, ok := resp.PerRuleTimingsMS["rule1"]; !ok {
+		t.Errorf("expected per_rule_timings_ms for rule1 to be present")
+	}
+}
+
+func assertStatus(t *testing.T, actual, expected int) {
+	if actual != expected {
+		t.Errorf("expected status %d, got %d", expected, actual)
+	}
+}
+
 func intPtr(v int) *int {
 	return &v
 }

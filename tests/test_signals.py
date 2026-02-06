@@ -5,10 +5,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from api.backtest import BacktestMetrics, BacktestResult, BacktestStore
-from api.metrics import MetricsCollector, RuleMetrics
-from api.rules import Rule, RuleSet, RuleStatus
-from api.signals import (
+from rules_management.backtest import BacktestMetrics, BacktestResult, BacktestStore
+from rules_management.metrics import MetricsCollector, RuleMetrics
+from rules_management.rules import Rule, RuleSet, RuleStatus
+from rules_management.signals import (
     compute_approval_signals,
     compute_coverage_signals,
     compute_governance_signals,
@@ -137,8 +137,8 @@ class TestStructuralSignals:
 class TestCoverageSignals:
     """Tests for coverage/match impact signals."""
 
-    @patch("api.signals.get_metrics_collector")
-    @patch("api.signals.get_draft_store")
+    @patch("rules_management.signals.get_metrics_collector")
+    @patch("rules_management.signals.get_draft_store")
     def test_shadow_metrics_available(self, mock_draft_store, mock_metrics_collector):
         """Test shadow metrics when available."""
         # Mock metrics collector
@@ -183,7 +183,7 @@ class TestCoverageSignals:
         assert shadow_match_signal is not None
         assert shadow_match_signal.value == 1247
 
-    @patch("api.signals.BacktestStore")
+    @patch("rules_management.signals.BacktestStore")
     def test_backtest_available(self, mock_backtest_store_class):
         """Test backtest signals when available."""
         # Mock backtest store
@@ -225,7 +225,7 @@ class TestCoverageSignals:
         assert match_rate_signal is not None
         assert match_rate_signal.value == 0.023
 
-    @patch("api.signals.BacktestStore")
+    @patch("rules_management.signals.BacktestStore")
     def test_no_backtest(self, mock_backtest_store_class):
         """Test backtest signals when no backtest exists."""
         mock_store = MagicMock(spec=BacktestStore)
@@ -244,7 +244,7 @@ class TestCoverageSignals:
 class TestGovernanceSignals:
     """Tests for governance/process signals."""
 
-    @patch("api.signals.get_version_store")
+    @patch("rules_management.signals.get_version_store")
     def test_version_count(self, mock_version_store):
         """Test version count signal."""
         mock_store = MagicMock()
@@ -294,10 +294,10 @@ class TestGovernanceSignals:
 class TestComputeApprovalSignals:
     """Tests for the main compute_approval_signals function."""
 
-    @patch("api.signals.get_draft_store")
-    @patch("api.signals.compute_structural_signals")
-    @patch("api.signals.compute_coverage_signals")
-    @patch("api.signals.compute_governance_signals")
+    @patch("rules_management.signals.get_draft_store")
+    @patch("rules_management.signals.compute_structural_signals")
+    @patch("rules_management.signals.compute_coverage_signals")
+    @patch("rules_management.signals.compute_governance_signals")
     def test_compute_all_signals(
         self,
         mock_governance,
@@ -371,7 +371,7 @@ class TestComputeApprovalSignals:
         assert response.summary.warning_count == 0
         assert response.summary.has_blockers is False
 
-    @patch("api.signals.get_draft_store")
+    @patch("rules_management.signals.get_draft_store")
     def test_rule_not_found(self, mock_draft_store):
         """Test that ValueError is raised when rule not found."""
         mock_store = MagicMock()
@@ -381,10 +381,10 @@ class TestComputeApprovalSignals:
         with pytest.raises(ValueError, match="Rule not found"):
             compute_approval_signals("nonexistent_rule")
 
-    @patch("api.signals.get_draft_store")
-    @patch("api.signals.compute_structural_signals")
-    @patch("api.signals.compute_coverage_signals")
-    @patch("api.signals.compute_governance_signals")
+    @patch("rules_management.signals.get_draft_store")
+    @patch("rules_management.signals.compute_structural_signals")
+    @patch("rules_management.signals.compute_coverage_signals")
+    @patch("rules_management.signals.compute_governance_signals")
     def test_partial_signals(
         self,
         mock_governance,

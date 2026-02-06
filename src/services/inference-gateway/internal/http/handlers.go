@@ -53,6 +53,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/evaluate/signal", h.handleEvaluateSignal)
 	mux.HandleFunc("/evaluate/rules", h.handleEvaluateRules)
 	mux.HandleFunc("/evaluate/rules/diff", h.handleEvaluateRulesDiff)
+	mux.HandleFunc("/rules/sandbox/evaluate", h.handleSandboxEvaluate)
+	mux.HandleFunc("/rules/sandbox/diff", h.handleSandboxDiff)
 	mux.HandleFunc("/ready", h.handleReady)
 	mux.HandleFunc("/analytics/overview", h.handleAnalyticsOverview)
 	mux.HandleFunc("/analytics/daily-stats", h.handleAnalyticsDailyStats)
@@ -62,6 +64,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/analytics/feature-sample", h.handleAnalyticsFeatureSample)
 	mux.HandleFunc("/analytics/schema", h.handleAnalyticsSchema)
 	mux.HandleFunc("/analytics/transactions/search", h.handleSearchTransactions)
+	mux.HandleFunc("/data/clear", h.handleDatasetClear)
 	mux.HandleFunc("/monitoring/drift", h.handleMonitoringDrift)
 	mux.HandleFunc("/metrics/shadow/comparison", h.handleMetricsShadowComparison)
 	mux.HandleFunc("/backtest/results", h.handleBacktestResults)
@@ -209,7 +212,7 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 
 	rawScore := int32(math.Round(inferenceResp.GetModelScore()))
 
-	ruleResult, err := rules.EvaluateRules(features, int(rawScore), ruleset)
+	ruleResult, err := rules.EvaluateRules(features, int(rawScore), &ruleset, rules.EvalOptions{Debug: false})
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "rule evaluation failed")
 		return

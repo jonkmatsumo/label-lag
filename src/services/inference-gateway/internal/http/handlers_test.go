@@ -653,6 +653,7 @@ type stubAnalyticsClient struct {
 	lastFeatureSampleReq      *crudv1.GetFeatureSampleRequest
 	lastSchemaSummaryReq      *crudv1.GetSchemaSummaryRequest
 	lastBacktestResultsReq    *crudv1.ListBacktestResultsRequest
+	lastClearAllDataReq       *crudv1.ClearAllDataRequest
 }
 
 func (s *stubAnalyticsClient) SearchTransactions(ctx context.Context, req *crudv1.SearchTransactionsRequest) (*crudv1.SearchTransactionsResponse, error) {
@@ -698,6 +699,11 @@ func (s *stubAnalyticsClient) GetSchemaSummary(ctx context.Context, req *crudv1.
 func (s *stubAnalyticsClient) ListBacktestResults(ctx context.Context, req *crudv1.ListBacktestResultsRequest) (*crudv1.ListBacktestResultsResponse, error) {
 	s.lastBacktestResultsReq = req
 	return s.backtestResultsResp, s.err
+}
+
+func (s *stubAnalyticsClient) ClearAllData(ctx context.Context, req *crudv1.ClearAllDataRequest) (*crudv1.ClearAllDataResponse, error) {
+	s.lastClearAllDataReq = req
+	return &crudv1.ClearAllDataResponse{Success: true}, s.err
 }
 
 func (s *stubAnalyticsClient) GetFeatures(ctx context.Context, userID string) (map[string]any, error) {
