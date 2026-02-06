@@ -3,8 +3,8 @@
 # verify.sh - Per-commit regression testing script
 #
 # Usage:
-#   ./scripts/verify.sh          # Fast check (lint + unit tests)
-#   ./scripts/verify.sh --full   # Full check (all tests including BFF)
+#   ./shell/verify.sh          # Fast check (lint + unit tests)
+#   ./shell/verify.sh --full   # Full check (all tests including BFF)
 #
 # Exit codes:
 #   0 - All checks passed

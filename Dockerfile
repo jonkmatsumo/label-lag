@@ -22,10 +22,10 @@ RUN uv sync --frozen --no-dev
 # Copy source code last (changes frequently)
 COPY python/src ./src
 COPY config ./config
-COPY scripts ./scripts
+COPY shell ./shell
 
 # Set up wait-for-it script
-RUN cp /app/scripts/wait-for-it.sh /usr/local/bin/wait-for-it.sh && \
+RUN cp /app/shell/wait-for-it.sh /usr/local/bin/wait-for-it.sh && \
     chmod +x /usr/local/bin/wait-for-it.sh
 
 # Default command
