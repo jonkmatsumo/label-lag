@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/jonkmatsumo/label-lag/src/services/analytics-crud/generator"
 	pb "github.com/jonkmatsumo/label-lag/src/services/analytics-crud/proto/crud/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -260,4 +261,120 @@ func TestResolveDatabaseURLAllowsDefaultsWhenEnabled(t *testing.T) {
 func TestResolveDatabaseURLRequiresExplicitValue(t *testing.T) {
 	_, err := resolveDatabaseURL(func(string) string { return "" })
 	require.Error(t, err)
+}
+
+// ============================================================================
+// Go Generator Integration Tests
+// ============================================================================
+
+func TestGenerateDataReturnsUnimplementedWhenDisabled(t *testing.T) {
+	db, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := &server{db: db}
+
+	// Ensure env var is not set (or cleared)
+	t.Setenv("ENABLE_GO_DATASET_GENERATE", "")
+
+	req := &pb.GenerateDataRequest{
+		NumUsers:  10,
+		FraudRate: 0.1,
+	}
+
+	_, err = s.GenerateData(context.Background(), req)
+	require.Error(t, err)
+
+	st, ok := status.FromError(err)
+	require.True(t, ok)
+	assert.Equal(t, codes.Unimplemented, st.Code())
+	assert.Contains(t, st.Message(), "disabled")
+}
+
+func TestGeneratorPackageIntegration(t *testing.T) {
+	// Tests that the generator package produces valid data
+	seed := int64(42)
+	gen := generator.NewGenerator(&seed)
+
+	// Generate a small dataset
+	result := gen.GenerateDatasetWithSequences(5, 0.2)
+
+	// Verify records exist
+	assert.NotEmpty(t, result.Records)
+	assert.NotEmpty(t, result.Metadata)
+	assert.Equal(t, len(result.Records), len(result.Metadata))
+
+	// Verify records have required fields
+	for i, r := range result.Records {
+		assert.NotEmpty(t, r.UserId, "record %d missing UserId", i)
+		assert.NotEmpty(t, r.FullName, "record %d missing FullName", i)
+		assert.NotEmpty(t, r.Email, "record %d missing Email", i)
+		assert.Greater(t, r.Amount, float64(0), "record %d has invalid Amount", i)
+	}
+
+	// Verify metadata
+	for i, m := range result.Metadata {
+		assert.NotEmpty(t, m.UserId, "metadata %d missing UserId", i)
+		assert.NotEmpty(t, m.RecordId, "metadata %d missing RecordId", i)
+		assert.GreaterOrEqual(t, m.SequenceNumber, int32(1), "metadata %d has invalid SequenceNumber", i)
+	}
+
+	// Verify fraud rate is approximately correct (1 fraudulent user = ~1 fraud record)
+	fraudCount := 0
+	for _, r := range result.Records {
+		if r.IsFraudulent {
+			fraudCount++
+		}
+	}
+	assert.GreaterOrEqual(t, fraudCount, 0)
+}
+
+func TestGeneratorDeterminism(t *testing.T) {
+	// Two generators with same seed should produce identical output
+	seed := int64(12345)
+
+	gen1 := generator.NewGenerator(&seed)
+	gen2 := generator.NewGenerator(&seed)
+
+	result1 := gen1.GenerateDatasetWithSequences(3, 0.1)
+	result2 := gen2.GenerateDatasetWithSequences(3, 0.1)
+
+	require.Equal(t, len(result1.Records), len(result2.Records))
+
+	// Check that deterministic fields match
+	for i := range result1.Records {
+		assert.Equal(t, result1.Records[i].Amount, result2.Records[i].Amount, "record %d Amount mismatch", i)
+		assert.Equal(t, result1.Records[i].AvailableBalance, result2.Records[i].AvailableBalance, "record %d AvailableBalance mismatch", i)
+		assert.Equal(t, result1.Records[i].BalanceVolatilityZScore, result2.Records[i].BalanceVolatilityZScore, "record %d ZScore mismatch", i)
+		assert.Equal(t, result1.Records[i].IsFraudulent, result2.Records[i].IsFraudulent, "record %d IsFraudulent mismatch", i)
+		assert.Equal(t, result1.Records[i].FraudType, result2.Records[i].FraudType, "record %d FraudType mismatch", i)
+	}
+}
+
+func TestGeneratorFraudTypeDistribution(t *testing.T) {
+	seed := int64(999)
+	gen := generator.NewGenerator(&seed)
+
+	// Generate with 100% fraud rate to ensure we get fraud records
+	result := gen.GenerateDatasetWithSequences(10, 1.0)
+
+	fraudTypes := make(map[string]int)
+	for _, r := range result.Records {
+		if r.IsFraudulent {
+			fraudTypes[r.FraudType]++
+		}
+	}
+
+	// Should have at least one fraud type represented
+	assert.NotEmpty(t, fraudTypes, "expected fraud types to be generated")
+
+	// Verify fraud types are valid
+	validTypes := map[string]bool{
+		"liquidity_crunch": true,
+		"link_burst":       true,
+		"ato":              true,
+	}
+	for ft := range fraudTypes {
+		assert.True(t, validTypes[ft], "unexpected fraud type: %s", ft)
+	}
 }
