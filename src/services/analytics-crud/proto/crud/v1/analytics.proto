@@ -24,6 +24,9 @@ service AnalyticsService {
   rpc StoreGeneratedData(StoreGeneratedDataRequest) returns (StoreGeneratedDataResponse);
   rpc ClearAllData(ClearAllDataRequest) returns (ClearAllDataResponse);
   rpc MaterializeFeatures(MaterializeFeaturesRequest) returns (MaterializeFeaturesResponse);
+  
+  // Synthetic Data Generation (Go implementation)
+  rpc GenerateData(GenerateDataRequest) returns (GenerateDataResponse);
 
   // Score Monitoring (C3)
   rpc GetInferenceScores(GetInferenceScoresRequest) returns (GetInferenceScoresResponse);
@@ -355,6 +358,23 @@ message MaterializeFeaturesRequest {
 message MaterializeFeaturesResponse {
   bool success = 1;
   int64 total_processed = 2;
+}
+
+// GenerateDataRequest initiates synthetic data generation in Go.
+// This is an alternative to the Python /data/generate endpoint.
+message GenerateDataRequest {
+  int32 num_users = 1;      // Number of users to generate
+  double fraud_rate = 2;    // Fraction of fraudulent users (0.0 to 1.0)
+  bool drop_existing = 3;   // Clear existing data before generating
+  optional int64 seed = 4;  // Optional seed for deterministic generation
+}
+
+message GenerateDataResponse {
+  bool success = 1;
+  int64 total_records = 2;       // Total records generated
+  int64 fraud_records = 3;       // Number of fraud records
+  int64 features_materialized = 4; // Number of feature rows materialized
+  string error = 5;              // Error message if !success
 }
 
 message Rule {
