@@ -23,13 +23,41 @@ jobs:
         run: uv sync --all-extras
 
       - name: Run ruff linting
-        run: uv run ruff check src tests
+        run: uv run ruff check python/src python/tests
 
       - name: Run ruff formatting check
-        run: uv run ruff format --check src tests
+        run: uv run ruff format --check python/src python/tests
 
       - name: Run tests
-        run: uv run pytest --cov=src/synthetic_pipeline --cov-report=xml
+        run: uv run pytest --cov=python/src/synthetic_pipeline --cov-report=xml
+
+  node-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: '**/package-lock.json'
+
+      - name: Install BFF dependencies
+        working-directory: typescript/bff
+        run: npm ci
+
+      - name: Test BFF
+        working-directory: typescript/bff
+        run: npm test
+
+      - name: Install UI dependencies
+        working-directory: typescript/ui
+        run: npm ci
+
+      - name: Lint UI
+        working-directory: typescript/ui
+        run: npm run lint
 
   lint:
     runs-on: ubuntu-latest
@@ -46,7 +74,7 @@ jobs:
         run: uv sync --all-extras
 
       - name: Run ruff
-        run: uv run ruff check --output-format=github src tests
+        run: uv run ruff check --output-format=github python/src python/tests
 
   go-test:
     runs-on: ubuntu-latest
@@ -54,8 +82,8 @@ jobs:
       fail-fast: false
       matrix:
         module:
-          - src/services/inference-gateway
-          - src/services/analytics-crud
+          - go/inference-gateway
+          - go/analytics-crud
 
     steps:
       - uses: actions/checkout@v4

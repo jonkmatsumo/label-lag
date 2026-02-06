@@ -10,9 +10,9 @@ services:
       - "${DB_PORT:-5432}:5432"
     volumes:
       - labellag_postgres_data:/var/lib/postgresql/data
-      - ./scripts/init-mlflow-db.sql:/docker-entrypoint-initdb.d/init-mlflow-db.sql:ro
+      - ./sql/init-mlflow-db.sql:/docker-entrypoint-initdb.d/init-mlflow-db.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -33,7 +33,7 @@ services:
     volumes:
       - labellag_minio_data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -49,12 +49,7 @@ services:
       minio:
         condition: service_healthy
     entrypoint: >
-      /bin/sh -c "
-      /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin;
-      /usr/bin/mc mb --ignore-existing myminio/mlflow-artifacts;
-      /usr/bin/mc anonymous set public myminio/mlflow-artifacts;
-      exit 0;
-      "
+      /bin/sh -c " /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin; /usr/bin/mc mb --ignore-existing myminio/mlflow-artifacts; /usr/bin/mc anonymous set public myminio/mlflow-artifacts; exit 0; "
 
   mlflow:
     build:
@@ -71,18 +66,14 @@ services:
       - AWS_ACCESS_KEY_ID=minioadmin
       - AWS_SECRET_ACCESS_KEY=minioadmin
     command: >
-      mlflow server
-      --backend-store-uri postgresql://${POSTGRES_USER:-synthetic}:${POSTGRES_PASSWORD:-synthetic_dev_password}@db:5432/mlflow_db
-      --default-artifact-root s3://mlflow-artifacts/
-      --host 0.0.0.0
-      --allowed-hosts "*"
+      mlflow server --backend-store-uri postgresql://${POSTGRES_USER:-synthetic}:${POSTGRES_PASSWORD:-synthetic_dev_password}@db:5432/mlflow_db --default-artifact-root s3://mlflow-artifacts/ --host 0.0.0.0 --allowed-hosts "*"
     depends_on:
       db:
         condition: service_healthy
       minio:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/health')\""]
+      test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/health')\"" ]
       interval: 10s
       timeout: 5s
       retries: 5

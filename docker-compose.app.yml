@@ -30,7 +30,7 @@ services:
   analytics-crud:
     build:
       context: .
-      dockerfile: src/services/analytics-crud/Dockerfile
+      dockerfile: go/analytics-crud/Dockerfile
     container_name: analytics-crud
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-synthetic}:${POSTGRES_PASSWORD:-synthetic_dev_password}@db:5432/${POSTGRES_DB:-synthetic_data}?sslmode=disable
@@ -46,7 +46,7 @@ services:
   grpc-inference:
     build:
       context: .
-      dockerfile: config/docker/grpc-inference.Dockerfile
+      dockerfile: python/Dockerfile
     container_name: grpc-inference
     environment:
       - GRPC_INFERENCE_HOST=0.0.0.0
@@ -70,11 +70,13 @@ services:
   inference-gateway:
     build:
       context: .
-      dockerfile: src/services/inference-gateway/Dockerfile
+      dockerfile: go/inference-gateway/Dockerfile
     container_name: inference-gateway
     environment:
       - PORT=8081
       - INFERENCE_GATEWAY_PYTHON_GRPC_ADDR=grpc-inference:50052
+      - INFERENCE_GATEWAY_RULES_PATH=go/inference-gateway/config/default_rules.json
+      - INFERENCE_GATEWAY_RULES_WATCH=true
     networks:
       - labellag_net
     ports:
@@ -90,7 +92,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: synthetic-data-generator
-    profiles: ["tools"]
+    profiles: [ "tools" ]
     env_file:
       - .env
     volumes:
@@ -104,10 +106,10 @@ services:
   # BFF (Backend for Frontend) - Node.js proxy layer for React UI
   bff:
     build:
-      context: bff
+      context: typescript/bff
       dockerfile: Dockerfile
     container_name: label-lag-bff
-    profiles: ["react", "all"]
+    profiles: [ "react", "all" ]
     environment:
       - BFF_PORT=${BFF_PORT:-3210}
       - BFF_HOST=0.0.0.0
@@ -123,7 +125,7 @@ services:
       - "${BFF_PORT:-3210}:${BFF_PORT:-3210}"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:${BFF_PORT:-3210}/health"]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:${BFF_PORT:-3210}/health" ]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -137,17 +139,17 @@ services:
   # React Web UI
   web:
     build:
-      context: web
+      context: typescript/ui
       dockerfile: Dockerfile
     container_name: label-lag-web
-    profiles: ["react", "all"]
+    profiles: [ "react", "all" ]
     networks:
       - labellag_net
     ports:
       - "${WEB_PORT:-5180}:${WEB_PORT:-5180}"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${WEB_PORT:-5180}/"]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${WEB_PORT:-5180}/" ]
       interval: 10s
       timeout: 5s
       retries: 3
