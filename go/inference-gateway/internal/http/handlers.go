@@ -35,10 +35,12 @@ type Handler struct {
 	inferenceClient InferenceClient
 	analyticsClient AnalyticsClient
 	rulesProvider   rules.Provider
+	pythonURL       string
+	mlflowURL       string
 	maxBodyBytes    int64
 }
 
-func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient AnalyticsClient, provider rules.Provider, maxBodyBytes int64) *Handler {
+func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient AnalyticsClient, provider rules.Provider, maxBodyBytes int64, pythonURL, mlflowURL string) *Handler {
 	if maxBodyBytes <= 0 {
 		maxBodyBytes = 1 << 20
 	}
@@ -48,6 +50,8 @@ func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient Ana
 		analyticsClient: analyticsClient,
 		rulesProvider:   provider,
 		maxBodyBytes:    maxBodyBytes,
+		pythonURL:       pythonURL,
+		mlflowURL:       mlflowURL,
 	}
 }
 
