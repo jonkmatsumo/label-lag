@@ -88,10 +88,10 @@ rebuild-bff:
 	docker compose -f docker-compose.infra.yml -f docker-compose.app.yml up -d bff
 
 bff-test:
-	cd bff && npm test
+	cd node/bff && npm test
 
 bff-dev:
-	cd bff && npm run dev
+	cd node/bff && npm run dev
 
 # Web (React UI) targets
 rebuild-web:
@@ -99,7 +99,7 @@ rebuild-web:
 	docker compose -f docker-compose.infra.yml -f docker-compose.app.yml up -d web
 
 web-test:
-	cd web && npm test
+	cd node/ui && npm test
 
 web-dev:
-	cd web && npm run dev
+	cd node/ui && npm run dev

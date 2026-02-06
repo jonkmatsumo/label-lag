@@ -90,7 +90,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: synthetic-data-generator
-    profiles: ["tools"]
+    profiles: [ "tools" ]
     env_file:
       - .env
     volumes:
@@ -104,10 +104,10 @@ services:
   # BFF (Backend for Frontend) - Node.js proxy layer for React UI
   bff:
     build:
-      context: bff
+      context: node/bff
       dockerfile: Dockerfile
     container_name: label-lag-bff
-    profiles: ["react", "all"]
+    profiles: [ "react", "all" ]
     environment:
       - BFF_PORT=${BFF_PORT:-3210}
       - BFF_HOST=0.0.0.0
@@ -123,7 +123,7 @@ services:
       - "${BFF_PORT:-3210}:${BFF_PORT:-3210}"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:${BFF_PORT:-3210}/health"]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:${BFF_PORT:-3210}/health" ]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -137,17 +137,17 @@ services:
   # React Web UI
   web:
     build:
-      context: web
+      context: node/ui
       dockerfile: Dockerfile
     container_name: label-lag-web
-    profiles: ["react", "all"]
+    profiles: [ "react", "all" ]
     networks:
       - labellag_net
     ports:
       - "${WEB_PORT:-5180}:${WEB_PORT:-5180}"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${WEB_PORT:-5180}/"]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${WEB_PORT:-5180}/" ]
       interval: 10s
       timeout: 5s
       retries: 3

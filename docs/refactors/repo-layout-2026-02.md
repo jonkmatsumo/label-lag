@@ -15,12 +15,12 @@ This document tracks the migration of the repository structure to top-level lang
 
 ## Checklist of Updates
 
-- [ ] Dockerfiles & Compose
-    - `docker-compose.app.yml`
-    - `Dockerfile` (API)
-    - `src/services/*/Dockerfile`
-    - `bff/Dockerfile`
-    - `config/docker/*.Dockerfile`
+- [x] Dockerfiles & Compose
+    - [x] `docker-compose.app.yml`
+    - [ ] `Dockerfile` (API)
+    - [ ] `src/services/*/Dockerfile`
+    - [x] `bff/Dockerfile`
+    - [ ] `config/docker/*.Dockerfile`
 - [ ] CI/CD
     - `.github/workflows/ci.yml` (paths, working-dirs)
 - [ ] Tooling

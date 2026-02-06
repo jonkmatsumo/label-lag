@@ -113,13 +113,13 @@ fi
 if [ "$FULL_MODE" = true ]; then
     section "BFF Linting (eslint)"
 
-    if [ -d "bff" ] && [ -f "bff/package.json" ]; then
+    if [ -d "node/bff" ] && [ -f "node/bff/package.json" ]; then
         # Check if node_modules exists
-        if [ -d "bff/node_modules" ]; then
-            run_step "BFF lint" "cd bff && npm run lint" || true
+        if [ -d "node/bff/node_modules" ]; then
+            run_step "BFF lint" "cd node/bff && npm run lint" || true
         else
             echo -e "${YELLOW}Skipping BFF lint - node_modules not installed${NC}"
-            echo "Run 'cd bff && npm install' to enable BFF checks"
+            echo "Run 'cd node/bff && npm install' to enable BFF checks"
         fi
     else
         echo -e "${YELLOW}Skipping BFF lint - bff directory not found${NC}"
@@ -127,9 +127,9 @@ if [ "$FULL_MODE" = true ]; then
 
     section "BFF Tests (vitest)"
 
-    if [ -d "bff" ] && [ -f "bff/package.json" ]; then
-        if [ -d "bff/node_modules" ]; then
-            run_step "BFF unit tests" "cd bff && npm test" || true
+    if [ -d "node/bff" ] && [ -f "node/bff/package.json" ]; then
+        if [ -d "node/bff/node_modules" ]; then
+            run_step "BFF unit tests" "cd node/bff && npm test" || true
         else
             echo -e "${YELLOW}Skipping BFF tests - node_modules not installed${NC}"
         fi
@@ -137,12 +137,12 @@ if [ "$FULL_MODE" = true ]; then
 
     section "Web Linting (eslint)"
 
-    if [ -d "web" ] && [ -f "web/package.json" ]; then
-        if [ -d "web/node_modules" ]; then
-            run_step "Web lint" "cd web && npm run lint" || true
+    if [ -d "node/ui" ] && [ -f "node/ui/package.json" ]; then
+        if [ -d "node/ui/node_modules" ]; then
+            run_step "Web lint" "cd node/ui && npm run lint" || true
         else
             echo -e "${YELLOW}Skipping Web lint - node_modules not installed${NC}"
-            echo "Run 'cd web && npm install' to enable Web checks"
+            echo "Run 'cd node/ui && npm install' to enable Web checks"
         fi
     fi
 fi
