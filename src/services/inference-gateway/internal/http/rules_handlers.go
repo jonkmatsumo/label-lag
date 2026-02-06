@@ -793,4 +793,75 @@ func (h *Handler) handleRuleReadiness(w http.ResponseWriter, r *http.Request) {
 	w.Write(payload)
 }
 
-// diff/publish handlers temporarily removed for commit splitting
+func (h *Handler) handlePublishRule(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	ruleID := r.PathValue("rule_id")
+	if ruleID == "" {
+		writeJSONError(w, http.StatusBadRequest, "rule_id required")
+		return
+	}
+
+	type PublishRequest struct {
+		VersionID string `json:"version_id"`
+		Reason    string `json:"reason"`
+		Actor     string `json:"actor"`
+	}
+	var req PublishRequest
+	// Body optional
+	if r.Body != nil && r.ContentLength > 0 {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+
+	resp, err := h.analyticsClient.PublishRuleVersion(r.Context(), &crudv1.PublishRuleVersionRequest{
+		RuleId:    ruleID,
+		VersionId: req.VersionID,
+		Reason:    req.Reason,
+		Actor:     req.Actor,
+	})
+	if err != nil {
+		writeRPCError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	payload, _ := protojson.MarshalOptions{EmitUnpopulated: true, UseProtoNames: true}.Marshal(resp)
+	w.Write(payload)
+}
+
+func (h *Handler) handleRuleDiff(w http.ResponseWriter, r *http.Request) {
+	// GET /rules/{rule_id}/diff?version_a=...&version_b=...
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	ruleID := r.PathValue("rule_id")
+	versionA := r.URL.Query().Get("version_a")
+	versionB := r.URL.Query().Get("version_b") // "live" or empty
+
+	if ruleID == "" || versionA == "" {
+		writeJSONError(w, http.StatusBadRequest, "rule_id and version_a required")
+		return
+	}
+	if versionB == "" {
+		versionB = "active"
+	}
+
+	resp, err := h.analyticsClient.DiffRuleVersions(r.Context(), &crudv1.DiffRuleVersionsRequest{
+		RuleId:   ruleID,
+		VersionA: versionA,
+		VersionB: versionB,
+	})
+	if err != nil {
+		writeRPCError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	payload, _ := protojson.MarshalOptions{EmitUnpopulated: true, UseProtoNames: true}.Marshal(resp)
+	w.Write(payload)
+}

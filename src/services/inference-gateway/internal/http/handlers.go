@@ -76,9 +76,9 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	// Routes for later commits
 	mux.HandleFunc("GET /rules/{rule_id}/history", h.handleListRuleVersions)
 	mux.HandleFunc("GET /rules/{rule_id}/versions/{version_id}", h.handleGetRuleVersion)
-	// mux.HandleFunc("POST /rules/{rule_id}/publish", h.handlePublishRule)
+	mux.HandleFunc("POST /rules/{rule_id}/publish", h.handlePublishRule)
 	mux.HandleFunc("GET /rules/{rule_id}/readiness", h.handleRuleReadiness)
-	// mux.HandleFunc("GET /rules/{rule_id}/diff", h.handleRuleDiff)
+	mux.HandleFunc("GET /rules/{rule_id}/diff", h.handleRuleDiff)
 
 	for _, route := range notImplementedRoutes {
 		mux.HandleFunc(route, h.handleNotImplemented)
