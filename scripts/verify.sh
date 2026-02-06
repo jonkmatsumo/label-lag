@@ -91,8 +91,8 @@ echo ""
 # ============================================
 section "Python Linting (ruff)"
 
-run_step "Ruff check" "uv run ruff check src tests" || true
-run_step "Ruff format check" "uv run ruff format --check src tests" || true
+run_step "Ruff check" "uv run ruff check python/src python/tests" || true
+run_step "Ruff format check" "uv run ruff format --check python/src python/tests" || true
 
 # ============================================
 # Python Tests
@@ -102,9 +102,9 @@ section "Python Tests (pytest)"
 # Fast mode: exclude integration tests (they require running services)
 # Full mode: include integration tests (will skip if services unavailable)
 if [ "$FULL_MODE" = true ]; then
-    run_step "Python tests (all)" "uv run pytest --cov=src/synthetic_pipeline --cov-report=term-missing -q" || true
+    run_step "Python tests (all)" "uv run pytest --cov=python/src/synthetic_pipeline --cov-report=term-missing -q" || true
 else
-    run_step "Python unit tests" "uv run pytest --ignore=tests/integration --cov=src/synthetic_pipeline --cov-report=term-missing -q" || true
+    run_step "Python unit tests" "uv run pytest --ignore=python/tests/integration --cov=python/src/synthetic_pipeline --cov-report=term-missing -q" || true
 fi
 
 # ============================================

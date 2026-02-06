@@ -23,13 +23,13 @@ jobs:
         run: uv sync --all-extras
 
       - name: Run ruff linting
-        run: uv run ruff check src tests
+        run: uv run ruff check python/src python/tests
 
       - name: Run ruff formatting check
-        run: uv run ruff format --check src tests
+        run: uv run ruff format --check python/src python/tests
 
       - name: Run tests
-        run: uv run pytest --cov=src/synthetic_pipeline --cov-report=xml
+        run: uv run pytest --cov=python/src/synthetic_pipeline --cov-report=xml
 
   node-test:
     runs-on: ubuntu-latest
@@ -74,7 +74,7 @@ jobs:
         run: uv sync --all-extras
 
       - name: Run ruff
-        run: uv run ruff check --output-format=github src tests
+        run: uv run ruff check --output-format=github python/src python/tests
 
   go-test:
     runs-on: ubuntu-latest
@@ -82,8 +82,8 @@ jobs:
       fail-fast: false
       matrix:
         module:
-          - src/services/inference-gateway
-          - src/services/analytics-crud
+          - python/src/services/inference-gateway
+          - python/src/services/analytics-crud
 
     steps:
       - uses: actions/checkout@v4

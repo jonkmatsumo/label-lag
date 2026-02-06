@@ -17,8 +17,8 @@ This document tracks the migration of the repository structure to top-level lang
 
 - [x] Dockerfiles & Compose
     - [x] `docker-compose.app.yml`
-    - [ ] `Dockerfile` (API)
-    - [ ] `src/services/*/Dockerfile`
+    - [x] `Dockerfile` (API)
+    - [x] `src/services/*/Dockerfile`
     - [x] `bff/Dockerfile`
     - [ ] `config/docker/*.Dockerfile`
 - [ ] CI/CD

@@ -20,7 +20,7 @@ COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev
 
 # Copy source code last (changes frequently)
-COPY src ./src
+COPY python/src ./src
 COPY config ./config
 COPY scripts ./scripts
 

@@ -15,15 +15,15 @@ install:
 	uv run pre-commit install
 
 test:
-	uv run pytest --cov=src/synthetic_pipeline --cov-report=term-missing
+	uv run pytest --cov=python/src/synthetic_pipeline --cov-report=term-missing
 
 lint:
-	uv run ruff check src tests
-	uv run ruff format --check src tests
+	uv run ruff check python/src python/tests
+	uv run ruff format --check python/src python/tests
 
 lint-fix:
-	uv run ruff check --fix src tests
-	uv run ruff format src tests
+	uv run ruff check --fix python/src python/tests
+	uv run ruff format python/src python/tests
 
 clean:
 	rm -rf .pytest_cache
