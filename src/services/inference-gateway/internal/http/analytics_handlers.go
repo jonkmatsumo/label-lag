@@ -360,7 +360,40 @@ func (h *Handler) handleAnalyticsRuleStats(w http.ResponseWriter, r *http.Reques
 	writeAnalyticsJSON(w, resp)
 }
 
-func (h *Handler) handleAnalyticsAttribution(w http.ResponseWriter, r *http.Request) {}
+func (h *Handler) handleAnalyticsAttribution(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	days, err := parseIntQuery(r, "days", 7, 1, 90)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	limit, err := parseIntQuery(r, "limit", 100, 1, 1000)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if h.analyticsClient == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "analytics backend unavailable")
+		return
+	}
+
+	resp, err := h.analyticsClient.GetAttribution(r.Context(), &crudv1.GetAttributionRequest{
+		Days:  days,
+		Limit: limit,
+	})
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	writeAnalyticsJSON(w, resp)
+}
 
 func parseIntQuery(r *http.Request, name string, defaultValue, minValue, maxValue int32) (int32, error) {
 	raw := r.URL.Query().Get(name)

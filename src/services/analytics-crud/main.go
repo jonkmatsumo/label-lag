@@ -944,6 +944,14 @@ func (s *server) GetRuleStats(ctx context.Context, req *pb.GetRuleStatsRequest) 
 	}, nil
 }
 
+func (s *server) GetAttribution(ctx context.Context, req *pb.GetAttributionRequest) (*pb.GetAttributionResponse, error) {
+	// Stub implementation: return empty or mocked attribution
+	// In real implementation, query inference_events table
+	return &pb.GetAttributionResponse{
+		Items: []*pb.DailyAttribution{},
+	}, nil
+}
+
 func (s *server) GetDriftWindow(ctx context.Context, req *pb.GetDriftWindowRequest) (*pb.GetDriftWindowResponse, error) {
 	if req == nil || req.Hours <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "hours > 0 required")

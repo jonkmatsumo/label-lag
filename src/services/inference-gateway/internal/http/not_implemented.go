@@ -8,7 +8,7 @@ import (
 )
 
 var notImplementedRoutes = []string{
-	"/analytics/attribution",
+	// "/analytics/attribution", // Implemented
 	"/analytics/relationships",
 	"/analytics/correlations",
 	// "/analytics/rules/", // Implemented
