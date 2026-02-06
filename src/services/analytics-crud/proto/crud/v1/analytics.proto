@@ -33,6 +33,13 @@ service AnalyticsService {
   rpc GetRule(GetRuleRequest) returns (GetRuleResponse);
   rpc ListRules(ListRulesRequest) returns (ListRulesResponse);
   rpc DeleteRule(DeleteRuleRequest) returns (DeleteRuleResponse);
+  
+  // Rule Versioning & Control Plane
+  rpc ListRuleVersions(ListRuleVersionsRequest) returns (ListRuleVersionsResponse);
+  rpc GetRuleVersion(GetRuleVersionRequest) returns (GetRuleVersionResponse);
+  rpc PublishRuleVersion(PublishRuleVersionRequest) returns (PublishRuleVersionResponse);
+  rpc GetRuleReadiness(GetRuleReadinessRequest) returns (GetRuleReadinessResponse);
+  rpc DiffRuleVersions(DiffRuleVersionsRequest) returns (DiffRuleVersionsResponse);
 
   // Inference Events
   rpc LogInferenceEvent(LogInferenceEventRequest) returns (LogInferenceEventResponse);
@@ -402,4 +409,74 @@ message LogInferenceEventRequest {
 
 message LogInferenceEventResponse {
   bool success = 1;
+}
+
+message ListRuleVersionsRequest {
+  string rule_id = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+}
+
+message ListRuleVersionsResponse {
+  repeated Rule versions = 1;
+  int64 total = 2;
+}
+
+message GetRuleVersionRequest {
+  string rule_id = 1;
+  string version_id = 2; // "latest", "active", or specific version
+}
+
+message GetRuleVersionResponse {
+  Rule rule = 1;
+  string version_id = 2;
+  google.protobuf.Timestamp created_at = 3;
+}
+
+message PublishRuleVersionRequest {
+  string rule_id = 1;
+  string version_id = 2; // Optional: specific version to promote. If empty, promote draft.
+  string actor = 3;
+  string reason = 4;
+}
+
+message PublishRuleVersionResponse {
+  bool success = 1;
+  string active_version_id = 2;
+}
+
+message GetRuleReadinessRequest {
+  string rule_id = 1;
+}
+
+message ReadinessCheck {
+  string name = 1;
+  bool passed = 2;
+  string message = 3;
+}
+
+message GetRuleReadinessResponse {
+  string rule_id = 1;
+  bool ready = 2;
+  repeated ReadinessCheck checks = 3;
+}
+
+message DiffRuleVersionsRequest {
+  string rule_id = 1;
+  string version_a = 2;
+  string version_b = 3;
+}
+
+message RuleDiffChange {
+  string field = 1;
+  string old_value = 2; // JSON string
+  string new_value = 3; // JSON string
+  string description = 4;
+}
+
+message DiffRuleVersionsResponse {
+  string rule_id = 1;
+  string version_a = 2;
+  string version_b = 3;
+  repeated RuleDiffChange changes = 4;
 }

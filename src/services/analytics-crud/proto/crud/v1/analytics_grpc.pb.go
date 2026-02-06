@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.0
 // - protoc             v6.33.4
-// source: crud/v1/analytics.proto
+// source: src/services/analytics-crud/proto/crud/v1/analytics.proto
 
 package crudv1
 
@@ -41,6 +41,11 @@ const (
 	AnalyticsService_GetRule_FullMethodName               = "/crud.v1.AnalyticsService/GetRule"
 	AnalyticsService_ListRules_FullMethodName             = "/crud.v1.AnalyticsService/ListRules"
 	AnalyticsService_DeleteRule_FullMethodName            = "/crud.v1.AnalyticsService/DeleteRule"
+	AnalyticsService_ListRuleVersions_FullMethodName      = "/crud.v1.AnalyticsService/ListRuleVersions"
+	AnalyticsService_GetRuleVersion_FullMethodName        = "/crud.v1.AnalyticsService/GetRuleVersion"
+	AnalyticsService_PublishRuleVersion_FullMethodName    = "/crud.v1.AnalyticsService/PublishRuleVersion"
+	AnalyticsService_GetRuleReadiness_FullMethodName      = "/crud.v1.AnalyticsService/GetRuleReadiness"
+	AnalyticsService_DiffRuleVersions_FullMethodName      = "/crud.v1.AnalyticsService/DiffRuleVersions"
 	AnalyticsService_LogInferenceEvent_FullMethodName     = "/crud.v1.AnalyticsService/LogInferenceEvent"
 )
 
@@ -72,6 +77,12 @@ type AnalyticsServiceClient interface {
 	GetRule(ctx context.Context, in *GetRuleRequest, opts ...grpc.CallOption) (*GetRuleResponse, error)
 	ListRules(ctx context.Context, in *ListRulesRequest, opts ...grpc.CallOption) (*ListRulesResponse, error)
 	DeleteRule(ctx context.Context, in *DeleteRuleRequest, opts ...grpc.CallOption) (*DeleteRuleResponse, error)
+	// Rule Versioning & Control Plane
+	ListRuleVersions(ctx context.Context, in *ListRuleVersionsRequest, opts ...grpc.CallOption) (*ListRuleVersionsResponse, error)
+	GetRuleVersion(ctx context.Context, in *GetRuleVersionRequest, opts ...grpc.CallOption) (*GetRuleVersionResponse, error)
+	PublishRuleVersion(ctx context.Context, in *PublishRuleVersionRequest, opts ...grpc.CallOption) (*PublishRuleVersionResponse, error)
+	GetRuleReadiness(ctx context.Context, in *GetRuleReadinessRequest, opts ...grpc.CallOption) (*GetRuleReadinessResponse, error)
+	DiffRuleVersions(ctx context.Context, in *DiffRuleVersionsRequest, opts ...grpc.CallOption) (*DiffRuleVersionsResponse, error)
 	// Inference Events
 	LogInferenceEvent(ctx context.Context, in *LogInferenceEventRequest, opts ...grpc.CallOption) (*LogInferenceEventResponse, error)
 }
@@ -304,6 +315,56 @@ func (c *analyticsServiceClient) DeleteRule(ctx context.Context, in *DeleteRuleR
 	return out, nil
 }
 
+func (c *analyticsServiceClient) ListRuleVersions(ctx context.Context, in *ListRuleVersionsRequest, opts ...grpc.CallOption) (*ListRuleVersionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRuleVersionsResponse)
+	err := c.cc.Invoke(ctx, AnalyticsService_ListRuleVersions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *analyticsServiceClient) GetRuleVersion(ctx context.Context, in *GetRuleVersionRequest, opts ...grpc.CallOption) (*GetRuleVersionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRuleVersionResponse)
+	err := c.cc.Invoke(ctx, AnalyticsService_GetRuleVersion_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *analyticsServiceClient) PublishRuleVersion(ctx context.Context, in *PublishRuleVersionRequest, opts ...grpc.CallOption) (*PublishRuleVersionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PublishRuleVersionResponse)
+	err := c.cc.Invoke(ctx, AnalyticsService_PublishRuleVersion_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *analyticsServiceClient) GetRuleReadiness(ctx context.Context, in *GetRuleReadinessRequest, opts ...grpc.CallOption) (*GetRuleReadinessResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRuleReadinessResponse)
+	err := c.cc.Invoke(ctx, AnalyticsService_GetRuleReadiness_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *analyticsServiceClient) DiffRuleVersions(ctx context.Context, in *DiffRuleVersionsRequest, opts ...grpc.CallOption) (*DiffRuleVersionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DiffRuleVersionsResponse)
+	err := c.cc.Invoke(ctx, AnalyticsService_DiffRuleVersions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *analyticsServiceClient) LogInferenceEvent(ctx context.Context, in *LogInferenceEventRequest, opts ...grpc.CallOption) (*LogInferenceEventResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(LogInferenceEventResponse)
@@ -342,6 +403,12 @@ type AnalyticsServiceServer interface {
 	GetRule(context.Context, *GetRuleRequest) (*GetRuleResponse, error)
 	ListRules(context.Context, *ListRulesRequest) (*ListRulesResponse, error)
 	DeleteRule(context.Context, *DeleteRuleRequest) (*DeleteRuleResponse, error)
+	// Rule Versioning & Control Plane
+	ListRuleVersions(context.Context, *ListRuleVersionsRequest) (*ListRuleVersionsResponse, error)
+	GetRuleVersion(context.Context, *GetRuleVersionRequest) (*GetRuleVersionResponse, error)
+	PublishRuleVersion(context.Context, *PublishRuleVersionRequest) (*PublishRuleVersionResponse, error)
+	GetRuleReadiness(context.Context, *GetRuleReadinessRequest) (*GetRuleReadinessResponse, error)
+	DiffRuleVersions(context.Context, *DiffRuleVersionsRequest) (*DiffRuleVersionsResponse, error)
 	// Inference Events
 	LogInferenceEvent(context.Context, *LogInferenceEventRequest) (*LogInferenceEventResponse, error)
 	mustEmbedUnimplementedAnalyticsServiceServer()
@@ -419,6 +486,21 @@ func (UnimplementedAnalyticsServiceServer) ListRules(context.Context, *ListRules
 }
 func (UnimplementedAnalyticsServiceServer) DeleteRule(context.Context, *DeleteRuleRequest) (*DeleteRuleResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteRule not implemented")
+}
+func (UnimplementedAnalyticsServiceServer) ListRuleVersions(context.Context, *ListRuleVersionsRequest) (*ListRuleVersionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRuleVersions not implemented")
+}
+func (UnimplementedAnalyticsServiceServer) GetRuleVersion(context.Context, *GetRuleVersionRequest) (*GetRuleVersionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRuleVersion not implemented")
+}
+func (UnimplementedAnalyticsServiceServer) PublishRuleVersion(context.Context, *PublishRuleVersionRequest) (*PublishRuleVersionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PublishRuleVersion not implemented")
+}
+func (UnimplementedAnalyticsServiceServer) GetRuleReadiness(context.Context, *GetRuleReadinessRequest) (*GetRuleReadinessResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRuleReadiness not implemented")
+}
+func (UnimplementedAnalyticsServiceServer) DiffRuleVersions(context.Context, *DiffRuleVersionsRequest) (*DiffRuleVersionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DiffRuleVersions not implemented")
 }
 func (UnimplementedAnalyticsServiceServer) LogInferenceEvent(context.Context, *LogInferenceEventRequest) (*LogInferenceEventResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method LogInferenceEvent not implemented")
@@ -840,6 +922,96 @@ func _AnalyticsService_DeleteRule_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AnalyticsService_ListRuleVersions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRuleVersionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AnalyticsServiceServer).ListRuleVersions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AnalyticsService_ListRuleVersions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AnalyticsServiceServer).ListRuleVersions(ctx, req.(*ListRuleVersionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AnalyticsService_GetRuleVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRuleVersionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AnalyticsServiceServer).GetRuleVersion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AnalyticsService_GetRuleVersion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AnalyticsServiceServer).GetRuleVersion(ctx, req.(*GetRuleVersionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AnalyticsService_PublishRuleVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PublishRuleVersionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AnalyticsServiceServer).PublishRuleVersion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AnalyticsService_PublishRuleVersion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AnalyticsServiceServer).PublishRuleVersion(ctx, req.(*PublishRuleVersionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AnalyticsService_GetRuleReadiness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRuleReadinessRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AnalyticsServiceServer).GetRuleReadiness(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AnalyticsService_GetRuleReadiness_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AnalyticsServiceServer).GetRuleReadiness(ctx, req.(*GetRuleReadinessRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AnalyticsService_DiffRuleVersions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DiffRuleVersionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AnalyticsServiceServer).DiffRuleVersions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AnalyticsService_DiffRuleVersions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AnalyticsServiceServer).DiffRuleVersions(ctx, req.(*DiffRuleVersionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AnalyticsService_LogInferenceEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(LogInferenceEventRequest)
 	if err := dec(in); err != nil {
@@ -954,10 +1126,30 @@ var AnalyticsService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _AnalyticsService_DeleteRule_Handler,
 		},
 		{
+			MethodName: "ListRuleVersions",
+			Handler:    _AnalyticsService_ListRuleVersions_Handler,
+		},
+		{
+			MethodName: "GetRuleVersion",
+			Handler:    _AnalyticsService_GetRuleVersion_Handler,
+		},
+		{
+			MethodName: "PublishRuleVersion",
+			Handler:    _AnalyticsService_PublishRuleVersion_Handler,
+		},
+		{
+			MethodName: "GetRuleReadiness",
+			Handler:    _AnalyticsService_GetRuleReadiness_Handler,
+		},
+		{
+			MethodName: "DiffRuleVersions",
+			Handler:    _AnalyticsService_DiffRuleVersions_Handler,
+		},
+		{
 			MethodName: "LogInferenceEvent",
 			Handler:    _AnalyticsService_LogInferenceEvent_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "crud/v1/analytics.proto",
+	Metadata: "src/services/analytics-crud/proto/crud/v1/analytics.proto",
 }
