@@ -82,8 +82,8 @@ jobs:
       fail-fast: false
       matrix:
         module:
-          - python/src/services/inference-gateway
-          - python/src/services/analytics-crud
+          - go/inference-gateway
+          - go/analytics-crud
 
     steps:
       - uses: actions/checkout@v4
