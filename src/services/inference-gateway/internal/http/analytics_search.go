@@ -36,6 +36,7 @@ type AnalyticsClient interface {
 	DeleteRule(ctx context.Context, req *crudv1.DeleteRuleRequest) (*crudv1.DeleteRuleResponse, error)
 	GetRuleStats(ctx context.Context, req *crudv1.GetRuleStatsRequest) (*crudv1.GetRuleStatsResponse, error)
 	GetAttribution(ctx context.Context, req *crudv1.GetAttributionRequest) (*crudv1.GetAttributionResponse, error)
+	LogInferenceEvent(ctx context.Context, req *crudv1.LogInferenceEventRequest) (*crudv1.LogInferenceEventResponse, error)
 }
 
 type searchTransactionsRequest struct {

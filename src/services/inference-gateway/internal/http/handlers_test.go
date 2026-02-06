@@ -763,6 +763,10 @@ func (s *stubAnalyticsClient) GetAttribution(ctx context.Context, req *crudv1.Ge
 	return nil, s.err
 }
 
+func (s *stubAnalyticsClient) LogInferenceEvent(ctx context.Context, req *crudv1.LogInferenceEventRequest) (*crudv1.LogInferenceEventResponse, error) {
+	return &crudv1.LogInferenceEventResponse{Success: true}, s.err
+}
+
 type errProvider struct{}
 
 func (errProvider) GetRules(context.Context) (rules.RuleSet, error) {

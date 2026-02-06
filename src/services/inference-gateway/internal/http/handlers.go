@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"time"
 
+	crudv1 "github.com/jonkmatsumo/label-lag/src/services/analytics-crud/proto/crud/v1"
 	grpcclient "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/grpc"
 	inferencev1 "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/grpc/inferencev1/inference/v1"
 	gatewayv1 "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/http/gatewayv1/gateway/v1"
@@ -20,6 +21,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -272,6 +274,34 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 		"rule_impacts":  ruleImpacts,
 	}
 	h.logger.Info("InferenceEvent", "event", event)
+
+	// Persist inference event to CRUD (fire-and-forget, don't fail the request)
+	if h.analyticsClient != nil {
+		go func() {
+			pbImpacts := make([]*crudv1.RuleImpact, 0, len(ruleImpacts))
+			for _, ri := range ruleImpacts {
+				pbImpacts = append(pbImpacts, &crudv1.RuleImpact{
+					RuleId:     ri["rule_id"].(string),
+					IsShadow:   ri["is_shadow"].(bool),
+					ScoreDelta: ri["score_delta"].(float64),
+				})
+			}
+			_, err := h.analyticsClient.LogInferenceEvent(context.Background(), &crudv1.LogInferenceEventRequest{
+				Event: &crudv1.InferenceEvent{
+					RequestId:    requestID,
+					Timestamp:    timestamppb.Now(),
+					ModelVersion: inferenceResp.GetModelVersion(),
+					RulesVersion: ruleResult.RulesVersion,
+					ModelScore:   rawScore,
+					FinalScore:   int32(ruleResult.FinalScore),
+					RuleImpacts:  pbImpacts,
+				},
+			})
+			if err != nil {
+				h.logger.Warn("failed to log inference event to CRUD", "error", err, "request_id", requestID)
+			}
+		}()
+	}
 
 	// OTEL attributes
 	span.SetAttributes(
