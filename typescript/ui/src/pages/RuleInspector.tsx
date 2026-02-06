@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { rulesApi, monitoringApi, backtestApi, suggestionsApi, analyticsApi } from '../api';
@@ -7,6 +7,7 @@ import type {
   SandboxEvaluateRequest,
   SandboxEvaluateResponse,
   ApprovalSignalItem,
+  RuleSuggestion,
 } from '../types/api';
 import {
   AlertTriangle, CheckCircle, Info, Shield,
@@ -251,7 +252,7 @@ function RuleOverviewTab({ rule, onShowPublish }: { rule: DraftRule, onShowPubli
                 <li key={i} className="list-group-item d-flex justify-content-between align-items-center py-2 px-3 small">
                   <span className="fw-medium">{check.name}</span>
                   <div className="d-flex align-items-center">
-                    <span className="text-muted me-2" style={{fontSize: '0.9em'}}>{check.message}</span>
+                    <span className="text-muted me-2" style={{ fontSize: '0.9em' }}>{check.message}</span>
                     <StatusDot status={check.status} />
                   </div>
                 </li>
@@ -352,7 +353,7 @@ function RuleHistoryTab({ ruleId }: { ruleId: string }) {
                   <span className="badge bg-light text-dark border small">{v.rule.status}</span>
                 </div>
                 <div className="small text-muted mb-1">{new Date(v.timestamp).toLocaleString()}</div>
-                <div className="small fw-medium text-truncate" style={{maxWidth: '200px'}}>{v.reason || 'No reason provided'}</div>
+                <div className="small fw-medium text-truncate" style={{ maxWidth: '200px' }}>{v.reason || 'No reason provided'}</div>
               </div>
               <div className="ms-2">
                 {selectedVersions.includes(v.version_id) && <CheckCircle size={16} className="text-primary" />}
@@ -597,11 +598,15 @@ export function RuleSandbox() {
   const [jsonError, setJsonError] = useState<string | null>(null);
 
   // Sync sliders to JSON
+  /*
   useEffect(() => {
     if (inputMode === 'sliders') {
       setFeaturesJson(JSON.stringify(sliderFeatures, null, 2));
     }
   }, [sliderFeatures, inputMode]);
+  */
+  // Derived state for featuresJson instead of effect
+  const activeFeaturesJson = inputMode === 'sliders' ? JSON.stringify(sliderFeatures, null, 2) : featuresJson;
 
   const evaluateMutation = useMutation({
     mutationFn: rulesApi.sandboxEvaluate,
@@ -611,15 +616,16 @@ export function RuleSandbox() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setJsonError(null);
+    setJsonError(null);
     try {
-      const features = JSON.parse(featuresJson);
+      const features = JSON.parse(activeFeaturesJson);
       evaluateMutation.mutate({ ...formData, features });
     } catch {
       setJsonError('Invalid JSON format');
     }
   };
 
-  const updateSlider = (key: string, val: any) => {
+  const updateSlider = (key: string, val: number | boolean) => {
     setSliderFeatures(prev => ({ ...prev, [key]: val }));
   };
 
@@ -644,7 +650,7 @@ export function RuleSandbox() {
               <form onSubmit={handleSubmit}>
                 <div className="mb-4">
                   <label className="form-label small fw-bold">Base Score (Model Baseline)</label>
-                  <input type="range" className="form-range" min="1" max="99" value={formData.base_score} onChange={e => setFormData({...formData, base_score: parseInt(e.target.value)})} />
+                  <input type="range" className="form-range" min="1" max="99" value={formData.base_score} onChange={e => setFormData({ ...formData, base_score: parseInt(e.target.value) })} />
                   <div className="text-center fw-bold h4 text-primary">{formData.base_score}</div>
                 </div>
 
@@ -663,7 +669,9 @@ export function RuleSandbox() {
                   <div className="mb-3">
                     <textarea
                       className={`form-control font-monospace small ${jsonError ? 'is-invalid' : ''}`}
-                      rows={12} value={featuresJson} onChange={e => setFeaturesJson(e.target.value)}
+                      rows={12} value={activeFeaturesJson} onChange={e => {
+                        if (inputMode === 'json') setFeaturesJson(e.target.value);
+                      }}
                     />
                     {jsonError && <div className="invalid-feedback">{jsonError}</div>}
                   </div>
@@ -879,15 +887,22 @@ export function RuleBacktests() {
     queryFn: () => backtestApi.listResults({ rule_id: ruleFilter || undefined, limit: 100 }),
   });
 
+  // Effect to reset page removed to avoid "state in effect" warning.
+  // Ideally page should be in URL params.
+  // For now, we will reset it ONLY when we change the filter handler.
+  /*
   useEffect(() => {
     setPage(1);
   }, [ruleFilter]);
+  */
 
   const handleFilterChange = (val: string) => {
+    const newParams = new URLSearchParams(searchParams);
     const newParams = new URLSearchParams(searchParams);
     if (val) newParams.set('rule_id', val);
     else newParams.delete('rule_id');
     setSearchParams(newParams);
+    setPage(1); // Reset page manually when filter changes
   };
 
   const getStatusBadgeClass = (status: string) => {
@@ -1054,7 +1069,7 @@ export function RuleSuggestions() {
             type="range" className="form-range"
             min="0.5" max="0.95" step="0.05"
             value={minConfidence} onChange={e => setMinConfidence(parseFloat(e.target.value))}
-            style={{maxWidth: '300px', display: 'inline-block', verticalAlign: 'middle'}}
+            style={{ maxWidth: '300px', display: 'inline-block', verticalAlign: 'middle' }}
           />
           <span className="ms-2 fw-bold">{minConfidence.toFixed(2)}</span>
         </div>
@@ -1063,40 +1078,40 @@ export function RuleSuggestions() {
       {suggestionsQuery.isLoading ? (
         <div className="loading">Analyzing patterns...</div>
       ) : suggestionsQuery.isError ? (
-         <ErrorBanner error={suggestionsQuery.error} title="Analysis failed" className="alert alert-danger" />
+        <ErrorBanner error={suggestionsQuery.error} title="Analysis failed" className="alert alert-danger" />
       ) : suggestionsQuery.data && suggestionsQuery.data.suggestions.length > 0 ? (
         <div className="row">
-           {suggestionsQuery.data.suggestions.map((s: any, idx: number) => (
-             <div className="col-md-6 mb-3" key={idx}>
-               <div className="card h-100">
-                 <div className="card-header d-flex justify-content-between align-items-center">
-                   <span className="fw-bold">{s.field} {s.operator} {s.threshold}</span>
-                   <span className="badge bg-primary">{(s.confidence * 100).toFixed(0)}% Conf</span>
-                 </div>
-                 <div className="card-body">
-                   <p className="card-text small text-muted">{s.reason}</p>
-                   <ul className="small text-muted mb-3">
-                     <li>Action: <strong>{s.action}</strong></li>
-                     <li>Score: <strong>{s.suggested_score}</strong></li>
-                     {s.evidence && (
-                       <li>Evidence: Mean {s.evidence.mean?.toFixed(2)}, Count {s.evidence.sample_count}</li>
-                     )}
-                   </ul>
-                   <button
-                     className="btn btn-outline-primary btn-sm w-100"
-                     onClick={() => acceptMutation.mutate({
-                       suggestion: s,
-                       actor: 'user',
-                       custom_id: `suggest_${Date.now()}_${idx}`
-                     })}
-                     disabled={acceptMutation.isPending}
-                   >
-                     Accept & Create Draft
-                   </button>
-                 </div>
-               </div>
-             </div>
-           ))}
+          {suggestionsQuery.data.suggestions.map((s: RuleSuggestion, idx: number) => (
+            <div className="col-md-6 mb-3" key={idx}>
+              <div className="card h-100">
+                <div className="card-header d-flex justify-content-between align-items-center">
+                  <span className="fw-bold">{s.field} {s.operator} {s.threshold}</span>
+                  <span className="badge bg-primary">{(s.confidence * 100).toFixed(0)}% Conf</span>
+                </div>
+                <div className="card-body">
+                  <p className="card-text small text-muted">{s.reason}</p>
+                  <ul className="small text-muted mb-3">
+                    <li>Action: <strong>{s.action}</strong></li>
+                    <li>Score: <strong>{s.suggested_score}</strong></li>
+                    {s.evidence && (
+                      <li>Evidence: Mean {s.evidence.mean?.toFixed(2)}, Count {s.evidence.sample_count}</li>
+                    )}
+                  </ul>
+                  <button
+                    className="btn btn-outline-primary btn-sm w-100"
+                    onClick={() => acceptMutation.mutate({
+                      suggestion: s,
+                      actor: 'user',
+                      custom_id: `suggest_${Date.now()}_${idx}`
+                    })}
+                    disabled={acceptMutation.isPending}
+                  >
+                    Accept & Create Draft
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
         <div className="empty-state">

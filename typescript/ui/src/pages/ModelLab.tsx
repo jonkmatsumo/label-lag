@@ -166,19 +166,18 @@ function TrainTab() {
         <div className="card">
           <div className="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
             Feature Drift
-            {driftQuery.data?.cached && <span className="badge bg-secondary text-white" style={{fontSize: '0.6em'}}>Cached</span>}
+            {driftQuery.data?.cached && <span className="badge bg-secondary text-white" style={{ fontSize: '0.6em' }}>Cached</span>}
           </div>
           <div className="card-body">
             {driftQuery.isLoading ? (
-               <div className="text-center"><div className="spinner-border spinner-border-sm"></div></div>
+              <div className="text-center"><div className="spinner-border spinner-border-sm"></div></div>
             ) : driftQuery.data ? (
               <div>
-                <div className={`alert ${
-                  driftQuery.data.status === 'ok' ? 'alert-success' :
+                <div className={`alert ${driftQuery.data.status === 'ok' ? 'alert-success' :
                   driftQuery.data.status === 'warn' ? 'alert-warning' : 'alert-danger'
-                } mb-3`}>
+                  } mb-3`}>
                   <div className="d-flex align-items-center">
-                    {driftQuery.data.status === 'ok' ? <CheckCircle size={18} className="me-2"/> : <AlertTriangle size={18} className="me-2"/>}
+                    {driftQuery.data.status === 'ok' ? <CheckCircle size={18} className="me-2" /> : <AlertTriangle size={18} className="me-2" />}
                     <strong className="text-uppercase">{driftQuery.data.status}</strong>
                   </div>
                 </div>
@@ -189,7 +188,7 @@ function TrainTab() {
                     <ul className="list-unstyled">
                       {driftQuery.data.top_features.slice(0, 5).map(f => (
                         <li key={f.feature} className="d-flex justify-content-between mb-1">
-                          <span className="text-truncate" style={{maxWidth: '180px'}} title={f.feature}>{f.feature}</span>
+                          <span className="text-truncate" style={{ maxWidth: '180px' }} title={f.feature}>{f.feature}</span>
                           <span className={`fw-mono ${f.status !== 'OK' ? 'text-danger fw-bold' : 'text-muted'}`}>
                             {(f.psi ?? 0).toFixed(3)}
                           </span>
@@ -198,8 +197,8 @@ function TrainTab() {
                     </ul>
                   </div>
                 )}
-                <div className="text-muted mt-2" style={{fontSize: '0.75rem'}}>
-                   Window: {driftQuery.data.hours_analyzed}h | Samples: {driftQuery.data.live_size}
+                <div className="text-muted mt-2" style={{ fontSize: '0.75rem' }}>
+                  Window: {driftQuery.data.hours_analyzed}h | Samples: {driftQuery.data.live_size}
                 </div>
               </div>
             ) : <ErrorBanner error={driftQuery.error} title="Drift check unavailable" className="alert alert-danger py-2" />}
@@ -221,7 +220,7 @@ function TrainTab() {
                     name="name"
                     className="form-control"
                     value={trainForm.name}
-                    onChange={e => setTrainForm({...trainForm, name: e.target.value})}
+                    onChange={e => setTrainForm({ ...trainForm, name: e.target.value })}
                     placeholder="fraud-model-vX"
                   />
                 </div>
@@ -232,20 +231,20 @@ function TrainTab() {
                     name="test_size"
                     className="form-control"
                     value={trainForm.test_size}
-                    onChange={e => setTrainForm({...trainForm, test_size: parseFloat(e.target.value)})}
+                    onChange={e => setTrainForm({ ...trainForm, test_size: parseFloat(e.target.value) })}
                     step="0.05" min="0.1" max="0.5"
                   />
                 </div>
                 <div className="col-md-3">
                   <label className="form-label d-flex align-items-center">
-                    <Calendar size={14} className="me-1 text-muted"/> Training Window
+                    <Calendar size={14} className="me-1 text-muted" /> Training Window
                   </label>
                   <input
                     type="number"
                     name="training_window_days"
                     className="form-control"
                     value={trainForm.training_window_days}
-                    onChange={e => setTrainForm({...trainForm, training_window_days: parseInt(e.target.value)})}
+                    onChange={e => setTrainForm({ ...trainForm, training_window_days: parseInt(e.target.value) })}
                     min="7" max="90"
                   />
                   <div className="form-text small">7-90 days</div>
@@ -257,18 +256,18 @@ function TrainTab() {
                     name="random_seed"
                     className="form-control"
                     value={trainForm.random_seed}
-                    onChange={e => setTrainForm({...trainForm, random_seed: parseInt(e.target.value)})}
+                    onChange={e => setTrainForm({ ...trainForm, random_seed: parseInt(e.target.value) })}
                   />
                 </div>
 
                 <div className="col-12">
                   <label className="form-label d-flex align-items-center fw-bold">
-                    <Filter size={14} className="me-1 text-primary"/> Feature Selection
+                    <Filter size={14} className="me-1 text-primary" /> Feature Selection
                   </label>
                   {schemaQuery.isLoading ? (
-                    <div className="text-center py-2"><div className="spinner-border spinner-border-sm text-primary"/></div>
+                    <div className="text-center py-2"><div className="spinner-border spinner-border-sm text-primary" /></div>
                   ) : schemaQuery.data ? (
-                    <div className="border rounded bg-light p-3" style={{maxHeight: '160px', overflowY: 'auto'}}>
+                    <div className="border rounded bg-light p-3" style={{ maxHeight: '160px', overflowY: 'auto' }}>
                       <div className="row g-2">
                         {schemaQuery.data.columns.filter(c => c !== 'is_fraudulent').map(col => (
                           <div key={col} className="col-md-4 col-sm-6">
@@ -282,7 +281,7 @@ function TrainTab() {
                                   const next = e.target.checked
                                     ? [...current, col]
                                     : current.filter(c => c !== col);
-                                  setTrainForm({...trainForm, selected_feature_columns: next});
+                                  setTrainForm({ ...trainForm, selected_feature_columns: next });
                                 }}
                               />
                               <label className="form-check-label small text-truncate d-block" htmlFor={`feat-${col}`} title={col}>
@@ -303,7 +302,7 @@ function TrainTab() {
                     className="btn btn-link btn-sm p-0 text-decoration-none d-flex align-items-center"
                     onClick={() => setShowAdvanced(!showAdvanced)}
                   >
-                    {showAdvanced ? <ChevronDown size={14} className="me-1"/> : <ChevronRight size={14} className="me-1"/>}
+                    {showAdvanced ? <ChevronDown size={14} className="me-1" /> : <ChevronRight size={14} className="me-1" />}
                     {showAdvanced ? 'Hide' : 'Show'} Advanced Hyperparameters & Tuning
                   </button>
                 </div>
@@ -315,7 +314,7 @@ function TrainTab() {
                       <input
                         type="range" className="form-range" min="2" max="12"
                         value={trainForm.max_depth}
-                        onChange={e => setTrainForm({...trainForm, max_depth: parseInt(e.target.value)})}
+                        onChange={e => setTrainForm({ ...trainForm, max_depth: parseInt(e.target.value) })}
                       />
                       <div className="small text-center fw-bold">{trainForm.max_depth}</div>
                     </div>
@@ -324,7 +323,7 @@ function TrainTab() {
                       <input
                         type="range" className="form-range" min="0.01" max="0.3" step="0.01"
                         value={trainForm.learning_rate}
-                        onChange={e => setTrainForm({...trainForm, learning_rate: parseFloat(e.target.value)})}
+                        onChange={e => setTrainForm({ ...trainForm, learning_rate: parseFloat(e.target.value) })}
                       />
                       <div className="small text-center fw-bold">{trainForm.learning_rate}</div>
                     </div>
@@ -333,7 +332,7 @@ function TrainTab() {
                       <input
                         type="range" className="form-range" min="50" max="500" step="25"
                         value={trainForm.n_estimators}
-                        onChange={e => setTrainForm({...trainForm, n_estimators: parseInt(e.target.value)})}
+                        onChange={e => setTrainForm({ ...trainForm, n_estimators: parseInt(e.target.value) })}
                       />
                       <div className="small text-center fw-bold">{trainForm.n_estimators}</div>
                     </div>
@@ -344,7 +343,7 @@ function TrainTab() {
                           <input
                             className="form-check-input" type="checkbox" role="switch" id="tuningEnabled"
                             checked={trainForm.tuning_config?.enabled}
-                            onChange={e => setTrainForm({...trainForm, tuning_config: {...trainForm.tuning_config!, enabled: e.target.checked}})}
+                            onChange={e => setTrainForm({ ...trainForm, tuning_config: { ...trainForm.tuning_config!, enabled: e.target.checked } })}
                           />
                           <label className="form-check-label fw-bold small" htmlFor="tuningEnabled">Enable Optuna Tuning</label>
                         </div>
@@ -356,7 +355,7 @@ function TrainTab() {
                               <input
                                 type="number" className="form-control form-control-sm"
                                 value={trainForm.tuning_config.n_trials}
-                                onChange={e => setTrainForm({...trainForm, tuning_config: {...trainForm.tuning_config!, n_trials: parseInt(e.target.value)}})}
+                                onChange={e => setTrainForm({ ...trainForm, tuning_config: { ...trainForm.tuning_config!, n_trials: parseInt(e.target.value) } })}
                               />
                             </div>
                             <div className="col-md-4">
@@ -364,7 +363,7 @@ function TrainTab() {
                               <input
                                 type="number" className="form-control form-control-sm"
                                 value={trainForm.tuning_config.timeout_minutes}
-                                onChange={e => setTrainForm({...trainForm, tuning_config: {...trainForm.tuning_config!, timeout_minutes: parseInt(e.target.value)}})}
+                                onChange={e => setTrainForm({ ...trainForm, tuning_config: { ...trainForm.tuning_config!, timeout_minutes: parseInt(e.target.value) } })}
                               />
                             </div>
                             <div className="col-md-4">
@@ -372,7 +371,7 @@ function TrainTab() {
                               <select
                                 className="form-select form-select-sm"
                                 value={trainForm.tuning_config.metric}
-                                onChange={e => setTrainForm({...trainForm, tuning_config: {...trainForm.tuning_config!, metric: e.target.value as any}})}
+                                onChange={e => setTrainForm({ ...trainForm, tuning_config: { ...trainForm.tuning_config!, metric: e.target.value as 'pr_auc' | 'roc_auc' | 'f1' } })}
                               >
                                 <option value="pr_auc">PR-AUC</option>
                                 <option value="roc_auc">ROC-AUC</option>
@@ -387,9 +386,9 @@ function TrainTab() {
                 )}
 
                 <div className="col-12">
-                   <button type="submit" className="btn btn-primary" disabled={trainMutation.isPending}>
-                     {trainMutation.isPending ? <><span className="spinner-border spinner-border-sm me-2"/>Training...</> : <><Play size={16} className="me-2"/>Start Training</>}
-                   </button>
+                  <button type="submit" className="btn btn-primary" disabled={trainMutation.isPending}>
+                    {trainMutation.isPending ? <><span className="spinner-border spinner-border-sm me-2" />Training...</> : <><Play size={16} className="me-2" />Start Training</>}
+                  </button>
                 </div>
               </div>
             </form>
@@ -400,34 +399,34 @@ function TrainTab() {
           <div className="card border-primary">
             <div className="card-header bg-primary text-white fw-bold">Training Result</div>
             <div className="card-body">
-               <div className={`alert ${trainResult.success ? 'alert-success' : 'alert-danger'}`}>
-                 {trainResult.success ? 'Training completed successfully!' : `Training failed: ${trainResult.error}`}
-               </div>
+              <div className={`alert ${trainResult.success ? 'alert-success' : 'alert-danger'}`}>
+                {trainResult.success ? 'Training completed successfully!' : `Training failed: ${trainResult.error}`}
+              </div>
 
-               {trainResult.run_id && (
-                 <div>
-                   <div className="mb-3">
-                     <strong>Run ID:</strong> <code className="ms-2">{trainResult.run_id}</code>
-                   </div>
-
-                   <button
-                     className="btn btn-success d-flex align-items-center"
-                     onClick={() => setShowDeployModal(true)}
-                     disabled={deployMutation.isPending}
-                   >
-                      <Send size={16} className="me-2" />
-                      Deploy to Production
-                   </button>
-                 </div>
-               )}
-
-               {deployResult && (
-                  <div className={`alert mt-3 ${deployResult.success ? 'alert-success' : 'alert-danger'}`}>
-                    {deployResult.success ?
-                      `Deployed version ${deployResult.model_version} at ${deployResult.deployed_at ? new Date(deployResult.deployed_at).toLocaleTimeString() : 'Unknown Time'}` :
-                      `Deployment failed: ${deployResult.error}`}
+              {trainResult.run_id && (
+                <div>
+                  <div className="mb-3">
+                    <strong>Run ID:</strong> <code className="ms-2">{trainResult.run_id}</code>
                   </div>
-               )}
+
+                  <button
+                    className="btn btn-success d-flex align-items-center"
+                    onClick={() => setShowDeployModal(true)}
+                    disabled={deployMutation.isPending}
+                  >
+                    <Send size={16} className="me-2" />
+                    Deploy to Production
+                  </button>
+                </div>
+              )}
+
+              {deployResult && (
+                <div className={`alert mt-3 ${deployResult.success ? 'alert-success' : 'alert-danger'}`}>
+                  {deployResult.success ?
+                    `Deployed version ${deployResult.model_version} at ${deployResult.deployed_at ? new Date(deployResult.deployed_at).toLocaleTimeString() : 'Unknown Time'}` :
+                    `Deployment failed: ${deployResult.error}`}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -537,10 +536,10 @@ function RegistryTab() {
   const [compareMode, setCompareMode] = useState(false);
   const [selectedForCompare, setSelectedForCompare] = useState<string[]>([]);
 
-  if (isLoading) return <div className="text-center p-5"><div className="spinner-border text-primary"/></div>;
+  if (isLoading) return <div className="text-center p-5"><div className="spinner-border text-primary" /></div>;
 
   const versions = data?.model_versions || [];
-  versions.sort((a,b) => parseInt(b.version) - parseInt(a.version));
+  versions.sort((a, b) => parseInt(b.version) - parseInt(a.version));
 
   const handleSelectForCompare = (version: string) => {
     if (selectedForCompare.includes(version)) {
@@ -579,8 +578,8 @@ function RegistryTab() {
         <table className="table table-hover align-middle">
           <thead className="table-light">
             <tr>
-              <th style={{width: '40px'}}></th>
-              {compareMode && <th style={{width: '40px'}}>Select</th>}
+              <th style={{ width: '40px' }}></th>
+              {compareMode && <th style={{ width: '40px' }}>Select</th>}
               <th>Version</th>
               <th>Stage</th>
               <th>Created</th>
@@ -593,11 +592,11 @@ function RegistryTab() {
               <React.Fragment key={v.version}>
                 <tr
                   onClick={() => !compareMode && setExpandedVersion(expandedVersion === v.version ? null : v.version)}
-                  style={{cursor: compareMode ? 'default' : 'pointer'}}
+                  style={{ cursor: compareMode ? 'default' : 'pointer' }}
                   className={expandedVersion === v.version ? 'table-active' : ''}
                 >
                   <td className="text-center text-muted">
-                    {!compareMode && (expandedVersion === v.version ? <ChevronDown size={16}/> : <ChevronRight size={16}/>)}
+                    {!compareMode && (expandedVersion === v.version ? <ChevronDown size={16} /> : <ChevronRight size={16} />)}
                   </td>
                   {compareMode && (
                     <td>
@@ -619,52 +618,52 @@ function RegistryTab() {
                     )}
                   </td>
                   <td className="small text-muted">{new Date(v.creation_timestamp).toLocaleDateString()}</td>
-                  <td className="font-monospace small">{v.run_id.substring(0,8)}...</td>
+                  <td className="font-monospace small">{v.run_id.substring(0, 8)}...</td>
                   <td><span className="badge bg-light text-dark border">{v.status}</span></td>
                 </tr>
                 {!compareMode && expandedVersion === v.version && (
                   <tr>
                     <td colSpan={7} className="bg-light p-0">
                       <div className="p-4">
-                         <div className="d-flex justify-content-end gap-2 mb-3">
-                            {v.current_stage !== 'Staging' && (
-                              <button
-                                className="btn btn-sm btn-outline-warning"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  transitionMutation.mutate({ name: v.name, version: v.version, stage: 'Staging' });
-                                }}
-                                disabled={transitionMutation.isPending}
-                              >
-                                Promote to Staging
-                              </button>
-                            )}
-                            {v.current_stage !== 'Production' && (
-                              <button
-                                className="btn btn-sm btn-outline-success"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  transitionMutation.mutate({ name: v.name, version: v.version, stage: 'Production', archive_existing_versions: true });
-                                }}
-                                disabled={transitionMutation.isPending}
-                              >
-                                Promote to Production
-                              </button>
-                            )}
-                            {v.current_stage !== 'Archived' && (
-                              <button
-                                className="btn btn-sm btn-outline-secondary"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  transitionMutation.mutate({ name: v.name, version: v.version, stage: 'Archived' });
-                                }}
-                                disabled={transitionMutation.isPending}
-                              >
-                                Archive
-                              </button>
-                            )}
-                         </div>
-                         <RunDetail runId={v.run_id} />
+                        <div className="d-flex justify-content-end gap-2 mb-3">
+                          {v.current_stage !== 'Staging' && (
+                            <button
+                              className="btn btn-sm btn-outline-warning"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                transitionMutation.mutate({ name: v.name, version: v.version, stage: 'Staging' });
+                              }}
+                              disabled={transitionMutation.isPending}
+                            >
+                              Promote to Staging
+                            </button>
+                          )}
+                          {v.current_stage !== 'Production' && (
+                            <button
+                              className="btn btn-sm btn-outline-success"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                transitionMutation.mutate({ name: v.name, version: v.version, stage: 'Production', archive_existing_versions: true });
+                              }}
+                              disabled={transitionMutation.isPending}
+                            >
+                              Promote to Production
+                            </button>
+                          )}
+                          {v.current_stage !== 'Archived' && (
+                            <button
+                              className="btn btn-sm btn-outline-secondary"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                transitionMutation.mutate({ name: v.name, version: v.version, stage: 'Archived' });
+                              }}
+                              disabled={transitionMutation.isPending}
+                            >
+                              Archive
+                            </button>
+                          )}
+                        </div>
+                        <RunDetail runId={v.run_id} />
                       </div>
                     </td>
                   </tr>
@@ -690,7 +689,7 @@ function ModelCompareChart({ selectedVersions }: { selectedVersions: MlflowModel
   const isLoading = runQueries.some(q => q.isLoading);
   const isError = runQueries.some(q => q.isError);
 
-  if (isLoading) return <div className="text-center p-5"><div className="spinner-border text-primary"/></div>;
+  if (isLoading) return <div className="text-center p-5"><div className="spinner-border text-primary" /></div>;
   if (isError) return <ErrorBanner error={runQueries.find(q => q.isError)?.error} title="Failed to load run data" />;
 
   const data = selectedVersions.map((v, i) => {
@@ -707,7 +706,7 @@ function ModelCompareChart({ selectedVersions }: { selectedVersions: MlflowModel
   });
 
   return (
-    <div style={{height: 350}}>
+    <div style={{ height: 350 }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -755,8 +754,8 @@ function RunDetail({ runId }: { runId: string }) {
     const metrics = ['precision', 'recall', 'f1', 'pr_auc'];
     const numFolds = cvMetrics[metrics[0]]?.length || 0;
 
-    return Array.from({length: numFolds}, (_, i) => {
-      const point: any = { fold: `Fold ${i+1}` };
+    return Array.from({ length: numFolds }, (_, i) => {
+      const point: Record<string, string | number> = { fold: `Fold ${i + 1}` };
       metrics.forEach(m => {
         if (cvMetrics[m]) point[m] = cvMetrics[m][i];
       });
@@ -768,15 +767,15 @@ function RunDetail({ runId }: { runId: string }) {
     <div className="row g-4">
       {/* Split Summary */}
       <div className="col-md-12">
-         <h6 className="fw-bold mb-3 border-bottom pb-2">Configuration</h6>
-         {split ? (
-           <div className="d-flex gap-4 text-small">
-              <div><strong>Train Size:</strong> {split.train_size.toLocaleString()}</div>
-              <div><strong>Test Size:</strong> {split.test_size.toLocaleString()}</div>
-              <div><strong>Fraud Rate:</strong> {(split.train_fraud_rate * 100).toFixed(2)}%</div>
-              <div><strong>Strategy:</strong> {split.strategy}</div>
-           </div>
-         ) : splitLoading ? <div className="spinner-border spinner-border-sm"/> : <div className="text-muted">No split manifest found.</div>}
+        <h6 className="fw-bold mb-3 border-bottom pb-2">Configuration</h6>
+        {split ? (
+          <div className="d-flex gap-4 text-small">
+            <div><strong>Train Size:</strong> {split.train_size.toLocaleString()}</div>
+            <div><strong>Test Size:</strong> {split.test_size.toLocaleString()}</div>
+            <div><strong>Fraud Rate:</strong> {(split.train_fraud_rate * 100).toFixed(2)}%</div>
+            <div><strong>Strategy:</strong> {split.strategy}</div>
+          </div>
+        ) : splitLoading ? <div className="spinner-border spinner-border-sm" /> : <div className="text-muted">No split manifest found.</div>}
       </div>
 
       {/* Visual Artifacts */}
@@ -798,42 +797,42 @@ function RunDetail({ runId }: { runId: string }) {
       <div className="col-md-6">
         <h6 className="fw-bold mb-3 border-bottom pb-2">Cross-Validation Metrics</h6>
         {cvMetrics ? (
-          <div style={{height: 300}}>
-             <ResponsiveContainer width="100%" height="100%">
-               <BarChart data={cvChartData}>
-                 <CartesianGrid strokeDasharray="3 3" vertical={false}/>
-                 <XAxis dataKey="fold"/>
-                 <YAxis domain={[0, 1]}/>
-                 <Tooltip/>
-                 <Legend/>
-                 <Bar dataKey="precision" fill="#8884d8" name="Precision"/>
-                 <Bar dataKey="recall" fill="#82ca9d" name="Recall"/>
-                 <Bar dataKey="f1" fill="#ffc658" name="F1"/>
-               </BarChart>
-             </ResponsiveContainer>
+          <div style={{ height: 300 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={cvChartData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="fold" />
+                <YAxis domain={[0, 1]} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="precision" fill="#8884d8" name="Precision" />
+                <Bar dataKey="recall" fill="#82ca9d" name="Recall" />
+                <Bar dataKey="f1" fill="#ffc658" name="F1" />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
-        ) : cvLoading ? <div className="spinner-border text-primary"/> : <div className="text-muted">No CV metrics available.</div>}
+        ) : cvLoading ? <div className="spinner-border text-primary" /> : <div className="text-muted">No CV metrics available.</div>}
       </div>
 
       {/* Tuning Trials */}
       <div className="col-md-6">
         <h6 className="fw-bold mb-3 border-bottom pb-2">Tuning Trials (Top 5)</h6>
         {tuning ? (
-           <div className="table-responsive">
-             <table className="table table-sm text-small">
-               <thead><tr><th>Trial</th><th>Value</th><th>State</th></tr></thead>
-               <tbody>
-                 {tuning.slice(0, 5).map(t => (
-                   <tr key={t.trial}>
-                     <td>#{t.trial}</td>
-                     <td>{t.value.toFixed(4)}</td>
-                     <td><span className="badge bg-light text-dark border">{t.state}</span></td>
-                   </tr>
-                 ))}
-               </tbody>
-             </table>
-           </div>
-        ) : tuningLoading ? <div className="spinner-border text-primary"/> : <div className="text-muted">No tuning data available.</div>}
+          <div className="table-responsive">
+            <table className="table table-sm text-small">
+              <thead><tr><th>Trial</th><th>Value</th><th>State</th></tr></thead>
+              <tbody>
+                {tuning.slice(0, 5).map(t => (
+                  <tr key={t.trial}>
+                    <td>#{t.trial}</td>
+                    <td>{t.value.toFixed(4)}</td>
+                    <td><span className="badge bg-light text-dark border">{t.state}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : tuningLoading ? <div className="spinner-border text-primary" /> : <div className="text-muted">No tuning data available.</div>}
       </div>
 
       {/* Model Card */}
@@ -863,12 +862,13 @@ function ArtifactImage({ runId, path, title }: { runId: string, path: string, ti
   useEffect(() => {
     if (blob) {
       const u = URL.createObjectURL(blob);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setUrl(u);
       return () => URL.revokeObjectURL(u);
     }
   }, [blob]);
 
-  if (isLoading) return <div className="p-3 text-center"><div className="spinner-border spinner-border-sm text-primary"/></div>;
+  if (isLoading) return <div className="p-3 text-center"><div className="spinner-border spinner-border-sm text-primary" /></div>;
   if (isError || !url) return <div className="p-3 text-center border rounded bg-light text-muted small italic">Artifact {path} not available</div>;
 
   return (
@@ -892,7 +892,7 @@ function ArtifactMarkdown({ runId, path, title }: { runId: string, path: string,
     retry: false
   });
 
-  if (isLoading) return <div className="p-3 text-center"><div className="spinner-border spinner-border-sm text-primary"/></div>;
+  if (isLoading) return <div className="p-3 text-center"><div className="spinner-border spinner-border-sm text-primary" /></div>;
   if (isError || !text) return <div className="p-3 text-center border rounded bg-light text-muted small italic">Documentation {path} not available</div>;
 
   return (

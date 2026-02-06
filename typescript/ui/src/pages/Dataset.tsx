@@ -238,7 +238,7 @@ function GenerateTab() {
               disabled={generateMutation.isPending}
             >
               {generateMutation.isPending ? (
-                <><span className="spinner-border spinner-border-sm me-2"/>Generating...</>
+                <><span className="spinner-border spinner-border-sm me-2" />Generating...</>
               ) : (
                 'Generate Data'
               )}
@@ -276,7 +276,7 @@ function GenerateTab() {
             <button
               className="btn btn-outline-danger"
               onClick={() => {
-                if(confirm('Are you sure you want to delete all data?')) {
+                if (confirm('Are you sure you want to delete all data?')) {
                   clearMutation.mutate();
                 }
               }}
@@ -308,7 +308,7 @@ function DiagnosticsTab() {
     queryFn: () => datasetApi.getFeatureSample(2000, stratify),
   });
 
-  const samples = data?.samples || [];
+  const samples = useMemo(() => data?.samples || [], [data]);
 
   const numericKeys = useMemo(() => {
     if (!samples.length) return [];
@@ -351,13 +351,13 @@ function DiagnosticsTab() {
     return keys.map(k => ({
       column: k,
       pct: (samples.filter(s => s[k] === null || s[k] === undefined).length / samples.length) * 100
-    })).sort((a,b) => b.pct - a.pct);
+    })).sort((a, b) => b.pct - a.pct);
   }, [samples]);
 
   // Outlier calculation (IQR)
   const outlierStats = useMemo(() => {
     if (!samples.length || !selectedFeature) return null;
-    const values = samples.map(s => Number(s[selectedFeature])).filter(v => !isNaN(v)).sort((a,b) => a - b);
+    const values = samples.map(s => Number(s[selectedFeature])).filter(v => !isNaN(v)).sort((a, b) => a - b);
     if (values.length < 4) return null;
 
     const q1Idx = Math.floor(values.length * 0.25);
@@ -375,7 +375,7 @@ function DiagnosticsTab() {
     const outliers = values.filter(v => v < lowWhisker || v > highWhisker);
     const outlierPct = (outliers.length / values.length) * 100;
 
-    return { min: values[0], max: values[values.length-1], q1, q2, q3, lowWhisker, highWhisker, outlierCount: outliers.length, outlierPct };
+    return { min: values[0], max: values[values.length - 1], q1, q2, q3, lowWhisker, highWhisker, outlierCount: outliers.length, outlierPct };
   }, [samples, selectedFeature]);
 
   if (isLoading) return <div className="text-center p-5"><div className="spinner-border text-primary" /></div>;
@@ -433,40 +433,40 @@ function DiagnosticsTab() {
             </div>
           )}
           {diagMode === 'outliers' && (
-             <div className="card border-0 shadow-sm">
+            <div className="card border-0 shadow-sm">
               <div className="card-body p-4">
                 <h6 className="fw-bold mb-4 d-flex align-items-center">
-                   <Activity size={16} className="me-2 text-primary" />
-                   Outlier Analysis for {selectedFeature}
+                  <Activity size={16} className="me-2 text-primary" />
+                  Outlier Analysis for {selectedFeature}
                 </h6>
                 {outlierStats ? (
                   <div className="row align-items-center">
                     <div className="col-lg-8">
                       <div className="mb-4" style={{ height: '140px', position: 'relative', padding: '0 40px' }}>
-                         {/* Scale background */}
-                         <div style={{ position: 'absolute', bottom: '0', left: '40px', right: '40px', height: '1px', backgroundColor: '#dee2e6' }}></div>
+                        {/* Scale background */}
+                        <div style={{ position: 'absolute', bottom: '0', left: '40px', right: '40px', height: '1px', backgroundColor: '#dee2e6' }}></div>
 
-                         {/* Whisker Line */}
-                         <div style={{ position: 'absolute', top: '50%', left: `${((outlierStats.lowWhisker - outlierStats.min) / (outlierStats.max - outlierStats.min)) * 80 + 10}%`, right: `${100 - (((outlierStats.highWhisker - outlierStats.min) / (outlierStats.max - outlierStats.min)) * 80 + 10)}%`, height: '2px', backgroundColor: '#6c757d' }}></div>
+                        {/* Whisker Line */}
+                        <div style={{ position: 'absolute', top: '50%', left: `${((outlierStats.lowWhisker - outlierStats.min) / (outlierStats.max - outlierStats.min)) * 80 + 10}%`, right: `${100 - (((outlierStats.highWhisker - outlierStats.min) / (outlierStats.max - outlierStats.min)) * 80 + 10)}%`, height: '2px', backgroundColor: '#6c757d' }}></div>
 
-                         {/* Low Whisker */}
-                         <div style={{ position: 'absolute', top: '40%', bottom: '40%', left: `${((outlierStats.lowWhisker - outlierStats.min) / (outlierStats.max - outlierStats.min)) * 80 + 10}%`, width: '2px', backgroundColor: '#6c757d' }}></div>
+                        {/* Low Whisker */}
+                        <div style={{ position: 'absolute', top: '40%', bottom: '40%', left: `${((outlierStats.lowWhisker - outlierStats.min) / (outlierStats.max - outlierStats.min)) * 80 + 10}%`, width: '2px', backgroundColor: '#6c757d' }}></div>
 
-                         {/* High Whisker */}
-                         <div style={{ position: 'absolute', top: '40%', bottom: '40%', left: `${((outlierStats.highWhisker - outlierStats.min) / (outlierStats.max - outlierStats.min)) * 80 + 10}%`, width: '2px', backgroundColor: '#6c757d' }}></div>
+                        {/* High Whisker */}
+                        <div style={{ position: 'absolute', top: '40%', bottom: '40%', left: `${((outlierStats.highWhisker - outlierStats.min) / (outlierStats.max - outlierStats.min)) * 80 + 10}%`, width: '2px', backgroundColor: '#6c757d' }}></div>
 
-                         {/* Box (Q1 to Q3) */}
-                         <div style={{
-                           position: 'absolute', top: '30%', bottom: '30%',
-                           left: `${((outlierStats.q1 - outlierStats.min) / (outlierStats.max - outlierStats.min)) * 80 + 10}%`,
-                           width: `${((outlierStats.q3 - outlierStats.q1) / (outlierStats.max - outlierStats.min)) * 80}%`,
-                           backgroundColor: 'rgba(13, 110, 253, 0.15)',
-                           border: '2px solid #0d6efd',
-                           borderRadius: '2px'
-                         }}></div>
+                        {/* Box (Q1 to Q3) */}
+                        <div style={{
+                          position: 'absolute', top: '30%', bottom: '30%',
+                          left: `${((outlierStats.q1 - outlierStats.min) / (outlierStats.max - outlierStats.min)) * 80 + 10}%`,
+                          width: `${((outlierStats.q3 - outlierStats.q1) / (outlierStats.max - outlierStats.min)) * 80}%`,
+                          backgroundColor: 'rgba(13, 110, 253, 0.15)',
+                          border: '2px solid #0d6efd',
+                          borderRadius: '2px'
+                        }}></div>
 
-                         {/* Median Line */}
-                         <div style={{ position: 'absolute', top: '30%', bottom: '30%', left: `${((outlierStats.q2 - outlierStats.min) / (outlierStats.max - outlierStats.min)) * 80 + 10}%`, width: '3px', backgroundColor: '#0d6efd' }}></div>
+                        {/* Median Line */}
+                        <div style={{ position: 'absolute', top: '30%', bottom: '30%', left: `${((outlierStats.q2 - outlierStats.min) / (outlierStats.max - outlierStats.min)) * 80 + 10}%`, width: '3px', backgroundColor: '#0d6efd' }}></div>
                       </div>
                       <div className="d-flex justify-content-between text-muted small px-2">
                         <span>Min: {outlierStats.min.toFixed(2)}</span>
@@ -556,33 +556,33 @@ function RelationshipsTab({ featureColumns }: { featureColumns: string[] }) {
 
       <div className="card-body p-4">
         {activeSubTab === 'target' && (
-           <TargetRelationshipsTable
-             data={targetQuery.data}
-             isLoading={targetQuery.isLoading}
-             targetColumn={targetColumn}
-             setTargetColumn={setTargetColumn}
-             featureColumns={featureColumns}
-           />
+          <TargetRelationshipsTable
+            data={targetQuery.data}
+            isLoading={targetQuery.isLoading}
+            targetColumn={targetColumn}
+            setTargetColumn={setTargetColumn}
+            featureColumns={featureColumns}
+          />
         )}
 
         {activeSubTab === 'numeric' && (
-           <CorrelationHeatmap
-             title="Pearson Correlation Matrix"
-             data={matrixQuery.data?.pearson}
-             columns={matrixQuery.data?.numeric_columns}
-             isLoading={matrixQuery.isLoading}
-             baseColor="25, 135, 84" // Green-ish
-           />
+          <CorrelationHeatmap
+            title="Pearson Correlation Matrix"
+            data={matrixQuery.data?.pearson}
+            columns={matrixQuery.data?.numeric_columns}
+            isLoading={matrixQuery.isLoading}
+            baseColor="25, 135, 84" // Green-ish
+          />
         )}
 
         {activeSubTab === 'categorical' && (
-           <CorrelationHeatmap
-             title="Cramér's V Association Matrix"
-             data={matrixQuery.data?.cramers_v}
-             columns={matrixQuery.data?.categorical_columns}
-             isLoading={matrixQuery.isLoading}
-             baseColor="255, 193, 7" // Orange-ish
-           />
+          <CorrelationHeatmap
+            title="Cramér's V Association Matrix"
+            data={matrixQuery.data?.cramers_v}
+            columns={matrixQuery.data?.categorical_columns}
+            isLoading={matrixQuery.isLoading}
+            baseColor="255, 193, 7" // Orange-ish
+          />
         )}
       </div>
     </div>
@@ -598,9 +598,9 @@ function TargetRelationshipsTable({ data, isLoading, targetColumn, setTargetColu
         <h6 className="fw-bold mb-0">Correlations with {targetColumn}</h6>
         <div className="d-flex align-items-center gap-2">
           <span className="small text-muted">Target:</span>
-          <select className="form-select form-select-sm shadow-none border" style={{width: '180px'}} value={targetColumn} onChange={e => setTargetColumn(e.target.value)}>
-             <option value="is_fraudulent">is_fraudulent</option>
-             {featureColumns.map((c: string) => <option key={c} value={c}>{c}</option>)}
+          <select className="form-select form-select-sm shadow-none border" style={{ width: '180px' }} value={targetColumn} onChange={e => setTargetColumn(e.target.value)}>
+            <option value="is_fraudulent">is_fraudulent</option>
+            {featureColumns.map((c: string) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
       </div>
@@ -611,7 +611,7 @@ function TargetRelationshipsTable({ data, isLoading, targetColumn, setTargetColu
               <th>Feature</th>
               <th>Metric Type</th>
               <th>Coefficient</th>
-              <th style={{width: '200px'}}>Strength</th>
+              <th style={{ width: '200px' }}>Strength</th>
             </tr>
           </thead>
           <tbody>
@@ -620,20 +620,20 @@ function TargetRelationshipsTable({ data, isLoading, targetColumn, setTargetColu
                 <tr key={idx}>
                   <td className="fw-medium">{rel.feature_a}</td>
                   <td>
-                    <span className="badge bg-light text-dark border font-monospace text-uppercase" style={{fontSize: '0.7rem'}}>
+                    <span className="badge bg-light text-dark border font-monospace text-uppercase" style={{ fontSize: '0.7rem' }}>
                       {rel.metric_type}
                     </span>
                   </td>
                   <td className="font-monospace fw-bold">{rel.value.toFixed(4)}</td>
                   <td>
                     <div className="d-flex align-items-center gap-2">
-                      <div className="progress flex-grow-1" style={{height: '6px'}}>
+                      <div className="progress flex-grow-1" style={{ height: '6px' }}>
                         <div
                           className={`progress-bar ${Math.abs(rel.value) > 0.5 ? 'bg-danger' : Math.abs(rel.value) > 0.2 ? 'bg-warning' : 'bg-success'}`}
-                          style={{width: `${Math.min(Math.abs(rel.value) * 100, 100)}%`}}
+                          style={{ width: `${Math.min(Math.abs(rel.value) * 100, 100)}%` }}
                         ></div>
                       </div>
-                      <span className="text-muted" style={{fontSize: '0.7rem'}}>
+                      <span className="text-muted" style={{ fontSize: '0.7rem' }}>
                         {Math.abs(rel.value) > 0.5 ? 'Strong' : Math.abs(rel.value) > 0.2 ? 'Moderate' : 'Weak'}
                       </span>
                     </div>
@@ -667,12 +667,12 @@ function CorrelationHeatmap({ title, data, columns, isLoading, baseColor = "13, 
     <div className="overflow-auto">
       <h6 className="fw-bold mb-3">{title}</h6>
       <div className="table-responsive">
-        <table className="table table-bordered table-sm small text-center" style={{tableLayout: 'fixed', width: 'max-content'}}>
+        <table className="table table-bordered table-sm small text-center" style={{ tableLayout: 'fixed', width: 'max-content' }}>
           <thead>
             <tr>
-              <th style={{width: '140px', backgroundColor: '#f8f9fa'}} className="text-start ps-3">Feature</th>
+              <th style={{ width: '140px', backgroundColor: '#f8f9fa' }} className="text-start ps-3">Feature</th>
               {displayCols.map((c: string) => (
-                <th key={c} className="text-truncate" style={{width: '80px', maxWidth: '80px', fontSize: '0.75rem', transform: 'rotate(-45deg)', height: '80px', verticalAlign: 'bottom'}} title={c}>
+                <th key={c} className="text-truncate" style={{ width: '80px', maxWidth: '80px', fontSize: '0.75rem', transform: 'rotate(-45deg)', height: '80px', verticalAlign: 'bottom' }} title={c}>
                   {c}
                 </th>
               ))}
@@ -681,7 +681,7 @@ function CorrelationHeatmap({ title, data, columns, isLoading, baseColor = "13, 
           <tbody>
             {displayCols.map((row: string) => (
               <tr key={row}>
-                <th className="text-end pe-3 text-truncate" style={{maxWidth: '140px', backgroundColor: '#f8f9fa'}} title={row}>{row}</th>
+                <th className="text-end pe-3 text-truncate" style={{ maxWidth: '140px', backgroundColor: '#f8f9fa' }} title={row}>{row}</th>
                 {displayCols.map((col: string) => {
                   const val = matrix[`${row}:${col}`] || 0;
                   // Use absolute value for opacity
@@ -690,7 +690,7 @@ function CorrelationHeatmap({ title, data, columns, isLoading, baseColor = "13, 
                   const textColor = opacity > 0.6 ? '#fff' : '#000';
 
                   return (
-                    <td key={col} style={{backgroundColor: bg, color: textColor, transition: 'all 0.2s'}}>
+                    <td key={col} style={{ backgroundColor: bg, color: textColor, transition: 'all 0.2s' }}>
                       {val.toFixed(2)}
                     </td>
                   );

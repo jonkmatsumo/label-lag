@@ -31,6 +31,8 @@ import type {
   TransactionSearchRequest,
   TransactionSearchResponse,
   FeatureSampleResponse,
+  RuleSuggestion,
+  AcceptSuggestionRequest,
 } from '../types/api';
 
 // Health endpoints
@@ -90,9 +92,9 @@ export const suggestionsApi = {
     const searchParams = new URLSearchParams();
     if (params?.field) searchParams.set('field', params.field);
     if (params?.min_confidence) searchParams.set('min_confidence', String(params.min_confidence));
-    return apiClient.get<{ suggestions: any[]; total: number }>(`/bff/v1/suggestions/heuristic?${searchParams.toString()}`);
+    return apiClient.get<{ suggestions: RuleSuggestion[]; total: number }>(`/bff/v1/suggestions/heuristic?${searchParams.toString()}`);
   },
-  accept: (data: any) => apiClient.post('/bff/v1/suggestions/accept', data),
+  accept: (data: AcceptSuggestionRequest) => apiClient.post('/bff/v1/suggestions/accept', data),
 };
 
 // Backtest / What-if

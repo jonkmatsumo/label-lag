@@ -535,3 +535,26 @@ export interface ProductionRulesResponse {
   version: string;
   rules: ProductionRule[];
 }
+
+// Suggestion types
+export interface RuleEvidence {
+  mean?: number;
+  sample_count?: number;
+}
+
+export interface RuleSuggestion {
+  field: string;
+  operator: string;
+  threshold: number | string;
+  confidence: number;
+  reason: string;
+  action: string;
+  suggested_score: number;
+  evidence?: RuleEvidence;
+}
+
+export interface AcceptSuggestionRequest {
+  suggestion: RuleSuggestion;
+  actor: string;
+  custom_id: string;
+}
