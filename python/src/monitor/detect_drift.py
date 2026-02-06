@@ -41,7 +41,7 @@ MONITORED_FEATURES = [
 
 def _load_drift_thresholds() -> dict[str, float]:
     """Load drift thresholds from config file."""
-    config_path = Path(__file__).parents[3] / "config" / "model_thresholds.json"
+    config_path = Path(__file__).parents[2] / "config" / "model_thresholds.json"
     # C1: thresholds from env vars
     default_thresholds = {
         "psi_warning": float(os.getenv("DRIFT_PSI_WARN_THRESHOLD", 0.1)),

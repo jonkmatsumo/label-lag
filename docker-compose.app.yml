@@ -46,7 +46,7 @@ services:
   grpc-inference:
     build:
       context: .
-      dockerfile: config/docker/grpc-inference.Dockerfile
+      dockerfile: python/Dockerfile
     container_name: grpc-inference
     environment:
       - GRPC_INFERENCE_HOST=0.0.0.0
@@ -75,6 +75,8 @@ services:
     environment:
       - PORT=8081
       - INFERENCE_GATEWAY_PYTHON_GRPC_ADDR=grpc-inference:50052
+      - INFERENCE_GATEWAY_RULES_PATH=go/inference-gateway/config/default_rules.json
+      - INFERENCE_GATEWAY_RULES_WATCH=true
     networks:
       - labellag_net
     ports:

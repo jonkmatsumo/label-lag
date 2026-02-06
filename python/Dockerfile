@@ -16,7 +16,7 @@ COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev
 
 COPY src ./src
-COPY config ./config
+COPY python/config ./config
 
 ENV PYTHONPATH=/app/src
 
