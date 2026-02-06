@@ -466,12 +466,9 @@ class ScoreDistributionResponse(BaseModel):
     )
 
 
-
 # =============================================================================
 # Analytics CRUD Schemas
 # =============================================================================
-
-
 
 
 class DailyStat(BaseModel):

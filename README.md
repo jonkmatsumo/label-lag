@@ -90,13 +90,13 @@ stateDiagram-v2
 
 ## Detailed Architecture Breakdown
 
-Label Lag separates infrastructure, application runtime, and lifecycle workflows so that training and deployment are explicit and observable. The system design diagram above shows the runtime path (React → BFF → Go Inference → Python ML → Go Analytics → DB). The pipeline diagram shows how models move from training to production inference. The rule state machine anchors governance, ensuring changes pass review before affecting live scoring.
+Label Lag separates infrastructure, application runtime, and lifecycle workflows so that training and deployment are explicit and observable. The system design diagram above shows the runtime path (React → BFF → Go Inference → Python ML → Go Analytics → DB). The pipeline diagram shows how models move from training to production inference. The rule state machine anchors governance, with all rule management and analysis now handled by the Go-based control plane.
 
 Core flows:
 - **Data generation and feature materialization** feed training and historical analytics while preserving point-in-time correctness.
 - **Training and registry** capture metrics and artifacts in MLflow, enabling explicit promotion and deployment.
-- **Inference and rule evaluation** combine model predictions with a rule engine that supports shadow testing and auditing.
-- **Dashboard-driven workflows** expose model and rule lifecycle actions without bypassing API controls.
+- **Inference and rule evaluation** combine model predictions with a high-performance Go rule engine that supports shadow testing and auditing.
+- **Dashboard-driven workflows** expose model and rule lifecycle actions managed through the Go Inference Gateway.
 
 ## Ports & Services Table
 
@@ -145,17 +145,17 @@ Key folders:
 
 ## Service-Level Breakdown
 
-### API Service
+### API Service (Python)
 
-Responsible for model forecasting, training triggers, rule lifecycle management, and model deployment. It exposes prediction and lifecycle endpoints (`/predict/signal`, `/train`, `/rules/{id}/publish`, `/models/deploy`) and serves Swagger docs at `/docs`. The API is compute-only and relies on the Go Analytics CRUD service for data access.
+Responsible for model forecasting, training triggers, and model deployment. It exposes prediction and training endpoints (`/predict/signal`, `/train`, `/models/deploy`) and serves Swagger docs at `/docs`. The API is compute-only and relies on the Go Analytics CRUD service for data access. Rule-related lifecycle actions are now delegated to the Go Inference Gateway.
 
 ### Model Training & Registry (MLflow)
 
 Training runs are tracked with metrics and artifacts, then promoted through stages before deployment. The deploy action reloads the production model into the API, keeping approval and activation separate.
 
-### Rule Engine
+### Rule Engine (Go Inference Gateway)
 
-Rules evaluate transaction features using operators (`>`, `>=`, `<`, `<=`, `==`, `in`, `not_in`) and actions (`override_score`, `clamp_min`, `clamp_max`, `reject`). The lifecycle enforces draft → review → approval → publish transitions, and supports shadow evaluation and sandbox testing for safe iteration.
+High-performance rule evaluation and management. Rules evaluate transaction features using operators (`>`, `>=`, `<`, `<=`, `==`, `in`, `not_in`) and actions (`override_score`, `clamp_min`, `clamp_max`, `reject`). The gateway manages the lifecycle (draft → review → approval → publish) and supports shadow evaluation, sandbox testing, and automated conflict detection.
 
 ### Analytics CRUD (Go)
 
