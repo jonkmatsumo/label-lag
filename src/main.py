@@ -3,9 +3,9 @@
 from typing import Annotated
 
 import typer
+from src.logging_util import configure_logging, get_logger
 
 from api.crud_client import get_crud_client
-from synthetic_pipeline.logging import configure_logging, get_logger
 
 app = typer.Typer(
     name="synthetic-data-gen",

@@ -5,8 +5,6 @@ from fastapi import APIRouter
 from api.crud_client import get_crud_client
 from api.schemas import (
     ClearDataResponse,
-    GenerateDataRequest,
-    GenerateDataResponse,
     TrainRequest,
     TrainResponse,
 )
@@ -15,25 +13,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-
-@router.post(
-    "/data/generate",
-    response_model=GenerateDataResponse,
-    tags=["Data Management"],
-    summary="Generate synthetic data [DEPRECATED]",
-)
-async def generate_data(request: GenerateDataRequest) -> GenerateDataResponse:
-    """Deprecated: Use Go gateway /analytics/generate instead.
-
-    This endpoint is kept for backwards compatibility but no longer performs
-    data generation. The Go implementation in analytics-crud is now the
-    sole data generation path.
-    """
-    return GenerateDataResponse(
-        success=False,
-        error="DEPRECATED: Use Go gateway /analytics/generate. "
-              "This Python endpoint is no longer active.",
-    )
 
 
 @router.delete(
