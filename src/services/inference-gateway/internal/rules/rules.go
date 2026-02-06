@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sync"
 	"time"
 )
 
@@ -19,6 +20,9 @@ const (
 	RuleStatusShadow        RuleStatus = "shadow"
 	RuleStatusDisabled      RuleStatus = "disabled"
 	RuleStatusArchived      RuleStatus = "archived"
+
+	// DefaultMaxRules is the maximum number of rules allowed in a ruleset (R4).
+	DefaultMaxRules = 500
 )
 
 type Rule struct {
@@ -36,22 +40,34 @@ type Rule struct {
 type RuleSet struct {
 	Version string `json:"version"`
 	Rules   []Rule `json:"rules"`
+
+	// versionOnce ensures version is only computed once (R1).
+	versionOnce sync.Once `json:"-"`
+	// computedVersion caches the computed version string (R1).
+	computedVersion string `json:"-"`
 }
 
-func (rs RuleSet) ComputeVersion() string {
-	// Canonical JSON serialization
-	data, err := json.Marshal(rs.Rules)
-	if err != nil {
-		return rs.Version // Fallback
+func (rs *RuleSet) ComputeVersion() string {
+	if len(rs.Rules) == 0 {
+		return rs.Version
 	}
+	rs.versionOnce.Do(func() {
+		// Canonical JSON serialization
+		data, err := json.Marshal(rs.Rules)
+		if err != nil {
+			rs.computedVersion = rs.Version // Fallback
+			return
+		}
 
-	h := sha256.New()
-	// Include explicit version in hash if present
-	if rs.Version != "" {
-		h.Write([]byte(rs.Version))
-	}
-	h.Write(data)
-	return fmt.Sprintf("sha256:%x", h.Sum(nil))[:16]
+		h := sha256.New()
+		// Include explicit version in hash if present
+		if rs.Version != "" {
+			h.Write([]byte(rs.Version))
+		}
+		h.Write(data)
+		rs.computedVersion = fmt.Sprintf("sha256:%x", h.Sum(nil))[:16]
+	})
+	return rs.computedVersion
 }
 
 type Explanation struct {
@@ -80,17 +96,21 @@ type EvalOptions struct {
 	Debug bool
 }
 
-func EvaluateRules(features map[string]any, currentScore int, ruleset RuleSet, opts EvalOptions) (RuleResult, error) {
+func EvaluateRules(features map[string]any, currentScore int, ruleset *RuleSet, opts EvalOptions) (RuleResult, error) {
 	startTotal := time.Now()
 
-	if len(ruleset.Rules) == 0 {
+	if ruleset == nil || len(ruleset.Rules) == 0 {
+		version := ""
+		if ruleset != nil {
+			version = ruleset.ComputeVersion()
+		}
 		return RuleResult{
 			FinalScore:         currentScore,
 			MatchedRules:       []string{},
 			Explanations:       []Explanation{},
 			ShadowMatchedRules: []string{},
 			ShadowExplanations: []Explanation{},
-			RulesVersion:       ruleset.Version,
+			RulesVersion:       version,
 			EvaluationTimeMS:   float64(time.Since(startTotal).Nanoseconds()) / 1e6,
 		}, nil
 	}
@@ -439,6 +459,10 @@ func ValidateRule(rule Rule) error {
 }
 
 func FilterValidRules(rules []Rule) ([]Rule, []error) {
+	if len(rules) > DefaultMaxRules {
+		return nil, []error{fmt.Errorf("ruleset exceeds maximum rules limit of %d", DefaultMaxRules)}
+	}
+
 	valid := make([]Rule, 0, len(rules))
 	var errs []error
 	for _, rule := range rules {

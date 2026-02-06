@@ -92,7 +92,7 @@ func handleEvaluate(args []string) {
 		os.Exit(1)
 	}
 
-	result, err := rules.EvaluateRules(feats, *baseScore, rs, rules.EvalOptions{Debug: *debug})
+	result, err := rules.EvaluateRules(feats, *baseScore, &rs, rules.EvalOptions{Debug: *debug})
 	if err != nil {
 		fmt.Printf("Error evaluating rules: %v\n", err)
 		os.Exit(1)
@@ -134,8 +134,8 @@ func handleDiff(args []string) {
 	rsA, _ := loadRuleSet(*pathA)
 	rsB, _ := loadRuleSet(*pathB)
 
-	resA, _ := rules.EvaluateRules(feats, *baseScore, rsA, rules.EvalOptions{})
-	resB, _ := rules.EvaluateRules(feats, *baseScore, rsB, rules.EvalOptions{})
+	resA, _ := rules.EvaluateRules(feats, *baseScore, &rsA, rules.EvalOptions{})
+	resB, _ := rules.EvaluateRules(feats, *baseScore, &rsB, rules.EvalOptions{})
 
 	// Simplified diff logic matching gateway
 	diff := struct {

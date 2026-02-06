@@ -89,7 +89,7 @@ func (h *Handler) handleEvaluateRulesDiff(w http.ResponseWriter, r *http.Request
 			}
 		}
 
-		result, err := rules.EvaluateRules(req.Features, req.BaseScore, ruleset, rules.EvalOptions{Debug: debug})
+		result, err := rules.EvaluateRules(req.Features, req.BaseScore, &ruleset, rules.EvalOptions{Debug: debug})
 		if err != nil {
 			return EvaluateRulesResponse{}, err
 		}
@@ -235,7 +235,7 @@ func (h *Handler) handleEvaluateRules(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	result, err := rules.EvaluateRules(req.Features, req.BaseScore, ruleset, rules.EvalOptions{Debug: debug})
+	result, err := rules.EvaluateRules(req.Features, req.BaseScore, &ruleset, rules.EvalOptions{Debug: debug})
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "rule evaluation failed")
 		return

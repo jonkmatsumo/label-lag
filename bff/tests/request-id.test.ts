@@ -15,7 +15,7 @@ describe('Request ID Propagation', () => {
   });
 
   it('forwards X-Request-Id to gateway', async () => {
-    ctx.mockGatewayPool.intercept({
+    ctx.mockApiPool.intercept({
       path: '/monitoring/drift?hours=24&threshold=0.25&force_refresh=false',
       method: 'GET',
       headers: {
