@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 
 	"github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/requestid"
 	"github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/rules"
@@ -200,6 +201,9 @@ func (h *Handler) handleSandboxDiff(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	sort.Strings(diff.MatchedRulesAdded)
+	sort.Strings(diff.MatchedRulesRemoved)
+
 	// Use temporary EvaluateRulesResponse for severity computation
 	tempRespA := EvaluateRulesResponse{Rejected: resA.Rejected, Explanations: resA.Explanations}
 	tempRespB := EvaluateRulesResponse{Rejected: resB.Rejected, Explanations: resB.Explanations}
@@ -227,6 +231,9 @@ func mapToSandboxEvaluateResponse(result rules.RuleResult, baseScore int, shadow
 			Score:    exp.Score,
 		})
 	}
+	sort.Slice(matchedRules, func(i, j int) bool {
+		return matchedRules[i].RuleID < matchedRules[j].RuleID
+	})
 
 	shadowMatchedRules := make([]SandboxMatchedRule, 0, len(result.ShadowExplanations))
 	for _, exp := range result.ShadowExplanations {
@@ -238,6 +245,9 @@ func mapToSandboxEvaluateResponse(result rules.RuleResult, baseScore int, shadow
 			Score:    exp.Score,
 		})
 	}
+	sort.Slice(shadowMatchedRules, func(i, j int) bool {
+		return shadowMatchedRules[i].RuleID < shadowMatchedRules[j].RuleID
+	})
 
 	finalScore := result.FinalScore
 	var shadowScore *int
@@ -247,12 +257,22 @@ func mapToSandboxEvaluateResponse(result rules.RuleResult, baseScore int, shadow
 		finalScore = baseScore
 	}
 
+	explanations := result.Explanations
+	sort.Slice(explanations, func(i, j int) bool {
+		return explanations[i].RuleID < explanations[j].RuleID
+	})
+
+	shadowExplanations := result.ShadowExplanations
+	sort.Slice(shadowExplanations, func(i, j int) bool {
+		return shadowExplanations[i].RuleID < shadowExplanations[j].RuleID
+	})
+
 	return SandboxEvaluateResponse{
 		FinalScore:         finalScore,
 		BaselineScore:      baseScore,
 		ShadowScore:        shadowScore,
 		MatchedRules:       matchedRules,
-		Explanations:       result.Explanations,
+		Explanations:       explanations,
 		ShadowMatchedRules: shadowMatchedRules,
 		Rejected:           result.Rejected && !shadowMode,
 		RuleSetVersion:     result.RulesVersion,
@@ -364,6 +384,9 @@ func (h *Handler) handleEvaluateRulesDiff(w http.ResponseWriter, r *http.Request
 		}
 	}
 
+	sort.Strings(diff.MatchedRulesAdded)
+	sort.Strings(diff.MatchedRulesRemoved)
+
 	// Compute severity
 	diff.Severity = computeDiffSeverity(respA, respB, diff)
 
@@ -467,6 +490,9 @@ func (h *Handler) handleEvaluateRules(w http.ResponseWriter, r *http.Request) {
 		resp.FinalScore = req.BaseScore
 		resp.Rejected = false
 	}
+
+	sort.Strings(resp.MatchedRules)
+	sort.Strings(resp.ShadowMatchedRules)
 
 	// Logging and Tracing
 	h.logger.Info("RulesEvent",
