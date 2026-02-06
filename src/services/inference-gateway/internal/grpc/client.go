@@ -11,6 +11,8 @@ import (
 
 	inferencev1 "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/grpc/inferencev1/inference/v1"
 	"github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/requestid"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
@@ -32,6 +34,19 @@ const (
 	StateOpen
 	StateHalfOpen
 )
+
+func (s BreakerState) String() string {
+	switch s {
+	case StateClosed:
+		return "closed"
+	case StateOpen:
+		return "open"
+	case StateHalfOpen:
+		return "half-open"
+	default:
+		return "unknown"
+	}
+}
 
 type CircuitBreaker struct {
 	mu               sync.RWMutex
@@ -61,6 +76,12 @@ func NewCircuitBreaker() *CircuitBreaker {
 		failureThreshold: threshold,
 		resetTimeout:     timeout,
 	}
+}
+
+func (cb *CircuitBreaker) State() BreakerState {
+	cb.mu.RLock()
+	defer cb.mu.RUnlock()
+	return cb.state
 }
 
 func (cb *CircuitBreaker) Allow() error {
@@ -165,7 +186,12 @@ func (c *InferenceClient) Score(ctx context.Context, req *inferencev1.ScoreReque
 		return nil, fmt.Errorf("nil request")
 	}
 
+	span := trace.SpanFromContext(ctx)
 	if err := c.breaker.Allow(); err != nil {
+		span.SetAttributes(
+			attribute.String("inference.breaker_state", c.breaker.State().String()),
+			attribute.String("inference.breaker_open_reason", "cooldown"),
+		)
 		return nil, mapRPCError(err)
 	}
 
@@ -182,6 +208,10 @@ func (c *InferenceClient) Score(ctx context.Context, req *inferencev1.ScoreReque
 
 	resp, err := c.stub.Score(callCtx, req)
 	c.breaker.RecordResult(err)
+
+	span.SetAttributes(
+		attribute.String("inference.breaker_state", c.breaker.State().String()),
+	)
 
 	if err != nil {
 		return nil, mapRPCError(err)
