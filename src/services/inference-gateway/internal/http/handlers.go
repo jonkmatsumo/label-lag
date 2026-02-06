@@ -72,6 +72,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/monitoring/drift", h.handleMonitoringDrift)
 	mux.HandleFunc("/metrics/shadow/comparison", h.handleMetricsShadowComparison)
 	mux.HandleFunc("/backtest/results", h.handleBacktestResults)
+	mux.HandleFunc("POST /backtest/compare", h.handleBacktestCompare)
 	mux.HandleFunc("GET /rules", h.handleListRules)
 	mux.HandleFunc("POST /rules", h.handleCreateRule)
 	mux.HandleFunc("GET /rules/{rule_id}", h.handleGetRule)

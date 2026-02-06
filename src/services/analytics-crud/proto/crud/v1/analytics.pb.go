@@ -5027,6 +5027,203 @@ func (x *BatchGetLatestUserFeaturesResponse) GetFeatures() map[string]*UserFeatu
 	return nil
 }
 
+// Backtest Compare (Phase 8)
+type CompareBacktestsRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	BaselineJobId  string                 `protobuf:"bytes,1,opt,name=baseline_job_id,json=baselineJobId,proto3" json:"baseline_job_id,omitempty"`
+	CandidateJobId string                 `protobuf:"bytes,2,opt,name=candidate_job_id,json=candidateJobId,proto3" json:"candidate_job_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *CompareBacktestsRequest) Reset() {
+	*x = CompareBacktestsRequest{}
+	mi := &file_proto_crud_v1_analytics_proto_msgTypes[83]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CompareBacktestsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CompareBacktestsRequest) ProtoMessage() {}
+
+func (x *CompareBacktestsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_crud_v1_analytics_proto_msgTypes[83]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CompareBacktestsRequest.ProtoReflect.Descriptor instead.
+func (*CompareBacktestsRequest) Descriptor() ([]byte, []int) {
+	return file_proto_crud_v1_analytics_proto_rawDescGZIP(), []int{83}
+}
+
+func (x *CompareBacktestsRequest) GetBaselineJobId() string {
+	if x != nil {
+		return x.BaselineJobId
+	}
+	return ""
+}
+
+func (x *CompareBacktestsRequest) GetCandidateJobId() string {
+	if x != nil {
+		return x.CandidateJobId
+	}
+	return ""
+}
+
+type BacktestMetricsDelta struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	MatchRateDelta    float64                `protobuf:"fixed64,1,opt,name=match_rate_delta,json=matchRateDelta,proto3" json:"match_rate_delta,omitempty"` // candidate - baseline
+	ScoreMeanDelta    float64                `protobuf:"fixed64,2,opt,name=score_mean_delta,json=scoreMeanDelta,proto3" json:"score_mean_delta,omitempty"`
+	ScoreStdDelta     float64                `protobuf:"fixed64,3,opt,name=score_std_delta,json=scoreStdDelta,proto3" json:"score_std_delta,omitempty"`
+	RejectedRateDelta float64                `protobuf:"fixed64,4,opt,name=rejected_rate_delta,json=rejectedRateDelta,proto3" json:"rejected_rate_delta,omitempty"`
+	TotalRecordsDelta int64                  `protobuf:"varint,5,opt,name=total_records_delta,json=totalRecordsDelta,proto3" json:"total_records_delta,omitempty"`
+	MatchedCountDelta int64                  `protobuf:"varint,6,opt,name=matched_count_delta,json=matchedCountDelta,proto3" json:"matched_count_delta,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *BacktestMetricsDelta) Reset() {
+	*x = BacktestMetricsDelta{}
+	mi := &file_proto_crud_v1_analytics_proto_msgTypes[84]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BacktestMetricsDelta) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BacktestMetricsDelta) ProtoMessage() {}
+
+func (x *BacktestMetricsDelta) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_crud_v1_analytics_proto_msgTypes[84]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BacktestMetricsDelta.ProtoReflect.Descriptor instead.
+func (*BacktestMetricsDelta) Descriptor() ([]byte, []int) {
+	return file_proto_crud_v1_analytics_proto_rawDescGZIP(), []int{84}
+}
+
+func (x *BacktestMetricsDelta) GetMatchRateDelta() float64 {
+	if x != nil {
+		return x.MatchRateDelta
+	}
+	return 0
+}
+
+func (x *BacktestMetricsDelta) GetScoreMeanDelta() float64 {
+	if x != nil {
+		return x.ScoreMeanDelta
+	}
+	return 0
+}
+
+func (x *BacktestMetricsDelta) GetScoreStdDelta() float64 {
+	if x != nil {
+		return x.ScoreStdDelta
+	}
+	return 0
+}
+
+func (x *BacktestMetricsDelta) GetRejectedRateDelta() float64 {
+	if x != nil {
+		return x.RejectedRateDelta
+	}
+	return 0
+}
+
+func (x *BacktestMetricsDelta) GetTotalRecordsDelta() int64 {
+	if x != nil {
+		return x.TotalRecordsDelta
+	}
+	return 0
+}
+
+func (x *BacktestMetricsDelta) GetMatchedCountDelta() int64 {
+	if x != nil {
+		return x.MatchedCountDelta
+	}
+	return 0
+}
+
+type CompareBacktestsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Baseline      *BacktestResult        `protobuf:"bytes,1,opt,name=baseline,proto3" json:"baseline,omitempty"`
+	Candidate     *BacktestResult        `protobuf:"bytes,2,opt,name=candidate,proto3" json:"candidate,omitempty"`
+	Delta         *BacktestMetricsDelta  `protobuf:"bytes,3,opt,name=delta,proto3" json:"delta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CompareBacktestsResponse) Reset() {
+	*x = CompareBacktestsResponse{}
+	mi := &file_proto_crud_v1_analytics_proto_msgTypes[85]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CompareBacktestsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CompareBacktestsResponse) ProtoMessage() {}
+
+func (x *CompareBacktestsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_crud_v1_analytics_proto_msgTypes[85]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CompareBacktestsResponse.ProtoReflect.Descriptor instead.
+func (*CompareBacktestsResponse) Descriptor() ([]byte, []int) {
+	return file_proto_crud_v1_analytics_proto_rawDescGZIP(), []int{85}
+}
+
+func (x *CompareBacktestsResponse) GetBaseline() *BacktestResult {
+	if x != nil {
+		return x.Baseline
+	}
+	return nil
+}
+
+func (x *CompareBacktestsResponse) GetCandidate() *BacktestResult {
+	if x != nil {
+		return x.Candidate
+	}
+	return nil
+}
+
+func (x *CompareBacktestsResponse) GetDelta() *BacktestMetricsDelta {
+	if x != nil {
+		return x.Delta
+	}
+	return nil
+}
+
 var File_proto_crud_v1_analytics_proto protoreflect.FileDescriptor
 
 const file_proto_crud_v1_analytics_proto_rawDesc = "" +
@@ -5424,7 +5621,21 @@ const file_proto_crud_v1_analytics_proto_rawDesc = "" +
 	"\bfeatures\x18\x01 \x03(\v29.crud.v1.BatchGetLatestUserFeaturesResponse.FeaturesEntryR\bfeatures\x1aR\n" +
 	"\rFeaturesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12+\n" +
-	"\x05value\x18\x02 \x01(\v2\x15.crud.v1.UserFeaturesR\x05value:\x028\x012\xaf\x16\n" +
+	"\x05value\x18\x02 \x01(\v2\x15.crud.v1.UserFeaturesR\x05value:\x028\x01\"k\n" +
+	"\x17CompareBacktestsRequest\x12&\n" +
+	"\x0fbaseline_job_id\x18\x01 \x01(\tR\rbaselineJobId\x12(\n" +
+	"\x10candidate_job_id\x18\x02 \x01(\tR\x0ecandidateJobId\"\xa2\x02\n" +
+	"\x14BacktestMetricsDelta\x12(\n" +
+	"\x10match_rate_delta\x18\x01 \x01(\x01R\x0ematchRateDelta\x12(\n" +
+	"\x10score_mean_delta\x18\x02 \x01(\x01R\x0escoreMeanDelta\x12&\n" +
+	"\x0fscore_std_delta\x18\x03 \x01(\x01R\rscoreStdDelta\x12.\n" +
+	"\x13rejected_rate_delta\x18\x04 \x01(\x01R\x11rejectedRateDelta\x12.\n" +
+	"\x13total_records_delta\x18\x05 \x01(\x03R\x11totalRecordsDelta\x12.\n" +
+	"\x13matched_count_delta\x18\x06 \x01(\x03R\x11matchedCountDelta\"\xbb\x01\n" +
+	"\x18CompareBacktestsResponse\x123\n" +
+	"\bbaseline\x18\x01 \x01(\v2\x17.crud.v1.BacktestResultR\bbaseline\x125\n" +
+	"\tcandidate\x18\x02 \x01(\v2\x17.crud.v1.BacktestResultR\tcandidate\x123\n" +
+	"\x05delta\x18\x03 \x01(\v2\x1d.crud.v1.BacktestMetricsDeltaR\x05delta2\x88\x17\n" +
 	"\x10AnalyticsService\x12N\n" +
 	"\rGetDailyStats\x12\x1d.crud.v1.GetDailyStatsRequest\x1a\x1e.crud.v1.GetDailyStatsResponse\x12f\n" +
 	"\x15GetTransactionDetails\x12%.crud.v1.GetTransactionDetailsRequest\x1a&.crud.v1.GetTransactionDetailsResponse\x12]\n" +
@@ -5458,7 +5669,8 @@ const file_proto_crud_v1_analytics_proto_rawDesc = "" +
 	"\x0eGetAttribution\x12\x1e.crud.v1.GetAttributionRequest\x1a\x1f.crud.v1.GetAttributionResponse\x12Z\n" +
 	"\x11LogInferenceEvent\x12!.crud.v1.LogInferenceEventRequest\x1a\".crud.v1.LogInferenceEventResponse\x12f\n" +
 	"\x15GetLatestUserFeatures\x12%.crud.v1.GetLatestUserFeaturesRequest\x1a&.crud.v1.GetLatestUserFeaturesResponse\x12u\n" +
-	"\x1aBatchGetLatestUserFeatures\x12*.crud.v1.BatchGetLatestUserFeaturesRequest\x1a+.crud.v1.BatchGetLatestUserFeaturesResponseBSZQgithub.com/jonkmatsumo/label-lag/src/services/analytics-crud/proto/crud/v1;crudv1b\x06proto3"
+	"\x1aBatchGetLatestUserFeatures\x12*.crud.v1.BatchGetLatestUserFeaturesRequest\x1a+.crud.v1.BatchGetLatestUserFeaturesResponse\x12W\n" +
+	"\x10CompareBacktests\x12 .crud.v1.CompareBacktestsRequest\x1a!.crud.v1.CompareBacktestsResponseBSZQgithub.com/jonkmatsumo/label-lag/src/services/analytics-crud/proto/crud/v1;crudv1b\x06proto3"
 
 var (
 	file_proto_crud_v1_analytics_proto_rawDescOnce sync.Once
@@ -5472,7 +5684,7 @@ func file_proto_crud_v1_analytics_proto_rawDescGZIP() []byte {
 	return file_proto_crud_v1_analytics_proto_rawDescData
 }
 
-var file_proto_crud_v1_analytics_proto_msgTypes = make([]protoimpl.MessageInfo, 85)
+var file_proto_crud_v1_analytics_proto_msgTypes = make([]protoimpl.MessageInfo, 88)
 var file_proto_crud_v1_analytics_proto_goTypes = []any{
 	(*GetDailyStatsRequest)(nil),               // 0: crud.v1.GetDailyStatsRequest
 	(*DailyStat)(nil),                          // 1: crud.v1.DailyStat
@@ -5557,136 +5769,144 @@ var file_proto_crud_v1_analytics_proto_goTypes = []any{
 	(*GetLatestUserFeaturesResponse)(nil),      // 80: crud.v1.GetLatestUserFeaturesResponse
 	(*BatchGetLatestUserFeaturesRequest)(nil),  // 81: crud.v1.BatchGetLatestUserFeaturesRequest
 	(*BatchGetLatestUserFeaturesResponse)(nil), // 82: crud.v1.BatchGetLatestUserFeaturesResponse
-	nil,                           // 83: crud.v1.BacktestMetrics.ScoreDistributionEntry
-	nil,                           // 84: crud.v1.BatchGetLatestUserFeaturesResponse.FeaturesEntry
-	(*timestamppb.Timestamp)(nil), // 85: google.protobuf.Timestamp
+	(*CompareBacktestsRequest)(nil),            // 83: crud.v1.CompareBacktestsRequest
+	(*BacktestMetricsDelta)(nil),               // 84: crud.v1.BacktestMetricsDelta
+	(*CompareBacktestsResponse)(nil),           // 85: crud.v1.CompareBacktestsResponse
+	nil,                                        // 86: crud.v1.BacktestMetrics.ScoreDistributionEntry
+	nil,                                        // 87: crud.v1.BatchGetLatestUserFeaturesResponse.FeaturesEntry
+	(*timestamppb.Timestamp)(nil),              // 88: google.protobuf.Timestamp
 }
 var file_proto_crud_v1_analytics_proto_depIdxs = []int32{
 	1,  // 0: crud.v1.GetDailyStatsResponse.stats:type_name -> crud.v1.DailyStat
-	85, // 1: crud.v1.TransactionDetail.created_at:type_name -> google.protobuf.Timestamp
+	88, // 1: crud.v1.TransactionDetail.created_at:type_name -> google.protobuf.Timestamp
 	4,  // 2: crud.v1.GetTransactionDetailsResponse.transactions:type_name -> crud.v1.TransactionDetail
 	4,  // 3: crud.v1.SearchTransactionsResponse.transactions:type_name -> crud.v1.TransactionDetail
-	85, // 4: crud.v1.Alert.created_at:type_name -> google.protobuf.Timestamp
+	88, // 4: crud.v1.Alert.created_at:type_name -> google.protobuf.Timestamp
 	9,  // 5: crud.v1.GetRecentAlertsResponse.alerts:type_name -> crud.v1.Alert
-	85, // 6: crud.v1.GetOverviewMetricsResponse.min_transaction_timestamp:type_name -> google.protobuf.Timestamp
-	85, // 7: crud.v1.GetOverviewMetricsResponse.max_transaction_timestamp:type_name -> google.protobuf.Timestamp
-	85, // 8: crud.v1.GetOverviewMetricsResponse.min_created_at:type_name -> google.protobuf.Timestamp
-	85, // 9: crud.v1.GetOverviewMetricsResponse.max_created_at:type_name -> google.protobuf.Timestamp
-	85, // 10: crud.v1.TableFingerprint.max_created_at:type_name -> google.protobuf.Timestamp
-	85, // 11: crud.v1.TableFingerprint.max_timestamp:type_name -> google.protobuf.Timestamp
+	88, // 6: crud.v1.GetOverviewMetricsResponse.min_transaction_timestamp:type_name -> google.protobuf.Timestamp
+	88, // 7: crud.v1.GetOverviewMetricsResponse.max_transaction_timestamp:type_name -> google.protobuf.Timestamp
+	88, // 8: crud.v1.GetOverviewMetricsResponse.min_created_at:type_name -> google.protobuf.Timestamp
+	88, // 9: crud.v1.GetOverviewMetricsResponse.max_created_at:type_name -> google.protobuf.Timestamp
+	88, // 10: crud.v1.TableFingerprint.max_created_at:type_name -> google.protobuf.Timestamp
+	88, // 11: crud.v1.TableFingerprint.max_timestamp:type_name -> google.protobuf.Timestamp
 	14, // 12: crud.v1.GetDatasetFingerprintResponse.generated_records:type_name -> crud.v1.TableFingerprint
 	14, // 13: crud.v1.GetDatasetFingerprintResponse.feature_snapshots:type_name -> crud.v1.TableFingerprint
 	17, // 14: crud.v1.GetFeatureSampleResponse.samples:type_name -> crud.v1.FeatureSample
 	20, // 15: crud.v1.GetSchemaSummaryResponse.columns:type_name -> crud.v1.ColumnInfo
-	85, // 16: crud.v1.GetTrainingDataRequest.cutoff_date:type_name -> google.protobuf.Timestamp
+	88, // 16: crud.v1.GetTrainingDataRequest.cutoff_date:type_name -> google.protobuf.Timestamp
 	4,  // 17: crud.v1.GetTrainingDataResponse.train_records:type_name -> crud.v1.TransactionDetail
 	4,  // 18: crud.v1.GetTrainingDataResponse.test_records:type_name -> crud.v1.TransactionDetail
-	85, // 19: crud.v1.GetBacktestFeaturesRequest.start_date:type_name -> google.protobuf.Timestamp
-	85, // 20: crud.v1.GetBacktestFeaturesRequest.end_date:type_name -> google.protobuf.Timestamp
+	88, // 19: crud.v1.GetBacktestFeaturesRequest.start_date:type_name -> google.protobuf.Timestamp
+	88, // 20: crud.v1.GetBacktestFeaturesRequest.end_date:type_name -> google.protobuf.Timestamp
 	25, // 21: crud.v1.GetBacktestFeaturesResponse.features:type_name -> crud.v1.BacktestFeatureVector
-	83, // 22: crud.v1.BacktestMetrics.score_distribution:type_name -> crud.v1.BacktestMetrics.ScoreDistributionEntry
-	85, // 23: crud.v1.BacktestResult.start_date:type_name -> google.protobuf.Timestamp
-	85, // 24: crud.v1.BacktestResult.end_date:type_name -> google.protobuf.Timestamp
+	86, // 22: crud.v1.BacktestMetrics.score_distribution:type_name -> crud.v1.BacktestMetrics.ScoreDistributionEntry
+	88, // 23: crud.v1.BacktestResult.start_date:type_name -> google.protobuf.Timestamp
+	88, // 24: crud.v1.BacktestResult.end_date:type_name -> google.protobuf.Timestamp
 	27, // 25: crud.v1.BacktestResult.metrics:type_name -> crud.v1.BacktestMetrics
-	85, // 26: crud.v1.BacktestResult.completed_at:type_name -> google.protobuf.Timestamp
+	88, // 26: crud.v1.BacktestResult.completed_at:type_name -> google.protobuf.Timestamp
 	28, // 27: crud.v1.SaveBacktestResultRequest.result:type_name -> crud.v1.BacktestResult
-	85, // 28: crud.v1.ListBacktestResultsRequest.start_date:type_name -> google.protobuf.Timestamp
-	85, // 29: crud.v1.ListBacktestResultsRequest.end_date:type_name -> google.protobuf.Timestamp
+	88, // 28: crud.v1.ListBacktestResultsRequest.start_date:type_name -> google.protobuf.Timestamp
+	88, // 29: crud.v1.ListBacktestResultsRequest.end_date:type_name -> google.protobuf.Timestamp
 	28, // 30: crud.v1.ListBacktestResultsResponse.results:type_name -> crud.v1.BacktestResult
 	28, // 31: crud.v1.GetBacktestResultResponse.result:type_name -> crud.v1.BacktestResult
 	4,  // 32: crud.v1.GetDriftWindowResponse.transactions:type_name -> crud.v1.TransactionDetail
 	40, // 33: crud.v1.StoreGeneratedDataRequest.records:type_name -> crud.v1.GeneratedRecord
 	41, // 34: crud.v1.StoreGeneratedDataRequest.metadata:type_name -> crud.v1.EvaluationMetadata
-	85, // 35: crud.v1.GeneratedRecord.transaction_timestamp:type_name -> google.protobuf.Timestamp
-	85, // 36: crud.v1.GeneratedRecord.email_changed_at:type_name -> google.protobuf.Timestamp
-	85, // 37: crud.v1.GeneratedRecord.phone_changed_at:type_name -> google.protobuf.Timestamp
-	85, // 38: crud.v1.EvaluationMetadata.fraud_confirmed_at:type_name -> google.protobuf.Timestamp
+	88, // 35: crud.v1.GeneratedRecord.transaction_timestamp:type_name -> google.protobuf.Timestamp
+	88, // 36: crud.v1.GeneratedRecord.email_changed_at:type_name -> google.protobuf.Timestamp
+	88, // 37: crud.v1.GeneratedRecord.phone_changed_at:type_name -> google.protobuf.Timestamp
+	88, // 38: crud.v1.EvaluationMetadata.fraud_confirmed_at:type_name -> google.protobuf.Timestamp
 	47, // 39: crud.v1.SaveRuleRequest.rule:type_name -> crud.v1.Rule
 	47, // 40: crud.v1.GetRuleResponse.rule:type_name -> crud.v1.Rule
 	47, // 41: crud.v1.ListRulesResponse.rules:type_name -> crud.v1.Rule
-	85, // 42: crud.v1.InferenceEvent.timestamp:type_name -> google.protobuf.Timestamp
+	88, // 42: crud.v1.InferenceEvent.timestamp:type_name -> google.protobuf.Timestamp
 	56, // 43: crud.v1.InferenceEvent.rule_impacts:type_name -> crud.v1.RuleImpact
 	57, // 44: crud.v1.LogInferenceEventRequest.event:type_name -> crud.v1.InferenceEvent
 	47, // 45: crud.v1.ListRuleVersionsResponse.versions:type_name -> crud.v1.Rule
 	47, // 46: crud.v1.GetRuleVersionResponse.rule:type_name -> crud.v1.Rule
-	85, // 47: crud.v1.GetRuleVersionResponse.created_at:type_name -> google.protobuf.Timestamp
+	88, // 47: crud.v1.GetRuleVersionResponse.created_at:type_name -> google.protobuf.Timestamp
 	67, // 48: crud.v1.GetRuleReadinessResponse.checks:type_name -> crud.v1.ReadinessCheck
 	70, // 49: crud.v1.DiffRuleVersionsResponse.changes:type_name -> crud.v1.RuleDiffChange
 	73, // 50: crud.v1.GetRuleStatsResponse.stats:type_name -> crud.v1.RuleStats
 	76, // 51: crud.v1.GetAttributionResponse.items:type_name -> crud.v1.DailyAttribution
-	85, // 52: crud.v1.UserFeatures.snapshot_timestamp:type_name -> google.protobuf.Timestamp
+	88, // 52: crud.v1.UserFeatures.snapshot_timestamp:type_name -> google.protobuf.Timestamp
 	78, // 53: crud.v1.GetLatestUserFeaturesResponse.features:type_name -> crud.v1.UserFeatures
-	84, // 54: crud.v1.BatchGetLatestUserFeaturesResponse.features:type_name -> crud.v1.BatchGetLatestUserFeaturesResponse.FeaturesEntry
-	78, // 55: crud.v1.BatchGetLatestUserFeaturesResponse.FeaturesEntry.value:type_name -> crud.v1.UserFeatures
-	0,  // 56: crud.v1.AnalyticsService.GetDailyStats:input_type -> crud.v1.GetDailyStatsRequest
-	3,  // 57: crud.v1.AnalyticsService.GetTransactionDetails:input_type -> crud.v1.GetTransactionDetailsRequest
-	6,  // 58: crud.v1.AnalyticsService.SearchTransactions:input_type -> crud.v1.SearchTransactionsRequest
-	8,  // 59: crud.v1.AnalyticsService.GetRecentAlerts:input_type -> crud.v1.GetRecentAlertsRequest
-	11, // 60: crud.v1.AnalyticsService.GetOverviewMetrics:input_type -> crud.v1.GetOverviewMetricsRequest
-	13, // 61: crud.v1.AnalyticsService.GetDatasetFingerprint:input_type -> crud.v1.GetDatasetFingerprintRequest
-	16, // 62: crud.v1.AnalyticsService.GetFeatureSample:input_type -> crud.v1.GetFeatureSampleRequest
-	19, // 63: crud.v1.AnalyticsService.GetSchemaSummary:input_type -> crud.v1.GetSchemaSummaryRequest
-	22, // 64: crud.v1.AnalyticsService.GetTrainingData:input_type -> crud.v1.GetTrainingDataRequest
-	24, // 65: crud.v1.AnalyticsService.GetBacktestFeatures:input_type -> crud.v1.GetBacktestFeaturesRequest
-	29, // 66: crud.v1.AnalyticsService.SaveBacktestResult:input_type -> crud.v1.SaveBacktestResultRequest
-	31, // 67: crud.v1.AnalyticsService.ListBacktestResults:input_type -> crud.v1.ListBacktestResultsRequest
-	33, // 68: crud.v1.AnalyticsService.GetBacktestResult:input_type -> crud.v1.GetBacktestResultRequest
-	35, // 69: crud.v1.AnalyticsService.GetDriftWindow:input_type -> crud.v1.GetDriftWindowRequest
-	39, // 70: crud.v1.AnalyticsService.StoreGeneratedData:input_type -> crud.v1.StoreGeneratedDataRequest
-	43, // 71: crud.v1.AnalyticsService.ClearAllData:input_type -> crud.v1.ClearAllDataRequest
-	45, // 72: crud.v1.AnalyticsService.MaterializeFeatures:input_type -> crud.v1.MaterializeFeaturesRequest
-	37, // 73: crud.v1.AnalyticsService.GetInferenceScores:input_type -> crud.v1.GetInferenceScoresRequest
-	48, // 74: crud.v1.AnalyticsService.SaveRule:input_type -> crud.v1.SaveRuleRequest
-	50, // 75: crud.v1.AnalyticsService.GetRule:input_type -> crud.v1.GetRuleRequest
-	52, // 76: crud.v1.AnalyticsService.ListRules:input_type -> crud.v1.ListRulesRequest
-	54, // 77: crud.v1.AnalyticsService.DeleteRule:input_type -> crud.v1.DeleteRuleRequest
-	60, // 78: crud.v1.AnalyticsService.ListRuleVersions:input_type -> crud.v1.ListRuleVersionsRequest
-	62, // 79: crud.v1.AnalyticsService.GetRuleVersion:input_type -> crud.v1.GetRuleVersionRequest
-	64, // 80: crud.v1.AnalyticsService.PublishRuleVersion:input_type -> crud.v1.PublishRuleVersionRequest
-	66, // 81: crud.v1.AnalyticsService.GetRuleReadiness:input_type -> crud.v1.GetRuleReadinessRequest
-	69, // 82: crud.v1.AnalyticsService.DiffRuleVersions:input_type -> crud.v1.DiffRuleVersionsRequest
-	72, // 83: crud.v1.AnalyticsService.GetRuleStats:input_type -> crud.v1.GetRuleStatsRequest
-	75, // 84: crud.v1.AnalyticsService.GetAttribution:input_type -> crud.v1.GetAttributionRequest
-	58, // 85: crud.v1.AnalyticsService.LogInferenceEvent:input_type -> crud.v1.LogInferenceEventRequest
-	79, // 86: crud.v1.AnalyticsService.GetLatestUserFeatures:input_type -> crud.v1.GetLatestUserFeaturesRequest
-	81, // 87: crud.v1.AnalyticsService.BatchGetLatestUserFeatures:input_type -> crud.v1.BatchGetLatestUserFeaturesRequest
-	2,  // 88: crud.v1.AnalyticsService.GetDailyStats:output_type -> crud.v1.GetDailyStatsResponse
-	5,  // 89: crud.v1.AnalyticsService.GetTransactionDetails:output_type -> crud.v1.GetTransactionDetailsResponse
-	7,  // 90: crud.v1.AnalyticsService.SearchTransactions:output_type -> crud.v1.SearchTransactionsResponse
-	10, // 91: crud.v1.AnalyticsService.GetRecentAlerts:output_type -> crud.v1.GetRecentAlertsResponse
-	12, // 92: crud.v1.AnalyticsService.GetOverviewMetrics:output_type -> crud.v1.GetOverviewMetricsResponse
-	15, // 93: crud.v1.AnalyticsService.GetDatasetFingerprint:output_type -> crud.v1.GetDatasetFingerprintResponse
-	18, // 94: crud.v1.AnalyticsService.GetFeatureSample:output_type -> crud.v1.GetFeatureSampleResponse
-	21, // 95: crud.v1.AnalyticsService.GetSchemaSummary:output_type -> crud.v1.GetSchemaSummaryResponse
-	23, // 96: crud.v1.AnalyticsService.GetTrainingData:output_type -> crud.v1.GetTrainingDataResponse
-	26, // 97: crud.v1.AnalyticsService.GetBacktestFeatures:output_type -> crud.v1.GetBacktestFeaturesResponse
-	30, // 98: crud.v1.AnalyticsService.SaveBacktestResult:output_type -> crud.v1.SaveBacktestResultResponse
-	32, // 99: crud.v1.AnalyticsService.ListBacktestResults:output_type -> crud.v1.ListBacktestResultsResponse
-	34, // 100: crud.v1.AnalyticsService.GetBacktestResult:output_type -> crud.v1.GetBacktestResultResponse
-	36, // 101: crud.v1.AnalyticsService.GetDriftWindow:output_type -> crud.v1.GetDriftWindowResponse
-	42, // 102: crud.v1.AnalyticsService.StoreGeneratedData:output_type -> crud.v1.StoreGeneratedDataResponse
-	44, // 103: crud.v1.AnalyticsService.ClearAllData:output_type -> crud.v1.ClearAllDataResponse
-	46, // 104: crud.v1.AnalyticsService.MaterializeFeatures:output_type -> crud.v1.MaterializeFeaturesResponse
-	38, // 105: crud.v1.AnalyticsService.GetInferenceScores:output_type -> crud.v1.GetInferenceScoresResponse
-	49, // 106: crud.v1.AnalyticsService.SaveRule:output_type -> crud.v1.SaveRuleResponse
-	51, // 107: crud.v1.AnalyticsService.GetRule:output_type -> crud.v1.GetRuleResponse
-	53, // 108: crud.v1.AnalyticsService.ListRules:output_type -> crud.v1.ListRulesResponse
-	55, // 109: crud.v1.AnalyticsService.DeleteRule:output_type -> crud.v1.DeleteRuleResponse
-	61, // 110: crud.v1.AnalyticsService.ListRuleVersions:output_type -> crud.v1.ListRuleVersionsResponse
-	63, // 111: crud.v1.AnalyticsService.GetRuleVersion:output_type -> crud.v1.GetRuleVersionResponse
-	65, // 112: crud.v1.AnalyticsService.PublishRuleVersion:output_type -> crud.v1.PublishRuleVersionResponse
-	68, // 113: crud.v1.AnalyticsService.GetRuleReadiness:output_type -> crud.v1.GetRuleReadinessResponse
-	71, // 114: crud.v1.AnalyticsService.DiffRuleVersions:output_type -> crud.v1.DiffRuleVersionsResponse
-	74, // 115: crud.v1.AnalyticsService.GetRuleStats:output_type -> crud.v1.GetRuleStatsResponse
-	77, // 116: crud.v1.AnalyticsService.GetAttribution:output_type -> crud.v1.GetAttributionResponse
-	59, // 117: crud.v1.AnalyticsService.LogInferenceEvent:output_type -> crud.v1.LogInferenceEventResponse
-	80, // 118: crud.v1.AnalyticsService.GetLatestUserFeatures:output_type -> crud.v1.GetLatestUserFeaturesResponse
-	82, // 119: crud.v1.AnalyticsService.BatchGetLatestUserFeatures:output_type -> crud.v1.BatchGetLatestUserFeaturesResponse
-	88, // [88:120] is the sub-list for method output_type
-	56, // [56:88] is the sub-list for method input_type
-	56, // [56:56] is the sub-list for extension type_name
-	56, // [56:56] is the sub-list for extension extendee
-	0,  // [0:56] is the sub-list for field type_name
+	87, // 54: crud.v1.BatchGetLatestUserFeaturesResponse.features:type_name -> crud.v1.BatchGetLatestUserFeaturesResponse.FeaturesEntry
+	28, // 55: crud.v1.CompareBacktestsResponse.baseline:type_name -> crud.v1.BacktestResult
+	28, // 56: crud.v1.CompareBacktestsResponse.candidate:type_name -> crud.v1.BacktestResult
+	84, // 57: crud.v1.CompareBacktestsResponse.delta:type_name -> crud.v1.BacktestMetricsDelta
+	78, // 58: crud.v1.BatchGetLatestUserFeaturesResponse.FeaturesEntry.value:type_name -> crud.v1.UserFeatures
+	0,  // 59: crud.v1.AnalyticsService.GetDailyStats:input_type -> crud.v1.GetDailyStatsRequest
+	3,  // 60: crud.v1.AnalyticsService.GetTransactionDetails:input_type -> crud.v1.GetTransactionDetailsRequest
+	6,  // 61: crud.v1.AnalyticsService.SearchTransactions:input_type -> crud.v1.SearchTransactionsRequest
+	8,  // 62: crud.v1.AnalyticsService.GetRecentAlerts:input_type -> crud.v1.GetRecentAlertsRequest
+	11, // 63: crud.v1.AnalyticsService.GetOverviewMetrics:input_type -> crud.v1.GetOverviewMetricsRequest
+	13, // 64: crud.v1.AnalyticsService.GetDatasetFingerprint:input_type -> crud.v1.GetDatasetFingerprintRequest
+	16, // 65: crud.v1.AnalyticsService.GetFeatureSample:input_type -> crud.v1.GetFeatureSampleRequest
+	19, // 66: crud.v1.AnalyticsService.GetSchemaSummary:input_type -> crud.v1.GetSchemaSummaryRequest
+	22, // 67: crud.v1.AnalyticsService.GetTrainingData:input_type -> crud.v1.GetTrainingDataRequest
+	24, // 68: crud.v1.AnalyticsService.GetBacktestFeatures:input_type -> crud.v1.GetBacktestFeaturesRequest
+	29, // 69: crud.v1.AnalyticsService.SaveBacktestResult:input_type -> crud.v1.SaveBacktestResultRequest
+	31, // 70: crud.v1.AnalyticsService.ListBacktestResults:input_type -> crud.v1.ListBacktestResultsRequest
+	33, // 71: crud.v1.AnalyticsService.GetBacktestResult:input_type -> crud.v1.GetBacktestResultRequest
+	35, // 72: crud.v1.AnalyticsService.GetDriftWindow:input_type -> crud.v1.GetDriftWindowRequest
+	39, // 73: crud.v1.AnalyticsService.StoreGeneratedData:input_type -> crud.v1.StoreGeneratedDataRequest
+	43, // 74: crud.v1.AnalyticsService.ClearAllData:input_type -> crud.v1.ClearAllDataRequest
+	45, // 75: crud.v1.AnalyticsService.MaterializeFeatures:input_type -> crud.v1.MaterializeFeaturesRequest
+	37, // 76: crud.v1.AnalyticsService.GetInferenceScores:input_type -> crud.v1.GetInferenceScoresRequest
+	48, // 77: crud.v1.AnalyticsService.SaveRule:input_type -> crud.v1.SaveRuleRequest
+	50, // 78: crud.v1.AnalyticsService.GetRule:input_type -> crud.v1.GetRuleRequest
+	52, // 79: crud.v1.AnalyticsService.ListRules:input_type -> crud.v1.ListRulesRequest
+	54, // 80: crud.v1.AnalyticsService.DeleteRule:input_type -> crud.v1.DeleteRuleRequest
+	60, // 81: crud.v1.AnalyticsService.ListRuleVersions:input_type -> crud.v1.ListRuleVersionsRequest
+	62, // 82: crud.v1.AnalyticsService.GetRuleVersion:input_type -> crud.v1.GetRuleVersionRequest
+	64, // 83: crud.v1.AnalyticsService.PublishRuleVersion:input_type -> crud.v1.PublishRuleVersionRequest
+	66, // 84: crud.v1.AnalyticsService.GetRuleReadiness:input_type -> crud.v1.GetRuleReadinessRequest
+	69, // 85: crud.v1.AnalyticsService.DiffRuleVersions:input_type -> crud.v1.DiffRuleVersionsRequest
+	72, // 86: crud.v1.AnalyticsService.GetRuleStats:input_type -> crud.v1.GetRuleStatsRequest
+	75, // 87: crud.v1.AnalyticsService.GetAttribution:input_type -> crud.v1.GetAttributionRequest
+	58, // 88: crud.v1.AnalyticsService.LogInferenceEvent:input_type -> crud.v1.LogInferenceEventRequest
+	79, // 89: crud.v1.AnalyticsService.GetLatestUserFeatures:input_type -> crud.v1.GetLatestUserFeaturesRequest
+	81, // 90: crud.v1.AnalyticsService.BatchGetLatestUserFeatures:input_type -> crud.v1.BatchGetLatestUserFeaturesRequest
+	83, // 91: crud.v1.AnalyticsService.CompareBacktests:input_type -> crud.v1.CompareBacktestsRequest
+	2,  // 92: crud.v1.AnalyticsService.GetDailyStats:output_type -> crud.v1.GetDailyStatsResponse
+	5,  // 93: crud.v1.AnalyticsService.GetTransactionDetails:output_type -> crud.v1.GetTransactionDetailsResponse
+	7,  // 94: crud.v1.AnalyticsService.SearchTransactions:output_type -> crud.v1.SearchTransactionsResponse
+	10, // 95: crud.v1.AnalyticsService.GetRecentAlerts:output_type -> crud.v1.GetRecentAlertsResponse
+	12, // 96: crud.v1.AnalyticsService.GetOverviewMetrics:output_type -> crud.v1.GetOverviewMetricsResponse
+	15, // 97: crud.v1.AnalyticsService.GetDatasetFingerprint:output_type -> crud.v1.GetDatasetFingerprintResponse
+	18, // 98: crud.v1.AnalyticsService.GetFeatureSample:output_type -> crud.v1.GetFeatureSampleResponse
+	21, // 99: crud.v1.AnalyticsService.GetSchemaSummary:output_type -> crud.v1.GetSchemaSummaryResponse
+	23, // 100: crud.v1.AnalyticsService.GetTrainingData:output_type -> crud.v1.GetTrainingDataResponse
+	26, // 101: crud.v1.AnalyticsService.GetBacktestFeatures:output_type -> crud.v1.GetBacktestFeaturesResponse
+	30, // 102: crud.v1.AnalyticsService.SaveBacktestResult:output_type -> crud.v1.SaveBacktestResultResponse
+	32, // 103: crud.v1.AnalyticsService.ListBacktestResults:output_type -> crud.v1.ListBacktestResultsResponse
+	34, // 104: crud.v1.AnalyticsService.GetBacktestResult:output_type -> crud.v1.GetBacktestResultResponse
+	36, // 105: crud.v1.AnalyticsService.GetDriftWindow:output_type -> crud.v1.GetDriftWindowResponse
+	42, // 106: crud.v1.AnalyticsService.StoreGeneratedData:output_type -> crud.v1.StoreGeneratedDataResponse
+	44, // 107: crud.v1.AnalyticsService.ClearAllData:output_type -> crud.v1.ClearAllDataResponse
+	46, // 108: crud.v1.AnalyticsService.MaterializeFeatures:output_type -> crud.v1.MaterializeFeaturesResponse
+	38, // 109: crud.v1.AnalyticsService.GetInferenceScores:output_type -> crud.v1.GetInferenceScoresResponse
+	49, // 110: crud.v1.AnalyticsService.SaveRule:output_type -> crud.v1.SaveRuleResponse
+	51, // 111: crud.v1.AnalyticsService.GetRule:output_type -> crud.v1.GetRuleResponse
+	53, // 112: crud.v1.AnalyticsService.ListRules:output_type -> crud.v1.ListRulesResponse
+	55, // 113: crud.v1.AnalyticsService.DeleteRule:output_type -> crud.v1.DeleteRuleResponse
+	61, // 114: crud.v1.AnalyticsService.ListRuleVersions:output_type -> crud.v1.ListRuleVersionsResponse
+	63, // 115: crud.v1.AnalyticsService.GetRuleVersion:output_type -> crud.v1.GetRuleVersionResponse
+	65, // 116: crud.v1.AnalyticsService.PublishRuleVersion:output_type -> crud.v1.PublishRuleVersionResponse
+	68, // 117: crud.v1.AnalyticsService.GetRuleReadiness:output_type -> crud.v1.GetRuleReadinessResponse
+	71, // 118: crud.v1.AnalyticsService.DiffRuleVersions:output_type -> crud.v1.DiffRuleVersionsResponse
+	74, // 119: crud.v1.AnalyticsService.GetRuleStats:output_type -> crud.v1.GetRuleStatsResponse
+	77, // 120: crud.v1.AnalyticsService.GetAttribution:output_type -> crud.v1.GetAttributionResponse
+	59, // 121: crud.v1.AnalyticsService.LogInferenceEvent:output_type -> crud.v1.LogInferenceEventResponse
+	80, // 122: crud.v1.AnalyticsService.GetLatestUserFeatures:output_type -> crud.v1.GetLatestUserFeaturesResponse
+	82, // 123: crud.v1.AnalyticsService.BatchGetLatestUserFeatures:output_type -> crud.v1.BatchGetLatestUserFeaturesResponse
+	85, // 124: crud.v1.AnalyticsService.CompareBacktests:output_type -> crud.v1.CompareBacktestsResponse
+	92, // [92:125] is the sub-list for method output_type
+	59, // [59:92] is the sub-list for method input_type
+	59, // [59:59] is the sub-list for extension type_name
+	59, // [59:59] is the sub-list for extension extendee
+	0,  // [0:59] is the sub-list for field type_name
 }
 
 func init() { file_proto_crud_v1_analytics_proto_init() }
@@ -5701,7 +5921,7 @@ func file_proto_crud_v1_analytics_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_crud_v1_analytics_proto_rawDesc), len(file_proto_crud_v1_analytics_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   85,
+			NumMessages:   88,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

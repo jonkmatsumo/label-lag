@@ -767,6 +767,10 @@ func (s *stubAnalyticsClient) LogInferenceEvent(ctx context.Context, req *crudv1
 	return &crudv1.LogInferenceEventResponse{Success: true}, s.err
 }
 
+func (s *stubAnalyticsClient) CompareBacktests(ctx context.Context, req *crudv1.CompareBacktestsRequest) (*crudv1.CompareBacktestsResponse, error) {
+	return &crudv1.CompareBacktestsResponse{}, s.err
+}
+
 type errProvider struct{}
 
 func (errProvider) GetRules(context.Context) (rules.RuleSet, error) {

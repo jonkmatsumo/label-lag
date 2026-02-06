@@ -49,6 +49,9 @@ service AnalyticsService {
   // Feature Hydration (Phase 6)
   rpc GetLatestUserFeatures(GetLatestUserFeaturesRequest) returns (GetLatestUserFeaturesResponse);
   rpc BatchGetLatestUserFeatures(BatchGetLatestUserFeaturesRequest) returns (BatchGetLatestUserFeaturesResponse);
+
+  // Backtest Compare (Phase 8)
+  rpc CompareBacktests(CompareBacktestsRequest) returns (CompareBacktestsResponse);
 }
 
 message GetDailyStatsRequest {
@@ -547,4 +550,25 @@ message BatchGetLatestUserFeaturesRequest {
 
 message BatchGetLatestUserFeaturesResponse {
   map<string, UserFeatures> features = 1;
+}
+
+// Backtest Compare (Phase 8)
+message CompareBacktestsRequest {
+  string baseline_job_id = 1;
+  string candidate_job_id = 2;
+}
+
+message BacktestMetricsDelta {
+  double match_rate_delta = 1;       // candidate - baseline
+  double score_mean_delta = 2;
+  double score_std_delta = 3;
+  double rejected_rate_delta = 4;
+  int64 total_records_delta = 5;
+  int64 matched_count_delta = 6;
+}
+
+message CompareBacktestsResponse {
+  BacktestResult baseline = 1;
+  BacktestResult candidate = 2;
+  BacktestMetricsDelta delta = 3;
 }

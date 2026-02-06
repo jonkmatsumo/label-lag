@@ -12,7 +12,7 @@ var notImplementedRoutes = []string{
 	"/analytics/relationships",
 	"/analytics/correlations",
 	// "/analytics/rules/", // Implemented
-	"/backtest/compare",
+	// "/backtest/compare", // Implemented in Phase 8
 	"/train",
 	"/models/deploy",
 	// "/rules",  // Implemented

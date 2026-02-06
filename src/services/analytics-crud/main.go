@@ -929,6 +929,41 @@ func (s *server) GetBacktestResult(ctx context.Context, req *pb.GetBacktestResul
 	return &pb.GetBacktestResultResponse{Result: &res}, nil
 }
 
+func (s *server) CompareBacktests(ctx context.Context, req *pb.CompareBacktestsRequest) (*pb.CompareBacktestsResponse, error) {
+	if req.BaselineJobId == "" || req.CandidateJobId == "" {
+		return nil, status.Error(codes.InvalidArgument, "baseline_job_id and candidate_job_id are required")
+	}
+
+	baselineResp, err := s.GetBacktestResult(ctx, &pb.GetBacktestResultRequest{JobId: req.BaselineJobId})
+	if err != nil {
+		return nil, err
+	}
+	candidateResp, err := s.GetBacktestResult(ctx, &pb.GetBacktestResultRequest{JobId: req.CandidateJobId})
+	if err != nil {
+		return nil, err
+	}
+
+	baseline := baselineResp.Result
+	candidate := candidateResp.Result
+
+	// Compute deltas, defaulting to 0 if metrics are nil
+	var delta pb.BacktestMetricsDelta
+	if baseline.Metrics != nil && candidate.Metrics != nil {
+		delta.MatchRateDelta = candidate.Metrics.MatchRate - baseline.Metrics.MatchRate
+		delta.ScoreMeanDelta = candidate.Metrics.ScoreMean - baseline.Metrics.ScoreMean
+		delta.ScoreStdDelta = candidate.Metrics.ScoreStd - baseline.Metrics.ScoreStd
+		delta.RejectedRateDelta = candidate.Metrics.RejectedRate - baseline.Metrics.RejectedRate
+		delta.TotalRecordsDelta = candidate.Metrics.TotalRecords - baseline.Metrics.TotalRecords
+		delta.MatchedCountDelta = candidate.Metrics.MatchedCount - baseline.Metrics.MatchedCount
+	}
+
+	return &pb.CompareBacktestsResponse{
+		Baseline:  baseline,
+		Candidate: candidate,
+		Delta:     &delta,
+	}, nil
+}
+
 func (s *server) GetRuleStats(ctx context.Context, req *pb.GetRuleStatsRequest) (*pb.GetRuleStatsResponse, error) {
 	// Stub implementation: return empty or mocked stats
 	// In real implementation, query daily_stats or rule_stats table
