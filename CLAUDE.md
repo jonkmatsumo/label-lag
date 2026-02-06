@@ -21,49 +21,49 @@ make lint-fix     # Auto-fix issues
 
 # Generate data (requires PostgreSQL running)
 docker compose up -d db
-uv run python src/main.py seed --users 100 --fraud-rate 0.05
+uv run python python/src/main.py seed --users 100 --fraud-rate 0.05
 
 # Other CLI commands
-uv run python src/main.py init-db   # Initialize schema only
-uv run python src/main.py stats     # Show database statistics
+uv run python python/src/main.py init-db   # Initialize schema only
+uv run python python/src/main.py stats     # Show database statistics
 ```
 
 ## Architecture
 
 ### Data Generation Layers
 
-**DataGenerator** (`src/synthetic_pipeline/generator.py`): Core generator with two modes:
+**DataGenerator** (`python/src/synthetic_pipeline/generator.py`): Core generator with two modes:
 - Legacy mode: Single transaction per user
 - Sequences mode: Multiple transactions with temporal tracking and evaluation metadata
 
-**Stateful Generator** (`src/generator/core.py`): `UserSimulator` maintains persistent state across transactions, enabling complex fraud profiles:
+**Stateful Generator** (`python/src/generator/core.py`): `UserSimulator` maintains persistent state across transactions, enabling complex fraud profiles:
 - `BustOutProfile`: 20-50 legitimate transactions → sudden spike (>500% avg)
 - `SleeperProfile`: 30+ days dormancy → link burst → high-value withdrawal
 - `LabelDelaySimulator`: Log-normal delay distribution for realistic fraud detection timing
 
 ### Database Layer
 
-**DatabaseSession** (`src/synthetic_pipeline/db/session.py`): Connection pooling with batch insert optimization.
+**DatabaseSession** (`python/src/synthetic_pipeline/db/session.py`): Connection pooling with batch insert optimization.
 
-**SQLAlchemy Models** (`src/synthetic_pipeline/db/models.py`):
+**SQLAlchemy Models** (`python/src/synthetic_pipeline/db/models.py`):
 - `GeneratedRecordDB`: Main transaction table (24 columns, indexed on user_id, is_fraudulent, fraud_type)
 - `EvaluationMetadataDB`: Temporal metadata for train/test splitting (NOT training features)
 - `FeatureSnapshotDB`: Point-in-time correct features with JSONB for experimental signals
 
 ### Feature Store
 
-**FeatureMaterializer** (`src/pipeline/materialize_features.py`): SQL window functions compute features without future data leakage:
+**FeatureMaterializer** (`python/src/pipeline/materialize_features.py`): SQL window functions compute features without future data leakage:
 - `velocity_24h`: Transaction count using `RANGE BETWEEN INTERVAL '24 hours' PRECEDING`
 - `amount_to_avg_ratio_30d`, `balance_volatility_z_score`: Rolling aggregations
 - `experimental_signals` (JSONB): Flexible schema for new features
 
-### Pydantic Models (`src/synthetic_pipeline/models/`)
+### Pydantic Models (`python/src/synthetic_pipeline/models/`)
 
 Hierarchical composition: `AccountSnapshot` → `BehaviorMetrics` → `ConnectionMetrics` → `TransactionEvaluation` → `GeneratedRecord`
 
 ### Graph Network
 
-**GraphNetworkGenerator** (`src/synthetic_pipeline/graph.py`): Relationship data between users, devices, accounts, and IPs. Fraud patterns include device sharing rings, IP recycling, and fund transfer cycles.
+**GraphNetworkGenerator** (`python/src/synthetic_pipeline/graph.py`): Relationship data between users, devices, accounts, and IPs. Fraud patterns include device sharing rings, IP recycling, and fund transfer cycles.
 
 ## Fraud Pattern Types
 

@@ -126,15 +126,20 @@ The React UI now supports:
 The repo is organized around data flow and runtime boundaries so services can evolve independently while sharing a common domain model.
 
 ```
-src/
-├── api/                 # FastAPI app, model forecaster, rule management
-├── model/               # XGBoost training, evaluation, tuning
-├── monitor/             # Feature distribution monitoring and drift reporting
-├── pipeline/            # Point-in-time feature materialization (SQL window functions)
-├── generator/           # Stateful fraud profile simulation
-└── synthetic_pipeline/  # Core data generation, DB models
-bff/                     # Node.js BFF (Backend for Frontend) for React UI
-web/                     # React + TypeScript frontend
+go/
+├── analytics-crud/      # Go gRPC services
+└── inference-gateway/   # Go rule engine & gateway
+node/
+├── bff/                 # Node.js Backend for Frontend
+└── ui/                  # React + TypeScript frontend
+python/
+├── src/
+│   ├── api/             # FastAPI app, model forecaster
+│   ├── model/           # XGBoost training, evaluation
+│   ├── monitor/         # Drift monitoring
+│   ├── pipeline/        # Feature materialization
+│   └── synthetic_pipeline/ # Data generation
+└── tests/               # Python tests
 ```
 
 Key folders:
