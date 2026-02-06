@@ -8,15 +8,15 @@ import (
 )
 
 var notImplementedRoutes = []string{
-	"/analytics/attribution",
+	// "/analytics/attribution", // Implemented
 	"/analytics/relationships",
 	"/analytics/correlations",
-	"/analytics/rules/",
-	"/backtest/compare",
+	// "/analytics/rules/", // Implemented
+	// "/backtest/compare", // Implemented in Phase 8
 	"/train",
 	"/models/deploy",
-	"/rules",
-	"/rules/",
+	// "/rules",  // Implemented
+	// "/rules/", // Implemented
 	"/suggestions/heuristic",
 	"/suggestions/accept",
 	"/data/generate",

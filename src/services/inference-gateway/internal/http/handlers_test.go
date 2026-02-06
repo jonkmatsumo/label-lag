@@ -719,6 +719,58 @@ func (s *stubAnalyticsClient) GetFeatures(ctx context.Context, userID string) (m
 	return nil, nil
 }
 
+func (s *stubAnalyticsClient) ListRuleVersions(ctx context.Context, req *crudv1.ListRuleVersionsRequest) (*crudv1.ListRuleVersionsResponse, error) {
+	return nil, s.err
+}
+
+func (s *stubAnalyticsClient) GetRuleVersion(ctx context.Context, req *crudv1.GetRuleVersionRequest) (*crudv1.GetRuleVersionResponse, error) {
+	return nil, s.err
+}
+
+func (s *stubAnalyticsClient) PublishRuleVersion(ctx context.Context, req *crudv1.PublishRuleVersionRequest) (*crudv1.PublishRuleVersionResponse, error) {
+	return nil, s.err
+}
+
+func (s *stubAnalyticsClient) GetRuleReadiness(ctx context.Context, req *crudv1.GetRuleReadinessRequest) (*crudv1.GetRuleReadinessResponse, error) {
+	return nil, s.err
+}
+
+func (s *stubAnalyticsClient) DiffRuleVersions(ctx context.Context, req *crudv1.DiffRuleVersionsRequest) (*crudv1.DiffRuleVersionsResponse, error) {
+	return nil, s.err
+}
+
+func (s *stubAnalyticsClient) SaveRule(ctx context.Context, req *crudv1.SaveRuleRequest) (*crudv1.SaveRuleResponse, error) {
+	return nil, s.err
+}
+
+func (s *stubAnalyticsClient) GetRule(ctx context.Context, req *crudv1.GetRuleRequest) (*crudv1.GetRuleResponse, error) {
+	return nil, s.err
+}
+
+func (s *stubAnalyticsClient) ListRules(ctx context.Context, req *crudv1.ListRulesRequest) (*crudv1.ListRulesResponse, error) {
+	return nil, s.err
+}
+
+func (s *stubAnalyticsClient) DeleteRule(ctx context.Context, req *crudv1.DeleteRuleRequest) (*crudv1.DeleteRuleResponse, error) {
+	return nil, s.err
+}
+
+func (s *stubAnalyticsClient) GetRuleStats(ctx context.Context, req *crudv1.GetRuleStatsRequest) (*crudv1.GetRuleStatsResponse, error) {
+	return nil, s.err
+}
+
+func (s *stubAnalyticsClient) GetAttribution(ctx context.Context, req *crudv1.GetAttributionRequest) (*crudv1.GetAttributionResponse, error) {
+	return nil, s.err
+}
+
+func (s *stubAnalyticsClient) LogInferenceEvent(ctx context.Context, req *crudv1.LogInferenceEventRequest) (*crudv1.LogInferenceEventResponse, error) {
+	return &crudv1.LogInferenceEventResponse{Success: true}, s.err
+}
+
+func (s *stubAnalyticsClient) CompareBacktests(ctx context.Context, req *crudv1.CompareBacktestsRequest) (*crudv1.CompareBacktestsResponse, error) {
+	return &crudv1.CompareBacktestsResponse{}, s.err
+}
+
 type errProvider struct{}
 
 func (errProvider) GetRules(context.Context) (rules.RuleSet, error) {

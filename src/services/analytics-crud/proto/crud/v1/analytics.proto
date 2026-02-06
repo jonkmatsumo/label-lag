@@ -33,9 +33,25 @@ service AnalyticsService {
   rpc GetRule(GetRuleRequest) returns (GetRuleResponse);
   rpc ListRules(ListRulesRequest) returns (ListRulesResponse);
   rpc DeleteRule(DeleteRuleRequest) returns (DeleteRuleResponse);
+  
+  // Rule Versioning & Control Plane
+  rpc ListRuleVersions(ListRuleVersionsRequest) returns (ListRuleVersionsResponse);
+  rpc GetRuleVersion(GetRuleVersionRequest) returns (GetRuleVersionResponse);
+  rpc PublishRuleVersion(PublishRuleVersionRequest) returns (PublishRuleVersionResponse);
+  rpc GetRuleReadiness(GetRuleReadinessRequest) returns (GetRuleReadinessResponse);
+  rpc DiffRuleVersions(DiffRuleVersionsRequest) returns (DiffRuleVersionsResponse);
+  rpc GetRuleStats(GetRuleStatsRequest) returns (GetRuleStatsResponse);
+  rpc GetAttribution(GetAttributionRequest) returns (GetAttributionResponse);
 
   // Inference Events
   rpc LogInferenceEvent(LogInferenceEventRequest) returns (LogInferenceEventResponse);
+
+  // Feature Hydration (Phase 6)
+  rpc GetLatestUserFeatures(GetLatestUserFeaturesRequest) returns (GetLatestUserFeaturesResponse);
+  rpc BatchGetLatestUserFeatures(BatchGetLatestUserFeaturesRequest) returns (BatchGetLatestUserFeaturesResponse);
+
+  // Backtest Compare (Phase 8)
+  rpc CompareBacktests(CompareBacktestsRequest) returns (CompareBacktestsResponse);
 }
 
 message GetDailyStatsRequest {
@@ -402,4 +418,157 @@ message LogInferenceEventRequest {
 
 message LogInferenceEventResponse {
   bool success = 1;
+}
+
+message ListRuleVersionsRequest {
+  string rule_id = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+}
+
+message ListRuleVersionsResponse {
+  repeated Rule versions = 1;
+  int64 total = 2;
+}
+
+message GetRuleVersionRequest {
+  string rule_id = 1;
+  string version_id = 2; // "latest", "active", or specific version
+}
+
+message GetRuleVersionResponse {
+  Rule rule = 1;
+  string version_id = 2;
+  google.protobuf.Timestamp created_at = 3;
+}
+
+message PublishRuleVersionRequest {
+  string rule_id = 1;
+  string version_id = 2; // Optional: specific version to promote. If empty, promote draft.
+  string actor = 3;
+  string reason = 4;
+}
+
+message PublishRuleVersionResponse {
+  bool success = 1;
+  string active_version_id = 2;
+}
+
+message GetRuleReadinessRequest {
+  string rule_id = 1;
+}
+
+message ReadinessCheck {
+  string name = 1;
+  bool passed = 2;
+  string message = 3;
+}
+
+message GetRuleReadinessResponse {
+  string rule_id = 1;
+  bool ready = 2;
+  repeated ReadinessCheck checks = 3;
+}
+
+message DiffRuleVersionsRequest {
+  string rule_id = 1;
+  string version_a = 2;
+  string version_b = 3;
+}
+
+message RuleDiffChange {
+  string field = 1;
+  string old_value = 2; // JSON string
+  string new_value = 3; // JSON string
+  string description = 4;
+}
+
+message DiffRuleVersionsResponse {
+  string rule_id = 1;
+  string version_a = 2;
+  string version_b = 3;
+  repeated RuleDiffChange changes = 4;
+}
+
+message GetRuleStatsRequest {
+  string rule_id = 1; // Optional, if empty returns all
+  int32 days = 2;
+}
+
+message RuleStats {
+  string rule_id = 1;
+  int64 triggered_count = 2;
+  int64 shadow_triggered_count = 3;
+  double approval_rate = 4;
+}
+
+message GetRuleStatsResponse {
+  repeated RuleStats stats = 1;
+}
+
+message GetAttributionRequest {
+  int32 days = 1;
+  int32 limit = 2;
+}
+
+message DailyAttribution {
+  string date = 1;
+  string rule_id = 2;
+  int64 contribution_score = 3; // Total score contributed
+  int64 volume = 4;
+}
+
+message GetAttributionResponse {
+  repeated DailyAttribution items = 1;
+}
+
+// Feature Hydration (Phase 6)
+message UserFeatures {
+  string user_id = 1;
+  string snapshot_id = 2;
+  google.protobuf.Timestamp snapshot_timestamp = 3;
+  int32 velocity_24h = 4;
+  double amount_to_avg_ratio_30d = 5;
+  double balance_volatility_z_score = 6;
+  int32 bank_connections_24h = 7;
+  int32 merchant_risk_score = 8;
+  bool has_history = 9;
+}
+
+message GetLatestUserFeaturesRequest {
+  string user_id = 1;
+}
+
+message GetLatestUserFeaturesResponse {
+  UserFeatures features = 1;
+  bool found = 2;
+}
+
+message BatchGetLatestUserFeaturesRequest {
+  repeated string user_ids = 1;
+}
+
+message BatchGetLatestUserFeaturesResponse {
+  map<string, UserFeatures> features = 1;
+}
+
+// Backtest Compare (Phase 8)
+message CompareBacktestsRequest {
+  string baseline_job_id = 1;
+  string candidate_job_id = 2;
+}
+
+message BacktestMetricsDelta {
+  double match_rate_delta = 1;       // candidate - baseline
+  double score_mean_delta = 2;
+  double score_std_delta = 3;
+  double rejected_rate_delta = 4;
+  int64 total_records_delta = 5;
+  int64 matched_count_delta = 6;
+}
+
+message CompareBacktestsResponse {
+  BacktestResult baseline = 1;
+  BacktestResult candidate = 2;
+  BacktestMetricsDelta delta = 3;
 }

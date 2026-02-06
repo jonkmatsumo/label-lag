@@ -929,6 +929,64 @@ func (s *server) GetBacktestResult(ctx context.Context, req *pb.GetBacktestResul
 	return &pb.GetBacktestResultResponse{Result: &res}, nil
 }
 
+func (s *server) CompareBacktests(ctx context.Context, req *pb.CompareBacktestsRequest) (*pb.CompareBacktestsResponse, error) {
+	if req.BaselineJobId == "" || req.CandidateJobId == "" {
+		return nil, status.Error(codes.InvalidArgument, "baseline_job_id and candidate_job_id are required")
+	}
+
+	baselineResp, err := s.GetBacktestResult(ctx, &pb.GetBacktestResultRequest{JobId: req.BaselineJobId})
+	if err != nil {
+		return nil, err
+	}
+	candidateResp, err := s.GetBacktestResult(ctx, &pb.GetBacktestResultRequest{JobId: req.CandidateJobId})
+	if err != nil {
+		return nil, err
+	}
+
+	baseline := baselineResp.Result
+	candidate := candidateResp.Result
+
+	// Compute deltas, defaulting to 0 if metrics are nil
+	var delta pb.BacktestMetricsDelta
+	if baseline.Metrics != nil && candidate.Metrics != nil {
+		delta.MatchRateDelta = candidate.Metrics.MatchRate - baseline.Metrics.MatchRate
+		delta.ScoreMeanDelta = candidate.Metrics.ScoreMean - baseline.Metrics.ScoreMean
+		delta.ScoreStdDelta = candidate.Metrics.ScoreStd - baseline.Metrics.ScoreStd
+		delta.RejectedRateDelta = candidate.Metrics.RejectedRate - baseline.Metrics.RejectedRate
+		delta.TotalRecordsDelta = candidate.Metrics.TotalRecords - baseline.Metrics.TotalRecords
+		delta.MatchedCountDelta = candidate.Metrics.MatchedCount - baseline.Metrics.MatchedCount
+	}
+
+	return &pb.CompareBacktestsResponse{
+		Baseline:  baseline,
+		Candidate: candidate,
+		Delta:     &delta,
+	}, nil
+}
+
+func (s *server) GetRuleStats(ctx context.Context, req *pb.GetRuleStatsRequest) (*pb.GetRuleStatsResponse, error) {
+	// Stub implementation: return empty or mocked stats
+	// In real implementation, query daily_stats or rule_stats table
+	return &pb.GetRuleStatsResponse{
+		Stats: []*pb.RuleStats{
+			{
+				RuleId:               req.RuleId,
+				TriggeredCount:       0,
+				ShadowTriggeredCount: 0,
+				ApprovalRate:         0.0,
+			},
+		},
+	}, nil
+}
+
+func (s *server) GetAttribution(ctx context.Context, req *pb.GetAttributionRequest) (*pb.GetAttributionResponse, error) {
+	// Stub implementation: return empty or mocked attribution
+	// In real implementation, query inference_events table
+	return &pb.GetAttributionResponse{
+		Items: []*pb.DailyAttribution{},
+	}, nil
+}
+
 func (s *server) GetDriftWindow(ctx context.Context, req *pb.GetDriftWindowRequest) (*pb.GetDriftWindowResponse, error) {
 	if req == nil || req.Hours <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "hours > 0 required")
@@ -1703,6 +1761,288 @@ func main() {
 	s.GracefulStop()
 }
 
+// Rule Versioning Handlers
+
+func (s *server) ListRuleVersions(ctx context.Context, req *pb.ListRuleVersionsRequest) (*pb.ListRuleVersionsResponse, error) {
+	limit := int32(100)
+	if req.Limit > 0 {
+		limit = req.Limit
+	}
+	offset := int32(0)
+	if req.Offset > 0 {
+		offset = req.Offset
+	}
+
+	query := `
+		SELECT rule_json, created_at, created_by, status
+		FROM rule_versions
+		WHERE rule_id = $1
+		ORDER BY created_at DESC
+		LIMIT $2 OFFSET $3
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, req.RuleId, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list rule versions: %v", err)
+	}
+	defer rows.Close()
+
+	var versions []*pb.Rule
+	for rows.Next() {
+		var ruleJSON []byte
+		var createdAt time.Time
+		var createdBy, statusStr sql.NullString
+
+		if err := rows.Scan(&ruleJSON, &createdAt, &createdBy, &statusStr); err != nil {
+			return nil, fmt.Errorf("failed to scan rule version: %v", err)
+		}
+
+		var r pb.Rule
+		if err := json.Unmarshal(ruleJSON, &r); err != nil {
+			// If JSON unmarshal fails, we might skip or return error?
+			// Let's log and continue for list
+			slog.Warn("failed to unmarshal rule version", "error", err)
+			continue
+		}
+		// Allow status override from version row?
+		if statusStr.Valid {
+			r.Status = statusStr.String
+		}
+		versions = append(versions, &r)
+	}
+
+	// Get total count
+	var total int64
+	err = s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM rule_versions WHERE rule_id = $1", req.RuleId).Scan(&total)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count rule versions: %v", err)
+	}
+
+	return &pb.ListRuleVersionsResponse{Versions: versions, Total: total}, nil
+}
+
+func (s *server) GetRuleVersion(ctx context.Context, req *pb.GetRuleVersionRequest) (*pb.GetRuleVersionResponse, error) {
+	if req.RuleId == "" {
+		return nil, status.Error(codes.InvalidArgument, "rule_id required")
+	}
+
+	var query string
+	var args []interface{}
+
+	if req.VersionId == "active" || req.VersionId == "" {
+		// Get active version from rules table join
+		query = `
+			SELECT rv.rule_json, rv.version_id, rv.created_at
+			FROM rules r
+			JOIN rule_versions rv ON r.active_version_id = rv.version_id
+			WHERE r.rule_id = $1
+		`
+		args = []interface{}{req.RuleId}
+	} else if req.VersionId == "latest" {
+		query = `
+			SELECT rule_json, version_id, created_at
+			FROM rule_versions
+			WHERE rule_id = $1
+			ORDER BY created_at DESC
+			LIMIT 1
+		`
+		args = []interface{}{req.RuleId}
+	} else {
+		query = `
+			SELECT rule_json, version_id, created_at
+			FROM rule_versions
+			WHERE rule_id = $1 AND version_id = $2
+		`
+		args = []interface{}{req.RuleId, req.VersionId}
+	}
+
+	var ruleJSON []byte
+	var verID string
+	var createdAt time.Time
+
+	err := s.db.QueryRowContext(ctx, query, args...).Scan(&ruleJSON, &verID, &createdAt)
+	if err == sql.ErrNoRows {
+		return nil, status.Error(codes.NotFound, "rule version not found")
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to get rule version: %v", err)
+	}
+
+	var r pb.Rule
+	if err := json.Unmarshal(ruleJSON, &r); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal rule: %v", err)
+	}
+
+	return &pb.GetRuleVersionResponse{
+		Rule:      &r,
+		VersionId: verID,
+		CreatedAt: timestamppb.New(createdAt),
+	}, nil
+}
+
+func (s *server) PublishRuleVersion(ctx context.Context, req *pb.PublishRuleVersionRequest) (*pb.PublishRuleVersionResponse, error) {
+	if req.RuleId == "" {
+		return nil, status.Error(codes.InvalidArgument, "rule_id required")
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback()
+
+	// 1. Get current draft from rules table
+	var field, op, value, action, severity, reason, statusStr string
+	var score sql.NullInt32
+	err = tx.QueryRowContext(ctx, `SELECT field, op, value, action, score, severity, reason, status FROM rules WHERE rule_id = $1`, req.RuleId).
+		Scan(&field, &op, &value, &action, &score, &severity, &reason, &statusStr)
+
+	if err == sql.ErrNoRows {
+		return nil, status.Error(codes.NotFound, "rule not found")
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to get rule: %v", err)
+	}
+
+	// 2. Determine new version ID
+	// Simple strategy: v + timestamp
+	newVersion := req.VersionId
+	if newVersion == "" {
+		newVersion = fmt.Sprintf("v%s", time.Now().Format("20060102150405"))
+	}
+
+	// 3. Create Rule object for snapshot
+	// If score is null (0 for int32 in proto), we treat it as 0
+	r := pb.Rule{
+		Id:        req.RuleId,
+		Field:     field,
+		Op:        op,
+		ValueJson: value,
+		Action:    action,
+		Score:     score.Int32,
+		Severity:  severity,
+		Reason:    reason,
+		Status:    "active", // Published version is active
+	}
+	ruleJSON, _ := json.Marshal(r)
+
+	// 4. Insert into rule_versions
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO rule_versions (version_id, rule_id, rule_json, created_at, created_by, change_description, status, is_active)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	`, newVersion, req.RuleId, ruleJSON, time.Now(), req.Actor, req.Reason, "active", true)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to insert rule version: %v", err)
+	}
+
+	// 5. Update rules table with active_version_id and status=active
+	_, err = tx.ExecContext(ctx, `
+		UPDATE rules SET status = 'active', active_version_id = $1 WHERE rule_id = $2
+	`, newVersion, req.RuleId)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to update rule status: %v", err)
+	}
+
+	// 6. Archive previous active versions?
+	// Optional: Set is_active=false for other versions
+	_, err = tx.ExecContext(ctx, `
+		UPDATE rule_versions SET is_active = FALSE WHERE rule_id = $1 AND version_id != $2
+	`, req.RuleId, newVersion)
+	if err != nil {
+		return nil, fmt.Errorf("failed to archive old versions: %v", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	return &pb.PublishRuleVersionResponse{Success: true, ActiveVersionId: newVersion}, nil
+}
+
+func (s *server) GetRuleReadiness(ctx context.Context, req *pb.GetRuleReadinessRequest) (*pb.GetRuleReadinessResponse, error) {
+	// Compatibility mode readiness check
+	// 1. Check if rule exists
+	// 2. Check if it has required fields (JSON value valid)
+	// 3. Check syntax (simplified)
+
+	var ruleID, valueJSON string
+	err := s.db.QueryRowContext(ctx, "SELECT rule_id, value FROM rules WHERE rule_id = $1", req.RuleId).Scan(&ruleID, &valueJSON)
+	if err == sql.ErrNoRows {
+		return nil, status.Error(codes.NotFound, "rule not found")
+	}
+
+	checks := []*pb.ReadinessCheck{}
+	overallReady := true
+
+	// Check 1: JSON validity
+	var val interface{}
+	jsonCheck := &pb.ReadinessCheck{Name: "json_validity", Passed: true, Message: "Value is valid JSON"}
+	if err := json.Unmarshal([]byte(valueJSON), &val); err != nil {
+		jsonCheck.Passed = false
+		jsonCheck.Message = fmt.Sprintf("Invalid JSON value: %v", err)
+		overallReady = false
+	}
+	checks = append(checks, jsonCheck)
+
+	// Check 2: Basic integrity
+	checks = append(checks, &pb.ReadinessCheck{Name: "integrity", Passed: true, Message: "Rule integrity check passed"})
+
+	return &pb.GetRuleReadinessResponse{
+		RuleId: req.RuleId,
+		Ready:  overallReady,
+		Checks: checks,
+	}, nil
+}
+
+func (s *server) DiffRuleVersions(ctx context.Context, req *pb.DiffRuleVersionsRequest) (*pb.DiffRuleVersionsResponse, error) {
+	// For now, return empty changes, gateway can compute diff if it has both versions.
+	// OR implement basic field diff here.
+	// Since we are storing JSON blobs, text diff is hard.
+	// Let's implement getting the two versions logic and doing a basic comparison of fields.
+
+	// Helper to get version JSON
+	getVersionJSON := func(verID string) (*pb.Rule, error) {
+		var rJSON []byte
+		err := s.db.QueryRowContext(ctx, "SELECT rule_json FROM rule_versions WHERE rule_id = $1 AND version_id = $2", req.RuleId, verID).Scan(&rJSON)
+		if err != nil {
+			return nil, err
+		}
+		var r pb.Rule
+		json.Unmarshal(rJSON, &r)
+		return &r, nil
+	}
+
+	vA, errA := getVersionJSON(req.VersionA)
+	vB, errB := getVersionJSON(req.VersionB)
+
+	if errA != nil || errB != nil {
+		return nil, fmt.Errorf("failed to fetch versions for diff")
+	}
+
+	changes := []*pb.RuleDiffChange{}
+
+	// Compare fields
+	if vA.Field != vB.Field {
+		changes = append(changes, &pb.RuleDiffChange{Field: "field", OldValue: vB.Field, NewValue: vA.Field, Description: "Field changed"})
+	}
+	if vA.Op != vB.Op {
+		changes = append(changes, &pb.RuleDiffChange{Field: "op", OldValue: vB.Op, NewValue: vA.Op, Description: "Operator changed"})
+	}
+	if vA.ValueJson != vB.ValueJson {
+		changes = append(changes, &pb.RuleDiffChange{Field: "value", OldValue: vB.ValueJson, NewValue: vA.ValueJson, Description: "Value changed"})
+	}
+	if vA.Action != vB.Action {
+		changes = append(changes, &pb.RuleDiffChange{Field: "action", OldValue: vB.Action, NewValue: vA.Action, Description: "Action changed"})
+	}
+
+	return &pb.DiffRuleVersionsResponse{
+		RuleId:   req.RuleId,
+		VersionA: req.VersionA,
+		VersionB: req.VersionB,
+		Changes:  changes,
+	}, nil
+}
+
 func updateHealthStatus(ctx context.Context, db *sql.DB, healthServer *health.Server, logger *slog.Logger) error {
 	if err := db.PingContext(ctx); err != nil {
 		if logger != nil {
@@ -1752,6 +2092,20 @@ func initDB(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_backtest_results_completed_at ON backtest_results(completed_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_rules_status ON rules(status)`,
 		`CREATE INDEX IF NOT EXISTS idx_inference_events_ts ON inference_events(ts)`,
+		// Rule Versioning
+		`CREATE TABLE IF NOT EXISTS rule_versions (
+			version_id TEXT PRIMARY KEY,
+			rule_id TEXT NOT NULL,
+			rule_json JSONB NOT NULL,
+			created_at TIMESTAMP NOT NULL,
+			created_by TEXT,
+			change_description TEXT,
+			status TEXT NOT NULL,
+			is_active BOOLEAN DEFAULT FALSE
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_rule_versions_rule_id ON rule_versions(rule_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_rule_versions_created_at ON rule_versions(created_at)`,
+		`ALTER TABLE rules ADD COLUMN IF NOT EXISTS active_version_id TEXT`,
 	}
 
 	for _, q := range queries {

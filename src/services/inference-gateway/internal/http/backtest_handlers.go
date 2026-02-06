@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -14,7 +15,70 @@ import (
 // - GET /backtest/results
 // - POST /backtest/compare
 
-func (h *Handler) handleBacktestCompare(w http.ResponseWriter, r *http.Request) {}
+type backtestCompareRequest struct {
+	BaselineJobID  string `json:"baseline_job_id"`
+	CandidateJobID string `json:"candidate_job_id"`
+}
+
+type backtestCompareResponse struct {
+	Baseline  backtestResultResponse   `json:"baseline"`
+	Candidate backtestResultResponse   `json:"candidate"`
+	Delta     backtestMetricsDeltaJSON `json:"delta"`
+}
+
+type backtestMetricsDeltaJSON struct {
+	MatchRateDelta    float64 `json:"match_rate_delta"`
+	ScoreMeanDelta    float64 `json:"score_mean_delta"`
+	ScoreStdDelta     float64 `json:"score_std_delta"`
+	RejectedRateDelta float64 `json:"rejected_rate_delta"`
+	TotalRecordsDelta int64   `json:"total_records_delta"`
+	MatchedCountDelta int64   `json:"matched_count_delta"`
+}
+
+func (h *Handler) handleBacktestCompare(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if h.analyticsClient == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "analytics backend unavailable")
+		return
+	}
+
+	var req backtestCompareRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+
+	if req.BaselineJobID == "" || req.CandidateJobID == "" {
+		writeJSONError(w, http.StatusBadRequest, "baseline_job_id and candidate_job_id are required")
+		return
+	}
+
+	resp, err := h.analyticsClient.CompareBacktests(r.Context(), &crudv1.CompareBacktestsRequest{
+		BaselineJobId:  req.BaselineJobID,
+		CandidateJobId: req.CandidateJobID,
+	})
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	writeAnalyticsJSON(w, backtestCompareResponse{
+		Baseline:  mapBacktestResult(resp.Baseline),
+		Candidate: mapBacktestResult(resp.Candidate),
+		Delta: backtestMetricsDeltaJSON{
+			MatchRateDelta:    resp.Delta.GetMatchRateDelta(),
+			ScoreMeanDelta:    resp.Delta.GetScoreMeanDelta(),
+			ScoreStdDelta:     resp.Delta.GetScoreStdDelta(),
+			RejectedRateDelta: resp.Delta.GetRejectedRateDelta(),
+			TotalRecordsDelta: resp.Delta.GetTotalRecordsDelta(),
+			MatchedCountDelta: resp.Delta.GetMatchedCountDelta(),
+		},
+	})
+}
 
 func (h *Handler) handleBacktestResults(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

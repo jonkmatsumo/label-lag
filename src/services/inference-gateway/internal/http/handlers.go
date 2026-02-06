@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"time"
 
+	crudv1 "github.com/jonkmatsumo/label-lag/src/services/analytics-crud/proto/crud/v1"
 	grpcclient "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/grpc"
 	inferencev1 "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/grpc/inferencev1/inference/v1"
 	gatewayv1 "github.com/jonkmatsumo/label-lag/src/services/inference-gateway/internal/http/gatewayv1/gateway/v1"
@@ -20,6 +21,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -42,9 +44,9 @@ func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient Ana
 	}
 	return &Handler{
 		logger:          logger,
-		inferenceClient:  client,
-		analyticsClient:  analyticsClient,
-		rulesProvider:    provider,
+		inferenceClient: client,
+		analyticsClient: analyticsClient,
+		rulesProvider:   provider,
 		maxBodyBytes:    maxBodyBytes,
 	}
 }
@@ -53,21 +55,36 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/evaluate/signal", h.handleEvaluateSignal)
 	mux.HandleFunc("/evaluate/rules", h.handleEvaluateRules)
 	mux.HandleFunc("/evaluate/rules/diff", h.handleEvaluateRulesDiff)
-	mux.HandleFunc("/rules/sandbox/evaluate", h.handleSandboxEvaluate)
-	mux.HandleFunc("/rules/sandbox/diff", h.handleSandboxDiff)
+	mux.HandleFunc("POST /rules/sandbox/evaluate", h.handleSandboxEvaluate)
+	mux.HandleFunc("POST /rules/sandbox/diff", h.handleSandboxDiff)
 	mux.HandleFunc("/ready", h.handleReady)
 	mux.HandleFunc("/analytics/overview", h.handleAnalyticsOverview)
 	mux.HandleFunc("/analytics/daily-stats", h.handleAnalyticsDailyStats)
 	mux.HandleFunc("/analytics/transactions", h.handleAnalyticsTransactions)
 	mux.HandleFunc("/analytics/recent-alerts", h.handleAnalyticsRecentAlerts)
 	mux.HandleFunc("/analytics/fingerprint", h.handleAnalyticsFingerprint)
+	mux.HandleFunc("GET /analytics/attribution", h.handleAnalyticsAttribution)
 	mux.HandleFunc("/analytics/feature-sample", h.handleAnalyticsFeatureSample)
 	mux.HandleFunc("/analytics/schema", h.handleAnalyticsSchema)
+	mux.HandleFunc("GET /analytics/rules/{rule_id}", h.handleAnalyticsRuleStats)
 	mux.HandleFunc("/analytics/transactions/search", h.handleSearchTransactions)
 	mux.HandleFunc("/data/clear", h.handleDatasetClear)
 	mux.HandleFunc("/monitoring/drift", h.handleMonitoringDrift)
 	mux.HandleFunc("/metrics/shadow/comparison", h.handleMetricsShadowComparison)
 	mux.HandleFunc("/backtest/results", h.handleBacktestResults)
+	mux.HandleFunc("POST /backtest/compare", h.handleBacktestCompare)
+	mux.HandleFunc("GET /rules", h.handleListRules)
+	mux.HandleFunc("POST /rules", h.handleCreateRule)
+	mux.HandleFunc("GET /rules/{rule_id}", h.handleGetRule)
+	mux.HandleFunc("PUT /rules/{rule_id}", h.handleUpdateRule)
+	mux.HandleFunc("DELETE /rules/{rule_id}", h.handleDeleteRule)
+	// Routes for later commits
+	mux.HandleFunc("GET /rules/{rule_id}/history", h.handleListRuleVersions)
+	mux.HandleFunc("GET /rules/{rule_id}/versions/{version_id}", h.handleGetRuleVersion)
+	mux.HandleFunc("POST /rules/{rule_id}/publish", h.handlePublishRule)
+	mux.HandleFunc("GET /rules/{rule_id}/readiness", h.handleRuleReadiness)
+	mux.HandleFunc("GET /rules/{rule_id}/diff", h.handleRuleDiff)
+
 	for _, route := range notImplementedRoutes {
 		mux.HandleFunc(route, h.handleNotImplemented)
 	}
@@ -258,6 +275,34 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 		"rule_impacts":  ruleImpacts,
 	}
 	h.logger.Info("InferenceEvent", "event", event)
+
+	// Persist inference event to CRUD (fire-and-forget, don't fail the request)
+	if h.analyticsClient != nil {
+		go func() {
+			pbImpacts := make([]*crudv1.RuleImpact, 0, len(ruleImpacts))
+			for _, ri := range ruleImpacts {
+				pbImpacts = append(pbImpacts, &crudv1.RuleImpact{
+					RuleId:     ri["rule_id"].(string),
+					IsShadow:   ri["is_shadow"].(bool),
+					ScoreDelta: ri["score_delta"].(float64),
+				})
+			}
+			_, err := h.analyticsClient.LogInferenceEvent(context.Background(), &crudv1.LogInferenceEventRequest{
+				Event: &crudv1.InferenceEvent{
+					RequestId:    requestID,
+					Timestamp:    timestamppb.Now(),
+					ModelVersion: inferenceResp.GetModelVersion(),
+					RulesVersion: ruleResult.RulesVersion,
+					ModelScore:   rawScore,
+					FinalScore:   int32(ruleResult.FinalScore),
+					RuleImpacts:  pbImpacts,
+				},
+			})
+			if err != nil {
+				h.logger.Warn("failed to log inference event to CRUD", "error", err, "request_id", requestID)
+			}
+		}()
+	}
 
 	// OTEL attributes
 	span.SetAttributes(

@@ -40,11 +40,22 @@ export async function rulesDetailRoutes(
     '/bff/v1/rules',
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const response = await httpClient.request<ProductionRulesResponse>({
-          method: 'GET',
-          path: '/rules',
-          requestId: request.requestId,
-        });
+        let response;
+        if (httpClient.config.enableGoRulesControlPlane) {
+          response = await httpClient.request<ProductionRulesResponse>({
+            method: 'GET',
+            path: '/rules',
+            query: { status: 'ACTIVE' },
+            requestId: request.requestId,
+            target: 'gateway',
+          });
+        } else {
+          response = await httpClient.request<ProductionRulesResponse>({
+            method: 'GET',
+            path: '/rules',
+            requestId: request.requestId,
+          });
+        }
 
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
@@ -77,11 +88,17 @@ export async function rulesDetailRoutes(
       try {
         const { rule_id } = request.params;
 
-        const response = await httpClient.request<ReadinessReportResponse>({
+        const options: any = {
           method: 'GET',
           path: `/rules/${encodeURIComponent(rule_id)}/readiness`,
           requestId: request.requestId,
-        });
+        };
+
+        if (httpClient.config.enableGoRulesControlPlane) {
+          options.target = 'gateway';
+        }
+
+        const response = await httpClient.request<ReadinessReportResponse>(options);
 
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
@@ -114,11 +131,17 @@ export async function rulesDetailRoutes(
       try {
         const { rule_id } = request.params;
 
-        const response = await httpClient.request<RuleVersionListResponse>({
+        const options: any = {
           method: 'GET',
           path: `/rules/${encodeURIComponent(rule_id)}/versions`,
           requestId: request.requestId,
-        });
+        };
+
+        if (httpClient.config.enableGoRulesControlPlane) {
+          options.target = 'gateway';
+        }
+
+        const response = await httpClient.request<RuleVersionListResponse>(options);
 
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
@@ -152,11 +175,17 @@ export async function rulesDetailRoutes(
       try {
         const { rule_id, version_id } = request.params;
 
-        const response = await httpClient.request<RuleVersionResponse>({
+        const options: any = {
           method: 'GET',
           path: `/rules/${encodeURIComponent(rule_id)}/versions/${encodeURIComponent(version_id)}`,
           requestId: request.requestId,
-        });
+        };
+
+        if (httpClient.config.enableGoRulesControlPlane) {
+          options.target = 'gateway';
+        }
+
+        const response = await httpClient.request<RuleVersionResponse>(options);
 
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
@@ -208,11 +237,17 @@ export async function rulesDetailRoutes(
         const queryString = queryParams.toString();
         const path = `/rules/${encodeURIComponent(rule_id)}/diff${queryString ? `?${queryString}` : ''}`;
 
-        const response = await httpClient.request<RuleDiffResponse>({
+        const options: any = {
           method: 'GET',
           path,
           requestId: request.requestId,
-        });
+        };
+
+        if (httpClient.config.enableGoRulesControlPlane) {
+          options.target = 'gateway';
+        }
+
+        const response = await httpClient.request<RuleDiffResponse>(options);
 
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
