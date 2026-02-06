@@ -54,6 +54,7 @@ class InferenceService(inference_pb2_grpc.InferenceServiceServicer):
                 amount=Decimal(str(request.amount)),
                 currency=currency,
                 client_transaction_id=request.client_transaction_id,
+                fallback_mode=request.fallback_mode if request.HasField("fallback_mode") else None,
             )
         except Exception as exc:
             context.abort(grpc.StatusCode.INVALID_ARGUMENT, f"invalid request: {exc}")

@@ -17,6 +17,7 @@ message ScoreRequest {
   string currency = 4;
   string client_transaction_id = 5;
   google.protobuf.Struct context = 6;
+  optional string fallback_mode = 7;
 }
 
 message ScoreResponse {
