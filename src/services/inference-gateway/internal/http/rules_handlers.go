@@ -711,4 +711,86 @@ func abs(x int) int {
 	return x
 }
 
-// version/readiness/diff handlers temporarily removed for commit splitting
+func (h *Handler) handleListRuleVersions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	ruleID := r.PathValue("rule_id")
+	if ruleID == "" {
+		writeJSONError(w, http.StatusBadRequest, "rule_id required")
+		return
+	}
+
+	// Parse limit/offset
+	limit := 100
+	offset := 0
+
+	resp, err := h.analyticsClient.ListRuleVersions(r.Context(), &crudv1.ListRuleVersionsRequest{
+		RuleId: ruleID,
+		Limit:  int32(limit),
+		Offset: int32(offset),
+	})
+	if err != nil {
+		writeRPCError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	// Use protojson for response
+	payload, _ := protojson.MarshalOptions{EmitUnpopulated: true, UseProtoNames: true}.Marshal(resp)
+	w.Write(payload)
+}
+
+func (h *Handler) handleGetRuleVersion(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	ruleID := r.PathValue("rule_id")
+	versionID := r.PathValue("version_id")
+	if ruleID == "" || versionID == "" {
+		writeJSONError(w, http.StatusBadRequest, "rule_id and version_id required")
+		return
+	}
+
+	resp, err := h.analyticsClient.GetRuleVersion(r.Context(), &crudv1.GetRuleVersionRequest{
+		RuleId:    ruleID,
+		VersionId: versionID,
+	})
+	if err != nil {
+		writeRPCError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	payload, _ := protojson.MarshalOptions{EmitUnpopulated: true, UseProtoNames: true}.Marshal(resp)
+	w.Write(payload)
+}
+
+func (h *Handler) handleRuleReadiness(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	ruleID := r.PathValue("rule_id")
+	if ruleID == "" {
+		writeJSONError(w, http.StatusBadRequest, "rule_id required")
+		return
+	}
+
+	resp, err := h.analyticsClient.GetRuleReadiness(r.Context(), &crudv1.GetRuleReadinessRequest{RuleId: ruleID})
+	if err != nil {
+		writeRPCError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	payload, _ := protojson.MarshalOptions{EmitUnpopulated: true, UseProtoNames: true}.Marshal(resp)
+	w.Write(payload)
+}
+
+// diff/publish handlers temporarily removed for commit splitting
