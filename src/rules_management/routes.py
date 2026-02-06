@@ -5,9 +5,9 @@ from fastapi import APIRouter, HTTPException, Query
 from google.protobuf.json_format import MessageToDict
 
 from api.audit import get_audit_logger
-from api.readiness import ReadinessEvaluator
 from api.crud_client import get_crud_client
 from api.errors import analytics_http_exception
+from api.readiness import ReadinessEvaluator
 from api.schemas import (
     AcceptSuggestionRequest,
     AcceptSuggestionResponse,
@@ -70,14 +70,18 @@ from api.schemas import (
     SuggestionsListResponse,
     ValidationResult,
 )
-from rules_management.backtest import BacktestRunner, BacktestStore, BacktestComparator
+from rules_management.analytics import RuleHealthEvaluator
+from rules_management.attribution import AttributionService
+from rules_management.backtest import BacktestComparator, BacktestRunner, BacktestStore
 from rules_management.draft_store import get_draft_store
 from rules_management.metrics import get_metrics_collector
 from rules_management.rules import Rule, RuleSet, RuleStatus
 from rules_management.versioning import get_version_store
-from rules_management.workflow import RuleStateMachine, TransitionError, create_state_machine
-from rules_management.analytics import RuleHealthEvaluator
-from rules_management.attribution import AttributionService
+from rules_management.workflow import (
+    RuleStateMachine,
+    TransitionError,
+    create_state_machine,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -480,8 +484,12 @@ async def get_heuristic_suggestions(
             fp_resp = client.get_dataset_fingerprint()
             if fp_resp:
                 import hashlib
-                s = f"{fp_resp.generated_records.count}-{fp_resp.feature_snapshots.count}"
-                fingerprint = hashlib.sha256(s.encode()).hexdigest()
+
+                fingerprint_key = (
+                    f"{fp_resp.generated_records.count}-"
+                    f"{fp_resp.feature_snapshots.count}"
+                )
+                fingerprint = hashlib.sha256(fingerprint_key.encode()).hexdigest()
         except Exception:
             pass
 
@@ -593,7 +601,10 @@ async def accept_suggestion(
             "reason": rule.reason,
             "status": rule.status,
         },
-        reason=f"Accepted suggestion: {suggestion.field} {suggestion.operator} {suggestion.threshold}",
+        reason=(
+            f"Accepted suggestion: {suggestion.field} "
+            f"{suggestion.operator} {suggestion.threshold}"
+        ),
     )
 
     rule_response = DraftRuleResponse(
@@ -686,12 +697,15 @@ async def create_draft_rule(request: DraftRuleCreateRequest) -> DraftRuleCreateR
     draft_rules = store.list_rules(include_archived=False)
     # Filter active rules from store instead of manager.ruleset
     active_rules = store.list_rules(status=RuleStatus.ACTIVE.value)
-    
+
     all_rules = draft_rules.copy()
-    all_rules.extend([r for r in active_rules if r.id not in [dr.id for dr in draft_rules]])
+    all_rules.extend(
+        [r for r in active_rules if r.id not in [dr.id for dr in draft_rules]]
+    )
 
     test_ruleset = RuleSet(version="validation", rules=all_rules)
     from rules_management.validation import validate_ruleset
+
     conflicts, redundancies = validate_ruleset(test_ruleset, strict=False)
 
     rule_response = DraftRuleResponse(
@@ -827,10 +841,16 @@ async def update_draft_rule(
         "field": request.field if request.field is not None else existing_rule.field,
         "op": request.op if request.op is not None else existing_rule.op,
         "value": request.value if request.value is not None else existing_rule.value,
-        "action": request.action if request.action is not None else existing_rule.action,
+        "action": request.action
+        if request.action is not None
+        else existing_rule.action,
         "score": request.score if request.score is not None else existing_rule.score,
-        "severity": request.severity if request.severity is not None else existing_rule.severity,
-        "reason": request.reason if request.reason is not None else existing_rule.reason,
+        "severity": request.severity
+        if request.severity is not None
+        else existing_rule.severity,
+        "reason": request.reason
+        if request.reason is not None
+        else existing_rule.reason,
         "status": RuleStatus.DRAFT.value,
     }
 
@@ -856,9 +876,12 @@ async def update_draft_rule(
     )
 
     from rules_management.validation import validate_ruleset
+
     draft_rules = store.list_rules(include_archived=False)
     active_rules = store.list_rules(status=RuleStatus.ACTIVE.value)
-    all_rules = draft_rules + [r for r in active_rules if r.id not in [dr.id for dr in draft_rules]]
+    all_rules = draft_rules + [
+        r for r in active_rules if r.id not in [dr.id for dr in draft_rules]
+    ]
     test_ruleset = RuleSet(version="validation", rules=all_rules)
     conflicts, redundancies = validate_ruleset(test_ruleset, strict=False)
 
@@ -877,8 +900,24 @@ async def update_draft_rule(
         ),
         version_id=version.version_id,
         validation=ValidationResult(
-            conflicts=[ConflictResponse(rule1_id=c.rule1_id, rule2_id=c.rule2_id, conflict_type=c.conflict_type, description=c.description) for c in conflicts],
-            redundancies=[RedundancyResponse(rule_id=r.rule_id, redundant_with=r.redundant_with, redundancy_type=r.redundancy_type, description=r.description) for r in redundancies],
+            conflicts=[
+                ConflictResponse(
+                    rule1_id=c.rule1_id,
+                    rule2_id=c.rule2_id,
+                    conflict_type=c.conflict_type,
+                    description=c.description,
+                )
+                for c in conflicts
+            ],
+            redundancies=[
+                RedundancyResponse(
+                    rule_id=r.rule_id,
+                    redundant_with=r.redundant_with,
+                    redundancy_type=r.redundancy_type,
+                    description=r.description,
+                )
+                for r in redundancies
+            ],
             is_valid=len(conflicts) == 0,
         ),
     )
@@ -913,7 +952,7 @@ async def delete_draft_rule(
             reason=f"Rule archived by {actor}",
         )
         return {"success": True, "rule_id": rule_id, "status": "archived"}
-    
+
     raise HTTPException(status_code=500, detail="Failed to archive rule")
 
 
@@ -937,21 +976,44 @@ async def validate_draft_rule(
 
     rules_to_validate = [rule]
     if request.include_existing_rules:
-        rules_to_validate.extend([r for r in store.list_rules(include_archived=False) if r.id != rule_id])
+        rules_to_validate.extend(
+            [r for r in store.list_rules(include_archived=False) if r.id != rule_id]
+        )
         active_rules = store.list_rules(status=RuleStatus.ACTIVE.value)
-        rules_to_validate.extend([r for r in active_rules if r.id not in [rv.id for rv in rules_to_validate]])
+        rules_to_validate.extend(
+            [r for r in active_rules if r.id not in [rv.id for rv in rules_to_validate]]
+        )
 
     test_ruleset = RuleSet(version="validation", rules=rules_to_validate)
     from rules_management.validation import validate_ruleset
+
     conflicts, redundancies = validate_ruleset(test_ruleset, strict=False)
 
-    rule_conflicts = [c for c in conflicts if c.rule1_id == rule_id or c.rule2_id == rule_id]
+    rule_conflicts = [
+        c for c in conflicts if c.rule1_id == rule_id or c.rule2_id == rule_id
+    ]
     rule_redundancies = [r for r in redundancies if r.rule_id == rule_id]
 
     return DraftRuleValidateResponse(
         schema_errors=schema_errors,
-        conflicts=[ConflictResponse(rule1_id=c.rule1_id, rule2_id=c.rule2_id, conflict_type=c.conflict_type, description=c.description) for c in rule_conflicts],
-        redundancies=[RedundancyResponse(rule_id=r.rule_id, redundant_with=r.redundant_with, redundancy_type=r.redundancy_type, description=r.description) for r in rule_redundancies],
+        conflicts=[
+            ConflictResponse(
+                rule1_id=c.rule1_id,
+                rule2_id=c.rule2_id,
+                conflict_type=c.conflict_type,
+                description=c.description,
+            )
+            for c in rule_conflicts
+        ],
+        redundancies=[
+            RedundancyResponse(
+                rule_id=r.rule_id,
+                redundant_with=r.redundant_with,
+                redundancy_type=r.redundancy_type,
+                description=r.description,
+            )
+            for r in rule_redundancies
+        ],
         is_valid=len(schema_errors) == 0 and len(rule_conflicts) == 0,
     )
 
@@ -984,18 +1046,26 @@ async def submit_draft_rule(
     draft_rules = store.list_rules(include_archived=False)
     active_rules = store.list_rules(status=RuleStatus.ACTIVE.value)
     all_rules = draft_rules.copy()
-    all_rules.extend([r for r in active_rules if r.id not in [dr.id for dr in draft_rules]])
+    all_rules.extend(
+        [r for r in active_rules if r.id not in [dr.id for dr in draft_rules]]
+    )
 
     test_ruleset = RuleSet(version="validation", rules=all_rules)
     from rules_management.validation import validate_ruleset
+
     conflicts, redundancies = validate_ruleset(test_ruleset, strict=False)
 
-    rule_conflicts = [c for c in conflicts if c.rule1_id == rule_id or c.rule2_id == rule_id]
+    rule_conflicts = [
+        c for c in conflicts if c.rule1_id == rule_id or c.rule2_id == rule_id
+    ]
     if rule_conflicts:
         conflict_descriptions = [c.description for c in rule_conflicts]
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot submit rule {rule_id} with conflicts. Conflicts: {'; '.join(conflict_descriptions)}",
+            detail=(
+                f"Cannot submit rule {rule_id} with conflicts. "
+                f"Conflicts: {'; '.join(conflict_descriptions)}"
+            ),
         )
 
     try:
@@ -1010,15 +1080,26 @@ async def submit_draft_rule(
         # Compute approval signals at submission
         try:
             from rules_management.signals import compute_approval_signals
-            draft_ruleset = RuleSet(version="draft", rules=[r for r in draft_rules if r.id != rule_id])
+
+            draft_ruleset = RuleSet(
+                version="draft", rules=[r for r in draft_rules if r.id != rule_id]
+            )
             # Use active rules from store instead of manager.ruleset
             prod_ruleset = RuleSet(version="live", rules=active_rules)
-            compute_approval_signals(rule_id=rule_id, production_ruleset=prod_ruleset, draft_ruleset=draft_ruleset)
+            compute_approval_signals(
+                rule_id=rule_id,
+                production_ruleset=prod_ruleset,
+                draft_ruleset=draft_ruleset,
+            )
         except Exception as e:
             logger.warning(f"Failed to compute approval signals at submission: {e}")
 
-        version_store.save(rule=updated_rule, created_by=request.actor, reason=f"Submitted: {request.justification}")
-        
+        version_store.save(
+            rule=updated_rule,
+            created_by=request.actor,
+            reason=f"Submitted: {request.justification}",
+        )
+
         return DraftRuleSubmitResponse(
             rule=DraftRuleResponse(
                 rule_id=updated_rule.id,
@@ -1052,12 +1133,17 @@ async def get_approval_signals(rule_id: str) -> ApprovalSignalsResponse:
         raise HTTPException(status_code=404, detail="Rule not found")
 
     draft_rules = store.list_rules(include_archived=False)
-    draft_ruleset = RuleSet(version="draft", rules=[r for r in draft_rules if r.id != rule_id])
+    draft_ruleset = RuleSet(
+        version="draft", rules=[r for r in draft_rules if r.id != rule_id]
+    )
     active_rules = store.list_rules(status=RuleStatus.ACTIVE.value)
     prod_ruleset = RuleSet(version="live", rules=active_rules)
 
     from rules_management.signals import compute_approval_signals
-    return compute_approval_signals(rule_id=rule_id, production_ruleset=prod_ruleset, draft_ruleset=draft_ruleset)
+
+    return compute_approval_signals(
+        rule_id=rule_id, production_ruleset=prod_ruleset, draft_ruleset=draft_ruleset
+    )
 
 
 @router.post(
@@ -1070,6 +1156,7 @@ async def approve_draft_rule(
 ) -> ApproveRuleResponse:
     """Approve a pending rule."""
     from dataclasses import asdict
+
     store = get_draft_store()
     state_machine = create_state_machine()
     audit_logger = get_audit_logger()
@@ -1079,32 +1166,57 @@ async def approve_draft_rule(
         raise HTTPException(status_code=404, detail=f"Draft rule not found: {rule_id}")
 
     if rule.status != RuleStatus.PENDING_REVIEW.value:
-        raise HTTPException(status_code=400, detail=f"Rule {rule_id} is not pending review (status: {rule.status})")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Rule {rule_id} is not pending review (status: {rule.status})",
+        )
 
     # Find submitter to prevent self-approval
     rule_history = audit_logger.get_rule_history(rule_id)
     submitter = None
     for record in reversed(rule_history):
-        if (record.action == "state_change" and record.after_state and record.after_state.get("status") == RuleStatus.PENDING_REVIEW.value):
+        if (
+            record.action == "state_change"
+            and record.after_state
+            and record.after_state.get("status") == RuleStatus.PENDING_REVIEW.value
+        ):
             submitter = record.actor
             break
 
     if submitter and submitter == request.approver:
-        raise HTTPException(status_code=400, detail=f"Self-approval not allowed. Actor '{request.approver}' cannot approve their own submission.")
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Self-approval not allowed. Actor '{request.approver}' "
+                "cannot approve their own submission."
+            ),
+        )
 
     # Fetch approval signals before approval
     approval_signals_data = None
     try:
         from rules_management.signals import compute_approval_signals
+
         draft_rules = store.list_rules(include_archived=False)
-        draft_ruleset = RuleSet(version="draft", rules=[r for r in draft_rules if r.id != rule_id])
+        draft_ruleset = RuleSet(
+            version="draft", rules=[r for r in draft_rules if r.id != rule_id]
+        )
         active_rules = store.list_rules(status=RuleStatus.ACTIVE.value)
         prod_ruleset = RuleSet(version="live", rules=active_rules)
-        signals_response = compute_approval_signals(rule_id=rule_id, production_ruleset=prod_ruleset, draft_ruleset=draft_ruleset)
+        signals_response = compute_approval_signals(
+            rule_id=rule_id,
+            production_ruleset=prod_ruleset,
+            draft_ruleset=draft_ruleset,
+        )
         approval_signals_data = {
             "computed_at": signals_response.computed_at,
-            "summary": {"risk_count": signals_response.summary.risk_count, "warning_count": signals_response.summary.warning_count},
-            "signals": [s.signal_id for s in signals_response.signals if s.severity == "risk"],
+            "summary": {
+                "risk_count": signals_response.summary.risk_count,
+                "warning_count": signals_response.summary.warning_count,
+            },
+            "signals": [
+                s.signal_id for s in signals_response.signals if s.severity == "risk"
+            ],
         }
     except Exception as e:
         logger.warning(f"Failed to compute approval signals at approval: {e}")
@@ -1127,8 +1239,12 @@ async def approve_draft_rule(
             store._rules[rule_id] = approved_rule
             store._save_rules()
 
-        get_version_store().save(rule=approved_rule, created_by=request.approver, reason=request.reason or "Approved")
-        
+        get_version_store().save(
+            rule=approved_rule,
+            created_by=request.approver,
+            reason=request.reason or "Approved",
+        )
+
         return ApproveRuleResponse(
             rule=DraftRuleResponse(
                 rule_id=updated_rule.id,
@@ -1167,7 +1283,10 @@ async def publish_rule(
     if rule.status != RuleStatus.APPROVED.value:
         raise HTTPException(
             status_code=400,
-            detail=f"Rule {rule_id} is not approved (status: {rule.status}). Only approved rules can be published.",
+            detail=(
+                f"Rule {rule_id} is not approved (status: {rule.status}). "
+                "Only approved rules can be published."
+            ),
         )
 
     try:
@@ -1178,14 +1297,21 @@ async def publish_rule(
             reason=request.reason or "Published",
         )
         store.save(updated_rule)
-        version = get_version_store().save(rule=updated_rule, created_by=request.actor, reason=request.reason or "Published")
-        
+        version = get_version_store().save(
+            rule=updated_rule,
+            created_by=request.actor,
+            reason=request.reason or "Published",
+        )
+
         get_audit_logger().log(
             rule_id=rule_id,
             action="RULE_PUBLISHED",
             actor=request.actor,
             before_state={"status": RuleStatus.APPROVED.value},
-            after_state={"status": RuleStatus.ACTIVE.value, "version_id": version.version_id},
+            after_state={
+                "status": RuleStatus.ACTIVE.value,
+                "version_id": version.version_id,
+            },
             reason=request.reason or "Published",
         )
 
@@ -1226,7 +1352,10 @@ async def reject_draft_rule(
         raise HTTPException(status_code=404, detail=f"Draft rule not found: {rule_id}")
 
     if rule.status != RuleStatus.PENDING_REVIEW.value:
-        raise HTTPException(status_code=400, detail=f"Rule {rule_id} is not pending review (status: {rule.status})")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Rule {rule_id} is not pending review (status: {rule.status})",
+        )
 
     try:
         updated_rule = state_machine.transition(
@@ -1236,8 +1365,12 @@ async def reject_draft_rule(
             reason=request.reason,
         )
         store.save(updated_rule)
-        get_version_store().save(rule=updated_rule, created_by=request.actor, reason=f"Rejected: {request.reason}")
-        
+        get_version_store().save(
+            rule=updated_rule,
+            created_by=request.actor,
+            reason=f"Rejected: {request.reason}",
+        )
+
         return RejectRuleResponse(
             rule=DraftRuleResponse(
                 rule_id=updated_rule.id,
@@ -1267,6 +1400,7 @@ async def activate_rule(
 ) -> ActivateRuleResponse:
     """Activate a rule."""
     from dataclasses import asdict
+
     store = get_draft_store()
     state_machine = create_state_machine()
     audit_logger = get_audit_logger()
@@ -1279,18 +1413,50 @@ async def activate_rule(
     if rule is None:
         raise HTTPException(status_code=404, detail=f"Rule not found: {rule_id}")
 
-    if rule.status not in [RuleStatus.PENDING_REVIEW.value, RuleStatus.SHADOW.value, RuleStatus.DISABLED.value]:
-        raise HTTPException(status_code=400, detail=f"Cannot activate rule {rule_id} from status {rule.status}")
+    if rule.status not in [
+        RuleStatus.PENDING_REVIEW.value,
+        RuleStatus.SHADOW.value,
+        RuleStatus.DISABLED.value,
+    ]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot activate rule {rule_id} from status {rule.status}",
+        )
 
     if rule.status == RuleStatus.PENDING_REVIEW.value:
         if not request.approver:
-            raise HTTPException(status_code=400, detail="Activating from pending_review requires approver")
+            raise HTTPException(
+                status_code=400,
+                detail="Activating from pending_review requires approver",
+            )
         rule_history = audit_logger.get_rule_history(rule_id)
-        submitter = next((r.actor for r in reversed(rule_history) if r.action == "state_change" and r.after_state and r.after_state.get("status") == RuleStatus.PENDING_REVIEW.value), None)
+        submitter = next(
+            (
+                r.actor
+                for r in reversed(rule_history)
+                if r.action == "state_change"
+                and r.after_state
+                and r.after_state.get("status") == RuleStatus.PENDING_REVIEW.value
+            ),
+            None,
+        )
         if submitter and submitter == request.approver:
-            raise HTTPException(status_code=400, detail=f"Self-approval not allowed. Actor '{request.approver}' cannot approve their own submission.")
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Self-approval not allowed. Actor '{request.approver}' "
+                    "cannot approve their own submission."
+                ),
+            )
         try:
-            rule = state_machine.transition(rule=rule, new_status=RuleStatus.APPROVED.value, actor=request.actor, reason=request.reason or "Approved for activation", approver=request.approver, previous_actor=submitter)
+            rule = state_machine.transition(
+                rule=rule,
+                new_status=RuleStatus.APPROVED.value,
+                actor=request.actor,
+                reason=request.reason or "Approved for activation",
+                approver=request.approver,
+                previous_actor=submitter,
+            )
             if rule_id in store._rules:
                 rule_dict = asdict(rule)
                 rule_dict["status"] = RuleStatus.APPROVED.value
@@ -1300,14 +1466,36 @@ async def activate_rule(
             raise HTTPException(status_code=400, detail=str(e)) from e
 
     try:
-        updated_rule = state_machine.transition(rule=rule, new_status=RuleStatus.ACTIVE.value, actor=request.actor, reason=request.reason, approver=request.approver)
+        updated_rule = state_machine.transition(
+            rule=rule,
+            new_status=RuleStatus.ACTIVE.value,
+            actor=request.actor,
+            reason=request.reason,
+            approver=request.approver,
+        )
         if rule_id in store._rules:
             rule_dict = asdict(updated_rule)
             rule_dict["status"] = RuleStatus.ACTIVE.value
             store._rules[rule_id] = Rule(**rule_dict)
             store._save_rules()
-        get_version_store().save(rule=updated_rule, created_by=request.actor, reason=request.reason)
-        return ActivateRuleResponse(rule=DraftRuleResponse(rule_id=updated_rule.id, field=updated_rule.field, op=updated_rule.op, value=updated_rule.value, action=updated_rule.action, score=updated_rule.score, severity=updated_rule.severity, reason=updated_rule.reason, status=updated_rule.status, created_at=None), activated_at=datetime.now(timezone.utc).isoformat())
+        get_version_store().save(
+            rule=updated_rule, created_by=request.actor, reason=request.reason
+        )
+        return ActivateRuleResponse(
+            rule=DraftRuleResponse(
+                rule_id=updated_rule.id,
+                field=updated_rule.field,
+                op=updated_rule.op,
+                value=updated_rule.value,
+                action=updated_rule.action,
+                score=updated_rule.score,
+                severity=updated_rule.severity,
+                reason=updated_rule.reason,
+                status=updated_rule.status,
+                created_at=None,
+            ),
+            activated_at=datetime.now(timezone.utc).isoformat(),
+        )
     except TransitionError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -1322,6 +1510,7 @@ async def disable_rule(
 ) -> DisableRuleResponse:
     """Disable a rule."""
     from dataclasses import asdict
+
     store = get_draft_store()
     state_machine = create_state_machine()
 
@@ -1334,17 +1523,43 @@ async def disable_rule(
         raise HTTPException(status_code=404, detail=f"Rule not found: {rule_id}")
 
     if rule.status not in [RuleStatus.ACTIVE.value, RuleStatus.SHADOW.value]:
-        raise HTTPException(status_code=400, detail=f"Cannot disable rule {rule_id} from status {rule.status}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot disable rule {rule_id} from status {rule.status}",
+        )
 
     try:
-        updated_rule = state_machine.transition(rule=rule, new_status=RuleStatus.DISABLED.value, actor=request.actor, reason=request.reason or f"Disabled by {request.actor}")
+        updated_rule = state_machine.transition(
+            rule=rule,
+            new_status=RuleStatus.DISABLED.value,
+            actor=request.actor,
+            reason=request.reason or f"Disabled by {request.actor}",
+        )
         if rule_id in store._rules:
             rule_dict = asdict(updated_rule)
             rule_dict["status"] = RuleStatus.DISABLED.value
             store._rules[rule_id] = Rule(**rule_dict)
             store._save_rules()
-        get_version_store().save(rule=updated_rule, created_by=request.actor, reason=request.reason or "Disabled")
-        return DisableRuleResponse(rule=DraftRuleResponse(rule_id=updated_rule.id, field=updated_rule.field, op=updated_rule.op, value=updated_rule.value, action=updated_rule.action, score=updated_rule.score, severity=updated_rule.severity, reason=updated_rule.reason, status=updated_rule.status, created_at=None), disabled_at=datetime.now(timezone.utc).isoformat())
+        get_version_store().save(
+            rule=updated_rule,
+            created_by=request.actor,
+            reason=request.reason or "Disabled",
+        )
+        return DisableRuleResponse(
+            rule=DraftRuleResponse(
+                rule_id=updated_rule.id,
+                field=updated_rule.field,
+                op=updated_rule.op,
+                value=updated_rule.value,
+                action=updated_rule.action,
+                score=updated_rule.score,
+                severity=updated_rule.severity,
+                reason=updated_rule.reason,
+                status=updated_rule.status,
+                created_at=None,
+            ),
+            disabled_at=datetime.now(timezone.utc).isoformat(),
+        )
     except TransitionError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -1357,6 +1572,7 @@ async def disable_rule(
 async def shadow_rule(rule_id: str, request: ShadowRuleRequest) -> ShadowRuleResponse:
     """Move a rule to shadow mode."""
     from dataclasses import asdict
+
     store = get_draft_store()
     state_machine = create_state_machine()
 
@@ -1369,17 +1585,43 @@ async def shadow_rule(rule_id: str, request: ShadowRuleRequest) -> ShadowRuleRes
         raise HTTPException(status_code=404, detail=f"Rule not found: {rule_id}")
 
     if rule.status != RuleStatus.ACTIVE.value:
-        raise HTTPException(status_code=400, detail=f"Cannot shadow rule {rule_id} from status {rule.status}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot shadow rule {rule_id} from status {rule.status}",
+        )
 
     try:
-        updated_rule = state_machine.transition(rule=rule, new_status=RuleStatus.SHADOW.value, actor=request.actor, reason=request.reason or f"Moved to shadow by {request.actor}")
+        updated_rule = state_machine.transition(
+            rule=rule,
+            new_status=RuleStatus.SHADOW.value,
+            actor=request.actor,
+            reason=request.reason or f"Moved to shadow by {request.actor}",
+        )
         if rule_id in store._rules:
             rule_dict = asdict(updated_rule)
             rule_dict["status"] = RuleStatus.SHADOW.value
             store._rules[rule_id] = Rule(**rule_dict)
             store._save_rules()
-        get_version_store().save(rule=updated_rule, created_by=request.actor, reason=request.reason or "Shadowed")
-        return ShadowRuleResponse(rule=DraftRuleResponse(rule_id=updated_rule.id, field=updated_rule.field, op=updated_rule.op, value=updated_rule.value, action=updated_rule.action, score=updated_rule.score, severity=updated_rule.severity, reason=updated_rule.reason, status=updated_rule.status, created_at=None), shadowed_at=datetime.now(timezone.utc).isoformat())
+        get_version_store().save(
+            rule=updated_rule,
+            created_by=request.actor,
+            reason=request.reason or "Shadowed",
+        )
+        return ShadowRuleResponse(
+            rule=DraftRuleResponse(
+                rule_id=updated_rule.id,
+                field=updated_rule.field,
+                op=updated_rule.op,
+                value=updated_rule.value,
+                action=updated_rule.action,
+                score=updated_rule.score,
+                severity=updated_rule.severity,
+                reason=updated_rule.reason,
+                status=updated_rule.status,
+                created_at=None,
+            ),
+            shadowed_at=datetime.now(timezone.utc).isoformat(),
+        )
     except TransitionError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -1397,14 +1639,25 @@ async def list_rule_versions(rule_id: str) -> RuleVersionListResponse:
             RuleVersionResponse(
                 rule_id=v.rule_id,
                 version_id=v.version_id,
-                rule=DraftRuleResponse(rule_id=v.rule.id, field=v.rule.field, op=v.rule.op, value=v.rule.value, action=v.rule.action, score=v.rule.score, severity=v.rule.severity, reason=v.rule.reason, status=v.rule.status, created_at=None),
+                rule=DraftRuleResponse(
+                    rule_id=v.rule.id,
+                    field=v.rule.field,
+                    op=v.rule.op,
+                    value=v.rule.value,
+                    action=v.rule.action,
+                    score=v.rule.score,
+                    severity=v.rule.severity,
+                    reason=v.rule.reason,
+                    status=v.rule.status,
+                    created_at=None,
+                ),
                 timestamp=v.timestamp.isoformat(),
                 created_by=v.created_by,
                 reason=v.reason,
             )
             for v in versions
         ],
-        total=len(versions)
+        total=len(versions),
     )
 
 
@@ -1418,7 +1671,25 @@ async def get_rule_version(rule_id: str, version_id: str) -> RuleVersionResponse
     version = get_version_store().get_version(rule_id, version_id)
     if version is None:
         raise HTTPException(status_code=404, detail="Version not found")
-    return RuleVersionResponse(rule_id=version.rule_id, version_id=version.version_id, rule=DraftRuleResponse(rule_id=version.rule.id, field=version.rule.field, op=version.rule.op, value=version.rule.value, action=version.rule.action, score=version.rule.score, severity=version.rule.severity, reason=version.rule.reason, status=version.rule.status, created_at=None), timestamp=version.timestamp.isoformat(), created_by=version.created_by, reason=version.reason)
+    return RuleVersionResponse(
+        rule_id=version.rule_id,
+        version_id=version.version_id,
+        rule=DraftRuleResponse(
+            rule_id=version.rule.id,
+            field=version.rule.field,
+            op=version.rule.op,
+            value=version.rule.value,
+            action=version.rule.action,
+            score=version.rule.score,
+            severity=version.rule.severity,
+            reason=version.rule.reason,
+            status=version.rule.status,
+            created_at=None,
+        ),
+        timestamp=version.timestamp.isoformat(),
+        created_by=version.created_by,
+        reason=version.reason,
+    )
 
 
 @router.get(
@@ -1433,26 +1704,71 @@ async def get_rule_diff(
 ) -> RuleDiffResponse:
     """Compare two versions of a rule."""
     from rules_management.versioning import diff_rule_versions, get_version_store
+
     version_store = get_version_store()
     versions = version_store.list_versions(rule_id)
     if not versions:
-        raise HTTPException(status_code=404, detail=f"Rule not found or has no versions: {rule_id}")
+        raise HTTPException(
+            status_code=404, detail=f"Rule not found or has no versions: {rule_id}"
+        )
     ver_a = version_store.get_version(rule_id, version_a) if version_a else versions[-1]
     if not ver_a:
-        raise HTTPException(status_code=404, detail=f"Version not found: {version_a} for rule {rule_id}")
+        raise HTTPException(
+            status_code=404, detail=f"Version not found: {version_a} for rule {rule_id}"
+        )
     if version_b is None:
-        idx = next((i for i, v in enumerate(versions) if v.version_id == ver_a.version_id), None)
+        idx = next(
+            (i for i, v in enumerate(versions) if v.version_id == ver_a.version_id),
+            None,
+        )
         if idx is None or idx == 0:
-            raise HTTPException(status_code=400, detail=f"Version {ver_a.version_id} has no predecessor. Specify version_b explicitly.")
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Version {ver_a.version_id} has no predecessor. "
+                    "Specify version_b explicitly."
+                ),
+            )
         ver_b = versions[idx - 1]
     else:
         ver_b = version_store.get_version(rule_id, version_b)
         if not ver_b:
-            raise HTTPException(status_code=404, detail=f"Version not found: {version_b} for rule {rule_id}")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Version not found: {version_b} for rule {rule_id}",
+            )
     if ver_a.version_id == ver_b.version_id:
-        raise HTTPException(status_code=400, detail="Cannot compare a version to itself. Provide two different versions.")
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Cannot compare a version to itself. "
+                "Provide two different versions."
+            ),
+        )
     diff_result = diff_rule_versions(ver_a, ver_b)
-    return RuleDiffResponse(version_a_id=diff_result.version_a_id, version_b_id=diff_result.version_b_id, rule_id=diff_result.rule_id, changes=[RuleFieldChangeResponse(field_name=c.field_name, change_type=c.change_type, old_value=c.old_value, new_value=c.new_value) for c in diff_result.changes], is_breaking=diff_result.is_breaking, version_a_timestamp=diff_result.version_a_timestamp.isoformat() if diff_result.version_a_timestamp else "", version_b_timestamp=diff_result.version_b_timestamp.isoformat() if diff_result.version_b_timestamp else "", version_a_created_by=diff_result.version_a_created_by, version_b_created_by=diff_result.version_b_created_by)
+    return RuleDiffResponse(
+        version_a_id=diff_result.version_a_id,
+        version_b_id=diff_result.version_b_id,
+        rule_id=diff_result.rule_id,
+        changes=[
+            RuleFieldChangeResponse(
+                field_name=c.field_name,
+                change_type=c.change_type,
+                old_value=c.old_value,
+                new_value=c.new_value,
+            )
+            for c in diff_result.changes
+        ],
+        is_breaking=diff_result.is_breaking,
+        version_a_timestamp=diff_result.version_a_timestamp.isoformat()
+        if diff_result.version_a_timestamp
+        else "",
+        version_b_timestamp=diff_result.version_b_timestamp.isoformat()
+        if diff_result.version_b_timestamp
+        else "",
+        version_a_created_by=diff_result.version_a_created_by,
+        version_b_created_by=diff_result.version_b_created_by,
+    )
 
 
 @router.post(
@@ -1467,11 +1783,34 @@ async def rollback_rule_version(
     version_store = get_version_store()
     version = version_store.get_version(rule_id, version_id)
     if version is None:
-        raise HTTPException(status_code=404, detail=f"Version {version_id} not found for rule {rule_id}")
+        raise HTTPException(
+            status_code=404, detail=f"Version {version_id} not found for rule {rule_id}"
+        )
     try:
-        new_version = version_store.rollback(rule_id=rule_id, version_id=version_id, rolled_back_by=request.actor, reason=request.reason)
+        new_version = version_store.rollback(
+            rule_id=rule_id,
+            version_id=version_id,
+            rolled_back_by=request.actor,
+            reason=request.reason,
+        )
         get_draft_store().save(new_version.rule)
-        return RollbackRuleResponse(rule=DraftRuleResponse(rule_id=new_version.rule.id, field=new_version.rule.field, op=new_version.rule.op, value=new_version.rule.value, action=new_version.rule.action, score=new_version.rule.score, severity=new_version.rule.severity, reason=new_version.rule.reason, status=new_version.rule.status, created_at=None), version_id=new_version.version_id, rolled_back_to=version_id, rolled_back_at=datetime.now(timezone.utc).isoformat())
+        return RollbackRuleResponse(
+            rule=DraftRuleResponse(
+                rule_id=new_version.rule.id,
+                field=new_version.rule.field,
+                op=new_version.rule.op,
+                value=new_version.rule.value,
+                action=new_version.rule.action,
+                score=new_version.rule.score,
+                severity=new_version.rule.severity,
+                reason=new_version.rule.reason,
+                status=new_version.rule.status,
+                created_at=None,
+            ),
+            version_id=new_version.version_id,
+            rolled_back_to=version_id,
+            rolled_back_at=datetime.now(timezone.utc).isoformat(),
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -1492,8 +1831,28 @@ async def query_audit_logs(
     audit_logger = get_audit_logger()
     start_dt = datetime.fromisoformat(start_date) if start_date else None
     end_dt = datetime.fromisoformat(end_date) if end_date else None
-    records = audit_logger.query(rule_id=rule_id, actor=actor, action=action, start_date=start_dt, end_date=end_dt)
-    return AuditLogQueryResponse(records=[AuditRecordResponse(rule_id=r.rule_id, action=r.action, actor=r.actor, timestamp=r.timestamp.isoformat(), before_state=r.before_state, after_state=r.after_state, reason=r.reason) for r in records], total=len(records))
+    records = audit_logger.query(
+        rule_id=rule_id,
+        actor=actor,
+        action=action,
+        start_date=start_dt,
+        end_date=end_dt,
+    )
+    return AuditLogQueryResponse(
+        records=[
+            AuditRecordResponse(
+                rule_id=r.rule_id,
+                action=r.action,
+                actor=r.actor,
+                timestamp=r.timestamp.isoformat(),
+                before_state=r.before_state,
+                after_state=r.after_state,
+                reason=r.reason,
+            )
+            for r in records
+        ],
+        total=len(records),
+    )
 
 
 @router.get(
@@ -1504,7 +1863,21 @@ async def query_audit_logs(
 async def get_rule_audit_history(rule_id: str) -> AuditLogQueryResponse:
     """Get audit history for a rule."""
     records = get_audit_logger().get_rule_history(rule_id)
-    return AuditLogQueryResponse(records=[AuditRecordResponse(rule_id=r.rule_id, action=r.action, actor=r.actor, timestamp=r.timestamp.isoformat(), before_state=r.before_state, after_state=r.after_state, reason=r.reason) for r in records], total=len(records))
+    return AuditLogQueryResponse(
+        records=[
+            AuditRecordResponse(
+                rule_id=r.rule_id,
+                action=r.action,
+                actor=r.actor,
+                timestamp=r.timestamp.isoformat(),
+                before_state=r.before_state,
+                after_state=r.after_state,
+                reason=r.reason,
+            )
+            for r in records
+        ],
+        total=len(records),
+    )
 
 
 @router.get(
@@ -1522,22 +1895,68 @@ async def export_audit_logs(
     """Export audit logs."""
     import csv
     import io
+
     from fastapi.responses import Response
+
     if format not in ["json", "csv"]:
         raise HTTPException(status_code=400, detail=f"Invalid format: {format}")
     audit_logger = get_audit_logger()
     start_dt = datetime.fromisoformat(start_date) if start_date else None
     end_dt = datetime.fromisoformat(end_date) if end_date else None
-    records = audit_logger.query(rule_id=rule_id, actor=actor, action=action, start_date=start_dt, end_date=end_dt)
+    records = audit_logger.query(
+        rule_id=rule_id,
+        actor=actor,
+        action=action,
+        start_date=start_dt,
+        end_date=end_dt,
+    )
     if format == "json":
         import json
-        return Response(content=json.dumps([{"rule_id": r.rule_id, "action": r.action, "actor": r.actor, "timestamp": r.timestamp.isoformat(), "before_state": r.before_state, "after_state": r.after_state, "reason": r.reason} for r in records], indent=2), media_type="application/json")
+
+        return Response(
+            content=json.dumps(
+                [
+                    {
+                        "rule_id": r.rule_id,
+                        "action": r.action,
+                        "actor": r.actor,
+                        "timestamp": r.timestamp.isoformat(),
+                        "before_state": r.before_state,
+                        "after_state": r.after_state,
+                        "reason": r.reason,
+                    }
+                    for r in records
+                ],
+                indent=2,
+            ),
+            media_type="application/json",
+        )
     else:
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(["rule_id", "action", "actor", "timestamp", "before_state", "after_state", "reason"])
+        writer.writerow(
+            [
+                "rule_id",
+                "action",
+                "actor",
+                "timestamp",
+                "before_state",
+                "after_state",
+                "reason",
+            ]
+        )
         for r in records:
-            writer.writerow([r.rule_id, r.action, r.actor, r.timestamp.isoformat(), str(r.before_state), str(r.after_state), r.reason])
+            writer.writerow(
+                [
+                    r.rule_id,
+                    r.action,
+                    r.actor,
+                    r.timestamp.isoformat(),
+                    str(r.before_state),
+                    str(r.after_state),
+                    r.reason,
+                ]
+            )
         return Response(content=output.getvalue(), media_type="text/csv")
 
 
@@ -1545,6 +1964,7 @@ def _resolve_ruleset_for_backtest(version_id: str | None, rule_id: str | None = 
     """Resolve ruleset from version identifier."""
     from rules_management.rules import RuleSet
     from rules_management.versioning import get_version_store
+
     if not version_id or version_id.lower() == "production":
         store = get_draft_store()
         active_rules = store.list_rules(status=RuleStatus.ACTIVE.value)
@@ -1554,12 +1974,16 @@ def _resolve_ruleset_for_backtest(version_id: str | None, rule_id: str | None = 
     version_store = get_version_store()
     if rule_id:
         version = version_store.get_version(rule_id, version_id)
-        if version: return RuleSet(version=version_id, rules=[version.rule])
+        if version:
+            return RuleSet(version=version_id, rules=[version.rule])
     try:
         ts = datetime.fromisoformat(version_id.replace("Z", "+00:00"))
         return version_store.get_ruleset_at(ts, rule_ids=[rule_id] if rule_id else None)
-    except ValueError: pass
-    raise HTTPException(status_code=404, detail=f"Could not resolve version: {version_id}")
+    except ValueError:
+        pass
+    raise HTTPException(
+        status_code=404, detail=f"Could not resolve version: {version_id}"
+    )
 
 
 @router.post("/backtest/run", response_model=BacktestResultResponse, tags=["Backtest"])
@@ -1569,116 +1993,320 @@ async def run_backtest_endpoint(request: BacktestRunRequest) -> BacktestResultRe
     end_dt = datetime.fromisoformat(request.end_date.replace("Z", "+00:00"))
     ruleset = _resolve_ruleset_for_backtest(request.ruleset_version, request.rule_id)
     runner = BacktestRunner()
-    result = runner.run_backtest(ruleset=ruleset, start_date=start_dt, end_date=end_dt, rule_id=request.rule_id)
+    result = runner.run_backtest(
+        ruleset=ruleset, start_date=start_dt, end_date=end_dt, rule_id=request.rule_id
+    )
     BacktestStore().save(result)
-    return BacktestResultResponse(job_id=result.job_id, rule_id=result.rule_id, ruleset_version=result.ruleset_version, start_date=result.start_date.isoformat(), end_date=result.end_date.isoformat(), metrics=BacktestMetricsResponse(**result.metrics.__dict__), completed_at=result.completed_at.isoformat(), error=result.error)
+    return BacktestResultResponse(
+        job_id=result.job_id,
+        rule_id=result.rule_id,
+        ruleset_version=result.ruleset_version,
+        start_date=result.start_date.isoformat(),
+        end_date=result.end_date.isoformat(),
+        metrics=BacktestMetricsResponse(**result.metrics.__dict__),
+        completed_at=result.completed_at.isoformat(),
+        error=result.error,
+    )
 
 
-@router.post("/backtest/compare", response_model=BacktestComparisonResult, tags=["Backtest"])
-async def compare_backtests_endpoint(request: CompareRulesetsRequest) -> BacktestComparisonResult:
+@router.post(
+    "/backtest/compare", response_model=BacktestComparisonResult, tags=["Backtest"]
+)
+async def compare_backtests_endpoint(
+    request: CompareRulesetsRequest,
+) -> BacktestComparisonResult:
     """Compare two backtests."""
     start_dt = datetime.fromisoformat(request.start_date.replace("Z", "+00:00"))
     end_dt = datetime.fromisoformat(request.end_date.replace("Z", "+00:00"))
     base_ruleset = _resolve_ruleset_for_backtest(request.base_version, request.rule_id)
-    cand_ruleset = _resolve_ruleset_for_backtest(request.candidate_version, request.rule_id)
+    cand_ruleset = _resolve_ruleset_for_backtest(
+        request.candidate_version, request.rule_id
+    )
     runner = BacktestRunner()
-    base_res = runner.run_backtest(ruleset=base_ruleset, start_date=start_dt, end_date=end_dt, rule_id=request.rule_id)
-    cand_res = runner.run_backtest(ruleset=cand_ruleset, start_date=start_dt, end_date=end_dt, rule_id=request.rule_id)
+    base_res = runner.run_backtest(
+        ruleset=base_ruleset,
+        start_date=start_dt,
+        end_date=end_dt,
+        rule_id=request.rule_id,
+    )
+    cand_res = runner.run_backtest(
+        ruleset=cand_ruleset,
+        start_date=start_dt,
+        end_date=end_dt,
+        rule_id=request.rule_id,
+    )
     delta = BacktestComparator().compute_delta(base_res.metrics, cand_res.metrics)
-    def _to_resp(res): return BacktestResultResponse(job_id=res.job_id, rule_id=res.rule_id, ruleset_version=res.ruleset_version, start_date=res.start_date.isoformat(), end_date=res.end_date.isoformat(), metrics=BacktestMetricsResponse(**res.metrics.__dict__), completed_at=res.completed_at.isoformat(), error=res.error)
-    return BacktestComparisonResult(base_result=_to_resp(base_res), candidate_result=_to_resp(cand_res), delta=delta)
+
+    def _to_resp(res):
+        return BacktestResultResponse(
+            job_id=res.job_id,
+            rule_id=res.rule_id,
+            ruleset_version=res.ruleset_version,
+            start_date=res.start_date.isoformat(),
+            end_date=res.end_date.isoformat(),
+            metrics=BacktestMetricsResponse(**res.metrics.__dict__),
+            completed_at=res.completed_at.isoformat(),
+            error=res.error,
+        )
+
+    return BacktestComparisonResult(
+        base_result=_to_resp(base_res), candidate_result=_to_resp(cand_res), delta=delta
+    )
 
 
-@router.get("/analytics/rules/{rule_id}", response_model=RuleAnalyticsResponse, tags=["Analytics"])
-async def get_rule_analytics(rule_id: str, days: int = Query(7, ge=1, le=90)) -> RuleAnalyticsResponse:
+@router.get(
+    "/analytics/rules/{rule_id}",
+    response_model=RuleAnalyticsResponse,
+    tags=["Analytics"],
+)
+async def get_rule_analytics(
+    rule_id: str, days: int = Query(7, ge=1, le=90)
+) -> RuleAnalyticsResponse:
     """Get rule analytics."""
-    metrics = get_metrics_collector().get_rule_metrics(rule_id, datetime.now(timezone.utc) - timedelta(days=days), datetime.now(timezone.utc))
+    metrics = get_metrics_collector().get_rule_metrics(
+        rule_id,
+        datetime.now(timezone.utc) - timedelta(days=days),
+        datetime.now(timezone.utc),
+    )
     store = get_draft_store()
-    rule = store.get(rule_id) or next((r for r in store.list_rules(status=RuleStatus.ACTIVE.value) if r.id == rule_id), None)
-    if not rule: raise HTTPException(status_code=404, detail="Rule not found")
+    rule = store.get(rule_id) or next(
+        (
+            r
+            for r in store.list_rules(status=RuleStatus.ACTIVE.value)
+            if r.id == rule_id
+        ),
+        None,
+    )
+    if not rule:
+        raise HTTPException(status_code=404, detail="Rule not found")
     health = RuleHealthEvaluator().evaluate(rule, metrics, 1000)
-    return RuleAnalyticsResponse(rule_id=rule_id, health=RuleHealthResponse(rule_id=rule_id, status=health.status.value, reason=health.reason, metrics=metrics.to_dict()), statistics={"mean_score_delta": metrics.mean_score_delta, "mean_latency_ms": metrics.mean_execution_time_ms, "total_matches": metrics.production_matches + metrics.shadow_matches}, history_summary=[])
+    return RuleAnalyticsResponse(
+        rule_id=rule_id,
+        health=RuleHealthResponse(
+            rule_id=rule_id,
+            status=health.status.value,
+            reason=health.reason,
+            metrics=metrics.to_dict(),
+        ),
+        statistics={
+            "mean_score_delta": metrics.mean_score_delta,
+            "mean_latency_ms": metrics.mean_execution_time_ms,
+            "total_matches": metrics.production_matches + metrics.shadow_matches,
+        },
+        history_summary=[],
+    )
 
 
-@router.get("/rules/{rule_id}/readiness", response_model=ReadinessReportResponse, tags=["Rules"])
+@router.get(
+    "/rules/{rule_id}/readiness", response_model=ReadinessReportResponse, tags=["Rules"]
+)
 async def check_rule_readiness(rule_id: str) -> ReadinessReportResponse:
     """Check rule readiness."""
     store = get_draft_store()
-    rule = store.get(rule_id) or next((r for r in store.list_rules(status=RuleStatus.ACTIVE.value) if r.id == rule_id), None)
-    if not rule: raise HTTPException(status_code=404, detail="Rule not found")
-    metrics = get_metrics_collector().get_rule_metrics(rule_id, datetime.now(timezone.utc) - timedelta(days=7), datetime.now(timezone.utc))
-    report = ReadinessEvaluator(audit_logger=get_audit_logger()).evaluate(rule, metrics, 1000)
-    return ReadinessReportResponse(rule_id=report.rule_id, timestamp=report.timestamp.isoformat(), overall_status=report.overall_status.value, checks=[{"policy_type": c.policy_type.value, "name": c.name, "status": c.status.value, "message": c.message, "details": c.details} for c in report.checks])
+    rule = store.get(rule_id) or next(
+        (
+            r
+            for r in store.list_rules(status=RuleStatus.ACTIVE.value)
+            if r.id == rule_id
+        ),
+        None,
+    )
+    if not rule:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    metrics = get_metrics_collector().get_rule_metrics(
+        rule_id,
+        datetime.now(timezone.utc) - timedelta(days=7),
+        datetime.now(timezone.utc),
+    )
+    report = ReadinessEvaluator(audit_logger=get_audit_logger()).evaluate(
+        rule, metrics, 1000
+    )
+    return ReadinessReportResponse(
+        rule_id=report.rule_id,
+        timestamp=report.timestamp.isoformat(),
+        overall_status=report.overall_status.value,
+        checks=[
+            {
+                "policy_type": c.policy_type.value,
+                "name": c.name,
+                "status": c.status.value,
+                "message": c.message,
+                "details": c.details,
+            }
+            for c in report.checks
+        ],
+    )
 
 
-@router.get("/analytics/attribution", response_model=RuleAttributionResponse, tags=["Analytics"])
-async def get_rule_attribution(rule_id: str, days: int = Query(7, ge=1, le=90)) -> RuleAttributionResponse:
+@router.get(
+    "/analytics/attribution", response_model=RuleAttributionResponse, tags=["Analytics"]
+)
+async def get_rule_attribution(
+    rule_id: str, days: int = Query(7, ge=1, le=90)
+) -> RuleAttributionResponse:
     """Get attribution metrics."""
-    attribution = AttributionService().get_rule_attribution(rule_id, datetime.now(timezone.utc) - timedelta(days=days), datetime.now(timezone.utc))
-    if not attribution: raise HTTPException(status_code=404, detail="No attribution data found")
-    return RuleAttributionResponse(rule_id=attribution.rule_id, total_matches=attribution.total_matches, mean_model_score=attribution.mean_model_score, mean_final_score=attribution.mean_final_score, mean_impact=attribution.mean_impact, net_impact=attribution.net_impact)
+    attribution = AttributionService().get_rule_attribution(
+        rule_id,
+        datetime.now(timezone.utc) - timedelta(days=days),
+        datetime.now(timezone.utc),
+    )
+    if not attribution:
+        raise HTTPException(status_code=404, detail="No attribution data found")
+    return RuleAttributionResponse(
+        rule_id=attribution.rule_id,
+        total_matches=attribution.total_matches,
+        mean_model_score=attribution.mean_model_score,
+        mean_final_score=attribution.mean_final_score,
+        mean_impact=attribution.mean_impact,
+        net_impact=attribution.net_impact,
+    )
 
 
-@router.get("/analytics/relationships", response_model=DatasetRelationshipsResponse, tags=["Analytics"])
-async def get_dataset_relationships(sample_size: int = Query(default=500, ge=10, le=2000), target_column: str = Query(default="is_fraudulent")) -> DatasetRelationshipsResponse:
+@router.get(
+    "/analytics/relationships",
+    response_model=DatasetRelationshipsResponse,
+    tags=["Analytics"],
+)
+async def get_dataset_relationships(
+    sample_size: int = Query(default=500, ge=10, le=2000),
+    target_column: str = Query(default="is_fraudulent"),
+) -> DatasetRelationshipsResponse:
     """Compute feature relationships."""
     import numpy as np
     import pandas as pd
     from scipy import stats
+
     try:
-        resp = get_crud_client().get_feature_sample(sample_size=sample_size, stratify=True)
-        samples = MessageToDict(resp, preserving_proto_field_name=True, always_print_fields_with_no_presence=True, use_integers_for_enums=True).get("samples", [])
-        if not samples: return DatasetRelationshipsResponse(relationships=[], target_column=target_column)
+        resp = get_crud_client().get_feature_sample(
+            sample_size=sample_size, stratify=True
+        )
+        samples = MessageToDict(
+            resp,
+            preserving_proto_field_name=True,
+            always_print_fields_with_no_presence=True,
+            use_integers_for_enums=True,
+        ).get("samples", [])
+        if not samples:
+            return DatasetRelationshipsResponse(
+                relationships=[], target_column=target_column
+            )
         df = pd.DataFrame(samples)
-        features = [c for c in df.columns if c not in ["record_id", "user_id", "snapshot_id", target_column]]
+        features = [
+            c
+            for c in df.columns
+            if c not in ["record_id", "user_id", "snapshot_id", target_column]
+        ]
         relationships = []
         if target_column in df.columns:
             for col in features:
-                if pd.api.types.is_numeric_dtype(df[col]) and pd.api.types.is_numeric_dtype(df[target_column]):
-                    corr, _ = stats.pearsonr(df[col].fillna(0), df[target_column].fillna(0))
-                    relationships.append(RelationshipMetric(feature_a=col, feature_b=target_column, metric_type="pearson", value=float(corr) if not np.isnan(corr) else 0.0))
+                if pd.api.types.is_numeric_dtype(
+                    df[col]
+                ) and pd.api.types.is_numeric_dtype(df[target_column]):
+                    corr, _ = stats.pearsonr(
+                        df[col].fillna(0), df[target_column].fillna(0)
+                    )
+                    relationships.append(
+                        RelationshipMetric(
+                            feature_a=col,
+                            feature_b=target_column,
+                            metric_type="pearson",
+                            value=float(corr) if not np.isnan(corr) else 0.0,
+                        )
+                    )
         relationships.sort(key=lambda x: abs(x.value), reverse=True)
-        return DatasetRelationshipsResponse(relationships=relationships[:20], target_column=target_column)
-    except Exception as e: raise analytics_http_exception(e)
+        return DatasetRelationshipsResponse(
+            relationships=relationships[:20], target_column=target_column
+        )
+    except Exception as e:
+        raise analytics_http_exception(e)
 
 
-@router.get("/analytics/correlations", response_model=DatasetCorrelationsResponse, tags=["Analytics"])
-async def get_dataset_correlations(sample_size: int = Query(default=1000, ge=100, le=5000)) -> DatasetCorrelationsResponse:
+@router.get(
+    "/analytics/correlations",
+    response_model=DatasetCorrelationsResponse,
+    tags=["Analytics"],
+)
+async def get_dataset_correlations(
+    sample_size: int = Query(default=1000, ge=100, le=5000),
+) -> DatasetCorrelationsResponse:
     """Compute dataset correlations."""
     import numpy as np
     import pandas as pd
     from scipy import stats
+
     try:
-        resp = get_crud_client().get_feature_sample(sample_size=sample_size, stratify=True)
-        samples = MessageToDict(resp, preserving_proto_field_name=True, always_print_fields_with_no_presence=True, use_integers_for_enums=True).get("samples", [])
-        if not samples: return DatasetCorrelationsResponse(pearson=[], spearman=[], cramers_v=[], numeric_columns=[], categorical_columns=[])
+        resp = get_crud_client().get_feature_sample(
+            sample_size=sample_size, stratify=True
+        )
+        samples = MessageToDict(
+            resp,
+            preserving_proto_field_name=True,
+            always_print_fields_with_no_presence=True,
+            use_integers_for_enums=True,
+        ).get("samples", [])
+        if not samples:
+            return DatasetCorrelationsResponse(
+                pearson=[],
+                spearman=[],
+                cramers_v=[],
+                numeric_columns=[],
+                categorical_columns=[],
+            )
         df = pd.DataFrame(samples)
         exclude = ["record_id", "user_id", "snapshot_id"]
-        num_cols = [c for c in df.columns if c not in exclude and pd.api.types.is_numeric_dtype(df[c])]
-        cat_cols = [c for c in df.columns if c not in exclude and not pd.api.types.is_numeric_dtype(df[c])]
+        num_cols = [
+            c
+            for c in df.columns
+            if c not in exclude and pd.api.types.is_numeric_dtype(df[c])
+        ]
+        cat_cols = [
+            c
+            for c in df.columns
+            if c not in exclude and not pd.api.types.is_numeric_dtype(df[c])
+        ]
         pearson = []
         if len(num_cols) >= 2:
             corr = df[num_cols].corr(method="pearson")
             for i in range(len(num_cols)):
                 for j in range(len(num_cols)):
                     val = corr.iloc[i, j]
-                    if not np.isnan(val): pearson.append(CorrelationPair(feature_a=num_cols[i], feature_b=num_cols[j], value=float(val)))
+                    if not np.isnan(val):
+                        pearson.append(
+                            CorrelationPair(
+                                feature_a=num_cols[i],
+                                feature_b=num_cols[j],
+                                value=float(val),
+                            )
+                        )
         cramers = []
         if len(cat_cols) >= 2:
             for ca in cat_cols:
                 for cb in cat_cols:
-                    if ca == cb: cramers.append(CorrelationPair(feature_a=ca, feature_b=cb, value=1.0)); continue
+                    if ca == cb:
+                        cramers.append(
+                            CorrelationPair(feature_a=ca, feature_b=cb, value=1.0)
+                        )
+                        continue
                     ct = pd.crosstab(df[ca], df[cb])
                     chi2 = stats.chi2_contingency(ct)[0]
                     n = ct.sum().sum()
                     if n > 1:
                         phi2 = chi2 / n
                         r, k = ct.shape
-                        phi2c = max(0, phi2 - ((k-1)*(r-1))/(n-1))
-                        rc = r - ((r-1)**2)/(n-1)
-                        kc = k - ((k-1)**2)/(n-1)
-                        denom = min((kc-1), (rc-1))
+                        phi2c = max(0, phi2 - ((k - 1) * (r - 1)) / (n - 1))
+                        rc = r - ((r - 1) ** 2) / (n - 1)
+                        kc = k - ((k - 1) ** 2) / (n - 1)
+                        denom = min((kc - 1), (rc - 1))
                         v = np.sqrt(phi2c / denom) if denom > 0 else 0.0
-                        cramers.append(CorrelationPair(feature_a=ca, feature_b=cb, value=float(v)))
-        return DatasetCorrelationsResponse(pearson=pearson, spearman=[], cramers_v=cramers, numeric_columns=num_cols, categorical_columns=cat_cols)
-    except Exception as e: raise analytics_http_exception(e)
+                        cramers.append(
+                            CorrelationPair(feature_a=ca, feature_b=cb, value=float(v))
+                        )
+        return DatasetCorrelationsResponse(
+            pearson=pearson,
+            spearman=[],
+            cramers_v=cramers,
+            numeric_columns=num_cols,
+            categorical_columns=cat_cols,
+        )
+    except Exception as e:
+        raise analytics_http_exception(e)

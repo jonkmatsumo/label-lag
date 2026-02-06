@@ -13,9 +13,10 @@ from typing import TYPE_CHECKING, Any
 from model.loader import DataLoader
 
 if TYPE_CHECKING:
-    from api.schemas import SplitConfig, TuningConfig
-    import mlflow
     import matplotlib.pyplot as plt
+    import mlflow
+
+    from api.schemas import SplitConfig, TuningConfig
 
 # Placeholders for lazy loading and patching
 mlflow: Any = None
@@ -29,6 +30,7 @@ def _get_mlflow():
     global mlflow
     if mlflow is None:
         import mlflow as _mlflow
+
         mlflow = _mlflow
     return mlflow
 
@@ -37,8 +39,10 @@ def _get_plt():
     global plt
     if plt is None:
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as _plt
+
         plt = _plt
     return plt
 
@@ -47,9 +51,11 @@ def _get_xgb():
     global xgb_pkg, XGBClassifier
     if xgb_pkg is None:
         import xgboost as _xgb
+
         xgb_pkg = _xgb
     if XGBClassifier is None:
         from xgboost import XGBClassifier as _XGBClassifier
+
         XGBClassifier = _XGBClassifier
     return xgb_pkg
 
@@ -58,6 +64,7 @@ def _get_run_tuning_study():
     global run_tuning_study
     if run_tuning_study is None:
         from model.tuning import run_tuning_study as _run_tuning_study
+
         run_tuning_study = _run_tuning_study
     return run_tuning_study
 
@@ -83,8 +90,9 @@ def _get_git_sha() -> str | None:
 def _save_confusion_matrix_plot(y_test, y_pred, path: str | Path) -> None:
     """Save confusion matrix as PNG heatmap."""
     from sklearn.metrics import confusion_matrix
+
     _plt = _get_plt()
-    
+
     cm = confusion_matrix(y_test, y_pred, labels=[0, 1])
     fig, ax = _plt.subplots(figsize=(6, 5))
     im = ax.imshow(cm, cmap="Blues")
@@ -168,6 +176,7 @@ def _generate_model_card(params: dict, metrics: dict, path: str | Path) -> None:
 
 def _compute_metrics(y_true, y_pred, y_proba):
     """Compute precision, recall, pr_auc, f1, roc_auc, log_loss, brier, tp/fp/tn/fn."""
+    import numpy as np
     from sklearn.metrics import (
         average_precision_score,
         brier_score_loss,
@@ -178,7 +187,7 @@ def _compute_metrics(y_true, y_pred, y_proba):
         recall_score,
         roc_auc_score,
     )
-    import numpy as np
+
     precision = precision_score(y_true, y_pred, zero_division=0)
     recall = recall_score(y_true, y_pred, zero_division=0)
     pr_auc = average_precision_score(y_true, y_proba)
@@ -237,12 +246,13 @@ def train_model(
     _run_tuning = _get_run_tuning_study()
     import numpy as np
     from mlflow.models import infer_signature
+
     from api.schemas import SplitStrategy
 
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
     _mlflow.set_tracking_uri(tracking_uri)
     _mlflow.set_experiment(EXPERIMENT_NAME)
-    
+
     training_cutoff_date = datetime.now(UTC) - timedelta(days=training_window_days)
 
     loader = DataLoader(database_url=database_url)
@@ -252,7 +262,9 @@ def train_model(
         split_config=split_config,
     )
 
-    actual_feature_columns = feature_columns if feature_columns is not None else loader.FEATURE_COLUMNS
+    actual_feature_columns = (
+        feature_columns if feature_columns is not None else loader.FEATURE_COLUMNS
+    )
 
     if split.train_size == 0:
         raise ValueError("No training data available. Generate data first.")
@@ -270,27 +282,40 @@ def train_model(
         scale_pos_weight = n_negative / n_positive
 
     import time
+
     training_start_time = time.time()
 
     with _mlflow.start_run() as run:
-        _mlflow.set_tags({
-            "git_sha": _get_git_sha() or "unknown",
-            "python_version": sys.version.split()[0],
-            "platform": platform.platform(),
-            "xgboost_version": xgb_pkg.__version__,
-        })
+        _mlflow.set_tags(
+            {
+                "git_sha": _get_git_sha() or "unknown",
+                "python_version": sys.version.split()[0],
+                "platform": platform.platform(),
+                "xgboost_version": xgb_pkg.__version__,
+            }
+        )
 
         if split.split_manifest is not None:
-            _mlflow.set_tags({
-                "split.strategy": split.split_manifest.get("strategy", "unknown"),
-                "split.train_size": str(split.split_manifest.get("train_size", 0)),
-                "split.test_size": str(split.split_manifest.get("test_size", 0)),
-                "split.train_fraud_rate": str(split.split_manifest.get("train_fraud_rate", 0.0)),
-                "split.test_fraud_rate": str(split.split_manifest.get("test_fraud_rate", 0.0)),
-            })
+            _mlflow.set_tags(
+                {
+                    "split.strategy": split.split_manifest.get("strategy", "unknown"),
+                    "split.train_size": str(split.split_manifest.get("train_size", 0)),
+                    "split.test_size": str(split.split_manifest.get("test_size", 0)),
+                    "split.train_fraud_rate": str(
+                        split.split_manifest.get("train_fraud_rate", 0.0)
+                    ),
+                    "split.test_fraud_rate": str(
+                        split.split_manifest.get("test_fraud_rate", 0.0)
+                    ),
+                }
+            )
 
         trials_df = None
-        if tuning_config is not None and tuning_config.enabled and split.train_size >= 30:
+        if (
+            tuning_config is not None
+            and tuning_config.enabled
+            and split.train_size >= 30
+        ):
             v_frac = split_config.validation_fraction if split_config else 0.2
             n = split.train_size
             val_size = max(5, int(n * v_frac))
@@ -301,7 +326,10 @@ def train_model(
                 x_val = split.X_train.iloc[train_size:]
                 y_val = split.y_train.iloc[train_size:]
                 best, trials_df = _run_tuning(
-                    x_tr, y_tr, x_val, y_val,
+                    x_tr,
+                    y_tr,
+                    x_val,
+                    y_val,
                     n_trials=tuning_config.n_trials,
                     metric=tuning_config.metric,
                     timeout_seconds=tuning_config.timeout_minutes * 60,
@@ -313,8 +341,11 @@ def train_model(
                 selected_trial_num = None
                 if tuning_config.selected_trial_number is not None:
                     from model.tuning import get_trial_params
-                    manual = get_trial_params(trials_df, tuning_config.selected_trial_number)
-                    if manual: 
+
+                    manual = get_trial_params(
+                        trials_df, tuning_config.selected_trial_number
+                    )
+                    if manual:
                         selected_params = manual
                         selection_type = "manual"
                         selected_trial_num = tuning_config.selected_trial_number
@@ -322,36 +353,61 @@ def train_model(
                     max_depth = selected_params.get("max_depth", max_depth)
                     n_estimators = selected_params.get("n_estimators", n_estimators)
                     learning_rate = selected_params.get("learning_rate", learning_rate)
-                    min_child_weight = selected_params.get("min_child_weight", min_child_weight)
+                    min_child_weight = selected_params.get(
+                        "min_child_weight", min_child_weight
+                    )
                     subsample = selected_params.get("subsample", subsample)
-                    colsample_bytree = selected_params.get("colsample_bytree", colsample_bytree)
+                    colsample_bytree = selected_params.get(
+                        "colsample_bytree", colsample_bytree
+                    )
                     gamma = selected_params.get("gamma", gamma)
                     reg_alpha = selected_params.get("reg_alpha", reg_alpha)
                     reg_lambda = selected_params.get("reg_lambda", reg_lambda)
-                    for k, v in selected_params.items(): _mlflow.log_param(f"tuning_best_{k}", v)
-                
-                _mlflow.set_tags({
-                    "tuning.selected_trial": str(selected_trial_num) if selected_trial_num is not None else "best",
-                    "tuning.selection_type": selection_type,
-                    "tuning.n_trials": str(tuning_config.n_trials),
-                })
+                    for k, v in selected_params.items():
+                        _mlflow.log_param(f"tuning_best_{k}", v)
+
+                _mlflow.set_tags(
+                    {
+                        "tuning.selected_trial": str(selected_trial_num)
+                        if selected_trial_num is not None
+                        else "best",
+                        "tuning.selection_type": selection_type,
+                        "tuning.n_trials": str(tuning_config.n_trials),
+                    }
+                )
 
         params_log = {
-            "scale_pos_weight": scale_pos_weight, "max_depth": max_depth, "training_window_days": training_window_days,
-            "train_size": split.train_size, "test_size": split.test_size, "n_estimators": n_estimators,
-            "learning_rate": learning_rate, "random_state": random_state,
+            "scale_pos_weight": scale_pos_weight,
+            "max_depth": max_depth,
+            "training_window_days": training_window_days,
+            "train_size": split.train_size,
+            "test_size": split.test_size,
+            "n_estimators": n_estimators,
+            "learning_rate": learning_rate,
+            "random_state": random_state,
             "feature_columns": json.dumps(actual_feature_columns),
         }
-        if early_stopping_rounds: params_log["early_stopping_rounds"] = early_stopping_rounds
+        if early_stopping_rounds:
+            params_log["early_stopping_rounds"] = early_stopping_rounds
         _mlflow.log_params(params_log)
 
         clf_kw = {
-            "scale_pos_weight": scale_pos_weight, "max_depth": max_depth, "n_estimators": n_estimators,
-            "learning_rate": learning_rate, "min_child_weight": min_child_weight, "subsample": subsample,
-            "colsample_bytree": colsample_bytree, "gamma": gamma, "reg_alpha": reg_alpha, "reg_lambda": reg_lambda,
-            "random_state": random_state, "use_label_encoder": False, "eval_metric": "logloss",
+            "scale_pos_weight": scale_pos_weight,
+            "max_depth": max_depth,
+            "n_estimators": n_estimators,
+            "learning_rate": learning_rate,
+            "min_child_weight": min_child_weight,
+            "subsample": subsample,
+            "colsample_bytree": colsample_bytree,
+            "gamma": gamma,
+            "reg_alpha": reg_alpha,
+            "reg_lambda": reg_lambda,
+            "random_state": random_state,
+            "use_label_encoder": False,
+            "eval_metric": "logloss",
         }
-        if early_stopping_rounds: clf_kw["early_stopping_rounds"] = early_stopping_rounds
+        if early_stopping_rounds:
+            clf_kw["early_stopping_rounds"] = early_stopping_rounds
         clf = XGBClassifier(**clf_kw)
 
         # CV loop
@@ -365,17 +421,21 @@ def train_model(
             fold_size = n // k
             for fold_i in range(k):
                 val_start = fold_i * fold_size
-                val_end = n if fold_i == k-1 else (fold_i+1)*fold_size
+                val_end = n if fold_i == k - 1 else (fold_i + 1) * fold_size
                 val_idx = np.arange(val_start, val_end)
-                train_idx = np.concatenate([np.arange(0, val_start), np.arange(val_end, n)])
-                if not len(train_idx) or not len(val_idx): continue
+                train_idx = np.concatenate(
+                    [np.arange(0, val_start), np.arange(val_end, n)]
+                )
+                if not len(train_idx) or not len(val_idx):
+                    continue
                 fold_clf = XGBClassifier(**clf_kw)
                 fold_clf.fit(x_tr.iloc[train_idx], y_tr.iloc[train_idx])
                 y_vp = fold_clf.predict(x_tr.iloc[val_idx])
                 y_vprob = fold_clf.predict_proba(x_tr.iloc[val_idx])[:, 1]
                 fm = _compute_metrics(y_tr.iloc[val_idx], y_vp, y_vprob)
                 fold_metrics.append(fm)
-                for key, val in fm.items(): _mlflow.log_metric(f"cv_{key}_fold_{fold_i}", val, step=fold_i)
+                for key, val in fm.items():
+                    _mlflow.log_metric(f"cv_{key}_fold_{fold_i}", val, step=fold_i)
             if fold_metrics:
                 agg = {}
                 for key in fold_metrics[0]:
@@ -413,20 +473,24 @@ def train_model(
 
         # Fit calibrator on test set (C2)
         from model.evaluate import ScoreCalibrator
+
         calibrator = ScoreCalibrator()
         calibrator.fit(y_pred_proba, split.y_test)
 
         signature = infer_signature(split.X_train, y_pred_proba)
-        _mlflow.sklearn.log_model(clf, "model", signature=signature, input_example=split.X_train.iloc[:1])
+        _mlflow.sklearn.log_model(
+            clf, "model", signature=signature, input_example=split.X_train.iloc[:1]
+        )
 
         with tempfile.TemporaryDirectory() as tmpdir:
             ref_path = os.path.join(tmpdir, "reference_data.parquet")
             split.X_test.to_parquet(ref_path, index=False)
             _mlflow.log_artifact(ref_path)
-            
+
             # Save calibrator artifact (C2)
             calibrator_path = os.path.join(tmpdir, "calibrator.pkl")
             import joblib
+
             joblib.dump(calibrator, calibrator_path)
             _mlflow.log_artifact(calibrator_path)
 
@@ -436,10 +500,12 @@ def train_model(
             counts, _ = np.histogram(calibrated_scores, bins=buckets)
             ratios = counts / len(calibrated_scores)
             baseline_dist = {
-                "buckets": [[buckets[i], buckets[i+1]-1] for i in range(len(buckets)-1)],
+                "buckets": [
+                    [buckets[i], buckets[i + 1] - 1] for i in range(len(buckets) - 1)
+                ],
                 "ratios": ratios.tolist(),
                 "counts": counts.tolist(),
-                "total": int(len(calibrated_scores))
+                "total": int(len(calibrated_scores)),
             }
             dist_path = os.path.join(tmpdir, "score_distribution.json")
             with open(dist_path, "w") as f:
@@ -457,7 +523,9 @@ def train_model(
             _mlflow.log_artifact(cm_path)
 
             fi_base = os.path.join(tmpdir, "feature_importance")
-            fi_json, fi_png = _save_feature_importance(clf, actual_feature_columns, fi_base)
+            fi_json, fi_png = _save_feature_importance(
+                clf, actual_feature_columns, fi_base
+            )
             _mlflow.log_artifact(fi_json)
             _mlflow.log_artifact(fi_png)
 
@@ -473,8 +541,10 @@ def get_latest_model_version(model_name: str = EXPERIMENT_NAME) -> int | None:
     client = _mlflow.MlflowClient()
     try:
         versions = client.search_model_versions(f"name='{model_name}'")
-        if versions: return max(int(v.version) for v in versions)
-    except Exception: pass
+        if versions:
+            return max(int(v.version) for v in versions)
+    except Exception:
+        pass
     return None
 
 
@@ -482,7 +552,9 @@ def load_production_model(model_name: str = EXPERIMENT_NAME):
     """Load the latest version of the production model."""
     _mlflow = _get_mlflow()
     import mlflow.sklearn
+
     version = get_latest_model_version(model_name)
-    if version is None: raise ValueError(f"No model versions found for '{model_name}'")
+    if version is None:
+        raise ValueError(f"No model versions found for '{model_name}'")
     model_uri = f"models:/{model_name}/{version}"
     return mlflow.sklearn.load_model(model_uri)

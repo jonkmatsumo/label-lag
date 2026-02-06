@@ -3,8 +3,8 @@
 import pytest
 
 from api.audit import AuditLogger, set_audit_logger
-from rules_management.draft_store import DraftRuleStore, set_draft_store
 from forecast.model_manager import ModelManager
+from rules_management.draft_store import DraftRuleStore, set_draft_store
 from rules_management.rules import Rule, RuleSet, RuleStatus
 from rules_management.versioning import RuleVersionStore, set_version_store
 
@@ -65,7 +65,7 @@ class TestPublishFlow:
         # Add approved rule to draft store
         draft_store._rules[approved_rule.id] = approved_rule
         draft_store._save_rules()
-    
+
         # Simulate publish: transition to active
         from rules_management.workflow import RuleStateMachine
 

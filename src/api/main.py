@@ -12,8 +12,8 @@ from fastapi.responses import JSONResponse
 
 from api.schemas import HealthResponse
 from forecast.model_manager import get_model_manager
-from forecast.services import get_forecaster
 from forecast.routes import router as forecast_router
+from forecast.services import get_forecaster
 from rules_management.routes import router as rules_router
 from training.routes import router as training_router
 

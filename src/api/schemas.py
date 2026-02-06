@@ -1248,9 +1248,13 @@ class ScoreDistributionResponse(BaseModel):
     observed_size: int = Field(..., description="Number of live samples")
     baseline_size: int | None = Field(None, description="Number of baseline samples")
     divergence: float = Field(..., description="Divergence metric value")
-    divergence_metric: str = Field(default="JS", description="Metric used (JS for Jensen-Shannon)")
+    divergence_metric: str = Field(
+        default="JS", description="Metric used (JS for Jensen-Shannon)"
+    )
     distribution: list[ScoreDistributionItem] = Field(default_factory=list)
-    shift_detected: bool = Field(..., description="True if any bucket exceeded 2x baseline")
+    shift_detected: bool = Field(
+        ..., description="True if any bucket exceeded 2x baseline"
+    )
 
 
 # =============================================================================

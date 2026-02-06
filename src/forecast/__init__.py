@@ -1,5 +1,11 @@
-from .services import SignalForecaster
+from .di import get_drift_cache, get_forecaster, get_model_manager
 from .model_manager import ModelManager
-from .di import get_forecaster, get_model_manager, get_drift_cache
+from .services import SignalForecaster
 
-__all__ = ["SignalForecaster", "ModelManager", "get_forecaster", "get_model_manager", "get_drift_cache"]
+__all__ = [
+    "SignalForecaster",
+    "ModelManager",
+    "get_forecaster",
+    "get_model_manager",
+    "get_drift_cache",
+]

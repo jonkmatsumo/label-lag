@@ -23,7 +23,7 @@ def test_no_legacy_decisioning_methods():
 
 
 def test_sandbox_no_python_decisioning():
-    """Assert that sandbox implementation doesn't use rules_management.rules.evaluate_rules."""
+    """Assert sandbox doesn't use rules_management.rules.evaluate_rules."""
     main_py = Path("src/api/main.py").read_text()
 
     # Verify evaluate_rules is NOT imported in main.py from rules_management.rules
@@ -32,7 +32,7 @@ def test_sandbox_no_python_decisioning():
 
 
 def test_backtest_no_python_decisioning():
-    """Assert that backtest implementation doesn't use rules_management.rules.evaluate_rules."""
+    """Assert backtest doesn't use rules_management.rules.evaluate_rules."""
     backtest_py = Path("src/rules_management/backtest.py").read_text()
 
     # Assert no import of evaluate_rules from rules_management.rules
@@ -67,5 +67,6 @@ def test_no_remaining_decisioning_calls():
         # Also check for direct calls if rules_management.rules was imported as a whole
         if "rules_management.rules.evaluate_rules(" in content:
             pytest.fail(
-                f"Forbidden call to rules_management.rules.evaluate_rules found in {py_file}"
+                "Forbidden call to rules_management.rules.evaluate_rules found "
+                f"in {py_file}"
             )

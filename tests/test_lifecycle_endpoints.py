@@ -6,8 +6,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.audit import AuditLogger, get_audit_logger, set_audit_logger
-from rules_management.draft_store import DraftRuleStore, set_draft_store
 from api.main import app
+from rules_management.draft_store import DraftRuleStore, set_draft_store
 from rules_management.versioning import (
     RuleVersionStore,
     get_version_store,

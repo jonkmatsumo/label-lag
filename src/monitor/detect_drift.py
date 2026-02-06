@@ -57,12 +57,22 @@ def _load_drift_thresholds() -> dict[str, float]:
                 config = json.load(f)
                 drift_config = config.get("drift_thresholds", {})
                 return {
-                    "psi_warning": float(os.getenv("DRIFT_PSI_WARN_THRESHOLD", drift_config.get(
-                        "psi_warning", default_thresholds["psi_warning"]
-                    ))),
-                    "psi_critical": float(os.getenv("DRIFT_PSI_CRIT_THRESHOLD", drift_config.get(
-                        "psi_critical", default_thresholds["psi_critical"]
-                    ))),
+                    "psi_warning": float(
+                        os.getenv(
+                            "DRIFT_PSI_WARN_THRESHOLD",
+                            drift_config.get(
+                                "psi_warning", default_thresholds["psi_warning"]
+                            ),
+                        )
+                    ),
+                    "psi_critical": float(
+                        os.getenv(
+                            "DRIFT_PSI_CRIT_THRESHOLD",
+                            drift_config.get(
+                                "psi_critical", default_thresholds["psi_critical"]
+                            ),
+                        )
+                    ),
                     "cache_ttl_seconds": drift_config.get(
                         "cache_ttl_seconds",
                         default_thresholds["cache_ttl_seconds"],
@@ -131,7 +141,7 @@ def get_reference_data() -> pd.DataFrame | None:
     try:
         import mlflow
         from mlflow import MlflowClient
-        
+
         mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
         client = MlflowClient()
 
@@ -245,22 +255,34 @@ def detect_drift(
 
         if psi >= PSI_THRESHOLD_CRITICAL:
             status = "CRITICAL"
-            results["alerts"].append({
-                "severity": "critical",
-                "feature": feature,
-                "psi": round(psi, 4),
-                "threshold": PSI_THRESHOLD_CRITICAL,
-                "recommendation": f"Feature '{feature}' shows critical drift (PSI={psi:.4f}). Immediate model retraining or data quality audit recommended."
-            })
+            results["alerts"].append(
+                {
+                    "severity": "critical",
+                    "feature": feature,
+                    "psi": round(psi, 4),
+                    "threshold": PSI_THRESHOLD_CRITICAL,
+                    "recommendation": (
+                        f"Feature '{feature}' shows critical drift "
+                        f"(PSI={psi:.4f}). Immediate model retraining or "
+                        "data quality audit recommended."
+                    ),
+                }
+            )
         elif psi >= PSI_THRESHOLD_WARNING:
             status = "WARNING"
-            results["alerts"].append({
-                "severity": "warning",
-                "feature": feature,
-                "psi": round(psi, 4),
-                "threshold": PSI_THRESHOLD_WARNING,
-                "recommendation": f"Feature '{feature}' shows moderate drift (PSI={psi:.4f}). Monitor closely and consider retraining if trend continues."
-            })
+            results["alerts"].append(
+                {
+                    "severity": "warning",
+                    "feature": feature,
+                    "psi": round(psi, 4),
+                    "threshold": PSI_THRESHOLD_WARNING,
+                    "recommendation": (
+                        f"Feature '{feature}' shows moderate drift "
+                        f"(PSI={psi:.4f}). Monitor closely and consider "
+                        "retraining if trend continues."
+                    ),
+                }
+            )
         else:
             status = "OK"
 

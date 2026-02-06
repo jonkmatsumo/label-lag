@@ -80,9 +80,10 @@ class ModelManager:
         """Get the loaded calibrator or a default one."""
         if self._calibrator is not None:
             return self._calibrator
-        
+
         # Fallback to default ScoreCalibrator
         from model.evaluate import ScoreCalibrator
+
         return ScoreCalibrator()
 
     @property
@@ -139,6 +140,7 @@ class ModelManager:
         """
         try:
             import mlflow
+
             mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 
             model_uri = f"models:/{MODEL_NAME}/Production"
@@ -184,6 +186,7 @@ class ModelManager:
         """
         try:
             import mlflow
+
             client = mlflow.MlflowClient()
             versions = client.search_model_versions(f"name='{MODEL_NAME}'")
             for v in versions:
@@ -217,8 +220,9 @@ class ModelManager:
         Sets self._calibrator and self._calibrator_loaded if artifact is found.
         """
         try:
-            import mlflow
             import joblib
+            import mlflow
+
             client = mlflow.MlflowClient()
             versions = client.search_model_versions(f"name='{MODEL_NAME}'")
             for v in versions:
@@ -230,10 +234,14 @@ class ModelManager:
                         )
                         self._calibrator = joblib.load(artifact_path)
                         self._calibrator_loaded = True
-                        logger.info("Successfully loaded calibrator artifact from MLflow")
+                        logger.info(
+                            "Successfully loaded calibrator artifact from MLflow"
+                        )
                         return
                     except Exception as e:
-                        logger.debug(f"calibrator.pkl artifact not found or failed to load: {e}")
+                        logger.debug(
+                            f"calibrator.pkl artifact not found or failed to load: {e}"
+                        )
                         break
         except Exception as e:
             logger.debug(f"Could not load calibrator artifact: {e}")
@@ -245,6 +253,7 @@ class ModelManager:
         """
         try:
             import mlflow
+
             client = mlflow.MlflowClient()
             versions = client.search_model_versions(f"name='{MODEL_NAME}'")
             for v in versions:
@@ -256,7 +265,10 @@ class ModelManager:
                         )
                         with open(artifact_path) as f:
                             self._baseline_distribution = json.load(f)
-                        logger.info("Successfully loaded baseline score distribution from MLflow")
+                        logger.info(
+                            "Successfully loaded baseline score distribution "
+                            "from MLflow"
+                        )
                         return
                     except Exception as e:
                         logger.debug(f"score_distribution.json artifact not found: {e}")
@@ -285,6 +297,7 @@ class ModelManager:
 
         try:
             import mlflow
+
             # Create sample data matching required features
             required = self.required_features
             sample_data = pd.DataFrame(
@@ -366,6 +379,7 @@ class ModelManager:
         """
         try:
             import mlflow
+
             client = mlflow.MlflowClient()
             versions = client.search_model_versions(f"name='{MODEL_NAME}'")
             for v in versions:

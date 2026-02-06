@@ -3,7 +3,10 @@
 import pytest
 
 from rules_management.draft_store import DraftRuleStore
-from rules_management.rule_store import get_rule_store_backend, is_postgres_backend_enabled
+from rules_management.rule_store import (
+    get_rule_store_backend,
+    is_postgres_backend_enabled,
+)
 from rules_management.rules import Rule, RuleStatus
 
 

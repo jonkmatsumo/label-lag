@@ -194,11 +194,15 @@ def _build_drift_response(
     # C1: Structured logging for alerts
     alerts = result.get("alerts", [])
     for alert in alerts:
-        log_level = logging.ERROR if alert["severity"] == "critical" else logging.WARNING
+        log_level = (
+            logging.ERROR if alert["severity"] == "critical" else logging.WARNING
+        )
         logger.log(
             log_level,
-            f"DRIFT ALERT: {alert['severity'].upper()} drift detected for feature '{alert['feature']}' "
-            f"(PSI={alert['psi']}, threshold={alert['threshold']})"
+            "DRIFT ALERT: "
+            f"{alert['severity'].upper()} drift detected for feature "
+            f"'{alert['feature']}' "
+            f"(PSI={alert['psi']}, threshold={alert['threshold']})",
         )
 
     return DriftStatusResponse(
@@ -226,15 +230,18 @@ def _build_drift_response(
     summary="Check final score distribution drift",
 )
 async def get_score_distribution(
-    hours: int = Query(default=24, ge=1, le=168, description="Hours of live data to analyze"),
+    hours: int = Query(
+        default=24, ge=1, le=168, description="Hours of live data to analyze"
+    ),
 ) -> ScoreDistributionResponse:
     """Check score distribution drift between training baseline and live data."""
     import numpy as np
+
     from api.crud_client import get_crud_client
 
     manager = get_model_manager()
     baseline = manager.baseline_distribution
-    
+
     # Fetch live scores
     client = get_crud_client()
     try:
@@ -246,16 +253,20 @@ async def get_score_distribution(
 
     # Define buckets (C3): [1-10, 11-30, 31-70, 71-90, 91-99]
     buckets = [1, 11, 31, 71, 91, 100]
-    
+
     if len(live_scores) > 0:
         counts, _ = np.histogram(live_scores, bins=buckets)
         observed_ratios = counts / len(live_scores)
     else:
-        counts = np.zeros(len(buckets)-1)
-        observed_ratios = np.zeros(len(buckets)-1)
+        counts = np.zeros(len(buckets) - 1)
+        observed_ratios = np.zeros(len(buckets) - 1)
 
-    baseline_ratios = np.array(baseline["ratios"]) if baseline else np.ones(len(buckets)-1) / (len(buckets)-1)
-    
+    baseline_ratios = (
+        np.array(baseline["ratios"])
+        if baseline
+        else np.ones(len(buckets) - 1) / (len(buckets) - 1)
+    )
+
     # Compute Jensen-Shannon Divergence
     def kl_div(p, q):
         p = np.clip(p, 1e-10, 1)
@@ -268,18 +279,20 @@ async def get_score_distribution(
     # Detect shift: any bucket > 2x baseline
     shift_detected = False
     distribution_items = []
-    for i in range(len(buckets)-1):
+    for i in range(len(buckets) - 1):
         b_ratio = float(baseline_ratios[i])
         o_ratio = float(observed_ratios[i])
         if b_ratio > 0 and o_ratio > 2 * b_ratio:
             shift_detected = True
-        
-        distribution_items.append(ScoreDistributionItem(
-            bucket=[buckets[i], buckets[i+1]-1],
-            baseline_ratio=b_ratio,
-            observed_ratio=o_ratio,
-            observed_count=int(counts[i])
-        ))
+
+        distribution_items.append(
+            ScoreDistributionItem(
+                bucket=[buckets[i], buckets[i + 1] - 1],
+                baseline_ratio=b_ratio,
+                observed_ratio=o_ratio,
+                observed_count=int(counts[i]),
+            )
+        )
 
     return ScoreDistributionResponse(
         computed_at=datetime.now(timezone.utc).isoformat(),
@@ -288,7 +301,7 @@ async def get_score_distribution(
         divergence=float(js_div),
         divergence_metric="JS",
         distribution=distribution_items,
-        shift_detected=shift_detected
+        shift_detected=shift_detected,
     )
 
 

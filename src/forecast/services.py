@@ -86,8 +86,10 @@ class SignalForecaster:
             model_loaded = True
         else:
             # Determine fallback mode: request value -> env var -> default "probability"
-            fallback_mode = request.fallback_mode or os.getenv("FORECASTER_FALLBACK_MODE", "probability")
-            
+            fallback_mode = request.fallback_mode or os.getenv(
+                "FORECASTER_FALLBACK_MODE", "probability"
+            )
+
             if fallback_mode == "error":
                 reason = (
                     "model not loaded" if not manager.model_loaded else "no history"
@@ -103,17 +105,17 @@ class SignalForecaster:
                 raw_probability = 0.05
             else:
                 raw_probability = self._calculate_probability(features)
-            
+
             model_version = self.model_version
             model_loaded = False
             effective_fallback_mode = fallback_mode
-        
+
         # Use calibrator from manager (C2)
         calibrator = manager.calibrator
         score = int(calibrator.transform(np.array([raw_probability]))[0])
-        
+
         latency_ms = (time.time() - start_time) * 1000
-        
+
         diagnostics = {
             "has_history": features.has_history,
             "raw_probability": float(raw_probability),
@@ -132,7 +134,7 @@ class SignalForecaster:
             "latency_ms": latency_ms,
             "diagnostics": diagnostics,
         }
-        
+
         if request.include_importance:
             importance = manager.cached_feature_importance
             if importance:
@@ -213,7 +215,9 @@ class SignalForecaster:
         """
         return FeatureVector(
             velocity_24h=int(feature_dict.get("velocity_24h", 0)),
-            amount_to_avg_ratio_30d=float(feature_dict.get("amount_to_avg_ratio_30d", 1.0)),
+            amount_to_avg_ratio_30d=float(
+                feature_dict.get("amount_to_avg_ratio_30d", 1.0)
+            ),
             balance_volatility_z_score=float(
                 feature_dict.get("balance_volatility_z_score", 0.0)
             ),
