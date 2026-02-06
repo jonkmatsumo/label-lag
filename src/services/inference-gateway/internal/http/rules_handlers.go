@@ -704,4 +704,11 @@ func (h *Handler) handleDeleteRule(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
 
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
 // version/readiness/diff handlers temporarily removed for commit splitting
