@@ -104,7 +104,7 @@ services:
   # BFF (Backend for Frontend) - Node.js proxy layer for React UI
   bff:
     build:
-      context: node/bff
+      context: typescript/bff
       dockerfile: Dockerfile
     container_name: label-lag-bff
     profiles: [ "react", "all" ]
@@ -137,7 +137,7 @@ services:
   # React Web UI
   web:
     build:
-      context: node/ui
+      context: typescript/ui
       dockerfile: Dockerfile
     container_name: label-lag-web
     profiles: [ "react", "all" ]

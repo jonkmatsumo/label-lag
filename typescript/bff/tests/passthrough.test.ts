@@ -25,6 +25,11 @@ describe('501 Passthrough', () => {
       request_id: 'req-501',
     });
 
+    ctx.mockApiPool.intercept({
+      path: '/analytics/overview',
+      method: 'GET',
+    }).reply(200, {});
+
     const response = await ctx.app.inject({
       method: 'GET',
       url: '/bff/v1/analytics/overview',

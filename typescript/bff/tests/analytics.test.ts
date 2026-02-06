@@ -30,6 +30,17 @@ describe('Analytics Routes', () => {
         date_range: { min: '2024-01-01', max: '2024-01-31' },
       });
 
+      ctx.mockApiPool.intercept({
+        path: '/analytics/overview',
+        method: 'GET',
+      }).reply(200, {
+        total_users: 1000,
+        total_transactions: 50000,
+        fraud_rate: 0.02,
+        unique_merchants: 500,
+        date_range: { min: '2024-01-01', max: '2024-01-31' },
+      });
+
       const response = await ctx.app.inject({
         method: 'GET',
         url: '/bff/v1/analytics/overview',
@@ -48,6 +59,11 @@ describe('Analytics Routes', () => {
       }).reply(500, {
         message: 'Authentication required',
       }).times(2);
+
+      ctx.mockApiPool.intercept({
+        path: '/analytics/overview',
+        method: 'GET',
+      }).reply(200, {});
 
       const response = await ctx.app.inject({
         method: 'GET',

@@ -4,7 +4,7 @@ import { createTestApp, createTestConfig } from './setup';
 describe('Inference Routing', () => {
   it('routes evaluate to gateway by default', async () => {
     const config = createTestConfig();
-    config.gatewayBaseUrl = 'http://mock-gateway';
+    config.gatewayBaseUrl = 'http://mock-gateway:8081';
 
     const ctx = await createTestApp(config);
 

@@ -44,19 +44,19 @@ jobs:
           cache-dependency-path: '**/package-lock.json'
 
       - name: Install BFF dependencies
-        working-directory: node/bff
+        working-directory: typescript/bff
         run: npm ci
 
       - name: Test BFF
-        working-directory: node/bff
+        working-directory: typescript/bff
         run: npm test
 
       - name: Install UI dependencies
-        working-directory: node/ui
+        working-directory: typescript/ui
         run: npm ci
 
       - name: Lint UI
-        working-directory: node/ui
+        working-directory: typescript/ui
         run: npm run lint
 
   lint:
