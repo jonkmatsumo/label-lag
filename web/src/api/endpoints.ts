@@ -30,6 +30,7 @@ import type {
   ApprovalSignalsResponse,
   TransactionSearchRequest,
   TransactionSearchResponse,
+  FeatureSampleResponse,
 } from '../types/api';
 
 // Health endpoints

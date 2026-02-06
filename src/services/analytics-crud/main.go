@@ -962,8 +962,8 @@ func (s *server) GetInferenceScores(ctx context.Context, req *pb.GetInferenceSco
 	query := `
 		SELECT final_score
 		FROM inference_events
-		WHERE timestamp >= $1
-		ORDER BY timestamp DESC
+		WHERE ts >= $1
+		ORDER BY ts DESC
 	`
 
 	rows, err := s.db.QueryContext(ctx, query, cutoff)
@@ -1291,7 +1291,7 @@ func (s *server) LogInferenceEvent(ctx context.Context, req *pb.LogInferenceEven
 
 	query := `
 		INSERT INTO inference_events (
-			request_id, timestamp, model_version, rules_version,
+			request_id, ts, model_version, rules_version,
 			model_score, final_score, rule_impacts
 		) VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`
@@ -1714,8 +1714,9 @@ func initDB(db *sql.DB) error {
 			status TEXT NOT NULL
 		)`,
 		`CREATE TABLE IF NOT EXISTS inference_events (
-			request_id TEXT PRIMARY KEY,
-			timestamp TIMESTAMP NOT NULL,
+			id SERIAL PRIMARY KEY,
+			ts TIMESTAMP NOT NULL DEFAULT NOW(),
+			request_id TEXT NOT NULL,
 			model_version TEXT NOT NULL,
 			rules_version TEXT NOT NULL,
 			model_score INTEGER NOT NULL,
@@ -1725,7 +1726,7 @@ func initDB(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_backtest_results_rule_id ON backtest_results(rule_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_backtest_results_completed_at ON backtest_results(completed_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_rules_status ON rules(status)`,
-		`CREATE INDEX IF NOT EXISTS idx_inference_events_timestamp ON inference_events(timestamp)`,
+		`CREATE INDEX IF NOT EXISTS idx_inference_events_ts ON inference_events(ts)`,
 	}
 
 	for _, q := range queries {

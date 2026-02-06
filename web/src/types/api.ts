@@ -46,6 +46,9 @@ export interface MatchedRule {
   severity: string;
   reason: string;
   explanation?: string;
+  name?: string;
+  action?: string;
+  score_adjustment?: number;
 }
 
 export interface SignalResponse {
@@ -59,6 +62,7 @@ export interface SignalResponse {
   matched_rules: MatchedRule[];
   shadow_matched_rules?: MatchedRule[];
   debug?: Record<string, unknown>;
+  model_score?: number;
 }
 
 // Training types
@@ -215,7 +219,7 @@ export interface BacktestMetrics {
   precision: number;
   recall: number;
   f1_score: number;
-  total_transactions: number;
+  total_records: number;
   flagged_transactions: number;
   true_positives: number;
   false_positives: number;
@@ -239,48 +243,49 @@ export interface BacktestCompareResponse {
 
 // Analytics types
 export interface AnalyticsOverviewResponse {
-  total_users: number;
-  total_transactions: number;
+  total_records: number;
+  fraud_records: number;
   fraud_rate: number;
-  fraud_count: number;
-  unique_merchants: number;
-  min_timestamp: string;
-  max_timestamp: string;
+  unique_users: number;
+  min_transaction_timestamp: string;
+  max_transaction_timestamp: string;
+  min_created_at: string;
+  max_created_at: string;
+  total_amount: number;
+  fraud_amount: number;
 }
 
 export interface DailyStat {
   date: string;
   total_transactions: number;
-  fraud_transactions: number;
+  fraud_count: number;
   fraud_rate: number;
   total_amount: number;
+  avg_z_score: number;
 }
 
 export interface DailyStatsResponse {
   stats: DailyStat[];
-  period_days: number;
 }
 
 export interface TransactionDetail {
-  id: string;
-  record_id?: string;
+  record_id: string;
   user_id: string;
+  created_at: string;
+  is_train_eligible: boolean;
+  is_pre_fraud: boolean;
   amount: number;
-  timestamp: string;
-  is_fraud: boolean;
-  score?: number;
-  merchant_category?: string;
-  merchant_risk_score?: number;
-  fraud_type?: string;
-  velocity_24h?: number;
-  amount_to_avg_ratio_30d?: number;
-  balance_volatility_z_score?: number;
-  is_off_hours_txn?: boolean;
+  is_fraudulent: boolean;
+  fraud_type: string;
+  is_off_hours_txn: boolean;
+  merchant_risk_score: number;
+  velocity_24h: number;
+  amount_to_avg_ratio_30d: number;
+  balance_volatility_z_score: number;
 }
 
 export interface TransactionDetailsResponse {
   transactions: TransactionDetail[];
-  total: number;
 }
 
 export interface TransactionSearchRequest {
@@ -303,47 +308,55 @@ export interface TransactionSearchResponse {
 }
 
 export interface RecentAlert {
-  id: string;
+  record_id: string;
   user_id: string;
-  amount: number;
-  score: number;
   created_at: string;
-  matched_rules: string[];
+  amount: number;
+  is_fraudulent: boolean;
+  fraud_type: string;
+  merchant_risk_score: number;
+  velocity_24h: number;
+  amount_to_avg_ratio_30d: number;
+  balance_volatility_z_score: number;
+  computed_risk_score: number;
 }
 
 export interface RecentAlertsResponse {
   alerts: RecentAlert[];
-  total: number;
+}
+
+export interface TableFingerprint {
+  count: number;
+  max_created_at: string;
+  max_timestamp: string;
+  max_id: number;
 }
 
 export interface DatasetFingerprintResponse {
-  fingerprint: string;
-  record_count: number;
-  created_at: string;
-  feature_stats: Record<string, {
-    mean: number;
-    std: number;
-    min: number;
-    max: number;
-  }>;
+  generated_records: TableFingerprint;
+  feature_snapshots: TableFingerprint;
 }
 
 export interface FeatureSample {
   record_id: string;
   is_fraudulent: boolean;
-  [key: string]: unknown;
+  velocity_24h: number;
+  amount_to_avg_ratio_30d: number;
+  balance_volatility_z_score: number;
 }
 
 export interface FeatureSampleResponse {
   samples: FeatureSample[];
-  total_sampled: number;
-  stratified: boolean;
 }
 
 export interface CorrelationPair {
   feature_a: string;
   feature_b: string;
   value: number;
+}
+
+export interface RelationshipMetric extends CorrelationPair {
+  metric_type: string;
 }
 
 export interface DatasetCorrelationsResponse {

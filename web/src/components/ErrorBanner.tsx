@@ -1,4 +1,3 @@
-import React from 'react';
 import { ApiError } from '../api/client';
 import { AlertTriangle } from 'lucide-react';
 
@@ -9,7 +8,6 @@ interface ErrorBannerProps {
 }
 
 export function ErrorBanner({ error, title = 'An error occurred', className = 'alert alert-danger' }: ErrorBannerProps) {
-  const isApiError = error instanceof ApiError;
   const message = error instanceof Error ? error.message : String(error);
 
   return (
@@ -19,11 +17,11 @@ export function ErrorBanner({ error, title = 'An error occurred', className = 'a
         <div className="flex-grow-1">
           <h4 className="h6 fw-bold mb-1">{title}</h4>
           <p className="mb-0">{message}</p>
-          {isApiError && (
+          {error instanceof ApiError && (
             <div className="mt-2 pt-2 border-top border-danger-subtle small font-monospace opacity-75">
-              {isApiError.upstreamStatus && <div>Upstream Status: {isApiError.upstreamStatus}</div>}
-              {isApiError.requestId && <div>Request ID: {isApiError.requestId}</div>}
-              {isApiError.code && <div>Code: {isApiError.code}</div>}
+              {error.upstreamStatus && <div>Upstream Status: {error.upstreamStatus}</div>}
+              {error.requestId && <div>Request ID: {error.requestId}</div>}
+              {error.code && <div>Code: {error.code}</div>}
             </div>
           )}
         </div>

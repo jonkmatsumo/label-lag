@@ -4,7 +4,27 @@ import { Layout } from './components';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import {
   LiveScoring,
-// ...
+  Analytics,
+  Dataset,
+  ModelLab,
+  RuleInspector,
+  RuleManagement,
+  RuleSandbox,
+  RuleShadow,
+  RuleBacktests,
+  RuleSuggestions,
+  WhatIf,
+} from './pages';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
