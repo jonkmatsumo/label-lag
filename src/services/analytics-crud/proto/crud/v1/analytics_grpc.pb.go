@@ -19,36 +19,38 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AnalyticsService_GetDailyStats_FullMethodName         = "/crud.v1.AnalyticsService/GetDailyStats"
-	AnalyticsService_GetTransactionDetails_FullMethodName = "/crud.v1.AnalyticsService/GetTransactionDetails"
-	AnalyticsService_SearchTransactions_FullMethodName    = "/crud.v1.AnalyticsService/SearchTransactions"
-	AnalyticsService_GetRecentAlerts_FullMethodName       = "/crud.v1.AnalyticsService/GetRecentAlerts"
-	AnalyticsService_GetOverviewMetrics_FullMethodName    = "/crud.v1.AnalyticsService/GetOverviewMetrics"
-	AnalyticsService_GetDatasetFingerprint_FullMethodName = "/crud.v1.AnalyticsService/GetDatasetFingerprint"
-	AnalyticsService_GetFeatureSample_FullMethodName      = "/crud.v1.AnalyticsService/GetFeatureSample"
-	AnalyticsService_GetSchemaSummary_FullMethodName      = "/crud.v1.AnalyticsService/GetSchemaSummary"
-	AnalyticsService_GetTrainingData_FullMethodName       = "/crud.v1.AnalyticsService/GetTrainingData"
-	AnalyticsService_GetBacktestFeatures_FullMethodName   = "/crud.v1.AnalyticsService/GetBacktestFeatures"
-	AnalyticsService_SaveBacktestResult_FullMethodName    = "/crud.v1.AnalyticsService/SaveBacktestResult"
-	AnalyticsService_ListBacktestResults_FullMethodName   = "/crud.v1.AnalyticsService/ListBacktestResults"
-	AnalyticsService_GetBacktestResult_FullMethodName     = "/crud.v1.AnalyticsService/GetBacktestResult"
-	AnalyticsService_GetDriftWindow_FullMethodName        = "/crud.v1.AnalyticsService/GetDriftWindow"
-	AnalyticsService_StoreGeneratedData_FullMethodName    = "/crud.v1.AnalyticsService/StoreGeneratedData"
-	AnalyticsService_ClearAllData_FullMethodName          = "/crud.v1.AnalyticsService/ClearAllData"
-	AnalyticsService_MaterializeFeatures_FullMethodName   = "/crud.v1.AnalyticsService/MaterializeFeatures"
-	AnalyticsService_GetInferenceScores_FullMethodName    = "/crud.v1.AnalyticsService/GetInferenceScores"
-	AnalyticsService_SaveRule_FullMethodName              = "/crud.v1.AnalyticsService/SaveRule"
-	AnalyticsService_GetRule_FullMethodName               = "/crud.v1.AnalyticsService/GetRule"
-	AnalyticsService_ListRules_FullMethodName             = "/crud.v1.AnalyticsService/ListRules"
-	AnalyticsService_DeleteRule_FullMethodName            = "/crud.v1.AnalyticsService/DeleteRule"
-	AnalyticsService_ListRuleVersions_FullMethodName      = "/crud.v1.AnalyticsService/ListRuleVersions"
-	AnalyticsService_GetRuleVersion_FullMethodName        = "/crud.v1.AnalyticsService/GetRuleVersion"
-	AnalyticsService_PublishRuleVersion_FullMethodName    = "/crud.v1.AnalyticsService/PublishRuleVersion"
-	AnalyticsService_GetRuleReadiness_FullMethodName      = "/crud.v1.AnalyticsService/GetRuleReadiness"
-	AnalyticsService_DiffRuleVersions_FullMethodName      = "/crud.v1.AnalyticsService/DiffRuleVersions"
-	AnalyticsService_GetRuleStats_FullMethodName          = "/crud.v1.AnalyticsService/GetRuleStats"
-	AnalyticsService_GetAttribution_FullMethodName        = "/crud.v1.AnalyticsService/GetAttribution"
-	AnalyticsService_LogInferenceEvent_FullMethodName     = "/crud.v1.AnalyticsService/LogInferenceEvent"
+	AnalyticsService_GetDailyStats_FullMethodName              = "/crud.v1.AnalyticsService/GetDailyStats"
+	AnalyticsService_GetTransactionDetails_FullMethodName      = "/crud.v1.AnalyticsService/GetTransactionDetails"
+	AnalyticsService_SearchTransactions_FullMethodName         = "/crud.v1.AnalyticsService/SearchTransactions"
+	AnalyticsService_GetRecentAlerts_FullMethodName            = "/crud.v1.AnalyticsService/GetRecentAlerts"
+	AnalyticsService_GetOverviewMetrics_FullMethodName         = "/crud.v1.AnalyticsService/GetOverviewMetrics"
+	AnalyticsService_GetDatasetFingerprint_FullMethodName      = "/crud.v1.AnalyticsService/GetDatasetFingerprint"
+	AnalyticsService_GetFeatureSample_FullMethodName           = "/crud.v1.AnalyticsService/GetFeatureSample"
+	AnalyticsService_GetSchemaSummary_FullMethodName           = "/crud.v1.AnalyticsService/GetSchemaSummary"
+	AnalyticsService_GetTrainingData_FullMethodName            = "/crud.v1.AnalyticsService/GetTrainingData"
+	AnalyticsService_GetBacktestFeatures_FullMethodName        = "/crud.v1.AnalyticsService/GetBacktestFeatures"
+	AnalyticsService_SaveBacktestResult_FullMethodName         = "/crud.v1.AnalyticsService/SaveBacktestResult"
+	AnalyticsService_ListBacktestResults_FullMethodName        = "/crud.v1.AnalyticsService/ListBacktestResults"
+	AnalyticsService_GetBacktestResult_FullMethodName          = "/crud.v1.AnalyticsService/GetBacktestResult"
+	AnalyticsService_GetDriftWindow_FullMethodName             = "/crud.v1.AnalyticsService/GetDriftWindow"
+	AnalyticsService_StoreGeneratedData_FullMethodName         = "/crud.v1.AnalyticsService/StoreGeneratedData"
+	AnalyticsService_ClearAllData_FullMethodName               = "/crud.v1.AnalyticsService/ClearAllData"
+	AnalyticsService_MaterializeFeatures_FullMethodName        = "/crud.v1.AnalyticsService/MaterializeFeatures"
+	AnalyticsService_GetInferenceScores_FullMethodName         = "/crud.v1.AnalyticsService/GetInferenceScores"
+	AnalyticsService_SaveRule_FullMethodName                   = "/crud.v1.AnalyticsService/SaveRule"
+	AnalyticsService_GetRule_FullMethodName                    = "/crud.v1.AnalyticsService/GetRule"
+	AnalyticsService_ListRules_FullMethodName                  = "/crud.v1.AnalyticsService/ListRules"
+	AnalyticsService_DeleteRule_FullMethodName                 = "/crud.v1.AnalyticsService/DeleteRule"
+	AnalyticsService_ListRuleVersions_FullMethodName           = "/crud.v1.AnalyticsService/ListRuleVersions"
+	AnalyticsService_GetRuleVersion_FullMethodName             = "/crud.v1.AnalyticsService/GetRuleVersion"
+	AnalyticsService_PublishRuleVersion_FullMethodName         = "/crud.v1.AnalyticsService/PublishRuleVersion"
+	AnalyticsService_GetRuleReadiness_FullMethodName           = "/crud.v1.AnalyticsService/GetRuleReadiness"
+	AnalyticsService_DiffRuleVersions_FullMethodName           = "/crud.v1.AnalyticsService/DiffRuleVersions"
+	AnalyticsService_GetRuleStats_FullMethodName               = "/crud.v1.AnalyticsService/GetRuleStats"
+	AnalyticsService_GetAttribution_FullMethodName             = "/crud.v1.AnalyticsService/GetAttribution"
+	AnalyticsService_LogInferenceEvent_FullMethodName          = "/crud.v1.AnalyticsService/LogInferenceEvent"
+	AnalyticsService_GetLatestUserFeatures_FullMethodName      = "/crud.v1.AnalyticsService/GetLatestUserFeatures"
+	AnalyticsService_BatchGetLatestUserFeatures_FullMethodName = "/crud.v1.AnalyticsService/BatchGetLatestUserFeatures"
 )
 
 // AnalyticsServiceClient is the client API for AnalyticsService service.
@@ -89,6 +91,9 @@ type AnalyticsServiceClient interface {
 	GetAttribution(ctx context.Context, in *GetAttributionRequest, opts ...grpc.CallOption) (*GetAttributionResponse, error)
 	// Inference Events
 	LogInferenceEvent(ctx context.Context, in *LogInferenceEventRequest, opts ...grpc.CallOption) (*LogInferenceEventResponse, error)
+	// Feature Hydration (Phase 6)
+	GetLatestUserFeatures(ctx context.Context, in *GetLatestUserFeaturesRequest, opts ...grpc.CallOption) (*GetLatestUserFeaturesResponse, error)
+	BatchGetLatestUserFeatures(ctx context.Context, in *BatchGetLatestUserFeaturesRequest, opts ...grpc.CallOption) (*BatchGetLatestUserFeaturesResponse, error)
 }
 
 type analyticsServiceClient struct {
@@ -399,6 +404,26 @@ func (c *analyticsServiceClient) LogInferenceEvent(ctx context.Context, in *LogI
 	return out, nil
 }
 
+func (c *analyticsServiceClient) GetLatestUserFeatures(ctx context.Context, in *GetLatestUserFeaturesRequest, opts ...grpc.CallOption) (*GetLatestUserFeaturesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetLatestUserFeaturesResponse)
+	err := c.cc.Invoke(ctx, AnalyticsService_GetLatestUserFeatures_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *analyticsServiceClient) BatchGetLatestUserFeatures(ctx context.Context, in *BatchGetLatestUserFeaturesRequest, opts ...grpc.CallOption) (*BatchGetLatestUserFeaturesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BatchGetLatestUserFeaturesResponse)
+	err := c.cc.Invoke(ctx, AnalyticsService_BatchGetLatestUserFeatures_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AnalyticsServiceServer is the server API for AnalyticsService service.
 // All implementations must embed UnimplementedAnalyticsServiceServer
 // for forward compatibility.
@@ -437,6 +462,9 @@ type AnalyticsServiceServer interface {
 	GetAttribution(context.Context, *GetAttributionRequest) (*GetAttributionResponse, error)
 	// Inference Events
 	LogInferenceEvent(context.Context, *LogInferenceEventRequest) (*LogInferenceEventResponse, error)
+	// Feature Hydration (Phase 6)
+	GetLatestUserFeatures(context.Context, *GetLatestUserFeaturesRequest) (*GetLatestUserFeaturesResponse, error)
+	BatchGetLatestUserFeatures(context.Context, *BatchGetLatestUserFeaturesRequest) (*BatchGetLatestUserFeaturesResponse, error)
 	mustEmbedUnimplementedAnalyticsServiceServer()
 }
 
@@ -536,6 +564,12 @@ func (UnimplementedAnalyticsServiceServer) GetAttribution(context.Context, *GetA
 }
 func (UnimplementedAnalyticsServiceServer) LogInferenceEvent(context.Context, *LogInferenceEventRequest) (*LogInferenceEventResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method LogInferenceEvent not implemented")
+}
+func (UnimplementedAnalyticsServiceServer) GetLatestUserFeatures(context.Context, *GetLatestUserFeaturesRequest) (*GetLatestUserFeaturesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetLatestUserFeatures not implemented")
+}
+func (UnimplementedAnalyticsServiceServer) BatchGetLatestUserFeatures(context.Context, *BatchGetLatestUserFeaturesRequest) (*BatchGetLatestUserFeaturesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BatchGetLatestUserFeatures not implemented")
 }
 func (UnimplementedAnalyticsServiceServer) mustEmbedUnimplementedAnalyticsServiceServer() {}
 func (UnimplementedAnalyticsServiceServer) testEmbeddedByValue()                          {}
@@ -1098,6 +1132,42 @@ func _AnalyticsService_LogInferenceEvent_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AnalyticsService_GetLatestUserFeatures_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetLatestUserFeaturesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AnalyticsServiceServer).GetLatestUserFeatures(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AnalyticsService_GetLatestUserFeatures_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AnalyticsServiceServer).GetLatestUserFeatures(ctx, req.(*GetLatestUserFeaturesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AnalyticsService_BatchGetLatestUserFeatures_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BatchGetLatestUserFeaturesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AnalyticsServiceServer).BatchGetLatestUserFeatures(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AnalyticsService_BatchGetLatestUserFeatures_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AnalyticsServiceServer).BatchGetLatestUserFeatures(ctx, req.(*BatchGetLatestUserFeaturesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AnalyticsService_ServiceDesc is the grpc.ServiceDesc for AnalyticsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1224,6 +1294,14 @@ var AnalyticsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "LogInferenceEvent",
 			Handler:    _AnalyticsService_LogInferenceEvent_Handler,
+		},
+		{
+			MethodName: "GetLatestUserFeatures",
+			Handler:    _AnalyticsService_GetLatestUserFeatures_Handler,
+		},
+		{
+			MethodName: "BatchGetLatestUserFeatures",
+			Handler:    _AnalyticsService_BatchGetLatestUserFeatures_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -249,26 +249,32 @@ func (c *AnalyticsClient) ClearAllData(ctx context.Context, req *crudv1.ClearAll
 }
 
 func (c *AnalyticsClient) GetFeatures(ctx context.Context, userID string) (map[string]any, error) {
-	resp, err := c.SearchTransactions(ctx, &crudv1.SearchTransactionsRequest{
-		UserId: userID,
-		Limit:  1,
-	})
-	if err != nil {
-		return nil, err
+	callCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
 	}
 
-	if len(resp.GetTransactions()) == 0 {
+	resp, err := c.stub.GetLatestUserFeatures(c.withMetadata(callCtx), &crudv1.GetLatestUserFeaturesRequest{
+		UserId: userID,
+	})
+	if err != nil {
+		return nil, mapRPCError(err)
+	}
+
+	if !resp.GetFound() {
 		return nil, nil // Not found
 	}
 
-	tx := resp.GetTransactions()[0]
+	f := resp.GetFeatures()
 	features := map[string]any{
-		"velocity_24h":               float64(tx.GetVelocity_24H()),
-		"amount_to_avg_ratio_30d":    tx.GetAmountToAvgRatio_30D(),
-		"balance_volatility_z_score": tx.GetBalanceVolatilityZScore(),
-		"bank_connections_24h":       0.0, // Not yet in Analytics
-		"merchant_risk_score":        float64(tx.GetMerchantRiskScore()),
-		"has_history":                true,
+		"velocity_24h":               float64(f.GetVelocity_24H()),
+		"amount_to_avg_ratio_30d":    f.GetAmountToAvgRatio_30D(),
+		"balance_volatility_z_score": f.GetBalanceVolatilityZScore(),
+		"bank_connections_24h":       float64(f.GetBankConnections_24H()),
+		"merchant_risk_score":        float64(f.GetMerchantRiskScore()),
+		"has_history":                f.GetHasHistory(),
 	}
 
 	return features, nil

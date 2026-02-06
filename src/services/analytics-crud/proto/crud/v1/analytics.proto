@@ -45,6 +45,10 @@ service AnalyticsService {
 
   // Inference Events
   rpc LogInferenceEvent(LogInferenceEventRequest) returns (LogInferenceEventResponse);
+
+  // Feature Hydration (Phase 6)
+  rpc GetLatestUserFeatures(GetLatestUserFeaturesRequest) returns (GetLatestUserFeaturesResponse);
+  rpc BatchGetLatestUserFeatures(BatchGetLatestUserFeaturesRequest) returns (BatchGetLatestUserFeaturesResponse);
 }
 
 message GetDailyStatsRequest {
@@ -513,4 +517,34 @@ message DailyAttribution {
 
 message GetAttributionResponse {
   repeated DailyAttribution items = 1;
+}
+
+// Feature Hydration (Phase 6)
+message UserFeatures {
+  string user_id = 1;
+  string snapshot_id = 2;
+  google.protobuf.Timestamp snapshot_timestamp = 3;
+  int32 velocity_24h = 4;
+  double amount_to_avg_ratio_30d = 5;
+  double balance_volatility_z_score = 6;
+  int32 bank_connections_24h = 7;
+  int32 merchant_risk_score = 8;
+  bool has_history = 9;
+}
+
+message GetLatestUserFeaturesRequest {
+  string user_id = 1;
+}
+
+message GetLatestUserFeaturesResponse {
+  UserFeatures features = 1;
+  bool found = 2;
+}
+
+message BatchGetLatestUserFeaturesRequest {
+  repeated string user_ids = 1;
+}
+
+message BatchGetLatestUserFeaturesResponse {
+  map<string, UserFeatures> features = 1;
 }
