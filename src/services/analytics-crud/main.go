@@ -388,7 +388,7 @@ func (s *server) GetOverviewMetrics(ctx context.Context, req *pb.GetOverviewMetr
 	query := `
 		SELECT
 			COUNT(*) as total_records,
-			SUM(CASE WHEN is_fraudulent THEN 1 ELSE 0 END) as fraud_records,
+			COALESCE(SUM(CASE WHEN is_fraudulent THEN 1 ELSE 0 END), 0) as fraud_records,
 			COUNT(DISTINCT user_id) as unique_users,
 			MIN(transaction_timestamp) as min_transaction_timestamp,
 			MAX(transaction_timestamp) as max_transaction_timestamp,
@@ -535,7 +535,7 @@ type tableStats struct {
 
 func getTableStats(ctx context.Context, db *sql.DB, table string) (tableStats, error) {
 	var stats tableStats
-	query := fmt.Sprintf("SELECT MIN(id), MAX(id), COUNT(*) FROM %s", table)
+	query := fmt.Sprintf("SELECT COALESCE(MIN(id), 0), COALESCE(MAX(id), 0), COUNT(*) FROM %s", table)
 	err := db.QueryRowContext(ctx, query).Scan(&stats.minID, &stats.maxID, &stats.totalCount)
 	if err != nil {
 		return stats, err

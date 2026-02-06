@@ -104,7 +104,7 @@ async function main(): Promise<void> {
   await fastify.register(modelRoutes, { httpClient });
   await fastify.register(rulesRoutes, { httpClient, shadowService });
   await fastify.register(backtestRoutes, { httpClient });
-  await fastify.register(analyticsRoutes, { httpClient, cache });
+  await fastify.register(analyticsRoutes, { httpClient, cache, shadowService });
   await fastify.register(monitoringRoutes, { httpClient });
   await fastify.register(rulesDetailRoutes, { httpClient });
   await fastify.register(datasetRoutes, { httpClient, shadowService });
