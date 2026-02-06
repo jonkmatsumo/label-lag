@@ -325,12 +325,6 @@ func (h *Handler) handleDatasetClear(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-	writeAnalyticsJSON(w, clearDataResponse{
-		Success:       resp.GetSuccess(),
-		TablesCleared: resp.GetTablesCleared(),
-	})
-}
-
 func (h *Handler) handleAnalyticsRuleStats(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
