@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -91,11 +92,18 @@ func (h *Handler) handleSandboxEvaluate(w http.ResponseWriter, r *http.Request) 
 
 	debug := r.URL.Query().Get("debug") == "true"
 
+	r.Body = http.MaxBytesReader(w, r.Body, h.maxBodyBytes)
 	var req EvaluateRulesRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		}
 		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
 		return
 	}
+	defer r.Body.Close()
 
 	ruleset := rules.RuleSet{}
 	if req.RuleSet != nil {
@@ -135,11 +143,18 @@ func (h *Handler) handleSandboxDiff(w http.ResponseWriter, r *http.Request) {
 
 	debug := r.URL.Query().Get("debug") == "true"
 
+	r.Body = http.MaxBytesReader(w, r.Body, h.maxBodyBytes)
 	var req EvaluateRulesDiffRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		}
 		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
 		return
 	}
+	defer r.Body.Close()
 
 	// Helper to evaluate a single ruleset
 	eval := func(rs *rules.RuleSet) (rules.RuleResult, error) {
@@ -289,11 +304,18 @@ func (h *Handler) handleEvaluateRulesDiff(w http.ResponseWriter, r *http.Request
 
 	debug := r.URL.Query().Get("debug") == "true"
 
+	r.Body = http.MaxBytesReader(w, r.Body, h.maxBodyBytes)
 	var req EvaluateRulesDiffRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		}
 		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
 		return
 	}
+	defer r.Body.Close()
 
 	// Helper to evaluate a single ruleset
 	eval := func(rs *rules.RuleSet) (EvaluateRulesResponse, error) {
@@ -437,11 +459,18 @@ func (h *Handler) handleEvaluateRules(w http.ResponseWriter, r *http.Request) {
 
 	debug := r.URL.Query().Get("debug") == "true"
 
+	r.Body = http.MaxBytesReader(w, r.Body, h.maxBodyBytes)
 	var req EvaluateRulesRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		}
 		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
 		return
 	}
+	defer r.Body.Close()
 
 	ruleset := rules.RuleSet{}
 	var warnings []rules.Conflict
@@ -600,11 +629,18 @@ func (h *Handler) handleCreateRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, h.maxBodyBytes)
 	var rule crudv1.Rule
 	if err := json.NewDecoder(r.Body).Decode(&rule); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		}
 		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
 		return
 	}
+	defer r.Body.Close()
 
 	// Force default status if not set
 	if rule.Status == "" {
@@ -659,11 +695,18 @@ func (h *Handler) handleUpdateRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, h.maxBodyBytes)
 	var rule crudv1.Rule
 	if err := json.NewDecoder(r.Body).Decode(&rule); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		}
 		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
 		return
 	}
+	defer r.Body.Close()
 
 	// Ensure ID matches path
 	if rule.Id != "" && rule.Id != ruleID {

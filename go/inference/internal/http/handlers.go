@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
@@ -364,6 +365,12 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 }
 
 func normalizeSignalRequest(req *gatewayv1.SignalRequest) {
+	if req == nil {
+		return
+	}
+	req.UserId = strings.TrimSpace(req.UserId)
+	req.Currency = strings.ToUpper(strings.TrimSpace(req.Currency))
+	req.ClientTransactionId = strings.TrimSpace(req.ClientTransactionId)
 	if req.Currency == "" {
 		req.Currency = "USD"
 	}
@@ -373,11 +380,23 @@ func validateSignalRequest(req *gatewayv1.SignalRequest) error {
 	if req.UserId == "" {
 		return errors.New("user_id is required")
 	}
+	if len(req.UserId) > 64 {
+		return errors.New("user_id is too long")
+	}
 	if req.Amount <= 0 {
 		return errors.New("amount must be greater than 0")
 	}
+	if req.Amount > 10000000 {
+		return errors.New("amount exceeds maximum limit")
+	}
+	if len(req.Currency) != 3 {
+		return errors.New("currency must be a 3-letter ISO code")
+	}
 	if req.ClientTransactionId == "" {
 		return errors.New("client_transaction_id is required")
+	}
+	if len(req.ClientTransactionId) > 128 {
+		return errors.New("client_transaction_id is too long")
 	}
 	return nil
 }
