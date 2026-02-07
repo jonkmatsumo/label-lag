@@ -10,6 +10,7 @@ import (
 	"github.com/jonkmatsumo/label-lag/go/inference/internal/requestid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -31,7 +32,17 @@ func NewAnalyticsClient(target string, timeout time.Duration) (*AnalyticsClient,
 		timeout = defaultTimeout
 	}
 
-	conn, err := grpc.Dial(target, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	kacp := keepalive.ClientParameters{
+		Time:                10 * time.Second,
+		Timeout:             time.Second,
+		PermitWithoutStream: true,
+	}
+
+	conn, err := grpc.Dial(target,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithKeepaliveParams(kacp),
+		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("dial analytics-crud target: %w", err)
 	}
