@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
 	forecastv1 "github.com/jonkmatsumo/label-lag/go/forecast/proto/forecastv1"
 	"github.com/jonkmatsumo/label-lag/go/inference/internal/requestid"
 )
@@ -57,7 +58,24 @@ func (h *Handler) handleMetricsShadowComparison(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	proxyAPIGet(w, r)
+	if h.analyticsClient == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "analytics backend unavailable")
+		return
+	}
+
+	hours, _ := parseIntQuery(r, "hours", 24, 1, 720)
+
+	resp, err := h.analyticsClient.GetShadowComparison(r.Context(), &crudv1.GetShadowComparisonRequest{
+		Hours: hours,
+	})
+	if err != nil {
+		writeRPCError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 var apiHTTPClient = &http.Client{Timeout: 10 * time.Second}

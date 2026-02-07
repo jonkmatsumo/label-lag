@@ -16,7 +16,6 @@ import (
 	forecastv1 "github.com/jonkmatsumo/label-lag/go/forecast/proto/forecastv1"
 	grpcclient "github.com/jonkmatsumo/label-lag/go/inference/internal/grpc"
 	inferencev1 "github.com/jonkmatsumo/label-lag/go/inference/internal/grpc/inferencev1"
-	"github.com/jonkmatsumo/label-lag/go/inference/internal/requestid"
 	"github.com/jonkmatsumo/label-lag/go/inference/internal/rules"
 	trainingv1 "github.com/jonkmatsumo/label-lag/go/training/proto/trainingv1"
 	"google.golang.org/grpc/codes"
@@ -453,27 +452,17 @@ func TestHandleAnalyticsSchema(t *testing.T) {
 	}
 }
 
-func TestHandleMonitoringDriftProxies(t *testing.T) {
-	var gotRequestID string
-	var gotPath string
-	var gotQuery string
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotRequestID = r.Header.Get("X-Request-Id")
-		gotPath = r.URL.Path
-		gotQuery = r.URL.RawQuery
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
-	}))
-	defer upstream.Close()
-
-	t.Setenv("INFERENCE_GATEWAY_API_URL", upstream.URL)
-
+func TestHandleMonitoringDrift(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, nil, nil, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, upstream.URL, "")
+	stub := stubForecastClient{
+		driftResp: &forecastv1.GetDriftMonitoringResponse{
+			DriftScore:    0.25,
+			DriftDetected: true,
+		},
+	}
+	handler := NewHandler(logger, nil, nil, stubTrainingClient{}, stub, rules.NewEmptyProvider(), 1024, "", "")
 
-	req := httptest.NewRequest(http.MethodGet, "/monitoring/drift?hours=24&threshold=0.25&force_refresh=false", nil)
-	req = req.WithContext(requestid.WithRequestID(req.Context(), "req-1"))
+	req := httptest.NewRequest(http.MethodGet, "/monitoring/drift?hours=24", nil)
 	rec := httptest.NewRecorder()
 
 	handler.handleMonitoringDrift(rec, req)
@@ -481,38 +470,32 @@ func TestHandleMonitoringDriftProxies(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
-	if gotRequestID != "req-1" {
-		t.Fatalf("expected request id req-1, got %v", gotRequestID)
+
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
 	}
-	if gotPath != "/monitoring/drift" {
-		t.Fatalf("expected path /monitoring/drift, got %v", gotPath)
+	if payload["drift_score"] != 0.25 {
+		t.Fatalf("expected drift_score 0.25, got %v", payload["drift_score"])
 	}
-	if gotQuery != "hours=24&threshold=0.25&force_refresh=false" {
-		t.Fatalf("expected query forwarded, got %v", gotQuery)
+	if payload["drift_detected"] != true {
+		t.Fatalf("expected drift_detected true, got %v", payload["drift_detected"])
 	}
 }
 
-func TestHandleMetricsShadowComparisonProxies(t *testing.T) {
-	var gotRequestID string
-	var gotPath string
-	var gotQuery string
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotRequestID = r.Header.Get("X-Request-Id")
-		gotPath = r.URL.Path
-		gotQuery = r.URL.RawQuery
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"total_requests":0}`))
-	}))
-	defer upstream.Close()
-
-	t.Setenv("INFERENCE_GATEWAY_API_URL", upstream.URL)
-
+func TestHandleMetricsShadowComparison(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, nil, nil, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, upstream.URL, "")
+	stub := &stubAnalyticsClient{
+		shadowComparisonResp: &crudv1.GetShadowComparisonResponse{
+			Metrics: &crudv1.ShadowModeMetrics{
+				TotalEvaluations: 100,
+				ActiveScoreMean:  50,
+			},
+		},
+	}
+	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
-	req := httptest.NewRequest(http.MethodGet, "/metrics/shadow/comparison?start_date=2025-01-01&end_date=2025-01-31&rule_ids=r1,r2", nil)
-	req = req.WithContext(requestid.WithRequestID(req.Context(), "req-2"))
+	req := httptest.NewRequest(http.MethodGet, "/metrics/shadow/comparison?hours=24", nil)
 	rec := httptest.NewRecorder()
 
 	handler.handleMetricsShadowComparison(rec, req)
@@ -520,14 +503,14 @@ func TestHandleMetricsShadowComparisonProxies(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
-	if gotRequestID != "req-2" {
-		t.Fatalf("expected request id req-2, got %v", gotRequestID)
+
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
 	}
-	if gotPath != "/metrics/shadow/comparison" {
-		t.Fatalf("expected path /metrics/shadow/comparison, got %v", gotPath)
-	}
-	if gotQuery != "start_date=2025-01-01&end_date=2025-01-31&rule_ids=r1,r2" {
-		t.Fatalf("expected query forwarded, got %v", gotQuery)
+	metrics := payload["metrics"].(map[string]any)
+	if metrics["total_evaluations"] != float64(100) {
+		t.Fatalf("expected total_evaluations 100, got %v", metrics["total_evaluations"])
 	}
 }
 
@@ -682,6 +665,7 @@ type stubAnalyticsClient struct {
 	lastSchemaSummaryReq      *crudv1.GetSchemaSummaryRequest
 	lastBacktestResultsReq    *crudv1.ListBacktestResultsRequest
 	lastClearAllDataReq       *crudv1.ClearAllDataRequest
+	shadowComparisonResp      *crudv1.GetShadowComparisonResponse
 }
 
 func (s *stubAnalyticsClient) SearchTransactions(ctx context.Context, req *crudv1.SearchTransactionsRequest) (*crudv1.SearchTransactionsResponse, error) {
@@ -797,6 +781,10 @@ func (s *stubAnalyticsClient) LogInferenceEvent(ctx context.Context, req *crudv1
 
 func (s *stubAnalyticsClient) CompareBacktests(ctx context.Context, req *crudv1.CompareBacktestsRequest) (*crudv1.CompareBacktestsResponse, error) {
 	return &crudv1.CompareBacktestsResponse{}, s.err
+}
+
+func (s *stubAnalyticsClient) GetShadowComparison(ctx context.Context, req *crudv1.GetShadowComparisonRequest) (*crudv1.GetShadowComparisonResponse, error) {
+	return s.shadowComparisonResp, s.err
 }
 
 func (s *stubAnalyticsClient) GenerateData(ctx context.Context, req *crudv1.GenerateDataRequest) (*crudv1.GenerateDataResponse, error) {
