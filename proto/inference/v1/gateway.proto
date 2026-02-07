@@ -5,7 +5,7 @@ package gateway.v1;
 option go_package = "github.com/jonkmatsumo/label-lag/go/inference/internal/http/gatewayv1;gatewayv1";
 
 import "google/protobuf/struct.proto";
-import "go/analytics/proto/crud/v1/analytics.proto";
+import "analytics/v1/analytics.proto";
 
 service GatewayService {
   // Evaluates a set of rules against provided features.
