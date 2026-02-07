@@ -21,12 +21,13 @@ flowchart TB
     end
 
     subgraph Inference[Inference & ML Compute]
-        GO_INF[Go Inference Gateway]
+        GO_INF[Go Inference Service]
         PY_API[Python Forecaster / ML Compute]
+        PY_GRPC[Python gRPC Service]
     end
 
     subgraph Analytics[Analytics Data Access]
-        GO_CRUD[Go Analytics CRUD]
+        GO_CRUD[Go Analytics Service]
         DB[(Postgres)]
     end
 
@@ -36,6 +37,8 @@ flowchart TB
     end
 
     UI_REACT --> BFF --> GO_INF --> PY_API --> GO_CRUD --> DB
+    GO_INF --> PY_GRPC --> DB
+    GO_INF --> GO_CRUD
     PY_API --> MLFLOW --> MINIO
 ```
 
@@ -96,7 +99,7 @@ Core flows:
 - **Data generation and feature materialization** feed training and historical analytics while preserving point-in-time correctness.
 - **Training and registry** capture metrics and artifacts in MLflow, enabling explicit promotion and deployment.
 - **Inference and rule evaluation** combine model predictions with a high-performance Go rule engine that supports shadow testing and auditing.
-- **Dashboard-driven workflows** expose model and rule lifecycle actions managed through the Go Inference Gateway.
+- **Dashboard-driven workflows** expose model and rule lifecycle actions managed through the Go Inference Service.
 
 ## Ports & Services Table
 
@@ -112,8 +115,8 @@ All ports are configurable via `.env`.
 | MinIO API | 9100 | Object storage API for artifacts |
 | MinIO Console | 9101 | Object storage console (minioadmin/minioadmin) |
 | PostgreSQL | 5542 | Transaction and feature storage |
-| Inference Gateway | 8181 | Go-based high-throughput inference gateway |
-| Analytics CRUD | 50051 | Go analytics service (gRPC) backing compute-only data access |
+| Inference Service | 8181 | Go-based high-throughput inference service |
+| Analytics Service | 50051 | Go analytics service (gRPC) backing compute-only data access |
 
 The React UI now supports:
 - **Synthetic Dataset Management**: Generate data, view distributions, and analyze correlations.
@@ -127,8 +130,8 @@ The repo is organized around data flow and runtime boundaries so services can ev
 
 ```
 go/
-├── analytics-crud/      # Go gRPC services
-└── inference-gateway/   # Go rule engine & gateway
+├── analytics/           # Go gRPC services
+└── inference/           # Go rule engine & gateway
 node/
 ├── bff/                 # Node.js Backend for Frontend
 └── ui/                  # React + TypeScript frontend
@@ -152,17 +155,21 @@ Key folders:
 
 ### API Service (Python)
 
-Responsible for model forecasting, training triggers, and model deployment. It exposes prediction and training endpoints (`/predict/signal`, `/train`, `/models/deploy`) and serves Swagger docs at `/docs`. The API is compute-only and relies on the Go Analytics CRUD service for data access. Rule-related lifecycle actions are now delegated to the Go Inference Gateway.
+Responsible for model forecasting, training triggers, and model deployment. It exposes prediction and training endpoints (`/predict/signal`, `/train`, `/models/deploy`) and serves Swagger docs at `/docs`. The API is compute-only and relies on the Go Analytics Service for data access. Rule-related lifecycle actions are now delegated to the Go Inference Service.
 
 ### Model Training & Registry (MLflow)
 
 Training runs are tracked with metrics and artifacts, then promoted through stages before deployment. The deploy action reloads the production model into the API, keeping approval and activation separate.
 
-### Rule Engine (Go Inference Gateway)
+### Rule Engine (Go Inference Service)
 
-High-performance rule evaluation and management. Rules evaluate transaction features using operators (`>`, `>=`, `<`, `<=`, `==`, `in`, `not_in`) and actions (`override_score`, `clamp_min`, `clamp_max`, `reject`). The gateway manages the lifecycle (draft → review → approval → publish) and supports shadow evaluation, sandbox testing, and automated conflict detection.
+High-performance rule evaluation and management. Rules evaluate transaction features using operators (`>`, `>=`, `<`, `<=`, `==`, `in`, `not_in`) and actions (`override_score`, `clamp_min`, `clamp_max`, `reject`). The gateway manages the lifecycle (draft → review → approval → publish) and supports shadow evaluation, sandbox testing, and automated conflict detection. It delegates model scoring to the Python gRPC service (`pygrpc`).
 
-### Analytics CRUD (Go)
+### Python gRPC Service (pygrpc)
+
+The `pygrpc` service provides a specialized interface for low-latency model inference. It loads registered models from MLflow and serves prediction requests from the Go Inference Service.
+
+### Analytics Service (Go)
 
 Provides the gRPC data access layer for compute-only services. The Python API, model training loaders, and analytics endpoints rely on this service for reads and writes, keeping direct database I/O out of ML/compute surfaces.
 
@@ -211,38 +218,37 @@ MINIO_CONSOLE_PORT=9101
 ```
 BFF_PYTHON_API_BASE_URL=http://api:8000
 BFF_MLFLOW_TRACKING_URI=http://mlflow:5000
-BFF_GATEWAY_BASE_URL=http://inference-gateway:8081
+BFF_GATEWAY_BASE_URL=http://inference:8081
 BFF_REQUEST_TIMEOUT=30000
 BFF_LOG_LEVEL=info
 ```
 
-### Inference Gateway (Go)
+### Inference Service (Go)
 
 ```
 INFERENCE_GATEWAY_MAX_BODY_BYTES=1048576
 INFERENCE_GATEWAY_READ_TIMEOUT=10s
 INFERENCE_GATEWAY_WRITE_TIMEOUT=30s
 INFERENCE_GATEWAY_IDLE_TIMEOUT=60s
-INFERENCE_GATEWAY_RULES_PATH=config/default_rules.json
+INFERENCE_GATEWAY_RULES_PATH=go/inference/config/default_rules.json
 INFERENCE_GATEWAY_RULES_WATCH=true
 ```
 
-The Inference Gateway provides high-throughput rule evaluation and supports several advanced features:
+The Inference Service provides high-throughput rule evaluation and supports several advanced features:
 - **Rule Conflict Detection**: Automatically identifies overlapping or clashing rules (e.g., same-field same-op, range overlaps, reject vs override clashes). Conflicts are returned as `warnings` in the `/evaluate/rules` and `/evaluate/rules/diff` endpoints.
 - **Diff Severity Categorization**: The `/evaluate/rules/diff` endpoint classifies ruleset changes as `breaking`, `behavioral`, or `cosmetic` based on score deltas and action changes.
 - **Performance Metrics**: Evaluation responses include `evaluation_time_ms`. Enabling `debug=true` query parameter provides granular `per_rule_timings_ms`.
 - **Hot-Reload (Dev)**: When `INFERENCE_GATEWAY_RULES_WATCH=true`, the gateway watches the rules file for changes and reloads it automatically with a last-known-good fallback.
-- **Rules CLI**: A command-line tool for offline rule validation, evaluation, and diffing.
-  - `rules-cli validate --rules rules.json`
+- **Rules CLI**: A native Go CLI for offline rule evaluation and diffing.
   - `rules-cli evaluate --features features.json --base-score 50 --rules rules.json`
   - `rules-cli diff --features features.json --base-score 50 --a rules_a.json --b rules_b.json`
 - **Shadow Mode**: In all evaluation paths, `shadow_mode=true` performs rule simulation (dry-run) to preview effects without affecting the final production decision.
 
-### Analytics CRUD (Go)
+### Analytics Service (Go)
 
 ```
 ANALYTICS_CRUD_PORT=50051
-ANALYTICS_CRUD_TARGET=analytics-crud:50051
+ANALYTICS_CRUD_TARGET=analytics:50051
 ANALYTICS_CRUD_TIMEOUT_SECONDS=15
 ANALYTICS_CRUD_ALLOW_INSECURE_DEFAULTS=false
 ```

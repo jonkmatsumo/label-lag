@@ -14,7 +14,7 @@ class GatewayDecisionClient:
     def __init__(self, base_url: str = None, timeout: float = 5.0):
         # Allow override via parameter or environment variable
         self.base_url = base_url or os.getenv(
-            "INFERENCE_GATEWAY_URL", "http://inference-gateway:8081"
+            "INFERENCE_GATEWAY_URL", "http://inference:8081"
         )
         # Ensure no trailing slash
         self.base_url = self.base_url.rstrip("/")

@@ -22,4 +22,4 @@ ENV PYTHONPATH=/app/src
 
 EXPOSE 50052
 
-CMD ["uv", "run", "python", "-m", "grpc_inference.server"]
+CMD ["uv", "run", "python", "-m", "pygrpc.server"]
