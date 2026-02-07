@@ -125,7 +125,7 @@ func main() {
 		os.Exit(1)
 	}
 	grpcServer := grpc.NewServer()
-	gatewayServer := grpcclient.NewGatewayServer()
+	gatewayServer := grpcclient.NewGatewayServer(rulesProvider)
 	gatewayServer.Register(grpcServer)
 
 	go func() {

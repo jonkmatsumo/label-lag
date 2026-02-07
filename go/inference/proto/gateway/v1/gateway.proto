@@ -68,6 +68,8 @@ message Explanation {
     string reason = 3;
     string action = 4;
     int32 score = 5;
+    string explanation = 6;
+    int32 score_delta = 7;
 }
 
 message Conflict {

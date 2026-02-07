@@ -478,6 +478,8 @@ type Explanation struct {
 	Reason        string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
 	Action        string                 `protobuf:"bytes,4,opt,name=action,proto3" json:"action,omitempty"`
 	Score         int32                  `protobuf:"varint,5,opt,name=score,proto3" json:"score,omitempty"`
+	Explanation   string                 `protobuf:"bytes,6,opt,name=explanation,proto3" json:"explanation,omitempty"`
+	ScoreDelta    int32                  `protobuf:"varint,7,opt,name=score_delta,json=scoreDelta,proto3" json:"score_delta,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -543,6 +545,20 @@ func (x *Explanation) GetAction() string {
 func (x *Explanation) GetScore() int32 {
 	if x != nil {
 		return x.Score
+	}
+	return 0
+}
+
+func (x *Explanation) GetExplanation() string {
+	if x != nil {
+		return x.Explanation
+	}
+	return ""
+}
+
+func (x *Explanation) GetScoreDelta() int32 {
+	if x != nil {
+		return x.ScoreDelta
 	}
 	return 0
 }
@@ -638,13 +654,16 @@ const file_go_inference_proto_gateway_v1_gateway_proto_rawDesc = "" +
 	"\x13matched_rules_added\x18\x03 \x03(\tR\x11matchedRulesAdded\x122\n" +
 	"\x15matched_rules_removed\x18\x04 \x03(\tR\x13matchedRulesRemoved\".\n" +
 	"\aRuleSet\x12#\n" +
-	"\x05rules\x18\x01 \x03(\v2\r.crud.v1.RuleR\x05rules\"\x88\x01\n" +
+	"\x05rules\x18\x01 \x03(\v2\r.crud.v1.RuleR\x05rules\"\xcb\x01\n" +
 	"\vExplanation\x12\x17\n" +
 	"\arule_id\x18\x01 \x01(\tR\x06ruleId\x12\x1a\n" +
 	"\bseverity\x18\x02 \x01(\tR\bseverity\x12\x16\n" +
 	"\x06reason\x18\x03 \x01(\tR\x06reason\x12\x16\n" +
 	"\x06action\x18\x04 \x01(\tR\x06action\x12\x14\n" +
-	"\x05score\x18\x05 \x01(\x05R\x05score\"$\n" +
+	"\x05score\x18\x05 \x01(\x05R\x05score\x12 \n" +
+	"\vexplanation\x18\x06 \x01(\tR\vexplanation\x12\x1f\n" +
+	"\vscore_delta\x18\a \x01(\x05R\n" +
+	"scoreDelta\"$\n" +
 	"\bConflict\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage2\xc8\x01\n" +
 	"\x0eGatewayService\x12T\n" +
