@@ -137,7 +137,7 @@ func NewInferenceClient(target string, timeout time.Duration) (*InferenceClient,
 		target = os.Getenv("INFERENCE_GATEWAY_PYTHON_GRPC_ADDR")
 	}
 	if target == "" {
-		target = "grpc-inference:50052"
+		target = "inference-server:50052"
 	}
 	if timeout == 0 {
 		timeout = defaultTimeout

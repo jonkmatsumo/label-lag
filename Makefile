@@ -61,10 +61,15 @@ app-rebuild:
 app-logs:
 	docker compose -f docker-compose.infra.yml -f docker-compose.app.yml logs -f
 
-# Rebuild and restart API only
-rebuild-api:
-	docker compose -f docker-compose.infra.yml -f docker-compose.app.yml build api
-	docker compose -f docker-compose.infra.yml -f docker-compose.app.yml up -d api
+# Rebuild and restart Training Server (API)
+rebuild-training-server:
+	docker compose -f docker-compose.infra.yml -f docker-compose.app.yml build training-server
+	docker compose -f docker-compose.infra.yml -f docker-compose.app.yml up -d training-server
+
+# Rebuild and restart Inference Server (gRPC)
+rebuild-inference-server:
+	docker compose -f docker-compose.infra.yml -f docker-compose.app.yml build inference-server
+	docker compose -f docker-compose.infra.yml -f docker-compose.app.yml up -d inference-server
 
 # Reset commands (destructive)
 reset-db:
