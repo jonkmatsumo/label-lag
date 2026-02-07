@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"reflect"
+	"math"
 	"sync"
 	"time"
 )
@@ -20,7 +20,6 @@ const (
 	RuleStatusShadow        RuleStatus = "shadow"
 	RuleStatusDisabled      RuleStatus = "disabled"
 	RuleStatusArchived      RuleStatus = "archived"
-
 	// DefaultMaxRules is the maximum number of rules allowed in a ruleset (R4).
 	DefaultMaxRules = 500
 )
@@ -36,16 +35,13 @@ type Rule struct {
 	Reason   string     `json:"reason"`
 	Status   RuleStatus `json:"status"`
 }
-
 type RuleSet struct {
 	Version string `json:"version"`
 	Rules   []Rule `json:"rules"`
-
 	// versionOnce ensures version is only computed once (R1).
 	versionOnce sync.Once `json:"-"`
 	// computedVersion caches the computed version string (R1).
 	computedVersion string `json:"-"`
-
 	// splitOnce ensures rules are split only once (R1).
 	splitOnce   sync.Once `json:"-"`
 	activeRules []Rule    `json:"-"`
@@ -63,7 +59,6 @@ func (rs *RuleSet) ComputeVersion() string {
 			rs.computedVersion = rs.Version // Fallback
 			return
 		}
-
 		h := sha256.New()
 		// Include explicit version in hash if present
 		if rs.Version != "" {
@@ -84,7 +79,6 @@ type Explanation struct {
 	Score       *int   `json:"score,omitempty"`
 	ScoreDelta  int    `json:"score_delta"`
 }
-
 type RuleResult struct {
 	FinalScore         int
 	MatchedRules       []string
@@ -96,14 +90,12 @@ type RuleResult struct {
 	EvaluationTimeMS   float64            `json:"evaluation_time_ms"`
 	PerRuleTimingsMS   map[string]float64 `json:"per_rule_timings_ms,omitempty"`
 }
-
 type EvalOptions struct {
 	Debug bool
 }
 
 func EvaluateRules(features map[string]any, currentScore int, ruleset *RuleSet, opts EvalOptions) (RuleResult, error) {
 	startTotal := time.Now()
-
 	if ruleset == nil || len(ruleset.Rules) == 0 {
 		version := ""
 		if ruleset != nil {
@@ -119,28 +111,24 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset *RuleSet, 
 			EvaluationTimeMS:   float64(time.Since(startTotal).Nanoseconds()) / 1e6,
 		}, nil
 	}
-
 	score := currentScore
-	matched := []string{}
-	explanations := []Explanation{}
-	shadowMatched := []string{}
-	shadowExplanations := []Explanation{}
+	// Pre-allocate assuming worst case (all match) to avoid resizes
+	matched := make([]string, 0, len(ruleset.Rules))
+	explanations := make([]Explanation, 0, len(ruleset.Rules))
+	shadowMatched := make([]string, 0, 5) // Shadow rules are typically fewer
+	shadowExplanations := make([]Explanation, 0, 5)
 	rejected := false
 	overrideApplied := false
-
 	var perRuleTimings map[string]float64
 	if opts.Debug {
 		perRuleTimings = make(map[string]float64)
 	}
-
 	activeRules, shadowRules := ruleset.Split()
-
 	for _, rule := range activeRules {
 		var startRule time.Time
 		if opts.Debug {
 			startRule = time.Now()
 		}
-
 		featureValue, ok := features[rule.Field]
 		if !ok {
 			if opts.Debug {
@@ -148,7 +136,6 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset *RuleSet, 
 			}
 			continue
 		}
-
 		matches, err := evaluateCondition(rule.Op, featureValue, rule.Value)
 		if err != nil || !matches {
 			if opts.Debug {
@@ -156,10 +143,8 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset *RuleSet, 
 			}
 			continue
 		}
-
 		matched = append(matched, rule.ID)
 		beforeScore := score
-
 		switch rule.Action {
 		case "reject":
 			rejected = true
@@ -191,7 +176,6 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset *RuleSet, 
 				}
 			}
 		}
-
 		explanations = append(explanations, Explanation{
 			RuleID:      rule.ID,
 			Severity:    defaultSeverity(rule.Severity),
@@ -201,18 +185,15 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset *RuleSet, 
 			Score:       rule.Score,
 			ScoreDelta:  score - beforeScore,
 		})
-
 		if opts.Debug {
 			perRuleTimings[rule.ID] = float64(time.Since(startRule).Nanoseconds()) / 1e6
 		}
 	}
-
 	for _, rule := range shadowRules {
 		var startRule time.Time
 		if opts.Debug {
 			startRule = time.Now()
 		}
-
 		featureValue, ok := features[rule.Field]
 		if !ok {
 			if opts.Debug {
@@ -220,7 +201,6 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset *RuleSet, 
 			}
 			continue
 		}
-
 		matches, err := evaluateCondition(rule.Op, featureValue, rule.Value)
 		if err != nil || !matches {
 			if opts.Debug {
@@ -228,9 +208,7 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset *RuleSet, 
 			}
 			continue
 		}
-
 		shadowMatched = append(shadowMatched, rule.ID)
-
 		// Compute shadow delta without modifying final score
 		shadowDelta := 0
 		switch rule.Action {
@@ -249,7 +227,6 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset *RuleSet, 
 				shadowDelta = *rule.Score - score
 			}
 		}
-
 		shadowExplanations = append(shadowExplanations, Explanation{
 			RuleID:      rule.ID,
 			Severity:    defaultSeverity(rule.Severity),
@@ -259,14 +236,11 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset *RuleSet, 
 			Score:       rule.Score,
 			ScoreDelta:  shadowDelta,
 		})
-
 		if opts.Debug {
 			perRuleTimings[rule.ID] = float64(time.Since(startRule).Nanoseconds()) / 1e6
 		}
 	}
-
 	score = clampScore(score)
-
 	return RuleResult{
 		FinalScore:         score,
 		MatchedRules:       matched,
@@ -279,7 +253,6 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset *RuleSet, 
 		PerRuleTimingsMS:   perRuleTimings,
 	}, nil
 }
-
 func (rs *RuleSet) Split() (active []Rule, shadow []Rule) {
 	if rs == nil {
 		return nil, nil
@@ -296,7 +269,6 @@ func (rs *RuleSet) Split() (active []Rule, shadow []Rule) {
 	})
 	return rs.activeRules, rs.shadowRules
 }
-
 func clampScore(score int) int {
 	if score < 1 {
 		return 1
@@ -306,28 +278,25 @@ func clampScore(score int) int {
 	}
 	return score
 }
-
 func defaultSeverity(severity string) string {
 	if severity == "" {
 		return "medium"
 	}
 	return severity
 }
-
 func defaultReason(reason, fallback string) string {
 	if reason == "" {
 		return fallback
 	}
 	return reason
 }
-
 func evaluateCondition(op string, featureValue any, ruleValue any) (bool, error) {
 	switch op {
 	case ">", ">=", "<", "<=":
 		fVal, ok1 := toFloat(featureValue)
 		rVal, ok2 := toFloat(ruleValue)
 		if !ok1 || !ok2 {
-			return false, fmt.Errorf("non-numeric comparison")
+			return false, fmt.Errorf("non-numeric comparison between %T and %T", featureValue, ruleValue)
 		}
 		switch op {
 		case ">":
@@ -343,9 +312,24 @@ func evaluateCondition(op string, featureValue any, ruleValue any) (bool, error)
 		if isNumber(featureValue) && isNumber(ruleValue) {
 			fVal, _ := toFloat(featureValue)
 			rVal, _ := toFloat(ruleValue)
-			return fVal == rVal, nil
+
+			// Float equality check with epsilon
+			return math.Abs(fVal-rVal) < 1e-9, nil
 		}
-		return reflect.DeepEqual(featureValue, ruleValue), nil
+		// String comparison optimization
+		if s1, ok1 := featureValue.(string); ok1 {
+			if s2, ok2 := ruleValue.(string); ok2 {
+				return s1 == s2, nil
+			}
+		}
+		// Bool comparison optimization
+		if b1, ok1 := featureValue.(bool); ok1 {
+			if b2, ok2 := ruleValue.(bool); ok2 {
+				return b1 == b2, nil
+			}
+		}
+		// Fallback only if types match perfectly
+		return featureValue == ruleValue, nil
 	case "in", "not_in":
 		in, err := containsValue(ruleValue, featureValue)
 		if err != nil {
@@ -360,65 +344,87 @@ func evaluateCondition(op string, featureValue any, ruleValue any) (bool, error)
 	}
 	return false, fmt.Errorf("unsupported operator: %s", op)
 }
-
 func containsValue(ruleValue any, featureValue any) (bool, error) {
-	rv := reflect.ValueOf(ruleValue)
-	if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
-		return false, fmt.Errorf("rule value is not a list")
-	}
-	for i := 0; i < rv.Len(); i++ {
-		item := rv.Index(i).Interface()
-		if isNumber(item) && isNumber(featureValue) {
-			fItem, _ := toFloat(item)
-			fFeature, _ := toFloat(featureValue)
-			if fItem == fFeature {
+	// Fast path for string slice
+	if sSlice, ok := ruleValue.([]string); ok {
+		sVal, ok := featureValue.(string)
+		if !ok {
+			// Try converting featureValue to string?
+			// For strictness, if rule is []string, feature must be string
+			return false, nil
+		}
+		for _, s := range sSlice {
+			if s == sVal {
 				return true, nil
 			}
-			continue
 		}
-		if reflect.DeepEqual(item, featureValue) {
-			return true, nil
-		}
+		return false, nil
 	}
-	return false, nil
+	// Fast path for []any
+	if aSlice, ok := ruleValue.([]any); ok {
+		// If feature is number, check numeric equality
+		if isNumber(featureValue) {
+			fFeature, _ := toFloat(featureValue)
+			for _, item := range aSlice {
+				if isNumber(item) {
+					fItem, _ := toFloat(item)
+					if math.Abs(fItem-fFeature) < 1e-9 {
+						return true, nil
+					}
+				}
+			}
+			return false, nil
+		}
+		// Generic equality
+		for _, item := range aSlice {
+			if item == featureValue {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+	// Fallback to error if not a slice we handle
+	// For JSON unmarshaling, []any is common.
+	return false, fmt.Errorf("rule value must be a list (got %T)", ruleValue)
 }
-
 func toFloat(value any) (float64, bool) {
 	switch v := value.(type) {
+	case float64:
+		return v, true
 	case int:
-		return float64(v), true
-	case int8:
-		return float64(v), true
-	case int16:
-		return float64(v), true
-	case int32:
 		return float64(v), true
 	case int64:
 		return float64(v), true
-	case uint:
-		return float64(v), true
-	case uint8:
-		return float64(v), true
-	case uint16:
-		return float64(v), true
-	case uint32:
-		return float64(v), true
-	case uint64:
+	case int32:
 		return float64(v), true
 	case float32:
 		return float64(v), true
-	case float64:
-		return v, true
+	case int16:
+		return float64(v), true
+	case int8:
+		return float64(v), true
+	case uint:
+		return float64(v), true
+	case uint64:
+		return float64(v), true
+	case uint32:
+		return float64(v), true
+	case uint16:
+		return float64(v), true
+	case uint8:
+		return float64(v), true
 	default:
 		return 0, false
 	}
 }
-
 func isNumber(value any) bool {
-	_, ok := toFloat(value)
-	return ok
+	switch value.(type) {
+	case float64, int, int64, int32, float32, int16, int8, uint, uint64, uint32, uint16, uint8:
+		return true
+	default:
+		return false
+	}
 }
-
 func ValidateRule(rule Rule) error {
 	if rule.ID == "" {
 		return errors.New("rule id is required")
@@ -437,14 +443,15 @@ func ValidateRule(rule Rule) error {
 	case "==":
 		// Any value is allowed.
 	case "in", "not_in":
-		val := reflect.ValueOf(rule.Value)
-		if val.Kind() != reflect.Slice && val.Kind() != reflect.Array {
-			return fmt.Errorf("rule value must be a list for op %s", rule.Op)
+		switch rule.Value.(type) {
+		case []any, []string, []int, []float64:
+			// ok
+		default:
+			return fmt.Errorf("rule value must be a list for op %s (got %T)", rule.Op, rule.Value)
 		}
 	default:
 		return fmt.Errorf("invalid rule op %s", rule.Op)
 	}
-
 	switch rule.Action {
 	case "reject":
 	case "override_score", "clamp_min", "clamp_max":
@@ -457,22 +464,18 @@ func ValidateRule(rule Rule) error {
 	default:
 		return fmt.Errorf("invalid rule action %s", rule.Action)
 	}
-
 	switch rule.Status {
 	case RuleStatusActive, RuleStatusShadow, RuleStatusDraft, RuleStatusPendingReview, RuleStatusApproved,
 		RuleStatusDisabled, RuleStatusArchived:
 	default:
 		return fmt.Errorf("invalid rule status %s", rule.Status)
 	}
-
 	return nil
 }
-
 func FilterValidRules(rules []Rule) ([]Rule, []error) {
 	if len(rules) > DefaultMaxRules {
 		return nil, []error{fmt.Errorf("ruleset exceeds maximum rules limit of %d", DefaultMaxRules)}
 	}
-
 	valid := make([]Rule, 0, len(rules))
 	var errs []error
 	for _, rule := range rules {
