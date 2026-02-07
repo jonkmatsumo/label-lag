@@ -73,6 +73,7 @@ const (
 	defaultSearchLimit   = 100
 	maxSearchLimit       = 1000
 	defaultDatabaseURL   = "postgresql://synthetic:synthetic_dev_password@localhost:5542/synthetic_data?sslmode=disable"
+	defaultQueryTimeout  = 10 * time.Second
 )
 
 func (s *server) GetDailyStats(ctx context.Context, req *pb.GetDailyStatsRequest) (*pb.GetDailyStatsResponse, error) {
@@ -100,8 +101,10 @@ func (s *server) GetDailyStats(ctx context.Context, req *pb.GetDailyStatsRequest
 		GROUP BY DATE(em.created_at)
 		ORDER BY date DESC
 	`
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
 
-	rows, err := s.db.QueryContext(ctx, query, cutoffDate)
+	rows, err := s.db.QueryContext(queryCtx, query, cutoffDate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query daily stats: %v", err)
 	}
@@ -162,8 +165,10 @@ func (s *server) GetTransactionDetails(ctx context.Context, req *pb.GetTransacti
 		ORDER BY em.created_at DESC
 		LIMIT $2
 	`
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
 
-	rows, err := s.db.QueryContext(ctx, query, cutoffDate, limit)
+	rows, err := s.db.QueryContext(queryCtx, query, cutoffDate, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query transaction details: %v", err)
 	}
@@ -255,7 +260,9 @@ func (s *server) SearchTransactions(ctx context.Context, req *pb.SearchTransacti
 
 	countQuery := "SELECT COUNT(*) FROM generated_records" + whereClause
 	var total int64
-	if err := s.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+	if err := s.db.QueryRowContext(queryCtx, countQuery, args...).Scan(&total); err != nil {
 		return nil, fmt.Errorf("failed to query transaction count: %v", err)
 	}
 
@@ -274,7 +281,8 @@ func (s *server) SearchTransactions(ctx context.Context, req *pb.SearchTransacti
 		FROM generated_records` + whereClause + fmt.Sprintf(" ORDER BY transaction_timestamp DESC OFFSET $%d LIMIT $%d", len(args)+1, len(args)+2)
 
 	args = append(args, offset, limit)
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	// Reuse queryCtx/cancel if possible, but let's just make a new one for clarity or keep it simple
+	rows, err := s.db.QueryContext(queryCtx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query transactions: %v", err)
 	}
@@ -351,8 +359,10 @@ func (s *server) GetRecentAlerts(ctx context.Context, req *pb.GetRecentAlertsReq
 		ORDER BY created_at DESC
 		LIMIT $2
 	`
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
 
-	rows, err := s.db.QueryContext(ctx, query, alertThreshold, limit)
+	rows, err := s.db.QueryContext(queryCtx, query, alertThreshold, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query recent alerts: %v", err)
 	}
@@ -403,7 +413,10 @@ func (s *server) GetOverviewMetrics(ctx context.Context, req *pb.GetOverviewMetr
 	var resp pb.GetOverviewMetricsResponse
 	var minTx, maxTx, minCr, maxCr sql.NullTime
 
-	err := s.db.QueryRowContext(ctx, query).Scan(
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	err := s.db.QueryRowContext(queryCtx, query).Scan(
 		&resp.TotalRecords,
 		&resp.FraudRecords,
 		&resp.UniqueUsers,
@@ -463,7 +476,10 @@ func (s *server) GetDatasetFingerprint(ctx context.Context, req *pb.GetDatasetFi
 	var maxCr, maxTx sql.NullTime
 	var maxId sql.NullInt64
 
-	err := s.db.QueryRowContext(ctx, queryGR).Scan(
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	err := s.db.QueryRowContext(queryCtx, queryGR).Scan(
 		&resp.GeneratedRecords.Count,
 		&maxCr,
 		&maxTx,
@@ -485,7 +501,8 @@ func (s *server) GetDatasetFingerprint(ctx context.Context, req *pb.GetDatasetFi
 	var maxComp sql.NullTime
 	var maxSnapshotId sql.NullInt64
 
-	err = s.db.QueryRowContext(ctx, queryFS).Scan(
+	// Reuse queryCtx/cancel if appropriate, or make new one
+	err = s.db.QueryRowContext(queryCtx, queryFS).Scan(
 		&resp.FeatureSnapshots.Count,
 		&maxComp,
 		&maxSnapshotId,
@@ -506,8 +523,10 @@ func (s *server) GetDatasetFingerprint(ctx context.Context, req *pb.GetDatasetFi
 // Helper functions for advanced sampling
 
 func getPostgresVersion(ctx context.Context, db *sql.DB) (int, error) {
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
 	var versionStr string
-	err := db.QueryRowContext(ctx, "SELECT version()").Scan(&versionStr)
+	err := db.QueryRowContext(queryCtx, "SELECT version()").Scan(&versionStr)
 	if err != nil {
 		return 0, err
 	}
@@ -535,9 +554,11 @@ type tableStats struct {
 }
 
 func getTableStats(ctx context.Context, db *sql.DB, table string) (tableStats, error) {
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
 	var stats tableStats
 	query := fmt.Sprintf("SELECT COALESCE(MIN(id), 0), COALESCE(MAX(id), 0), COUNT(*) FROM %s", table)
-	err := db.QueryRowContext(ctx, query).Scan(&stats.minID, &stats.maxID, &stats.totalCount)
+	err := db.QueryRowContext(queryCtx, query).Scan(&stats.minID, &stats.maxID, &stats.totalCount)
 	if err != nil {
 		return stats, err
 	}
@@ -605,6 +626,9 @@ func (s *server) GetSchemaSummary(ctx context.Context, req *pb.GetSchemaSummaryR
 
 	arrStr := "{" + strings.Join(tableNames, ",") + "}"
 
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
 	query := `
 		SELECT
 			table_name,
@@ -618,7 +642,7 @@ func (s *server) GetSchemaSummary(ctx context.Context, req *pb.GetSchemaSummaryR
 		ORDER BY table_name, ordinal_position
 	`
 
-	rows, err := s.db.QueryContext(ctx, query, arrStr)
+	rows, err := s.db.QueryContext(queryCtx, query, arrStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query schema summary: %v", err)
 	}
@@ -704,13 +728,15 @@ func (s *server) GetTrainingData(ctx context.Context, req *pb.GetTrainingDataReq
 		WHERE gr.transaction_timestamp >= $1
 		ORDER BY gr.transaction_timestamp
 	`
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
 
-	trainRecords, err := s.queryTrainingRecords(ctx, trainQuery, cutoff)
+	trainRecords, err := s.queryTrainingRecords(queryCtx, trainQuery, cutoff)
 	if err != nil {
 		return nil, err
 	}
 
-	testRecords, err := s.queryTrainingRecords(ctx, testQuery, cutoff)
+	testRecords, err := s.queryTrainingRecords(queryCtx, testQuery, cutoff)
 	if err != nil {
 		return nil, err
 	}
@@ -721,8 +747,8 @@ func (s *server) GetTrainingData(ctx context.Context, req *pb.GetTrainingDataReq
 	}, nil
 }
 
-func (s *server) queryTrainingRecords(ctx context.Context, query string, cutoff time.Time) ([]*pb.TransactionDetail, error) {
-	rows, err := s.db.QueryContext(ctx, query, cutoff)
+func (s *server) queryTrainingRecords(queryCtx context.Context, query string, cutoff time.Time) ([]*pb.TransactionDetail, error) {
+	rows, err := s.db.QueryContext(queryCtx, query, cutoff)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query training records: %v", err)
 	}
@@ -774,8 +800,10 @@ func (s *server) GetBacktestFeatures(ctx context.Context, req *pb.GetBacktestFea
 		WHERE computed_at >= $1 AND computed_at <= $2
 		ORDER BY computed_at
 	`
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
 
-	rows, err := s.db.QueryContext(ctx, query, start, end)
+	rows, err := s.db.QueryContext(queryCtx, query, start, end)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query backtest features: %v", err)
 	}
@@ -817,8 +845,10 @@ func (s *server) SaveBacktestResult(ctx context.Context, req *pb.SaveBacktestRes
 			completed_at = EXCLUDED.completed_at,
 			error = EXCLUDED.error
 	`
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
 
-	_, err := s.db.ExecContext(ctx, query,
+	_, err := s.db.ExecContext(queryCtx, query,
 		res.JobId, res.RuleId, res.RulesetVersion,
 		res.StartDate.AsTime(), res.EndDate.AsTime(),
 		metricsJSON, res.CompletedAt.AsTime(), res.Error,
@@ -856,7 +886,10 @@ func (s *server) ListBacktestResults(ctx context.Context, req *pb.ListBacktestRe
 
 	query += " ORDER BY completed_at DESC LIMIT 100"
 
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(queryCtx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query backtest results: %v", err)
 	}
@@ -906,7 +939,10 @@ func (s *server) GetBacktestResult(ctx context.Context, req *pb.GetBacktestResul
 	var metricsJSON []byte
 	var ruleID sql.NullString
 
-	err := s.db.QueryRowContext(ctx, query, req.JobId).Scan(
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	err := s.db.QueryRowContext(queryCtx, query, req.JobId).Scan(
 		&res.JobId, &ruleID, &res.RulesetVersion, &start, &end,
 		&metricsJSON, &completed, &res.Error,
 	)
@@ -1006,8 +1042,10 @@ func (s *server) GetDriftWindow(ctx context.Context, req *pb.GetDriftWindowReque
 		WHERE computed_at >= $1
 		ORDER BY computed_at DESC
 	`
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
 
-	rows, err := s.db.QueryContext(ctx, query, cutoff)
+	rows, err := s.db.QueryContext(queryCtx, query, cutoff)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query drift window: %v", err)
 	}
@@ -1046,8 +1084,10 @@ func (s *server) GetInferenceScores(ctx context.Context, req *pb.GetInferenceSco
 		WHERE ts >= $1
 		ORDER BY ts DESC
 	`
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
 
-	rows, err := s.db.QueryContext(ctx, query, cutoff)
+	rows, err := s.db.QueryContext(queryCtx, query, cutoff)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query inference scores: %v", err)
 	}
@@ -1090,9 +1130,11 @@ func (s *server) StoreGeneratedData(ctx context.Context, req *pb.StoreGeneratedD
 			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
 		)
 	`
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
 
 	for _, r := range req.Records {
-		_, err := tx.ExecContext(ctx, recordQuery,
+		_, err := tx.ExecContext(queryCtx, recordQuery,
 			r.RecordId, r.UserId, r.FullName, r.Email, r.Phone,
 			r.TransactionTimestamp.AsTime(), r.IsOffHoursTxn, r.AvailableBalance,
 			r.BalanceToTransactionRatio, r.AvgAvailableBalance_30D,
@@ -1121,7 +1163,7 @@ func (s *server) StoreGeneratedData(ctx context.Context, req *pb.StoreGeneratedD
 			fraudConfirmedAt = m.FraudConfirmedAt.AsTime()
 		}
 
-		_, err := tx.ExecContext(ctx, metaQuery,
+		_, err := tx.ExecContext(queryCtx, metaQuery,
 			m.UserId, m.RecordId, m.SequenceNumber, fraudConfirmedAt,
 			m.IsPreFraud, m.DaysToFraud, m.IsTrainEligible,
 		)
@@ -1236,8 +1278,11 @@ func (s *server) GenerateData(ctx context.Context, req *pb.GenerateDataRequest) 
 func (s *server) ClearAllData(ctx context.Context, req *pb.ClearAllDataRequest) (*pb.ClearAllDataResponse, error) {
 	tables := []string{"feature_snapshots", "evaluation_metadata", "generated_records", "backtest_results"}
 
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
 	for _, t := range tables {
-		if _, err := s.db.ExecContext(ctx, fmt.Sprintf("TRUNCATE TABLE %s CASCADE", t)); err != nil {
+		if _, err := s.db.ExecContext(queryCtx, fmt.Sprintf("TRUNCATE TABLE %s CASCADE", t)); err != nil {
 			return nil, fmt.Errorf("failed to clear table %s: %v", t, err)
 		}
 	}
@@ -1350,8 +1395,10 @@ func (s *server) MaterializeFeatures(ctx context.Context, req *pb.MaterializeFea
 			experimental_signals = EXCLUDED.experimental_signals,
 			computed_at = EXCLUDED.computed_at;
 	`
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
 
-	res, err := s.db.ExecContext(ctx, materializeSQL)
+	res, err := s.db.ExecContext(queryCtx, materializeSQL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to materialize features: %v", err)
 	}
@@ -1384,8 +1431,10 @@ func (s *server) SaveRule(ctx context.Context, req *pb.SaveRuleRequest) (*pb.Sav
 			reason = EXCLUDED.reason,
 			status = EXCLUDED.status
 	`
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
 
-	_, err := s.db.ExecContext(ctx, query,
+	_, err := s.db.ExecContext(queryCtx, query,
 		r.Id, r.Field, r.Op, r.ValueJson, r.Action, r.Score, r.Severity, r.Reason, r.Status,
 	)
 
@@ -1400,7 +1449,10 @@ func (s *server) GetRule(ctx context.Context, req *pb.GetRuleRequest) (*pb.GetRu
 	query := `SELECT rule_id, field, op, value, action, score, severity, reason, status FROM rules WHERE rule_id = $1`
 
 	var r pb.Rule
-	err := s.db.QueryRowContext(ctx, query, req.RuleId).Scan(
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	err := s.db.QueryRowContext(queryCtx, query, req.RuleId).Scan(
 		&r.Id, &r.Field, &r.Op, &r.ValueJson, &r.Action, &r.Score, &r.Severity, &r.Reason, &r.Status,
 	)
 
@@ -1426,7 +1478,10 @@ func (s *server) ListRules(ctx context.Context, req *pb.ListRulesRequest) (*pb.L
 
 	query += " ORDER BY rule_id"
 
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(queryCtx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list rules: %v", err)
 	}
@@ -1448,7 +1503,10 @@ func (s *server) ListRules(ctx context.Context, req *pb.ListRulesRequest) (*pb.L
 
 func (s *server) DeleteRule(ctx context.Context, req *pb.DeleteRuleRequest) (*pb.DeleteRuleResponse, error) {
 	query := `UPDATE rules SET status = 'archived' WHERE rule_id = $1`
-	_, err := s.db.ExecContext(ctx, query, req.RuleId)
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	_, err := s.db.ExecContext(queryCtx, query, req.RuleId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to archive rule: %v", err)
 	}
@@ -1469,8 +1527,10 @@ func (s *server) LogInferenceEvent(ctx context.Context, req *pb.LogInferenceEven
 			model_score, final_score, rule_impacts
 		) VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
 
-	_, err := s.db.ExecContext(ctx, query,
+	_, err := s.db.ExecContext(queryCtx, query,
 		e.RequestId, e.Timestamp.AsTime(), e.ModelVersion, e.RulesVersion,
 		e.ModelScore, e.FinalScore, impactsJSON,
 	)
@@ -1500,7 +1560,9 @@ func (s *server) GetFeatureSample(ctx context.Context, req *pb.GetFeatureSampleR
 
 	// Get fraud rate for stratification
 	var fraudRate float64
-	err = s.db.QueryRowContext(ctx, "SELECT CAST(SUM(CASE WHEN is_fraudulent THEN 1 ELSE 0 END) AS FLOAT) / COUNT(*) FROM generated_records").Scan(&fraudRate)
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+	err = s.db.QueryRowContext(queryCtx, "SELECT CAST(SUM(CASE WHEN is_fraudulent THEN 1 ELSE 0 END) AS FLOAT) / COUNT(*) FROM generated_records").Scan(&fraudRate)
 	if err != nil {
 		fraudRate = 0.0 // Fallback
 	}
@@ -1598,7 +1660,10 @@ func (s *server) sampleGeneric(ctx context.Context, limit int32, pgVersion int, 
 }
 
 func (s *server) executeQuery(ctx context.Context, query string) ([]*pb.FeatureSample, error) {
-	rows, err := s.db.QueryContext(ctx, query)
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(queryCtx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -1874,8 +1939,10 @@ func (s *server) ListRuleVersions(ctx context.Context, req *pb.ListRuleVersionsR
 		ORDER BY created_at DESC
 		LIMIT $2 OFFSET $3
 	`
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
 
-	rows, err := s.db.QueryContext(ctx, query, req.RuleId, limit, offset)
+	rows, err := s.db.QueryContext(queryCtx, query, req.RuleId, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list rule versions: %v", err)
 	}
@@ -1907,7 +1974,10 @@ func (s *server) ListRuleVersions(ctx context.Context, req *pb.ListRuleVersionsR
 
 	// Get total count
 	var total int64
-	err = s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM rule_versions WHERE rule_id = $1", req.RuleId).Scan(&total)
+	// Re-assign queryCtx with a fresh timeout for the second query
+	queryCtx, cancel = context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+	err = s.db.QueryRowContext(queryCtx, "SELECT COUNT(*) FROM rule_versions WHERE rule_id = $1", req.RuleId).Scan(&total)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count rule versions: %v", err)
 	}
@@ -1954,7 +2024,9 @@ func (s *server) GetRuleVersion(ctx context.Context, req *pb.GetRuleVersionReque
 	var verID string
 	var createdAt time.Time
 
-	err := s.db.QueryRowContext(ctx, query, args...).Scan(&ruleJSON, &verID, &createdAt)
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+	err := s.db.QueryRowContext(queryCtx, query, args...).Scan(&ruleJSON, &verID, &createdAt)
 	if err == sql.ErrNoRows {
 		return nil, status.Error(codes.NotFound, "rule version not found")
 	} else if err != nil {
@@ -1978,7 +2050,10 @@ func (s *server) PublishRuleVersion(ctx context.Context, req *pb.PublishRuleVers
 		return nil, status.Error(codes.InvalidArgument, "rule_id required")
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	tx, err := s.db.BeginTx(queryCtx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %v", err)
 	}
@@ -1987,7 +2062,7 @@ func (s *server) PublishRuleVersion(ctx context.Context, req *pb.PublishRuleVers
 	// 1. Get current draft from rules table
 	var field, op, value, action, severity, reason, statusStr string
 	var score sql.NullInt32
-	err = tx.QueryRowContext(ctx, `SELECT field, op, value, action, score, severity, reason, status FROM rules WHERE rule_id = $1`, req.RuleId).
+	err = tx.QueryRowContext(queryCtx, `SELECT field, op, value, action, score, severity, reason, status FROM rules WHERE rule_id = $1`, req.RuleId).
 		Scan(&field, &op, &value, &action, &score, &severity, &reason, &statusStr)
 
 	if err == sql.ErrNoRows {
@@ -2019,7 +2094,7 @@ func (s *server) PublishRuleVersion(ctx context.Context, req *pb.PublishRuleVers
 	ruleJSON, _ := json.Marshal(r)
 
 	// 4. Insert into rule_versions
-	_, err = tx.ExecContext(ctx, `
+	_, err = tx.ExecContext(queryCtx, `
 		INSERT INTO rule_versions (version_id, rule_id, rule_json, created_at, created_by, change_description, status, is_active)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`, newVersion, req.RuleId, ruleJSON, time.Now(), req.Actor, req.Reason, "active", true)
@@ -2029,7 +2104,7 @@ func (s *server) PublishRuleVersion(ctx context.Context, req *pb.PublishRuleVers
 	}
 
 	// 5. Update rules table with active_version_id and status=active
-	_, err = tx.ExecContext(ctx, `
+	_, err = tx.ExecContext(queryCtx, `
 		UPDATE rules SET status = 'active', active_version_id = $1 WHERE rule_id = $2
 	`, newVersion, req.RuleId)
 
@@ -2039,7 +2114,7 @@ func (s *server) PublishRuleVersion(ctx context.Context, req *pb.PublishRuleVers
 
 	// 6. Archive previous active versions?
 	// Optional: Set is_active=false for other versions
-	_, err = tx.ExecContext(ctx, `
+	_, err = tx.ExecContext(queryCtx, `
 		UPDATE rule_versions SET is_active = FALSE WHERE rule_id = $1 AND version_id != $2
 	`, req.RuleId, newVersion)
 	if err != nil {
@@ -2060,7 +2135,9 @@ func (s *server) GetRuleReadiness(ctx context.Context, req *pb.GetRuleReadinessR
 	// 3. Check syntax (simplified)
 
 	var ruleID, valueJSON string
-	err := s.db.QueryRowContext(ctx, "SELECT rule_id, value FROM rules WHERE rule_id = $1", req.RuleId).Scan(&ruleID, &valueJSON)
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+	err := s.db.QueryRowContext(queryCtx, "SELECT rule_id, value FROM rules WHERE rule_id = $1", req.RuleId).Scan(&ruleID, &valueJSON)
 	if err == sql.ErrNoRows {
 		return nil, status.Error(codes.NotFound, "rule not found")
 	}
@@ -2096,8 +2173,11 @@ func (s *server) DiffRuleVersions(ctx context.Context, req *pb.DiffRuleVersionsR
 
 	// Helper to get version JSON
 	getVersionJSON := func(verID string) (*pb.Rule, error) {
+		queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+		defer cancel()
 		var rJSON []byte
-		err := s.db.QueryRowContext(ctx, "SELECT rule_json FROM rule_versions WHERE rule_id = $1 AND version_id = $2", req.RuleId, verID).Scan(&rJSON)
+		err := s.db.QueryRowContext(queryCtx, "SELECT rule_json FROM rule_versions WHERE rule_id = $1 AND version_id = $2", req.RuleId, verID).Scan(&rJSON)
+
 		if err != nil {
 			return nil, err
 		}
