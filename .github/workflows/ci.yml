@@ -22,6 +22,9 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras
 
+      - name: Generate Protos
+        run: make proto-gen-python
+
       - name: Run ruff linting
         run: uv run ruff check python/src python/tests
 
@@ -73,6 +76,9 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras
 
+      - name: Generate Protos
+        run: make proto-gen-python
+
       - name: Run ruff
         run: uv run ruff check --output-format=github python/src python/tests
 
@@ -94,6 +100,18 @@ jobs:
           go-version-file: ${{ matrix.module }}/go.mod
           cache: true
           cache-dependency-path: ${{ matrix.module }}/go.sum
+
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+
+      - name: Install Go Protoc Plugins
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
+      - name: Generate Protos
+        run: make proto-gen-go
 
       - name: Run Go tests
         working-directory: ${{ matrix.module }}

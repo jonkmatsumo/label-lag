@@ -78,6 +78,7 @@ export async function modelRoutes(
           path: '/train',
           body: trainRequest,
           requestId: request.requestId,
+          target: 'gateway',
           timeout: 300000, // 5 minutes for training
         });
 
@@ -117,6 +118,7 @@ export async function modelRoutes(
           path: '/models/deploy',
           body: deployRequest,
           requestId: request.requestId,
+          target: 'gateway',
         });
 
         return reply.status(response.statusCode).send(response.data);

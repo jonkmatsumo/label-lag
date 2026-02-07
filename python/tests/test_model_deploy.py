@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from forecast.model_manager import ModelManager
+from forecast_server.model_manager import ModelManager
 from training_server.audit import AuditLogger, set_audit_logger
 
 
@@ -27,7 +27,7 @@ class TestModelDeploy:
         set_audit_logger(logger)
         return logger
 
-    @patch("forecast.routes.get_model_manager")
+    @patch("forecast_server.routes.get_model_manager")
     def test_deploy_triggers_reload(self, mock_get_manager, model_manager):
         """Test that deploy triggers model reload."""
         mock_get_manager.return_value = model_manager
@@ -39,7 +39,7 @@ class TestModelDeploy:
         assert success is True
         model_manager.load_production_model.assert_called_once()
 
-    @patch("forecast.routes.get_model_manager")
+    @patch("forecast_server.routes.get_model_manager")
     def test_deploy_creates_audit_event(
         self, mock_get_manager, model_manager, audit_logger
     ):
@@ -65,7 +65,7 @@ class TestModelDeploy:
         assert records[0].actor == "test_actor"
         assert records[0].rule_id == "model:v2"
 
-    @patch("forecast.routes.get_model_manager")
+    @patch("forecast_server.routes.get_model_manager")
     def test_deploy_fails_without_production_model(
         self, mock_get_manager, model_manager
     ):

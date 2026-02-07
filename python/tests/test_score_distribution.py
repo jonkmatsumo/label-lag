@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from forecast.routes import get_score_distribution
+from forecast_server.routes import get_score_distribution
 
 
 class TestScoreDistribution:
@@ -28,7 +28,9 @@ class TestScoreDistribution:
         mock_client.get_inference_scores.return_value = mock_resp
 
         with (
-            patch("forecast.routes.get_model_manager", return_value=mock_manager),
+            patch(
+                "forecast_server.routes.get_model_manager", return_value=mock_manager
+            ),
             patch(
                 "training_server.crud_client.get_crud_client", return_value=mock_client
             ),
@@ -60,7 +62,9 @@ class TestScoreDistribution:
         mock_client.get_inference_scores.return_value = mock_resp
 
         with (
-            patch("forecast.routes.get_model_manager", return_value=mock_manager),
+            patch(
+                "forecast_server.routes.get_model_manager", return_value=mock_manager
+            ),
             patch(
                 "training_server.crud_client.get_crud_client", return_value=mock_client
             ),

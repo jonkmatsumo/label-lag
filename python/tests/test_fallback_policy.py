@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from forecast.services import SignalForecaster
+from forecast_server.services import SignalForecaster
 from training_server.schemas import SignalRequest
 
 
@@ -19,7 +19,7 @@ class TestFallbackPolicy:
 
     @pytest.fixture
     def mock_manager(self):
-        with patch("forecast.model_manager.get_model_manager") as mock:
+        with patch("forecast_server.model_manager.get_model_manager") as mock:
             manager = MagicMock()
             mock.return_value = manager
             yield manager

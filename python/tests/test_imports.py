@@ -6,7 +6,7 @@ import pytest
 
 
 def test_api_main_import_is_lightweight():
-    """Assert that importing api.main does not import heavy dependencies."""
+    """Assert that importing training_server.main does not import heavy dependencies."""
     # Ensure heavy modules are not already in sys.modules
     heavy_modules = ["mlflow", "scipy", "matplotlib"]
     for mod in heavy_modules:

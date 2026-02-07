@@ -14,18 +14,15 @@ services:
       - AWS_SECRET_ACCESS_KEY=minioadmin
       - PYTHONPATH=/app/src
       - PYTHONHASHSEED=42
+      - TRAINING_SERVER_HOST=0.0.0.0
+      - TRAINING_SERVER_PORT=50053
     networks:
       - labellag_net
     ports:
-      - "${TRAINING_SERVER_PORT:-8000}:8000"
-    command: [ "uv", "run", "uvicorn", "training_server.main:app", "--host", "0.0.0.0", "--port", "8000" ]
+      - "${TRAINING_SERVER_PORT:-50053}:50053"
+      - "8000:8000"
+    command: [ "uv", "run", "python", "-m", "training_server.server" ]
     restart: unless-stopped
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
 
   analytics:
     build:
@@ -75,6 +72,7 @@ services:
     environment:
       - PORT=8081
       - INFERENCE_GATEWAY_PYTHON_GRPC_ADDR=inference-server:50052
+      - TRAINING_SERVER_GRPC_ADDR=training-server:50053
       - INFERENCE_GATEWAY_RULES_PATH=go/inference/config/default_rules.json
       - INFERENCE_GATEWAY_RULES_WATCH=true
     networks:

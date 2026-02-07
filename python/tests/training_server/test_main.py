@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from forecast.services import (
+from forecast_server.services import (
     FeatureVector,
     SignalForecaster,
     get_forecaster,

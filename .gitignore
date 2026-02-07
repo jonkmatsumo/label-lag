@@ -66,5 +66,31 @@ rules-cli
 
 # Node
 node_modules/
-# gRPC
+# gRPC generated files
 python/src/gateway_grpc/
+python/src/inference_server/proto/
+python/src/training_server/proto/
+python/src/forecast_server/proto/
+python/src/analytics/
+python/src/inference/
+python/src/training/
+go/forecast/proto/
+go/training/proto/
+# go/inference/internal/grpc/*_client.go (Track hand-written clients)
+go/inference/internal/grpc/inferencev1/
+
+# Generated Go binaries and plugins
+protoc-gen-go
+protoc-gen-go-grpc
+protoc-gen-go_grpc
+rules-cli
+bin/
+
+# Generated Proto Files
+**/*.pb.go
+**/proto/**/*_pb2.py
+**/proto/**/*_pb2.pyi
+**/proto/**/*_pb2_grpc.py
+**/gateway_grpc/**/*_pb2.py
+**/gateway_grpc/**/*_pb2.pyi
+**/gateway_grpc/**/*_pb2_grpc.py

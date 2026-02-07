@@ -1,8 +1,8 @@
 import grpc
 import pytest
 
+from inference.v1 import inference_pb2
 from inference_server.config import InferenceServerConfig
-from inference_server.proto.inference.v1 import inference_pb2
 from inference_server.service import InferenceService
 
 

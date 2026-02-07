@@ -19,8 +19,8 @@ describe('Monitoring Routes', () => {
 
   describe('GET /bff/v1/monitoring/drift', () => {
     it('returns drift status', async () => {
-      ctx.mockApiPool.intercept({
-        path: '/monitoring/drift?hours=24&threshold=0.25&force_refresh=false',
+      ctx.mockGatewayPool.intercept({
+        path: '/monitoring/drift?force_refresh=false&hours=24&threshold=0.25',
         method: 'GET',
       }).reply(200, {
         status: 'ok',
@@ -52,8 +52,8 @@ describe('Monitoring Routes', () => {
     });
 
     it('returns drift warning status', async () => {
-      ctx.mockApiPool.intercept({
-        path: '/monitoring/drift?hours=24&threshold=0.25&force_refresh=false',
+      ctx.mockGatewayPool.intercept({
+        path: '/monitoring/drift?force_refresh=false&hours=24&threshold=0.25',
         method: 'GET',
       }).reply(200, {
         status: 'warning',
@@ -81,8 +81,8 @@ describe('Monitoring Routes', () => {
     });
 
     it('accepts custom parameters', async () => {
-      ctx.mockApiPool.intercept({
-        path: '/monitoring/drift?hours=48&threshold=0.3&force_refresh=true',
+      ctx.mockGatewayPool.intercept({
+        path: '/monitoring/drift?force_refresh=true&hours=48&threshold=0.3',
         method: 'GET',
       }).reply(200, {
         status: 'ok',
@@ -102,7 +102,7 @@ describe('Monitoring Routes', () => {
 
   describe('GET /bff/v1/metrics/shadow/comparison', () => {
     it('returns shadow comparison metrics', async () => {
-      ctx.mockApiPool.intercept({
+      ctx.mockGatewayPool.intercept({
         path: '/metrics/shadow/comparison?start_date=2024-01-01&end_date=2024-01-15',
         method: 'GET',
       }).reply(200, {

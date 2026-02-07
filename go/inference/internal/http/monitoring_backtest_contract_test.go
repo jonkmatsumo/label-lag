@@ -1,7 +1,7 @@
 package httpserver
 
 import (
-	"bytes"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -10,6 +10,7 @@ import (
 	"time"
 
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	forecastv1 "github.com/jonkmatsumo/label-lag/go/forecast/proto/forecastv1"
 	grpcclient "github.com/jonkmatsumo/label-lag/go/inference/internal/grpc"
 	"github.com/jonkmatsumo/label-lag/go/inference/internal/requestid"
 	"github.com/jonkmatsumo/label-lag/go/inference/internal/rules"
@@ -18,26 +19,16 @@ import (
 )
 
 func TestMonitoringDriftContract(t *testing.T) {
-	var gotRequestID string
-	var gotPath string
-	var gotQuery string
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotRequestID = r.Header.Get("X-Request-Id")
-		gotPath = r.URL.Path
-		gotQuery = r.URL.RawQuery
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
-	}))
-	defer upstream.Close()
-
-	t.Setenv("INFERENCE_GATEWAY_API_URL", upstream.URL)
-
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, nil, nil, rules.NewEmptyProvider(), 1024, "", "")
+	stub := stubForecastClient{
+		driftResp: &forecastv1.GetDriftMonitoringResponse{
+			DriftScore:    0.1,
+			DriftDetected: false,
+		},
+	}
+	handler := NewHandler(logger, nil, nil, stubTrainingClient{}, stub, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/monitoring/drift?hours=24&threshold=0.25&force_refresh=false", nil)
-	req = req.WithContext(requestid.WithRequestID(req.Context(), "req-55"))
 	rec := httptest.NewRecorder()
 
 	handler.handleMonitoringDrift(rec, req)
@@ -45,60 +36,45 @@ func TestMonitoringDriftContract(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
-	if gotRequestID != "req-55" {
-		t.Fatalf("expected request id req-55, got %v", gotRequestID)
+
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
 	}
-	if gotPath != "/monitoring/drift" {
-		t.Fatalf("expected path /monitoring/drift, got %v", gotPath)
-	}
-	if gotQuery != "hours=24&threshold=0.25&force_refresh=false" {
-		t.Fatalf("expected query forwarded, got %v", gotQuery)
+	if payload["drift_score"] != 0.1 {
+		t.Fatalf("expected drift_score 0.1, got %v", payload["drift_score"])
 	}
 }
 
 func TestMonitoringDriftContractError(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"detail":"boom"}`))
-	}))
-	defer upstream.Close()
-
-	t.Setenv("INFERENCE_GATEWAY_API_URL", upstream.URL)
-
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, nil, nil, rules.NewEmptyProvider(), 1024, "", "")
+	stub := stubForecastClient{
+		err: &grpcclient.RPCError{Code: codes.Unavailable, Message: "service down"},
+	}
+	handler := NewHandler(logger, nil, nil, stubTrainingClient{}, stub, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/monitoring/drift", nil)
 	rec := httptest.NewRecorder()
 
 	handler.handleMonitoringDrift(rec, req)
 
-	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("expected status %d, got %d", http.StatusInternalServerError, rec.Code)
-	}
-	if !bytes.Contains(rec.Body.Bytes(), []byte(`"detail":"boom"`)) {
-		t.Fatalf("expected response body to pass through, got %s", rec.Body.String())
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
 	}
 }
 
 func TestShadowComparisonContract(t *testing.T) {
-	var gotRequestID string
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotRequestID = r.Header.Get("X-Request-Id")
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"total_requests":0}`))
-	}))
-	defer upstream.Close()
-
-	t.Setenv("INFERENCE_GATEWAY_API_URL", upstream.URL)
-
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, nil, nil, rules.NewEmptyProvider(), 1024, "", "")
+	stub := &stubAnalyticsClient{
+		shadowComparisonResp: &crudv1.GetShadowComparisonResponse{
+			Metrics: &crudv1.ShadowModeMetrics{
+				TotalEvaluations: 100,
+			},
+		},
+	}
+	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
-	req := httptest.NewRequest(http.MethodGet, "/metrics/shadow/comparison?start_date=2025-01-01&end_date=2025-01-31", nil)
-	req = req.WithContext(requestid.WithRequestID(req.Context(), "req-66"))
+	req := httptest.NewRequest(http.MethodGet, "/metrics/shadow/comparison?hours=24", nil)
 	rec := httptest.NewRecorder()
 
 	handler.handleMetricsShadowComparison(rec, req)
@@ -106,31 +82,30 @@ func TestShadowComparisonContract(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
-	if gotRequestID != "req-66" {
-		t.Fatalf("expected request id req-66, got %v", gotRequestID)
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	metrics := payload["metrics"].(map[string]any)
+	if metrics["total_evaluations"] != float64(100) {
+		t.Fatalf("expected total_evaluations 100, got %v", metrics["total_evaluations"])
 	}
 }
 
 func TestShadowComparisonContractError(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadGateway)
-		_, _ = w.Write([]byte(`{"detail":"upstream down"}`))
-	}))
-	defer upstream.Close()
-
-	t.Setenv("INFERENCE_GATEWAY_API_URL", upstream.URL)
-
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, nil, nil, rules.NewEmptyProvider(), 1024, "", "")
+	stub := &stubAnalyticsClient{
+		err: &grpcclient.RPCError{Code: codes.Unavailable, Message: "upstream down"},
+	}
+	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
-	req := httptest.NewRequest(http.MethodGet, "/metrics/shadow/comparison?start_date=2025-01-01&end_date=2025-01-31", nil)
+	req := httptest.NewRequest(http.MethodGet, "/metrics/shadow/comparison", nil)
 	rec := httptest.NewRecorder()
 
 	handler.handleMetricsShadowComparison(rec, req)
 
-	if rec.Code != http.StatusBadGateway {
-		t.Fatalf("expected status %d, got %d", http.StatusBadGateway, rec.Code)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
 	}
 }
 
@@ -150,7 +125,7 @@ func TestBacktestResultsContract(t *testing.T) {
 			},
 		},
 	}
-	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024, "", "")
+	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/backtest/results?limit=1", nil)
 	rec := httptest.NewRecorder()
@@ -167,7 +142,7 @@ func TestBacktestResultsContractError(t *testing.T) {
 	stub := &stubAnalyticsClient{
 		err: &grpcclient.RPCError{Code: codes.InvalidArgument, Message: "bad request"},
 	}
-	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024, "", "")
+	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/backtest/results", nil)
 	rec := httptest.NewRecorder()
@@ -181,7 +156,7 @@ func TestBacktestResultsContractError(t *testing.T) {
 
 func TestBacktestResultsRejectsInvalidDate(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, nil, &stubAnalyticsClient{}, rules.NewEmptyProvider(), 1024, "", "")
+	handler := NewHandler(logger, nil, &stubAnalyticsClient{}, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/backtest/results?start_date=not-a-date", nil)
 	rec := httptest.NewRecorder()
@@ -197,7 +172,7 @@ func TestBacktestResultsPreserveRequestIDHeader(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	handler := NewHandler(logger, nil, &stubAnalyticsClient{
 		backtestResultsResp: &crudv1.ListBacktestResultsResponse{},
-	}, rules.NewEmptyProvider(), 1024, "", "")
+	}, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
 	mux := http.NewServeMux()
 	handler.Register(mux)
