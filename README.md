@@ -47,6 +47,7 @@ flowchart TB
     PY_TRAIN --> GO_CRUD
     PY_TRAIN --> MLFLOW --> MINIO
     PY_INF --> MLFLOW
+    GO_CRUD --> DB
 ```
 
 ### ML / Data Pipeline Diagram
