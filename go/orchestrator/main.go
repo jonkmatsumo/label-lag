@@ -175,6 +175,10 @@ func main() {
 	if err := srv.Shutdown(ctx); err != nil {
 		logger.Error("shutdown error", "error", err)
 	}
+	// Shutdown handler (drain log queue)
+	if err := handler.Shutdown(ctx); err != nil {
+		logger.Error("handler shutdown error", "error", err)
+	}
 }
 
 func initTracer(ctx context.Context) (*sdktrace.TracerProvider, error) {
