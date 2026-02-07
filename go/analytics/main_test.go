@@ -7,6 +7,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/jonkmatsumo/label-lag/go/analytics/generator"
+	"github.com/jonkmatsumo/label-lag/go/analytics/internal/service"
 	"github.com/jonkmatsumo/label-lag/go/analytics/internal/store"
 	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
 	"github.com/stretchr/testify/assert"
@@ -20,7 +21,7 @@ import (
 
 func TestGetDailyStats(t *testing.T) {
 	mockStore := new(store.MockStore)
-	s := &server{store: mockStore}
+	s := service.NewService(mockStore)
 
 	expectedStats := []*pb.DailyStat{
 		{
@@ -48,7 +49,7 @@ func TestGetDailyStats(t *testing.T) {
 
 func TestGetOverviewMetrics(t *testing.T) {
 	mockStore := new(store.MockStore)
-	s := &server{store: mockStore}
+	s := service.NewService(mockStore)
 
 	expectedResp := &pb.GetOverviewMetricsResponse{
 		TotalRecords: 1000,
@@ -70,7 +71,7 @@ func TestGetOverviewMetrics(t *testing.T) {
 
 func TestGetFeatureSample_Stratified(t *testing.T) {
 	mockStore := new(store.MockStore)
-	s := &server{store: mockStore}
+	s := service.NewService(mockStore)
 
 	expectedSamples := []*pb.FeatureSample{
 		{RecordId: "f1", IsFraudulent: true},
@@ -125,7 +126,7 @@ func TestUpdateHealthStatusNotServing(t *testing.T) {
 
 func TestSearchTransactions(t *testing.T) {
 	mockStore := new(store.MockStore)
-	s := &server{store: mockStore}
+	s := service.NewService(mockStore)
 
 	expectedTxs := []*pb.TransactionDetail{
 		{
@@ -160,7 +161,7 @@ func TestSearchTransactions(t *testing.T) {
 
 func TestSearchTransactions_Unfiltered(t *testing.T) {
 	mockStore := new(store.MockStore)
-	s := &server{store: mockStore}
+	s := service.NewService(mockStore)
 
 	expectedTxs := []*pb.TransactionDetail{
 		{RecordId: "rec-2"},
@@ -189,7 +190,7 @@ func TestSearchTransactions_Unfiltered(t *testing.T) {
 
 func TestGenerateDataReturnsUnimplementedWhenDisabled(t *testing.T) {
 	mockStore := new(store.MockStore)
-	s := &server{store: mockStore}
+	s := service.NewService(mockStore)
 
 	// Explicitly disable via env var
 	t.Setenv("ENABLE_GO_DATASET_GENERATE", "false")
