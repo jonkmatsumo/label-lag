@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/jonkmatsumo/label-lag/go/analytics/generator"
+	"github.com/jonkmatsumo/label-lag/go/analytics/internal/generator"
 	"github.com/jonkmatsumo/label-lag/go/analytics/internal/store"
 	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
 	"google.golang.org/grpc/codes"
