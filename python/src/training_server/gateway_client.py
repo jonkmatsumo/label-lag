@@ -142,7 +142,7 @@ def get_gateway_client() -> GatewayDecisionClient:
     """Get the singleton GatewayDecisionClient instance."""
     global _client
     if _client is None:
-        transport = os.getenv("TRAINING_GATEWAY_TRANSPORT", "http").lower()
+        transport = os.getenv("TRAINING_GATEWAY_TRANSPORT", "grpc").lower()
         if transport == "grpc":
             try:
                 from training_server.gateway_grpc_client import GatewayGrpcClient
