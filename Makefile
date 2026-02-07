@@ -1,4 +1,4 @@
-.PHONY: up down restart install test lint clean infra-up infra-down infra-logs app-up app-down app-build app-rebuild app-logs rebuild-api rebuild-bff rebuild-web bff-test web-test reset-db reset-minio reset-all
+.PHONY: up down restart install test lint clean infra-up infra-down infra-logs app-up app-down app-build app-rebuild app-logs rebuild-api rebuild-bff rebuild-web bff-test web-test reset-db reset-minio reset-all proto-gen proto-gen-go proto-gen-python
 
 # Catch-all start command
 up: app-up
@@ -108,3 +108,41 @@ web-test:
 
 web-dev:
 	cd typescript/ui && npm run dev
+
+# Proto generation
+PROTO_DIR = proto
+PYTHON_SRC_DIR = python/src
+
+proto-gen: proto-gen-go proto-gen-python
+
+proto-gen-go:
+	@echo "Generating Go stubs..."
+	protoc -I $(PROTO_DIR) \
+		--go_out=. --go_opt=module=github.com/jonkmatsumo/label-lag \
+		--go-grpc_out=. --go-grpc_opt=module=github.com/jonkmatsumo/label-lag \
+		$(PROTO_DIR)/inference/v1/*.proto
+	protoc -I $(PROTO_DIR) \
+		--go_out=. --go_opt=module=github.com/jonkmatsumo/label-lag \
+		--go-grpc_out=. --go-grpc_opt=module=github.com/jonkmatsumo/label-lag \
+		$(PROTO_DIR)/analytics/v1/*.proto
+
+proto-gen-python:
+	@echo "Generating Python stubs..."
+	# Inference Server stubs
+	uv run python -m grpc_tools.protoc -I $(PROTO_DIR) \
+		--python_out=$(PYTHON_SRC_DIR)/inference_server/proto \
+		--grpc_python_out=$(PYTHON_SRC_DIR)/inference_server/proto \
+		$(PROTO_DIR)/inference/v1/*.proto
+	# Gateway stubs (legacy)
+	uv run python -m grpc_tools.protoc -I $(PROTO_DIR) \
+		--python_out=$(PYTHON_SRC_DIR)/gateway_grpc \
+		--grpc_python_out=$(PYTHON_SRC_DIR)/gateway_grpc \
+		$(PROTO_DIR)/inference/v1/gateway.proto \
+		$(PROTO_DIR)/analytics/v1/analytics.proto
+	# Ensure __init__.py files
+	@touch $(PYTHON_SRC_DIR)/inference_server/proto/inference/__init__.py
+	@touch $(PYTHON_SRC_DIR)/inference_server/proto/inference/v1/__init__.py
+	@touch $(PYTHON_SRC_DIR)/gateway_grpc/inference/__init__.py
+	@touch $(PYTHON_SRC_DIR)/gateway_grpc/inference/v1/__init__.py
+	@touch $(PYTHON_SRC_DIR)/gateway_grpc/analytics/__init__.py
+	@touch $(PYTHON_SRC_DIR)/gateway_grpc/analytics/v1/__init__.py
