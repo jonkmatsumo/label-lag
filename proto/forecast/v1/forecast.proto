@@ -22,6 +22,9 @@ service ForecastService {
 
   // Deploys a specific model version to production.
   rpc DeployModel(DeployModelRequest) returns (DeployModelResponse);
+
+  // Predicts fraud risk only (no rules).
+  rpc PredictSignal(PredictSignalRequest) returns (PredictSignalResponse);
 }
 
 message GetHealthRequest {}
@@ -50,6 +53,9 @@ message GetScoreDistributionRequest {
 message GetScoreDistributionResponse {
   repeated int32 scores = 1;
   map<string, int32> distribution = 2;
+  double divergence = 3;
+  string divergence_metric = 4;
+  bool shift_detected = 5;
 }
 
 message ReloadModelRequest {}
@@ -62,9 +68,26 @@ message ReloadModelResponse {
 message DeployModelRequest {
   string model_version = 1;
   string stage = 2; // e.g., "Production", "Staging"
+  string actor = 3;
+  string reason = 4;
 }
 
 message DeployModelResponse {
   bool success = 1;
   string message = 2;
+  string model_version = 3;
+  string deployed_at = 4;
+}
+
+message PredictSignalRequest {
+  string user_id = 1;
+  double amount = 2;
+  string currency = 3;
+  string client_transaction_id = 4;
+}
+
+message PredictSignalResponse {
+  double probability = 1;
+  string model_version = 2;
+  string run_id = 3;
 }

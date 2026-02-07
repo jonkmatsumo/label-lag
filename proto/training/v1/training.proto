@@ -59,5 +59,7 @@ message TuningConfig {
 message TrainResponse {
   bool success = 1;
   string run_id = 2;
-  string error = 3;
+  string status = 3;
+  string model_version = 4;
+  string error = 5;
 }
