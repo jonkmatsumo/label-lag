@@ -26,7 +26,7 @@ export function normalizeJson(obj: any): any {
   return Object.keys(obj)
     .sort()
     .reduce((result: any, key) => {
-      // Exclude dynamic fields like timestamps or IDs if needed, 
+      // Exclude dynamic fields like timestamps or IDs if needed,
       // but for contract tests we might want to keep them if they are deterministic in mocks
       result[key] = normalizeJson(obj[key]);
       return result;

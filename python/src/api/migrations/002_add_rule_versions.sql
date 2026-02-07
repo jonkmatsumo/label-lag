@@ -19,5 +19,5 @@ CREATE INDEX IF NOT EXISTS ix_rule_versions_created_at ON rule_versions (created
 
 -- Add active_version_id to rules table to track current head
 ALTER TABLE rules ADD COLUMN IF NOT EXISTS active_version_id VARCHAR(100);
--- We don't enforce FK from rules to rule_versions to avoid circular dependency issues during insertion 
+-- We don't enforce FK from rules to rule_versions to avoid circular dependency issues during insertion
 -- (though verifiable with deferred constraints, simpler to keep loose)

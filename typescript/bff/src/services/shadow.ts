@@ -39,7 +39,7 @@ export class ShadowService {
         path: primary.path,
         error: primaryResult.reason instanceof Error ? primaryResult.reason.message : String(primaryResult.reason)
       }, 'Primary request failed');
-      
+
       if (shadowOk) {
         this.logger.info({
           metric: 'fallback_rate',

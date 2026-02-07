@@ -3,7 +3,7 @@ import os
 import grpc
 import pytest
 
-from grpc_inference.proto.inference.v1 import inference_pb2, inference_pb2_grpc
+from pygrpc.proto.inference.v1 import inference_pb2, inference_pb2_grpc
 
 GRPC_INFERENCE_ADDR = os.getenv("GRPC_INFERENCE_ADDR", "localhost:50052")
 

@@ -27,11 +27,11 @@ services:
       retries: 3
       start_period: 10s
 
-  analytics-crud:
+  analytics:
     build:
       context: .
-      dockerfile: go/analytics-crud/Dockerfile
-    container_name: analytics-crud
+      dockerfile: go/analytics/Dockerfile
+    container_name: analytics
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-synthetic}:${POSTGRES_PASSWORD:-synthetic_dev_password}@db:5432/${POSTGRES_DB:-synthetic_data}?sslmode=disable
       - PORT=50051
@@ -43,22 +43,22 @@ services:
       db:
         condition: service_healthy
 
-  grpc-inference:
+  pygrpc:
     build:
       context: .
       dockerfile: python/Dockerfile
-    container_name: grpc-inference
+    container_name: pygrpc
     environment:
-      - GRPC_INFERENCE_HOST=0.0.0.0
-      - GRPC_INFERENCE_PORT=50052
-      - GRPC_INFERENCE_DB_DSN=postgresql://${POSTGRES_USER:-synthetic}:${POSTGRES_PASSWORD:-synthetic_dev_password}@db:5432/${POSTGRES_DB:-synthetic_data}
-      - GRPC_INFERENCE_MLFLOW_TRACKING_URI=http://mlflow:5000
-      - GRPC_INFERENCE_INCLUDE_FEATURES_USED=true
+      - PYGRPC_HOST=0.0.0.0
+      - PYGRPC_PORT=50052
+      - PYGRPC_DB_DSN=postgresql://${POSTGRES_USER:-synthetic}:${POSTGRES_PASSWORD:-synthetic_dev_password}@db:5432/${POSTGRES_DB:-synthetic_data}
+      - PYGRPC_MLFLOW_TRACKING_URI=http://mlflow:5000
+      - PYGRPC_INCLUDE_FEATURES_USED=true
       - PYTHONHASHSEED=42
     networks:
       - labellag_net
     ports:
-      - "${GRPC_INFERENCE_PORT:-50052}:50052"
+      - "${PYGRPC_PORT:-50052}:50052"
     depends_on:
       db:
         condition: service_healthy
@@ -67,24 +67,24 @@ services:
       minio:
         condition: service_healthy
 
-  inference-gateway:
+  inference:
     build:
       context: .
-      dockerfile: go/inference-gateway/Dockerfile
-    container_name: inference-gateway
+      dockerfile: go/inference/Dockerfile
+    container_name: inference
     environment:
       - PORT=8081
-      - INFERENCE_GATEWAY_PYTHON_GRPC_ADDR=grpc-inference:50052
-      - INFERENCE_GATEWAY_RULES_PATH=go/inference-gateway/config/default_rules.json
+      - INFERENCE_GATEWAY_PYTHON_GRPC_ADDR=pygrpc:50052
+      - INFERENCE_GATEWAY_RULES_PATH=go/inference/config/default_rules.json
       - INFERENCE_GATEWAY_RULES_WATCH=true
     networks:
       - labellag_net
     ports:
       - "${INFERENCE_GATEWAY_PORT:-8081}:8081"
     depends_on:
-      analytics-crud:
+      analytics:
         condition: service_started
-      grpc-inference:
+      pygrpc:
         condition: service_started
 
   generator:
@@ -115,7 +115,7 @@ services:
       - BFF_HOST=0.0.0.0
       - BFF_PYTHON_API_BASE_URL=http://api:8000
       - BFF_MLFLOW_TRACKING_URI=http://mlflow:5000
-      - BFF_GATEWAY_BASE_URL=http://inference-gateway:8081
+      - BFF_GATEWAY_BASE_URL=http://inference:8081
       - BFF_REQUEST_TIMEOUT=30000
       - BFF_LOG_LEVEL=info
       - NODE_ENV=production
@@ -133,7 +133,7 @@ services:
     depends_on:
       api:
         condition: service_healthy
-      inference-gateway:
+      inference:
         condition: service_started
 
   # React Web UI

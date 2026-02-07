@@ -20,7 +20,7 @@ def _parse_timeout(value: str | None, default: float) -> float:
 class AnalyticsCRUDClient:
     def __init__(self, target: str | None = None, timeout_seconds: float | None = None):
         if target is None:
-            target = os.getenv("ANALYTICS_CRUD_TARGET", "analytics-crud:50051")
+            target = os.getenv("ANALYTICS_CRUD_TARGET", "analytics:50051")
         if timeout_seconds is None:
             timeout_seconds = _parse_timeout(
                 os.getenv("ANALYTICS_CRUD_TIMEOUT_SECONDS"),

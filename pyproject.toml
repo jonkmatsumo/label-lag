@@ -51,7 +51,7 @@ packages = ["python/src/synthetic_pipeline"]
 [tool.ruff]
 src = ["python/src"]
 line-length = 88
-exclude = ["python/src/grpc_inference/proto", "python/src/api/proto"]
+exclude = ["python/src/pygrpc/proto", "python/src/api/proto"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]

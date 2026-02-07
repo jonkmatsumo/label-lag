@@ -21,7 +21,7 @@ RUN uv sync --frozen --no-dev
 
 # Copy source code last (changes frequently)
 COPY python/src ./src
-COPY config ./config
+COPY python/config ./config
 COPY shell ./shell
 
 # Set up wait-for-it script
