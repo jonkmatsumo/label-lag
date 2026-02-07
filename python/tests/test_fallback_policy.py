@@ -19,7 +19,7 @@ class TestFallbackPolicy:
 
     @pytest.fixture
     def mock_manager(self):
-        with patch("forecast.model_manager.get_model_manager") as mock:
+        with patch("forecast_server.model_manager.get_model_manager") as mock:
             manager = MagicMock()
             mock.return_value = manager
             yield manager

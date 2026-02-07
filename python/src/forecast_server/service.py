@@ -75,8 +75,34 @@ class ForecastService(forecast_pb2_grpc.ForecastServiceServicer):
         buckets = [1, 11, 31, 71, 91, 100]
         if len(live_scores) > 0:
             counts, _ = np.histogram(live_scores, bins=buckets)
+            observed_ratios = counts / len(live_scores)
         else:
             counts = np.zeros(len(buckets) - 1)
+            observed_ratios = np.zeros(len(buckets) - 1)
+
+        manager = get_model_manager()
+        baseline = manager.baseline_distribution
+        baseline_ratios = (
+            np.array(baseline["ratios"])
+            if baseline
+            else np.ones(len(buckets) - 1) / (len(buckets) - 1)
+        )
+
+        # Compute Jensen-Shannon Divergence
+        def kl_div(p, q):
+            p = np.clip(p, 1e-10, 1)
+            q = np.clip(q, 1e-10, 1)
+            return np.sum(p * np.log(p / q))
+
+        m = 0.5 * (baseline_ratios + observed_ratios)
+        js_div = 0.5 * (kl_div(baseline_ratios, m) + kl_div(observed_ratios, m))
+
+        # Detect shift: any bucket > 2x baseline
+        shift_detected = False
+        for i in range(len(buckets) - 1):
+            if baseline_ratios[i] > 0 and observed_ratios[i] > 2 * baseline_ratios[i]:
+                shift_detected = True
+                break
 
         return forecast_pb2.GetScoreDistributionResponse(
             scores=[int(s) for s in live_scores],
@@ -84,6 +110,9 @@ class ForecastService(forecast_pb2_grpc.ForecastServiceServicer):
                 f"{buckets[i]}-{buckets[i + 1] - 1}": int(counts[i])
                 for i in range(len(buckets) - 1)
             },
+            divergence=float(js_div),
+            divergence_metric="JS",
+            shift_detected=shift_detected,
         )
 
     def ReloadModel(self, request, context):  # noqa: N802
@@ -115,13 +144,37 @@ class ForecastService(forecast_pb2_grpc.ForecastServiceServicer):
         audit_logger.log(
             rule_id=f"model:{deployed_version}",
             action="MODEL_DEPLOYED",
-            actor=request.actor if hasattr(request, "actor") else "gRPC-system",
+            actor=request.actor or "gRPC-system",
             after_state={"model_version": deployed_version, "deployed_at": deployed_at},
-            reason=request.stage
-            if hasattr(request, "stage")
-            else "Model deployed via gRPC",
+            reason=request.reason or "Model deployed via gRPC",
         )
 
         return forecast_pb2.DeployModelResponse(
-            success=True, message=f"Model {deployed_version} deployed successfully"
+            success=True,
+            message=f"Model {deployed_version} deployed successfully",
+            model_version=deployed_version,
+            deployed_at=deployed_at,
         )
+
+    def PredictSignal(self, request, context):  # noqa: N802
+        forecaster = get_forecaster()
+        from training_server.schemas import SignalRequest
+
+        # Map proto to internal schema
+        internal_req = SignalRequest(
+            user_id=request.user_id,
+            amount=request.amount,
+            currency=request.currency,
+            client_transaction_id=request.client_transaction_id,
+        )
+
+        try:
+            result = forecaster.predict(internal_req)
+            return forecast_pb2.PredictSignalResponse(
+                probability=result["probability"],
+                model_version=result["model_version"],
+                run_id=result.get("run_id", ""),
+            )
+        except Exception as e:
+            logger.exception("Prediction failed")
+            context.abort(grpc.StatusCode.INTERNAL, f"Prediction failed: {e}")

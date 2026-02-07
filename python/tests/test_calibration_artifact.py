@@ -150,7 +150,8 @@ class TestCalibrationArtifact:
 
         with (
             patch(
-                "forecast.model_manager.get_model_manager", return_value=mock_manager
+                "forecast_server.model_manager.get_model_manager",
+                return_value=mock_manager,
             ),
             patch.object(forecaster, "_fetch_features") as mock_fetch,
         ):
