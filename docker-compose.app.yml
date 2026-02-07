@@ -81,6 +81,7 @@ services:
       - labellag_net
     ports:
       - "${INFERENCE_GATEWAY_PORT:-8081}:8081"
+      - "${INFERENCE_GATEWAY_GRPC_PORT:-50505}:50505"
     depends_on:
       analytics:
         condition: service_started

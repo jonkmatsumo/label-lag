@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,6 +21,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
+	"google.golang.org/grpc"
 )
 
 func main() {
@@ -103,12 +105,32 @@ func main() {
 	writeTimeout := parseDurationEnv(logger, "INFERENCE_GATEWAY_WRITE_TIMEOUT", 30*time.Second)
 	idleTimeout := parseDurationEnv(logger, "INFERENCE_GATEWAY_IDLE_TIMEOUT", 60*time.Second)
 
+	// Start HTTP server
 	srv := httpserver.NewServer("0.0.0.0:"+port, logger, handler, readTimeout, writeTimeout, idleTimeout)
 
-	errCh := make(chan error, 1)
+	errCh := make(chan error, 2)
 	go func() {
-		logger.Info("server listening", "address", srv.Addr)
+		logger.Info("http server listening", "address", srv.Addr)
 		errCh <- srv.ListenAndServe()
+	}()
+
+	// Start gRPC server
+	grpcPort := os.Getenv("GRPC_PORT")
+	if grpcPort == "" {
+		grpcPort = "50505"
+	}
+	lis, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", grpcPort))
+	if err != nil {
+		logger.Error("failed to listen for grpc", "error", err)
+		os.Exit(1)
+	}
+	grpcServer := grpc.NewServer()
+	gatewayServer := grpcclient.NewGatewayServer()
+	gatewayServer.Register(grpcServer)
+
+	go func() {
+		logger.Info("grpc server listening", "address", lis.Addr())
+		errCh <- grpcServer.Serve(lis)
 	}()
 
 	stop := make(chan os.Signal, 1)
@@ -122,6 +144,9 @@ func main() {
 			logger.Error("server error", "error", err)
 		}
 	}
+
+	// Graceful shutdown
+	grpcServer.GracefulStop()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
