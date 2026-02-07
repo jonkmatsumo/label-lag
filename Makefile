@@ -142,6 +142,22 @@ proto-gen-go:
 	@mv go/analytics/proto/crud/v1/analytics/v1/*.go go/analytics/proto/crud/v1/ 2>/dev/null || true
 	@rm -rf go/analytics/proto/crud/v1/analytics 2>/dev/null || true
 
+	# Training service
+	protoc -I $(PROTO_DIR) \
+		--go_out=. --go_opt=module=github.com/jonkmatsumo/label-lag \
+		--go-grpc_out=. --go-grpc_opt=module=github.com/jonkmatsumo/label-lag \
+		$(PROTO_DIR)/training/v1/training.proto
+	@mv go/training/proto/trainingv1/training/v1/*.go go/training/proto/trainingv1/ 2>/dev/null || true
+	@rm -rf go/training/proto/trainingv1/training 2>/dev/null || true
+
+	# Forecast service
+	protoc -I $(PROTO_DIR) \
+		--go_out=. --go_opt=module=github.com/jonkmatsumo/label-lag \
+		--go-grpc_out=. --go-grpc_opt=module=github.com/jonkmatsumo/label-lag \
+		$(PROTO_DIR)/forecast/v1/forecast.proto
+	@mv go/forecast/proto/forecastv1/forecast/v1/*.go go/forecast/proto/forecastv1/ 2>/dev/null || true
+	@rm -rf go/forecast/proto/forecastv1/forecast 2>/dev/null || true
+
 proto-gen-python:
 	@echo "Generating Python stubs..."
 	# Inference Server stubs
@@ -149,6 +165,16 @@ proto-gen-python:
 		--python_out=$(PYTHON_SRC_DIR)/inference_server/proto \
 		--grpc_python_out=$(PYTHON_SRC_DIR)/inference_server/proto \
 		$(PROTO_DIR)/inference/v1/*.proto
+	# Training Server stubs
+	uv run python -m grpc_tools.protoc -I $(PROTO_DIR) \
+		--python_out=$(PYTHON_SRC_DIR)/training_server/proto \
+		--grpc_python_out=$(PYTHON_SRC_DIR)/training_server/proto \
+		$(PROTO_DIR)/training/v1/*.proto
+	# Forecast stubs
+	uv run python -m grpc_tools.protoc -I $(PROTO_DIR) \
+		--python_out=$(PYTHON_SRC_DIR)/forecast_server/proto \
+		--grpc_python_out=$(PYTHON_SRC_DIR)/forecast_server/proto \
+		$(PROTO_DIR)/forecast/v1/*.proto
 	# Gateway stubs (legacy)
 	uv run python -m grpc_tools.protoc -I $(PROTO_DIR) \
 		--python_out=$(PYTHON_SRC_DIR)/gateway_grpc \
@@ -158,6 +184,10 @@ proto-gen-python:
 	# Ensure __init__.py files
 	@touch $(PYTHON_SRC_DIR)/inference_server/proto/inference/__init__.py
 	@touch $(PYTHON_SRC_DIR)/inference_server/proto/inference/v1/__init__.py
+	@touch $(PYTHON_SRC_DIR)/training_server/proto/training/__init__.py
+	@touch $(PYTHON_SRC_DIR)/training_server/proto/training/v1/__init__.py
+	@touch $(PYTHON_SRC_DIR)/forecast_server/proto/forecast/__init__.py
+	@touch $(PYTHON_SRC_DIR)/forecast_server/proto/forecast/v1/__init__.py
 	@touch $(PYTHON_SRC_DIR)/gateway_grpc/inference/__init__.py
 	@touch $(PYTHON_SRC_DIR)/gateway_grpc/inference/v1/__init__.py
 	@touch $(PYTHON_SRC_DIR)/gateway_grpc/analytics/__init__.py

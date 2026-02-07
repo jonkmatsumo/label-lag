@@ -10,8 +10,8 @@ from typing import Any
 import grpc
 from google.protobuf import struct_pb2
 
-from forecast.model_manager import get_model_manager
-from forecast.services import SignalForecaster
+from forecast_server.model_manager import get_model_manager
+from forecast_server.services import SignalForecaster
 from inference_server.config import InferenceServerConfig
 from inference_server.proto.inference.v1 import (
     inference_pb2,

@@ -3,9 +3,9 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query
 
-from forecast.drift_cache import get_drift_cache
-from forecast.model_manager import get_model_manager
-from forecast.services import get_forecaster
+from forecast_server.drift_cache import get_drift_cache
+from forecast_server.model_manager import get_model_manager
+from forecast_server.services import get_forecaster
 from training_server.audit import get_audit_logger
 from training_server.schemas import (
     DeployModelRequest,

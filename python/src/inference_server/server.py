@@ -24,7 +24,7 @@ def serve() -> None:
     configure_logging()
     _apply_env_overrides(config)
 
-    from forecast.model_manager import get_model_manager
+    from forecast_server.model_manager import get_model_manager
 
     manager = get_model_manager()
     if manager.load_production_model():

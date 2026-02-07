@@ -3,7 +3,7 @@
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
-from forecast.services import SignalForecaster
+from forecast_server.services import SignalForecaster
 from training_server.schemas import SignalRequest
 
 

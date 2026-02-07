@@ -66,7 +66,7 @@ class SignalForecaster:
         """
         import time
 
-        from forecast.model_manager import get_model_manager
+        from forecast_server.model_manager import get_model_manager
 
         start_time = time.time()
         request_id = f"req_{uuid.uuid4().hex[:12]}"

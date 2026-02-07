@@ -10,9 +10,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
-from forecast.model_manager import get_model_manager
-from forecast.routes import router as forecast_router
-from forecast.services import get_forecaster
+from forecast_server.model_manager import get_model_manager
+from forecast_server.routes import router as forecast_router
+from forecast_server.services import get_forecaster
 from training_server.routes import router as training_router
 from training_server.schemas import HealthResponse
 

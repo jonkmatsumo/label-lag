@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from forecast.routes import get_score_distribution
+from forecast_server.routes import get_score_distribution
 
 
 class TestScoreDistribution:

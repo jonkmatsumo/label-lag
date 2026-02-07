@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from forecast.model_manager import ModelManager
+from forecast_server.model_manager import ModelManager
 from training_server.audit import AuditLogger, set_audit_logger
 
 

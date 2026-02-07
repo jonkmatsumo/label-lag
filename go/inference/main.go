@@ -68,6 +68,28 @@ func main() {
 		}
 	}()
 
+	trainingClient, err := grpcclient.NewTrainingClient("", 0)
+	if err != nil {
+		logger.Error("failed to create training client", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := trainingClient.Close(); err != nil {
+			logger.Warn("failed to close training client", "error", err)
+		}
+	}()
+
+	forecastClient, err := grpcclient.NewForecastClient("", 0)
+	if err != nil {
+		logger.Error("failed to create forecast client", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := forecastClient.Close(); err != nil {
+			logger.Warn("failed to close forecast client", "error", err)
+		}
+	}()
+
 	rulesProvider := rules.Provider(rules.NewEmptyProvider())
 	if apiURL := os.Getenv("INFERENCE_GATEWAY_API_URL"); apiURL != "" {
 		ttl := 5 * time.Minute
@@ -97,7 +119,7 @@ func main() {
 		}
 	}
 
-	handler := httpserver.NewHandler(logger, inferenceClient, analyticsClient, rulesProvider, maxBodyBytes,
+	handler := httpserver.NewHandler(logger, inferenceClient, analyticsClient, trainingClient, forecastClient, rulesProvider, maxBodyBytes,
 		getEnv("PYTHON_API_URL", "http://api:8000"),
 		getEnv("MLFLOW_TRACKING_URI", "http://mlflow:5000"),
 	)

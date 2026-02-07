@@ -15,25 +15,25 @@ type APIProvider struct {
 	httpClient *http.Client
 	ttl        time.Duration
 
-	mu           sync.RWMutex
-	cachedRules  RuleSet
-	lastFetched  time.Time
-	lastAttempt  time.Time
-	nextAttempt  time.Time
-	backoff      time.Duration
-	baseBackoff  time.Duration
-	maxBackoff   time.Duration
-	jitterFn     func(time.Duration) time.Duration
-	fetching     bool
-	cond         *sync.Cond
-	lastErr      error
+	mu          sync.RWMutex
+	cachedRules RuleSet
+	lastFetched time.Time
+	lastAttempt time.Time
+	nextAttempt time.Time
+	backoff     time.Duration
+	baseBackoff time.Duration
+	maxBackoff  time.Duration
+	jitterFn    func(time.Duration) time.Duration
+	fetching    bool
+	cond        *sync.Cond
+	lastErr     error
 }
 
 func NewAPIProvider(apiURL string, ttl time.Duration) *APIProvider {
 	provider := &APIProvider{
-		apiURL:     apiURL,
-		httpClient: &http.Client{Timeout: 10 * time.Second},
-		ttl:        ttl,
+		apiURL:      apiURL,
+		httpClient:  &http.Client{Timeout: 10 * time.Second},
+		ttl:         ttl,
 		baseBackoff: 500 * time.Millisecond,
 		maxBackoff:  30 * time.Second,
 		jitterFn:    defaultJitter,

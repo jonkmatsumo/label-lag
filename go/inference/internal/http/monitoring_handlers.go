@@ -1,12 +1,15 @@
 package httpserver
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
+	forecastv1 "github.com/jonkmatsumo/label-lag/go/forecast/proto/forecastv1"
 	"github.com/jonkmatsumo/label-lag/go/inference/internal/requestid"
 )
 
@@ -20,7 +23,32 @@ func (h *Handler) handleMonitoringDrift(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	proxyAPIGet(w, r)
+	if h.forecastClient == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "forecast backend unavailable")
+		return
+	}
+
+	hours, _ := parseIntQuery(r, "hours", 24, 1, 168)
+	thresholdRaw := r.URL.Query().Get("threshold")
+	var threshold float64
+	if thresholdRaw != "" {
+		threshold, _ = strconv.ParseFloat(thresholdRaw, 64)
+	}
+	forceRefresh := r.URL.Query().Get("force_refresh") == "true"
+
+	resp, err := h.forecastClient.GetDriftMonitoring(r.Context(), &forecastv1.GetDriftMonitoringRequest{
+		Hours:        hours,
+		Threshold:    threshold,
+		ForceRefresh: forceRefresh,
+	})
+	if err != nil {
+		writeRPCError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func (h *Handler) handleMetricsShadowComparison(w http.ResponseWriter, r *http.Request) {
@@ -81,5 +109,5 @@ func getAPIBaseURL() string {
 	if value := strings.TrimSpace(os.Getenv("INFERENCE_GATEWAY_API_URL")); value != "" {
 		return value
 	}
-	return "http://api:8000"
+	return "http://training-server:8000"
 }

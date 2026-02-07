@@ -25,6 +25,9 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
+
+	forecastv1 "github.com/jonkmatsumo/label-lag/go/forecast/proto/forecastv1"
+	trainingv1 "github.com/jonkmatsumo/label-lag/go/training/proto/trainingv1"
 )
 
 type InferenceClient interface {
@@ -32,17 +35,32 @@ type InferenceClient interface {
 	Ready(ctx context.Context) error
 }
 
+type TrainingClient interface {
+	Train(ctx context.Context, req *trainingv1.TrainRequest) (*trainingv1.TrainResponse, error)
+	ClearData(ctx context.Context, req *trainingv1.ClearDataRequest) (*trainingv1.ClearDataResponse, error)
+}
+
+type ForecastClient interface {
+	GetHealth(ctx context.Context, req *forecastv1.GetHealthRequest) (*forecastv1.GetHealthResponse, error)
+	GetDriftMonitoring(ctx context.Context, req *forecastv1.GetDriftMonitoringRequest) (*forecastv1.GetDriftMonitoringResponse, error)
+	GetScoreDistribution(ctx context.Context, req *forecastv1.GetScoreDistributionRequest) (*forecastv1.GetScoreDistributionResponse, error)
+	ReloadModel(ctx context.Context, req *forecastv1.ReloadModelRequest) (*forecastv1.ReloadModelResponse, error)
+	DeployModel(ctx context.Context, req *forecastv1.DeployModelRequest) (*forecastv1.DeployModelResponse, error)
+}
+
 type Handler struct {
 	logger          *slog.Logger
 	inferenceClient InferenceClient
 	analyticsClient AnalyticsClient
+	trainingClient  TrainingClient
+	forecastClient  ForecastClient
 	rulesProvider   rules.Provider
 	pythonURL       string
 	mlflowURL       string
 	maxBodyBytes    int64
 }
 
-func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient AnalyticsClient, provider rules.Provider, maxBodyBytes int64, pythonURL, mlflowURL string) *Handler {
+func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient AnalyticsClient, trainingClient TrainingClient, forecastClient ForecastClient, provider rules.Provider, maxBodyBytes int64, pythonURL, mlflowURL string) *Handler {
 	if maxBodyBytes <= 0 {
 		maxBodyBytes = 1 << 20
 	}
@@ -50,6 +68,8 @@ func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient Ana
 		logger:          logger,
 		inferenceClient: client,
 		analyticsClient: analyticsClient,
+		trainingClient:  trainingClient,
+		forecastClient:  forecastClient,
 		rulesProvider:   provider,
 		maxBodyBytes:    maxBodyBytes,
 		pythonURL:       pythonURL,
@@ -92,9 +112,9 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /rules/{rule_id}/readiness", h.handleRuleReadiness)
 	mux.HandleFunc("GET /rules/{rule_id}/diff", h.handleRuleDiff)
 
-	// Proxied Routes
-	mux.HandleFunc("POST /train", proxy.NewHandler(h.pythonURL, h.logger))
-	mux.HandleFunc("POST /models/deploy", proxy.NewHandler(h.pythonURL, h.logger))
+	// Native gRPC handled routes
+	mux.HandleFunc("POST /train", h.handleTrain)
+	mux.HandleFunc("POST /models/deploy", h.handleDeployModel)
 	// MLflow Proxy (prefix matching)
 	mux.Handle("/api/2.0/mlflow/", proxy.NewHandler(h.mlflowURL, h.logger))
 	mux.Handle("/ajax-api/2.0/mlflow/", proxy.NewHandler(h.mlflowURL, h.logger)) // MLflow UI often uses this
@@ -490,6 +510,78 @@ func toFloat(value any) float64 {
 	default:
 		return 0
 	}
+}
+
+func (h *Handler) handleTrain(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if h.trainingClient == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "training backend unavailable")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, h.maxBodyBytes)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	defer r.Body.Close()
+
+	var req trainingv1.TrainRequest
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(body, &req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
+		return
+	}
+
+	resp, err := h.trainingClient.Train(r.Context(), &req)
+	if err != nil {
+		writeRPCError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func (h *Handler) handleDeployModel(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if h.forecastClient == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "forecast backend unavailable")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, h.maxBodyBytes)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	defer r.Body.Close()
+
+	var req forecastv1.DeployModelRequest
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(body, &req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
+		return
+	}
+
+	resp, err := h.forecastClient.DeployModel(r.Context(), &req)
+	if err != nil {
+		writeRPCError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func simulateFeatures(userID string, amount float64) map[string]any {

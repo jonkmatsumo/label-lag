@@ -20,13 +20,44 @@ message ClearDataResponse {
 }
 
 message TrainRequest {
-  string model_name = 1;
-  string dataset_id = 2;
-  map<string, string> parameters = 3;
+  int32 max_depth = 1;
+  int32 training_window_days = 2;
+  repeated string selected_feature_columns = 3;
+  SplitConfig split_config = 4;
+  TuningConfig tuning_config = 5;
+  int32 n_estimators = 6;
+  float learning_rate = 7;
+  int32 min_child_weight = 8;
+  float subsample = 9;
+  float colsample_bytree = 10;
+  float gamma = 11;
+  float reg_alpha = 12;
+  float reg_lambda = 13;
+  int32 random_state = 14;
+  optional int32 early_stopping_rounds = 15;
+}
+
+message SplitConfig {
+  string strategy = 1; // temporal, temporal_stratified, etc.
+  int32 n_folds = 2;
+  optional string stratify_column = 3;
+  string group_column = 4;
+  float validation_fraction = 5;
+  int32 seed = 6;
+}
+
+message TuningConfig {
+  bool enabled = 1;
+  string strategy = 2; // grid, random, bayesian
+  int32 n_trials = 3;
+  int32 timeout_minutes = 4;
+  string metric = 5;
+  string direction = 6; // maximize, minimize
+  optional int32 selected_trial_number = 7;
 }
 
 message TrainResponse {
-  string job_id = 1;
-  string status = 2;
-  string model_version = 3;
+  bool success = 1;
+  string run_id = 2;
+  string error = 3;
 }

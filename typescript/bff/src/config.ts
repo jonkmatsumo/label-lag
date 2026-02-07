@@ -54,7 +54,7 @@ export function loadConfig(): Config {
     corsOrigin: getEnvOrDefault('BFF_CORS_ORIGIN', 'true'), // 'true' means reflect origin (dev), or comma-separated list
     logLevel: getEnvOrDefault('BFF_LOG_LEVEL', 'info'),
     testMode: getEnvAsBool('BFF_TEST_MODE', false),
-    enableGoDatasetClear: getEnvAsBool('ENABLE_GO_DATASET_CLEAR', false),
+    enableGoDatasetClear: getEnvAsBool('ENABLE_GO_DATASET_CLEAR', true),
     enableGoDatasetGenerate: getEnvAsBool('ENABLE_GO_DATASET_GENERATE', true),
     enableGoRulesSandbox: getEnvAsBool('ENABLE_GO_RULES_SANDBOX', false),
     enableGoRulesControlPlane: getEnvAsBool('ENABLE_GO_RULES_CONTROL_PLANE', false),

@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from forecast.drift_cache import DriftCache, get_drift_cache
+from forecast_server.drift_cache import DriftCache, get_drift_cache
 from training_server.main import app
 
 
@@ -18,7 +18,7 @@ def client():
 @pytest.fixture(autouse=True)
 def clear_cache():
     """Clear drift cache before and after each test."""
-    from forecast.drift_cache import _drift_cache
+    from forecast_server.drift_cache import _drift_cache
 
     # Clear the module-level cache
     if _drift_cache is not None:

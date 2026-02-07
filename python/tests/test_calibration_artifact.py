@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from forecast.model_manager import ModelManager
+from forecast_server.model_manager import ModelManager
 from model.evaluate import ScoreCalibrator
 from model.train import train_model
 
@@ -130,7 +130,7 @@ class TestCalibrationArtifact:
         """Test that SignalForecaster uses the loaded calibrator and reports it (C2)."""
         from decimal import Decimal
 
-        from forecast.services import SignalForecaster
+        from forecast_server.services import SignalForecaster
         from training_server.schemas import SignalRequest
 
         forecaster = SignalForecaster()
