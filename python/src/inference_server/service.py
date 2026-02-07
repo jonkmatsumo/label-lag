@@ -12,11 +12,11 @@ from google.protobuf import struct_pb2
 
 from forecast_server.model_manager import get_model_manager
 from forecast_server.services import SignalForecaster
-from inference_server.config import InferenceServerConfig
-from inference_server.proto.inference.v1 import (
+from inference.v1 import (
     inference_pb2,
     inference_pb2_grpc,
 )
+from inference_server.config import InferenceServerConfig
 from training_server.schemas import SignalRequest
 
 logger = logging.getLogger(__name__)

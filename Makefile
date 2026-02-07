@@ -165,36 +165,39 @@ proto-gen-go:
 
 proto-gen-python:
 	@echo "Generating Python stubs..."
-	# Inference Server stubs
-	@mkdir -p $(PYTHON_SRC_DIR)/inference_server/proto
-	uv run python -m grpc_tools.protoc -I $(PROTO_DIR) \
-		--python_out=$(PYTHON_SRC_DIR)/inference_server/proto \
-		--grpc_python_out=$(PYTHON_SRC_DIR)/inference_server/proto \
-		$(PROTO_DIR)/inference/v1/*.proto
-	# Training Server & Shared stubs
-	# Generated into python/src so that imports like 'from analytics.v1 import ...' work
+	# Main Python stubs (Inference, Training, Analytics, Gateway)
+	# Generated into python/src so that imports like 'from inference.v1 import ...' work
 	uv run python -m grpc_tools.protoc -I $(PROTO_DIR) \
 		--python_out=$(PYTHON_SRC_DIR) \
 		--grpc_python_out=$(PYTHON_SRC_DIR) \
+		$(PROTO_DIR)/inference/v1/*.proto \
 		$(PROTO_DIR)/training/v1/*.proto \
-		$(PROTO_DIR)/analytics/v1/analytics.proto \
-		$(PROTO_DIR)/inference/v1/gateway.proto
-	@touch $(PYTHON_SRC_DIR)/training/v1/__init__.py
-	@touch $(PYTHON_SRC_DIR)/analytics/__init__.py
-	@touch $(PYTHON_SRC_DIR)/analytics/v1/__init__.py
-	@touch $(PYTHON_SRC_DIR)/inference/__init__.py
-	@touch $(PYTHON_SRC_DIR)/inference/v1/__init__.py
-	# Forecast stubs
+		$(PROTO_DIR)/analytics/v1/analytics.proto
+
+	# Forecast stubs (legacy separate generation, keeping for now if needed, or could consolidate)
 	@mkdir -p $(PYTHON_SRC_DIR)/forecast_server/proto
 	uv run python -m grpc_tools.protoc -I $(PROTO_DIR) \
 		--python_out=$(PYTHON_SRC_DIR)/forecast_server/proto \
 		--grpc_python_out=$(PYTHON_SRC_DIR)/forecast_server/proto \
 		$(PROTO_DIR)/forecast/v1/*.proto
-	# Gateway stubs (legacy)
+
+	# Legacy Gateway stubs (keeping for compatibility if needed, but should be phased out)
 	@mkdir -p $(PYTHON_SRC_DIR)/gateway_grpc
 	uv run python -m grpc_tools.protoc -I $(PROTO_DIR) \
 		--python_out=$(PYTHON_SRC_DIR)/gateway_grpc \
 		--grpc_python_out=$(PYTHON_SRC_DIR)/gateway_grpc \
 		$(PROTO_DIR)/inference/v1/gateway.proto \
 		$(PROTO_DIR)/analytics/v1/analytics.proto
+
 	# Ensure __init__.py files
+	@touch $(PYTHON_SRC_DIR)/training/v1/__init__.py
+	@touch $(PYTHON_SRC_DIR)/analytics/__init__.py
+	@touch $(PYTHON_SRC_DIR)/analytics/v1/__init__.py
+	@touch $(PYTHON_SRC_DIR)/inference/__init__.py
+	@touch $(PYTHON_SRC_DIR)/inference/v1/__init__.py
+	@touch $(PYTHON_SRC_DIR)/forecast_server/proto/forecast/__init__.py
+	@touch $(PYTHON_SRC_DIR)/forecast_server/proto/forecast/v1/__init__.py
+	@touch $(PYTHON_SRC_DIR)/gateway_grpc/inference/__init__.py
+	@touch $(PYTHON_SRC_DIR)/gateway_grpc/inference/v1/__init__.py
+	@touch $(PYTHON_SRC_DIR)/gateway_grpc/analytics/__init__.py
+	@touch $(PYTHON_SRC_DIR)/gateway_grpc/analytics/v1/__init__.py

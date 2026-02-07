@@ -45,7 +45,7 @@ describe('Core UI Read Routing', () => {
         method: 'GET',
         url: '/bff/v1/monitoring/drift',
         target: 'gateway',
-        path: '/monitoring/drift?hours=24&threshold=0.25&force_refresh=false',
+        path: '/monitoring/drift?force_refresh=false&hours=24&threshold=0.25',
       },
       {
         name: 'backtest results -> gateway',

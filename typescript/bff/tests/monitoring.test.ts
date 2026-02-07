@@ -20,7 +20,7 @@ describe('Monitoring Routes', () => {
   describe('GET /bff/v1/monitoring/drift', () => {
     it('returns drift status', async () => {
       ctx.mockGatewayPool.intercept({
-        path: '/monitoring/drift?hours=24&threshold=0.25&force_refresh=false',
+        path: '/monitoring/drift?force_refresh=false&hours=24&threshold=0.25',
         method: 'GET',
       }).reply(200, {
         status: 'ok',
@@ -53,7 +53,7 @@ describe('Monitoring Routes', () => {
 
     it('returns drift warning status', async () => {
       ctx.mockGatewayPool.intercept({
-        path: '/monitoring/drift?hours=24&threshold=0.25&force_refresh=false',
+        path: '/monitoring/drift?force_refresh=false&hours=24&threshold=0.25',
         method: 'GET',
       }).reply(200, {
         status: 'warning',
@@ -82,7 +82,7 @@ describe('Monitoring Routes', () => {
 
     it('accepts custom parameters', async () => {
       ctx.mockGatewayPool.intercept({
-        path: '/monitoring/drift?hours=48&threshold=0.3&force_refresh=true',
+        path: '/monitoring/drift?force_refresh=true&hours=48&threshold=0.3',
         method: 'GET',
       }).reply(200, {
         status: 'ok',
