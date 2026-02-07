@@ -141,26 +141,17 @@ The repo is organized around data flow and runtime boundaries so services can ev
 ```
 go/
 ├── analytics/           # Go gRPC services
-├── orchestrator/        # Go rule engine & gateway
-├── forecast/            # Go forecast protos/client
-└── training/            # Go training protos/client
-node/
+└── orchestrator/        # Go rule engine & gateway
+python/
+└── src/
+    ├── forecast/        # Forecasting logic
+    ├── inference/       # gRPC Inference Service
+    ├── training/        # gRPC Training Service
+    └── model/           # Shared ML logic
+typescript/
 ├── bff/                 # Node.js Backend for Frontend
 └── ui/                  # React + TypeScript frontend
-python/
-├── src/
-│   ├── forecast/        # Forecasting logic
-│   ├── inference/       # gRPC Inference Service
-│   ├── training/        # gRPC Training Service
-│   └── model/           # Shared ML logic
-└── tests/               # Python tests
 ```
-
-Key folders:
-- **`api/`**: Orchestrates scoring, rule lifecycle, validation, audit logging, and deployment actions.
-- **`model/`**: Training workflows, evaluation metrics, and registry interactions.
-- **`pipeline/`**: Feature materialization and data correctness safeguards.
-- **`generator/`** and **`synthetic_pipeline/`**: Synthetic data creation, fraud patterns, and persistence.
 
 ## Service-Level Breakdown
 
