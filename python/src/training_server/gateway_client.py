@@ -142,7 +142,21 @@ def get_gateway_client() -> GatewayDecisionClient:
     """Get the singleton GatewayDecisionClient instance."""
     global _client
     if _client is None:
-        _client = GatewayDecisionClient()
+        transport = os.getenv("TRAINING_GATEWAY_TRANSPORT", "http").lower()
+        if transport == "grpc":
+            try:
+                from training_server.gateway_grpc_client import GatewayGrpcClient
+
+                _client = GatewayGrpcClient()
+                logger.info("Using gRPC transport for Inference Gateway")
+            except Exception as e:
+                logger.error(
+                    f"Failed to initialize gRPC client, falling back to HTTP: {e}"
+                )
+                _client = GatewayDecisionClient()
+        else:
+            _client = GatewayDecisionClient()
+            logger.info("Using HTTP transport for Inference Gateway")
     return _client
 
 
