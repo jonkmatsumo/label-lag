@@ -5,6 +5,8 @@ import (
 
 	gatewayv1 "github.com/jonkmatsumo/label-lag/go/orchestrator/internal/http/gatewayv1"
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/rules"
+	"go.opentelemetry.io/otel/attribute"
+	sdktrace "go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -13,13 +15,15 @@ import (
 // GatewayServer implements the GatewayService gRPC interface.
 type GatewayServer struct {
 	gatewayv1.UnimplementedGatewayServiceServer
-	rulesProvider rules.Provider
+	rulesProvider   rules.Provider
+	enableAdminRPCs bool
 }
 
 // NewGatewayServer creates a new instance of GatewayServer.
-func NewGatewayServer(rp rules.Provider) *GatewayServer {
+func NewGatewayServer(rp rules.Provider, enableAdminRPCs bool) *GatewayServer {
 	return &GatewayServer{
-		rulesProvider: rp,
+		rulesProvider:   rp,
+		enableAdminRPCs: enableAdminRPCs,
 	}
 }
 
@@ -65,6 +69,15 @@ func (s *GatewayServer) EvaluateRules(ctx context.Context, req *gatewayv1.Evalua
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "evaluation failed: %v", err)
 	}
+
+	// Add telemetry
+	span := sdktrace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.String("rules.version", result.RulesVersion),
+		attribute.Float64("rules.eval_time_ms", result.EvaluationTimeMS),
+		attribute.Int("rules.matched_count", len(result.MatchedRules)),
+		attribute.Bool("rules.rejected", result.Rejected),
+	)
 
 	resp := ruleResultToProto(result, baseScore, req.ShadowMode)
 	return resp, nil

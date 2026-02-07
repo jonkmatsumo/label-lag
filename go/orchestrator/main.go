@@ -147,7 +147,8 @@ func main() {
 		os.Exit(1)
 	}
 	grpcServer := grpc.NewServer()
-	gatewayServer := grpcclient.NewGatewayServer(rulesProvider)
+	enableAdminRPCs := getEnv("ENABLE_ADMIN_RPCS", "false") == "true"
+	gatewayServer := grpcclient.NewGatewayServer(rulesProvider, enableAdminRPCs)
 	gatewayServer.Register(grpcServer)
 
 	go func() {
@@ -174,6 +175,10 @@ func main() {
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		logger.Error("shutdown error", "error", err)
+	}
+	// Shutdown handler (drain log queue)
+	if err := handler.Shutdown(ctx); err != nil {
+		logger.Error("handler shutdown error", "error", err)
 	}
 }
 

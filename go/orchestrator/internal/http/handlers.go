@@ -10,6 +10,8 @@ import (
 	"math"
 	"net/http"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
@@ -18,6 +20,7 @@ import (
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/http/proxy"
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/requestid"
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/rules"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
@@ -58,13 +61,23 @@ type Handler struct {
 	pythonURL       string
 	mlflowURL       string
 	maxBodyBytes    int64
+	logQueue        chan inferenceLogEvent
+	logWg           sync.WaitGroup
+	droppedLogs     atomic.Int64
+}
+
+type inferenceLogEvent struct {
+	ctx         context.Context
+	req         *crudv1.LogInferenceEventRequest
+	spanContext trace.SpanContext
+	requestID   string
 }
 
 func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient AnalyticsClient, trainingClient TrainingClient, forecastClient ForecastClient, provider rules.Provider, maxBodyBytes int64, pythonURL, mlflowURL string) *Handler {
 	if maxBodyBytes <= 0 {
 		maxBodyBytes = 1 << 20
 	}
-	return &Handler{
+	h := &Handler{
 		logger:          logger,
 		inferenceClient: client,
 		analyticsClient: analyticsClient,
@@ -74,6 +87,57 @@ func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient Ana
 		maxBodyBytes:    maxBodyBytes,
 		pythonURL:       pythonURL,
 		mlflowURL:       mlflowURL,
+		logQueue:        make(chan inferenceLogEvent, 100),
+	}
+	h.startWorkers()
+	return h
+}
+
+func (h *Handler) startWorkers() {
+	for i := 0; i < 5; i++ {
+		h.logWg.Add(1)
+		go h.logWorker()
+	}
+}
+
+func (h *Handler) logWorker() {
+	defer h.logWg.Done()
+	for event := range h.logQueue {
+		ctx := event.ctx
+		// Create a link to the parent trace
+		opts := []trace.SpanStartOption{
+			trace.WithLinks(trace.Link{SpanContext: event.spanContext}),
+			trace.WithAttributes(attribute.String("request_id", event.requestID)),
+		}
+
+		// Start a new root span for the async operation, linked to parent
+		var span trace.Span
+		if event.spanContext.IsValid() {
+			ctx, span = otel.Tracer("async-logger").Start(ctx, "async_log_inference", opts...)
+		} else {
+			ctx, span = otel.Tracer("async-logger").Start(ctx, "async_log_inference")
+		}
+		defer span.End()
+
+		_, err := h.analyticsClient.LogInferenceEvent(ctx, event.req)
+		if err != nil {
+			h.logger.Warn("failed to log inference event to CRUD", "error", err, "request_id", event.requestID)
+		}
+	}
+}
+
+func (h *Handler) Shutdown(ctx context.Context) error {
+	close(h.logQueue)
+	done := make(chan struct{})
+	go func() {
+		h.logWg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 
@@ -300,17 +364,22 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 	h.logger.Info("InferenceEvent", "event", event)
 
 	// Persist inference event to CRUD (fire-and-forget, don't fail the request)
+	// Persist inference event to CRUD (fire-and-forget, bounded)
 	if h.analyticsClient != nil {
-		go func() {
-			pbImpacts := make([]*crudv1.RuleImpact, 0, len(ruleImpacts))
-			for _, ri := range ruleImpacts {
-				pbImpacts = append(pbImpacts, &crudv1.RuleImpact{
-					RuleId:     ri["rule_id"].(string),
-					IsShadow:   ri["is_shadow"].(bool),
-					ScoreDelta: ri["score_delta"].(float64),
-				})
-			}
-			_, err := h.analyticsClient.LogInferenceEvent(context.Background(), &crudv1.LogInferenceEventRequest{
+		pbImpacts := make([]*crudv1.RuleImpact, 0, len(ruleImpacts))
+		for _, ri := range ruleImpacts {
+			pbImpacts = append(pbImpacts, &crudv1.RuleImpact{
+				RuleId:     ri["rule_id"].(string),
+				IsShadow:   ri["is_shadow"].(bool),
+				ScoreDelta: ri["score_delta"].(float64),
+			})
+		}
+
+		evt := inferenceLogEvent{
+			ctx:         context.Background(),
+			requestID:   requestID,
+			spanContext: span.SpanContext(),
+			req: &crudv1.LogInferenceEventRequest{
 				Event: &crudv1.InferenceEvent{
 					RequestId:    requestID,
 					Timestamp:    timestamppb.Now(),
@@ -320,11 +389,18 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 					FinalScore:   int32(ruleResult.FinalScore),
 					RuleImpacts:  pbImpacts,
 				},
-			})
-			if err != nil {
-				h.logger.Warn("failed to log inference event to CRUD", "error", err, "request_id", requestID)
+			},
+		}
+
+		select {
+		case h.logQueue <- evt:
+			// Enqueued successfully
+		default:
+			dropped := h.droppedLogs.Add(1)
+			if dropped%100 == 1 {
+				h.logger.Warn("dropping inference log event", "total_dropped", dropped)
 			}
-		}()
+		}
 	}
 
 	// OTEL attributes

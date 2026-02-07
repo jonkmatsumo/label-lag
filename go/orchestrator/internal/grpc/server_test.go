@@ -19,6 +19,10 @@ func (m *mockRulesProvider) GetRules(ctx context.Context) (rules.RuleSet, error)
 	return m.ruleset, m.err
 }
 
+func (m *mockRulesProvider) Reload(ctx context.Context) error {
+	return m.err
+}
+
 func TestEvaluateRules(t *testing.T) {
 	mockRules := rules.RuleSet{
 		Version: "v1",
@@ -27,7 +31,7 @@ func TestEvaluateRules(t *testing.T) {
 		},
 	}
 	provider := &mockRulesProvider{ruleset: mockRules}
-	server := NewGatewayServer(provider)
+	server := NewGatewayServer(provider, false)
 
 	features, _ := structpb.NewStruct(map[string]any{"f1": 20})
 	req := &gatewayv1.EvaluateRulesRequest{
@@ -52,7 +56,7 @@ func TestEvaluateRules(t *testing.T) {
 }
 
 func TestEvaluateRulesDiff(t *testing.T) {
-	server := NewGatewayServer(&mockRulesProvider{})
+	server := NewGatewayServer(&mockRulesProvider{}, false)
 
 	features, _ := structpb.NewStruct(map[string]any{"f1": 20})
 

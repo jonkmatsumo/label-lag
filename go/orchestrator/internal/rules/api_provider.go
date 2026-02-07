@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 )
 
 type APIProvider struct {
@@ -18,14 +20,16 @@ type APIProvider struct {
 	mu          sync.RWMutex
 	cachedRules RuleSet
 	lastFetched time.Time
+
+	// flightGroup prevents thundering herd on cache refresh
+	flightGroup singleflight.Group
+
 	lastAttempt time.Time
 	nextAttempt time.Time
 	backoff     time.Duration
 	baseBackoff time.Duration
 	maxBackoff  time.Duration
 	jitterFn    func(time.Duration) time.Duration
-	fetching    bool
-	cond        *sync.Cond
 	lastErr     error
 }
 
@@ -38,54 +42,63 @@ func NewAPIProvider(apiURL string, ttl time.Duration) *APIProvider {
 		maxBackoff:  30 * time.Second,
 		jitterFn:    defaultJitter,
 	}
-	provider.cond = sync.NewCond(&provider.mu)
 	return provider
 }
 
 func (p *APIProvider) GetRules(ctx context.Context) (RuleSet, error) {
-	for {
-		p.mu.Lock()
+	p.mu.RLock()
+	cached := p.cachedRules
+	lastFetched := p.lastFetched
+	p.mu.RUnlock()
+
+	// 1. Serve from cache if fresh
+	if time.Since(lastFetched) < p.ttl && cached.Version != "" {
+		return cached, nil
+	}
+
+	// 2. Refresh needed - Use Singleflight to coalesce requests
+	v, err, _ := p.flightGroup.Do("get_rules", func() (interface{}, error) {
+		// Re-check cache inside Do
+		p.mu.RLock()
 		if time.Since(p.lastFetched) < p.ttl && p.cachedRules.Version != "" {
-			rules := p.cachedRules
-			p.mu.Unlock()
-			return rules, nil
+			defer p.mu.RUnlock()
+			return p.cachedRules, nil
 		}
+
+		// Check backoff
 		if !p.nextAttempt.IsZero() && time.Now().Before(p.nextAttempt) {
 			cached := p.cachedRules
 			nextAttempt := p.nextAttempt
-			p.mu.Unlock()
+			p.mu.RUnlock()
 			if cached.Version != "" {
 				return cached, nil
 			}
 			return RuleSet{}, fmt.Errorf("rules provider in backoff until %s", nextAttempt.Format(time.RFC3339))
 		}
-		if p.fetching {
-			for p.fetching {
-				p.cond.Wait()
-			}
-			cached := p.cachedRules
-			lastErr := p.lastErr
-			p.mu.Unlock()
-			if cached.Version != "" {
-				return cached, nil
-			}
-			if lastErr != nil {
-				return RuleSet{}, lastErr
-			}
-			return RuleSet{}, fmt.Errorf("rules unavailable")
+		p.mu.RUnlock()
+
+		return p.fetchAndCache(ctx)
+	})
+
+	if err != nil {
+		// If fetch failed, return stale cache if available
+		p.mu.RLock()
+		defer p.mu.RUnlock()
+		if p.cachedRules.Version != "" {
+			return p.cachedRules, nil
 		}
-		p.fetching = true
-		p.mu.Unlock()
-
-		rules, err := p.fetchAndCache(ctx)
-
-		p.mu.Lock()
-		p.fetching = false
-		p.cond.Broadcast()
-		p.mu.Unlock()
-
-		return rules, err
+		return RuleSet{}, err
 	}
+
+	return v.(RuleSet), nil
+}
+
+func (p *APIProvider) Reload(ctx context.Context) error {
+	// Force refresh bypassing cache check
+	_, err, _ := p.flightGroup.Do("get_rules", func() (interface{}, error) {
+		return p.fetchAndCache(ctx)
+	})
+	return err
 }
 
 func (p *APIProvider) fetchAndCache(ctx context.Context) (RuleSet, error) {
@@ -99,11 +112,7 @@ func (p *APIProvider) fetchAndCache(ctx context.Context) (RuleSet, error) {
 		p.mu.Lock()
 		p.noteFailure(now)
 		p.lastErr = err
-		cached := p.cachedRules
 		p.mu.Unlock()
-		if cached.Version != "" {
-			return cached, nil
-		}
 		return RuleSet{}, err
 	}
 
