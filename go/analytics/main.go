@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -60,6 +61,22 @@ type server struct {
 	db *sql.DB
 }
 
+func mapDBError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return status.Error(codes.NotFound, "resource not found")
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return status.Error(codes.DeadlineExceeded, "database query timed out")
+	}
+	if errors.Is(err, context.Canceled) {
+		return status.Error(codes.Canceled, "request canceled")
+	}
+	return status.Errorf(codes.Internal, "database error: %v", err)
+}
+
 const (
 	maxDaysLimit         = 365
 	maxTransactionLimit  = 5000
@@ -106,7 +123,7 @@ func (s *server) GetDailyStats(ctx context.Context, req *pb.GetDailyStatsRequest
 
 	rows, err := s.db.QueryContext(queryCtx, query, cutoffDate)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query daily stats: %v", err)
+		return nil, mapDBError(err)
 	}
 	defer rows.Close()
 
@@ -170,7 +187,7 @@ func (s *server) GetTransactionDetails(ctx context.Context, req *pb.GetTransacti
 
 	rows, err := s.db.QueryContext(queryCtx, query, cutoffDate, limit)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query transaction details: %v", err)
+		return nil, mapDBError(err)
 	}
 	defer rows.Close()
 
@@ -272,14 +289,14 @@ func (s *server) SearchTransactions(ctx context.Context, req *pb.SearchTransacti
 			// Fallback to exact count if estimate fails
 			countQuery := "SELECT COUNT(*) FROM generated_records"
 			if err := s.db.QueryRowContext(queryCtx, countQuery).Scan(&total); err != nil {
-				return nil, fmt.Errorf("failed to query transaction count: %v", err)
+				return nil, mapDBError(err)
 			}
 		}
 	} else {
 		// Filtered count
 		countQuery := "SELECT COUNT(*) FROM generated_records" + whereClause
 		if err := s.db.QueryRowContext(queryCtx, countQuery, args...).Scan(&total); err != nil {
-			return nil, fmt.Errorf("failed to query transaction count: %v", err)
+			return nil, mapDBError(err)
 		}
 	}
 
@@ -301,7 +318,7 @@ func (s *server) SearchTransactions(ctx context.Context, req *pb.SearchTransacti
 	// Reuse queryCtx/cancel if possible, but let's just make a new one for clarity or keep it simple
 	rows, err := s.db.QueryContext(queryCtx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query transactions: %v", err)
+		return nil, mapDBError(err)
 	}
 	defer rows.Close()
 
@@ -381,7 +398,7 @@ func (s *server) GetRecentAlerts(ctx context.Context, req *pb.GetRecentAlertsReq
 
 	rows, err := s.db.QueryContext(queryCtx, query, alertThreshold, limit)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query recent alerts: %v", err)
+		return nil, mapDBError(err)
 	}
 	defer rows.Close()
 
@@ -445,7 +462,7 @@ func (s *server) GetOverviewMetrics(ctx context.Context, req *pb.GetOverviewMetr
 		&resp.FraudAmount,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query overview metrics: %v", err)
+		return nil, mapDBError(err)
 	}
 
 	if resp.TotalRecords > 0 {
@@ -503,7 +520,7 @@ func (s *server) GetDatasetFingerprint(ctx context.Context, req *pb.GetDatasetFi
 		&maxId,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query generated_records fingerprint: %v", err)
+		return nil, mapDBError(err)
 	}
 	if maxCr.Valid {
 		resp.GeneratedRecords.MaxCreatedAt = timestamppb.New(maxCr.Time)
@@ -525,7 +542,7 @@ func (s *server) GetDatasetFingerprint(ctx context.Context, req *pb.GetDatasetFi
 		&maxSnapshotId,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query feature_snapshots fingerprint: %v", err)
+		return nil, mapDBError(err)
 	}
 	if maxComp.Valid {
 		resp.FeatureSnapshots.MaxCreatedAt = timestamppb.New(maxComp.Time)
@@ -669,7 +686,7 @@ func (s *server) GetSchemaSummary(ctx context.Context, req *pb.GetSchemaSummaryR
 
 	rows, err := s.db.QueryContext(queryCtx, query, arrStr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query schema summary: %v", err)
+		return nil, mapDBError(err)
 	}
 	defer rows.Close()
 
@@ -775,7 +792,7 @@ func (s *server) GetTrainingData(ctx context.Context, req *pb.GetTrainingDataReq
 func (s *server) queryTrainingRecords(queryCtx context.Context, query string, cutoff time.Time) ([]*pb.TransactionDetail, error) {
 	rows, err := s.db.QueryContext(queryCtx, query, cutoff)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query training records: %v", err)
+		return nil, mapDBError(err)
 	}
 	defer rows.Close()
 
@@ -830,7 +847,7 @@ func (s *server) GetBacktestFeatures(ctx context.Context, req *pb.GetBacktestFea
 
 	rows, err := s.db.QueryContext(queryCtx, query, start, end)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query backtest features: %v", err)
+		return nil, mapDBError(err)
 	}
 	defer rows.Close()
 
@@ -880,7 +897,7 @@ func (s *server) SaveBacktestResult(ctx context.Context, req *pb.SaveBacktestRes
 	)
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to save backtest result: %v", err)
+		return nil, mapDBError(err)
 	}
 
 	return &pb.SaveBacktestResultResponse{Success: true}, nil
@@ -916,7 +933,7 @@ func (s *server) ListBacktestResults(ctx context.Context, req *pb.ListBacktestRe
 
 	rows, err := s.db.QueryContext(queryCtx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query backtest results: %v", err)
+		return nil, mapDBError(err)
 	}
 	defer rows.Close()
 
@@ -972,10 +989,8 @@ func (s *server) GetBacktestResult(ctx context.Context, req *pb.GetBacktestResul
 		&metricsJSON, &completed, &res.Error,
 	)
 
-	if err == sql.ErrNoRows {
-		return nil, status.Error(codes.NotFound, "backtest result not found")
-	} else if err != nil {
-		return nil, fmt.Errorf("failed to query backtest result: %v", err)
+	if err != nil {
+		return nil, mapDBError(err)
 	}
 
 	res.RuleId = ruleID.String
@@ -1137,7 +1152,7 @@ func (s *server) StoreGeneratedData(ctx context.Context, req *pb.StoreGeneratedD
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to begin transaction: %v", err)
+		return nil, mapDBError(fmt.Errorf("failed to begin transaction: %w", err))
 	}
 	defer tx.Rollback()
 
@@ -1170,7 +1185,7 @@ func (s *server) StoreGeneratedData(ctx context.Context, req *pb.StoreGeneratedD
 			r.IsFraudulent, r.FraudType,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to insert record %s: %v", r.RecordId, err)
+			return nil, mapDBError(fmt.Errorf("failed to insert record %s: %w", r.RecordId, err))
 		}
 	}
 
@@ -1193,12 +1208,12 @@ func (s *server) StoreGeneratedData(ctx context.Context, req *pb.StoreGeneratedD
 			m.IsPreFraud, m.DaysToFraud, m.IsTrainEligible,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to insert metadata for %s: %v", m.RecordId, err)
+			return nil, mapDBError(fmt.Errorf("failed to insert metadata for %s: %w", m.RecordId, err))
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("failed to commit transaction: %v", err)
+		return nil, mapDBError(fmt.Errorf("failed to commit transaction: %w", err))
 	}
 
 	return &pb.StoreGeneratedDataResponse{
@@ -1425,7 +1440,7 @@ func (s *server) MaterializeFeatures(ctx context.Context, req *pb.MaterializeFea
 
 	res, err := s.db.ExecContext(queryCtx, materializeSQL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to materialize features: %v", err)
+		return nil, mapDBError(fmt.Errorf("failed to materialize features: %w", err))
 	}
 
 	rowsAffected, _ := res.RowsAffected()
@@ -1464,7 +1479,7 @@ func (s *server) SaveRule(ctx context.Context, req *pb.SaveRuleRequest) (*pb.Sav
 	)
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to save rule: %v", err)
+		return nil, mapDBError(fmt.Errorf("failed to save rule: %w", err))
 	}
 
 	return &pb.SaveRuleResponse{Success: true}, nil
@@ -1481,10 +1496,8 @@ func (s *server) GetRule(ctx context.Context, req *pb.GetRuleRequest) (*pb.GetRu
 		&r.Id, &r.Field, &r.Op, &r.ValueJson, &r.Action, &r.Score, &r.Severity, &r.Reason, &r.Status,
 	)
 
-	if err == sql.ErrNoRows {
-		return nil, status.Error(codes.NotFound, "rule not found")
-	} else if err != nil {
-		return nil, fmt.Errorf("failed to get rule: %v", err)
+	if err != nil {
+		return nil, mapDBError(err)
 	}
 
 	return &pb.GetRuleResponse{Rule: &r}, nil
@@ -1508,7 +1521,7 @@ func (s *server) ListRules(ctx context.Context, req *pb.ListRulesRequest) (*pb.L
 
 	rows, err := s.db.QueryContext(queryCtx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list rules: %v", err)
+		return nil, mapDBError(err)
 	}
 	defer rows.Close()
 
@@ -1533,7 +1546,7 @@ func (s *server) DeleteRule(ctx context.Context, req *pb.DeleteRuleRequest) (*pb
 
 	_, err := s.db.ExecContext(queryCtx, query, req.RuleId)
 	if err != nil {
-		return nil, fmt.Errorf("failed to archive rule: %v", err)
+		return nil, mapDBError(fmt.Errorf("failed to archive rule: %w", err))
 	}
 	return &pb.DeleteRuleResponse{Success: true}, nil
 }
@@ -1561,7 +1574,7 @@ func (s *server) LogInferenceEvent(ctx context.Context, req *pb.LogInferenceEven
 	)
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to log inference event: %v", err)
+		return nil, mapDBError(fmt.Errorf("failed to log inference event: %w", err))
 	}
 
 	return &pb.LogInferenceEventResponse{Success: true}, nil
@@ -2163,8 +2176,8 @@ func (s *server) GetRuleReadiness(ctx context.Context, req *pb.GetRuleReadinessR
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 	err := s.db.QueryRowContext(queryCtx, "SELECT rule_id, value FROM rules WHERE rule_id = $1", req.RuleId).Scan(&ruleID, &valueJSON)
-	if err == sql.ErrNoRows {
-		return nil, status.Error(codes.NotFound, "rule not found")
+	if err != nil {
+		return nil, mapDBError(err)
 	}
 
 	checks := []*pb.ReadinessCheck{}
