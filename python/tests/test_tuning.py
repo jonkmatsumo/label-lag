@@ -70,7 +70,7 @@ class TestTuningStudy:
         """When tuning disabled, train_model does not run study."""
         from model.loader import DataLoader, TrainTestSplit
         from model.train import train_model
-        from training_server.schemas import TuningConfig
+        from training.schemas import TuningConfig
 
         with patch("model.train.DataLoader") as mock_loader:
             mock_loader.FEATURE_COLUMNS = DataLoader.FEATURE_COLUMNS
@@ -165,7 +165,7 @@ class TestSelectedTrialOverride:
         """When selected_trial_number is set, uses that trial's params."""
         from model.loader import TrainTestSplit
         from model.train import train_model
-        from training_server.schemas import TuningConfig
+        from training.schemas import TuningConfig
 
         mock_loader = MagicMock()
         mock_loader.FEATURE_COLUMNS = ["a", "b", "c"]

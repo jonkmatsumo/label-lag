@@ -6,8 +6,8 @@ from datetime import datetime
 
 import pandas as pd
 
-from training_server.crud_client import get_crud_client
-from training_server.schemas import SplitConfig
+from training.crud_client import get_crud_client
+from training.schemas import SplitConfig
 
 
 @dataclass

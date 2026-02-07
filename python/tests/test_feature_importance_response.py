@@ -3,8 +3,8 @@
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
-from forecast_server.services import SignalForecaster
-from training_server.schemas import SignalRequest
+from forecast.services import SignalForecaster
+from training.schemas import SignalRequest
 
 
 class TestFeatureImportanceResponse:
@@ -26,7 +26,7 @@ class TestFeatureImportanceResponse:
 
         with (
             patch(
-                "forecast_server.model_manager.get_model_manager",
+                "forecast.model_manager.get_model_manager",
                 return_value=mock_manager,
             ),
             patch.object(forecaster, "_fetch_features") as mock_fetch,
@@ -57,7 +57,7 @@ class TestFeatureImportanceResponse:
 
         with (
             patch(
-                "forecast_server.model_manager.get_model_manager",
+                "forecast.model_manager.get_model_manager",
                 return_value=mock_manager,
             ),
             patch.object(forecaster, "_fetch_features") as mock_fetch,
@@ -87,7 +87,7 @@ class TestFeatureImportanceResponse:
 
         with (
             patch(
-                "forecast_server.model_manager.get_model_manager",
+                "forecast.model_manager.get_model_manager",
                 return_value=mock_manager,
             ),
             patch.object(forecaster, "_fetch_features") as mock_fetch,

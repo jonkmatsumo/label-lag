@@ -20,10 +20,13 @@ flowchart TB
         BFF[Node BFF]
     end
 
-    subgraph Inference[Inference & ML Compute]
-        GO_INF[Go Inference Service]
-        PY_API[Python Forecaster / ML Compute]
-        PY_GRPC[Python gRPC Service]
+    subgraph Orchestration[Orchestration & Rules]
+        ORCH[Go Orchestrator]
+    end
+
+    subgraph Compute[ML Compute]
+        PY_INF[Python Inference Service]
+        PY_TRAIN[Python Training Service]
     end
 
     subgraph Analytics[Analytics Data Access]
@@ -36,10 +39,15 @@ flowchart TB
         MINIO[MinIO Artifacts]
     end
 
-    UI_REACT --> BFF --> GO_INF --> PY_API --> GO_CRUD --> DB
-    GO_INF --> PY_GRPC --> GO_CRUD
-    GO_INF --> GO_CRUD
-    PY_API --> MLFLOW --> MINIO
+    UI_REACT --> BFF --> ORCH
+    ORCH --> PY_INF
+    ORCH --> PY_TRAIN
+    ORCH --> GO_CRUD
+    PY_INF --> GO_CRUD
+    PY_TRAIN --> GO_CRUD
+    PY_TRAIN --> MLFLOW --> MINIO
+    PY_INF --> MLFLOW
+    GO_CRUD --> DB
 ```
 
 ### ML / Data Pipeline Diagram
@@ -93,13 +101,13 @@ stateDiagram-v2
 
 ## Detailed Architecture Breakdown
 
-Label Lag separates infrastructure, application runtime, and lifecycle workflows so that training and deployment are explicit and observable. The system design diagram above shows the runtime path (React → BFF → Go Inference → Python ML → Go Analytics → DB). The pipeline diagram shows how models move from training to production inference. The rule state machine anchors governance, with all rule management and analysis now handled by the Go-based control plane.
+Label Lag separates infrastructure, application runtime, and lifecycle workflows so that training and deployment are explicit and observable. The system design diagram above shows the runtime path (React → BFF → Go Orchestrator → Python Services → Go Analytics → DB). The pipeline diagram shows how models move from training to production inference. The rule state machine anchors governance, with all rule management and analysis now handled by the Go-based control plane.
 
 Core flows:
 - **Data generation and feature materialization** feed training and historical analytics while preserving point-in-time correctness.
 - **Training and registry** capture metrics and artifacts in MLflow, enabling explicit promotion and deployment.
-- **Inference and rule evaluation** combine model predictions with a high-performance Go rule engine that supports shadow testing and auditing.
-- **Dashboard-driven workflows** expose model and rule lifecycle actions managed through the Go Inference Service.
+- **Inference and rule evaluation** combine model predictions with a high-performance Go rule engine (Orchestrator) that supports shadow testing and auditing.
+- **Dashboard-driven workflows** expose model and rule lifecycle actions managed through the Go Orchestrator Service.
 
 ## Ports & Services Table
 
@@ -107,16 +115,18 @@ All ports are configurable via `.env`.
 
 | Service | Port | Purpose |
 |---------|------|---------|
+| Service | Port | Purpose |
+|---------|------|---------|
 | Web (React) | 5180 | React UI for scoring, analytics, model training, and rule authoring |
 | BFF | 3210 | Backend for Frontend - Node.js proxy layer for React UI |
-| API | 8100 | Python API (ML-only) for scoring and training endpoints |
-| API Docs | 8100 | Swagger UI served by the Python API |
+| Orchestrator | 8081 | Go Orchestrator (HTTP Gateway + Rule Engine) |
+| Training | 50053 | Python Training Service (gRPC) |
+| Inference | 50052 | Python Inference Service (gRPC) |
+| Analytics | 50051 | Go Analytics Service (gRPC) |
 | MLflow | 5005 | Experiment tracking and model registry |
 | MinIO API | 9100 | Object storage API for artifacts |
 | MinIO Console | 9101 | Object storage console (minioadmin/minioadmin) |
 | PostgreSQL | 5542 | Transaction and feature storage |
-| Inference Service | 8181 | Go-based high-throughput inference service |
-| Analytics Service | 50051 | Go analytics service (gRPC) backing compute-only data access |
 
 The React UI now supports:
 - **Synthetic Dataset Management**: Generate data, view distributions, and analyze correlations.
@@ -131,52 +141,44 @@ The repo is organized around data flow and runtime boundaries so services can ev
 ```
 go/
 ├── analytics/           # Go gRPC services
-└── inference/           # Go rule engine & gateway
-node/
+└── orchestrator/        # Go rule engine & gateway
+python/
+└── src/
+    ├── forecast/        # Forecasting logic
+    ├── inference/       # gRPC Inference Service
+    ├── training/        # gRPC Training Service
+    └── model/           # Shared ML logic
+typescript/
 ├── bff/                 # Node.js Backend for Frontend
 └── ui/                  # React + TypeScript frontend
-python/
-├── src/
-│   ├── api/             # FastAPI app, model forecaster
-│   ├── model/           # XGBoost training, evaluation
-│   ├── monitor/         # Drift monitoring
-│   ├── pipeline/        # Feature materialization
-│   └── synthetic_pipeline/ # Data generation
-└── tests/               # Python tests
 ```
-
-Key folders:
-- **`api/`**: Orchestrates scoring, rule lifecycle, validation, audit logging, and deployment actions.
-- **`model/`**: Training workflows, evaluation metrics, and registry interactions.
-- **`pipeline/`**: Feature materialization and data correctness safeguards.
-- **`generator/`** and **`synthetic_pipeline/`**: Synthetic data creation, fraud patterns, and persistence.
 
 ## Service-Level Breakdown
 
-### API Service (Python)
+### Orchestrator Service (Go)
 
-Responsible for model forecasting, training triggers, and model deployment. It exposes prediction and training endpoints (`/predict/signal`, `/train`, `/models/deploy`) and serves Swagger docs at `/docs`. The API is compute-only and relies on the Go Analytics Service for data access. Rule-related lifecycle actions are now delegated to the Go Inference Service.
+(Formerly Inference Service/Gateway). The central gateway for the Label Lag system. It serves HTTP traffic from the BFF/UI and orchestrates calls to backend services (Training, Inference, Analytics). It also hosts the high-performance **Rule Engine**.
 
-### Model Training & Registry (MLflow)
+Key features:
+- **Rule Engine**: Evaluates transactions against fraud rules using operators (`>`, `>=`, `in`, etc.).
+- **Gateway**: Proxies administrative actions (training, deployment) to Python services.
+- **Shadow Mode**: Supports shadow evaluation and auditing.
 
-Training runs are tracked with metrics and artifacts, then promoted through stages before deployment. The deploy action reloads the production model into the API, keeping approval and activation separate.
+### Inference Service (Python)
 
-### Rule Engine (Go Inference Service)
+A specialized gRPC service for low-latency model inference. It loads registered models from MLflow and serves prediction requests from the Orchestrator. It is compute-only and fetches features from the Analytics Service.
 
-High-performance rule evaluation and management. Rules evaluate transaction features using operators (`>`, `>=`, `<`, `<=`, `==`, `in`, `not_in`) and actions (`override_score`, `clamp_min`, `clamp_max`, `reject`). The gateway manages the lifecycle (draft → review → approval → publish) and supports shadow evaluation, sandbox testing, and automated conflict detection.
+### Training Service (Python)
 
-> [!NOTE]
-> **Rules vs. Model**: The Go Inference Service is the primary orchestrator for the final decision. It calculates rules locally but delegates the heavy ML model scoring to the Python gRPC service (`pygrpc`). The model score is then used as a feature input for the rule engine.
-
-### Python gRPC Service (pygrpc)
-
-The `pygrpc` service provides a specialized interface for low-latency model inference. It loads registered models from MLflow and serves prediction requests from the Go Inference Service.
-
-> **Data Access Layering**: `pygrpc` is a compute-only service. It does **not** access the database directly; instead, it retrieves user features by calling the Go Analytics Service via gRPC. This ensures centralized authorization and validation in the Analytics layer.
+A gRPC service responsible for:
+- Model training (XGBoost)
+- Triggering data generation
+- Handling model deployment (loading models into memory/registry)
+- Forecasting / Drift Monitoring
 
 ### Analytics Service (Go)
 
-Provides the gRPC data access layer for compute-only services. The Python API, model training loaders, and analytics endpoints rely on this service for reads and writes, keeping direct database I/O out of ML/compute surfaces.
+Provides the gRPC data access layer for all compute services. It manages PostgreSQL interactions, ensuring that Python services remain stateless and compute-focused.
 
 ### Synthetic Data Generator
 
@@ -235,7 +237,7 @@ INFERENCE_GATEWAY_MAX_BODY_BYTES=1048576
 INFERENCE_GATEWAY_READ_TIMEOUT=10s
 INFERENCE_GATEWAY_WRITE_TIMEOUT=30s
 INFERENCE_GATEWAY_IDLE_TIMEOUT=60s
-INFERENCE_GATEWAY_RULES_PATH=go/inference/config/default_rules.json
+INFERENCE_GATEWAY_RULES_PATH=go/orchestrator/config/default_rules.json
 INFERENCE_GATEWAY_RULES_WATCH=true
 ```
 

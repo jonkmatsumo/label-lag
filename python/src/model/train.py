@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     import matplotlib.pyplot as plt
     import mlflow
 
-    from training_server.schemas import SplitConfig, TuningConfig
+    from training.schemas import SplitConfig, TuningConfig
 
 # Placeholders for lazy loading and patching
 mlflow: Any = None
@@ -247,7 +247,7 @@ def train_model(
     import numpy as np
     from mlflow.models import infer_signature
 
-    from training_server.schemas import SplitStrategy
+    from training.schemas import SplitStrategy
 
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
     _mlflow.set_tracking_uri(tracking_uri)

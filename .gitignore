@@ -71,9 +71,19 @@ python/src/gateway_grpc/
 python/src/inference_server/proto/
 python/src/training_server/proto/
 python/src/forecast_server/proto/
-python/src/analytics/
-python/src/inference/
-python/src/training/
+# Generated proto files in service directories
+python/src/analytics/v1/*_pb2.py
+python/src/analytics/v1/*_pb2.pyi
+python/src/analytics/v1/*_pb2_grpc.py
+python/src/inference/v1/*_pb2.py
+python/src/inference/v1/*_pb2.pyi
+python/src/inference/v1/*_pb2_grpc.py
+python/src/training/v1/*_pb2.py
+python/src/training/v1/*_pb2.pyi
+python/src/training/v1/*_pb2_grpc.py
+python/src/forecast/v1/*_pb2.py
+python/src/forecast/v1/*_pb2.pyi
+python/src/forecast/v1/*_pb2_grpc.py
 go/forecast/proto/
 go/training/proto/
 # go/inference/internal/grpc/*_client.go (Track hand-written clients)
@@ -94,3 +104,12 @@ bin/
 **/gateway_grpc/**/*_pb2.py
 **/gateway_grpc/**/*_pb2.pyi
 **/gateway_grpc/**/*_pb2_grpc.py
+
+# Generated boilerplate modules and packages
+go/forecast/go.mod
+go/training/go.mod
+python/src/analytics/__init__.py
+python/src/analytics/v1/__init__.py
+python/src/forecast/v1/__init__.py
+python/src/inference/v1/__init__.py
+python/src/training/v1/__init__.py

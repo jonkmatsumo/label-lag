@@ -88,7 +88,7 @@ jobs:
       fail-fast: false
       matrix:
         module:
-          - go/inference
+          - go/orchestrator
           - go/analytics
 
     steps:
@@ -102,7 +102,12 @@ jobs:
           cache-dependency-path: ${{ matrix.module }}/go.sum
 
       - name: Install Protoc
-        uses: arduino/setup-protoc@v3
+        run: |
+          PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+          curl -LO --retry 5 --retry-delay 5 $PB_REL/download/v23.4/protoc-23.4-linux-x86_64.zip
+          sudo unzip -o protoc-23.4-linux-x86_64.zip -d /usr/local bin/protoc
+          sudo unzip -o protoc-23.4-linux-x86_64.zip -d /usr/local 'include/*'
+          rm -f protoc-23.4-linux-x86_64.zip
 
       - name: Install Go Protoc Plugins
         run: |

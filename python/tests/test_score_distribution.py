@@ -4,7 +4,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from forecast_server.routes import get_score_distribution
+from forecast.service import ForecastService
+from forecast.v1 import forecast_pb2
 
 
 class TestScoreDistribution:
@@ -28,26 +29,24 @@ class TestScoreDistribution:
         mock_client.get_inference_scores.return_value = mock_resp
 
         with (
-            patch(
-                "forecast_server.routes.get_model_manager", return_value=mock_manager
-            ),
-            patch(
-                "training_server.crud_client.get_crud_client", return_value=mock_client
-            ),
+            patch("forecast.service.get_model_manager", return_value=mock_manager),
+            patch("training.crud_client.get_crud_client", return_value=mock_client),
         ):
-            response = await get_score_distribution(hours=24)
+            service = ForecastService()
+            request = forecast_pb2.GetScoreDistributionRequest(hours=24)
+            mock_context = MagicMock()
 
-            assert response.observed_size == 100
-            assert response.baseline_size == 1000
+            response = service.GetScoreDistribution(request, mock_context)
+
             assert response.divergence > 0
             assert len(response.distribution) == 5
 
-            # Check bucket [91, 99] (index 4)
+            # Check bucket [91, 99] (index 4) -> "91-99"
             # Baseline ratio: 0.02
-            # Observed ratio: 10/100 = 0.10
+            # Observed count: 10. (Total 100). Ratio 0.10.
             # 0.10 > 2 * 0.02 (0.04), so shift should be detected
             assert response.shift_detected is True
-            assert response.distribution[4].observed_ratio == 0.10
+            assert response.distribution["91-99"] == 10
 
     @pytest.mark.anyio
     async def test_score_distribution_missing_baseline(self):
@@ -62,15 +61,17 @@ class TestScoreDistribution:
         mock_client.get_inference_scores.return_value = mock_resp
 
         with (
-            patch(
-                "forecast_server.routes.get_model_manager", return_value=mock_manager
-            ),
-            patch(
-                "training_server.crud_client.get_crud_client", return_value=mock_client
-            ),
+            patch("forecast.service.get_model_manager", return_value=mock_manager),
+            patch("training.crud_client.get_crud_client", return_value=mock_client),
         ):
-            response = await get_score_distribution(hours=24)
+            service = ForecastService()
+            request = forecast_pb2.GetScoreDistributionRequest(hours=24)
+            mock_context = MagicMock()
 
-            assert response.baseline_size is None
+            response = service.GetScoreDistribution(request, mock_context)
+
+            # Baseline size is 0 in response if missing? Or 0. Implementation detail.
+            # Original test asserted None, but protobuf int64 defaults to 0.
+            # assert response.baseline_size == 0 # Field does not exist in proto
             assert response.divergence >= 0
             assert response.shift_detected is False  # Default baseline is uniform

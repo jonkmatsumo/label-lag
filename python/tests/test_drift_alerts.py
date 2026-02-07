@@ -3,7 +3,7 @@
 import os
 from unittest.mock import patch
 
-from training_server.detect_drift import detect_drift
+from training.detect_drift import detect_drift
 
 
 class TestDriftAlerts:
@@ -12,8 +12,8 @@ class TestDriftAlerts:
     def test_drift_alert_classification(self):
         """Test that drift is correctly classified into alerts (C1)."""
         with (
-            patch("training_server.detect_drift.get_reference_data") as mock_ref,
-            patch("training_server.detect_drift.get_live_data") as mock_live,
+            patch("training.detect_drift.get_reference_data") as mock_ref,
+            patch("training.detect_drift.get_live_data") as mock_live,
             patch.dict(
                 os.environ,
                 {"DRIFT_PSI_WARN_THRESHOLD": "0.1", "DRIFT_PSI_CRIT_THRESHOLD": "0.25"},
@@ -52,8 +52,8 @@ class TestDriftAlerts:
 
             # Rebind thresholds because they are loaded at module import time.
             with (
-                patch("training_server.detect_drift.PSI_THRESHOLD_WARNING", 0.1),
-                patch("training_server.detect_drift.PSI_THRESHOLD_CRITICAL", 0.25),
+                patch("training.detect_drift.PSI_THRESHOLD_WARNING", 0.1),
+                patch("training.detect_drift.PSI_THRESHOLD_CRITICAL", 0.25),
             ):
                 results = detect_drift(hours=24)
 
@@ -71,7 +71,7 @@ class TestDriftAlerts:
             os.environ,
             {"DRIFT_PSI_WARN_THRESHOLD": "0.15", "DRIFT_PSI_CRIT_THRESHOLD": "0.35"},
         ):
-            from training_server.detect_drift import _load_drift_thresholds
+            from training.detect_drift import _load_drift_thresholds
 
             thresholds = _load_drift_thresholds()
             assert thresholds["psi_warning"] == 0.15

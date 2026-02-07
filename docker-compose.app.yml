@@ -1,10 +1,11 @@
 services:
   # Python Training/API Server
-  training-server:
+  # Python Training/API Server
+  training:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: training-server
+    container_name: training
     env_file:
       - .env
     environment:
@@ -21,7 +22,7 @@ services:
     ports:
       - "${TRAINING_SERVER_PORT:-50053}:50053"
       - "8000:8000"
-    command: [ "uv", "run", "python", "-m", "training_server.server" ]
+    command: [ "uv", "run", "python", "-m", "training.server" ]
     restart: unless-stopped
 
   analytics:
@@ -40,17 +41,18 @@ services:
       db:
         condition: service_healthy
 
-  inference-server:
+  inference:
     build:
       context: .
       dockerfile: python/Dockerfile
-    container_name: inference-server
+    container_name: inference
     environment:
       - INFERENCE_SERVER_HOST=0.0.0.0
       - INFERENCE_SERVER_PORT=50052
       - INFERENCE_SERVER_DB_DSN=postgresql://${POSTGRES_USER:-synthetic}:${POSTGRES_PASSWORD:-synthetic_dev_password}@db:5432/${POSTGRES_DB:-synthetic_data}
       - INFERENCE_SERVER_MLFLOW_TRACKING_URI=http://mlflow:5000
       - INFERENCE_SERVER_INCLUDE_FEATURES_USED=true
+      - PYTHONPATH=/app/src
       - PYTHONHASHSEED=42
     networks:
       - labellag_net
@@ -64,16 +66,17 @@ services:
       minio:
         condition: service_healthy
 
-  inference:
+  orchestrator:
     build:
       context: .
-      dockerfile: go/inference/Dockerfile
-    container_name: inference
+      dockerfile: go/orchestrator/Dockerfile
+    container_name: orchestrator
     environment:
       - PORT=8081
-      - INFERENCE_GATEWAY_PYTHON_GRPC_ADDR=inference-server:50052
-      - TRAINING_SERVER_GRPC_ADDR=training-server:50053
-      - INFERENCE_GATEWAY_RULES_PATH=go/inference/config/default_rules.json
+      - INFERENCE_GATEWAY_PYTHON_GRPC_ADDR=inference:50052
+      - TRAINING_SERVER_GRPC_ADDR=training:50053
+      - ANALYTICS_CRUD_TARGET=analytics:50051
+      - INFERENCE_GATEWAY_RULES_PATH=go/orchestrator/config/default_rules.json
       - INFERENCE_GATEWAY_RULES_WATCH=true
     networks:
       - labellag_net
@@ -83,7 +86,7 @@ services:
     depends_on:
       analytics:
         condition: service_started
-      inference-server:
+      inference:
         condition: service_started
 
   generator:
@@ -112,9 +115,9 @@ services:
     environment:
       - BFF_PORT=${BFF_PORT:-3210}
       - BFF_HOST=0.0.0.0
-      - BFF_PYTHON_API_BASE_URL=http://training-server:8000
+      - BFF_PYTHON_API_BASE_URL=http://orchestrator:8081
       - BFF_MLFLOW_TRACKING_URI=http://mlflow:5000
-      - BFF_GATEWAY_BASE_URL=http://inference:8081
+      - BFF_GATEWAY_BASE_URL=http://orchestrator:8081
       - BFF_REQUEST_TIMEOUT=30000
       - BFF_LOG_LEVEL=info
       - NODE_ENV=production
@@ -130,9 +133,9 @@ services:
       retries: 3
       start_period: 5s
     depends_on:
-      training-server:
+      training:
         condition: service_healthy
-      inference:
+      orchestrator:
         condition: service_started
 
   # React Web UI

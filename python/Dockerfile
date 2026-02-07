@@ -15,11 +15,11 @@ COPY pyproject.toml uv.lock README.md ./
 
 RUN uv sync --frozen --no-dev
 
-COPY src ./src
+COPY python/src ./src
 COPY python/config ./config
 
 ENV PYTHONPATH=/app/src
 
 EXPOSE 50052
 
-CMD ["uv", "run", "python", "-m", "inference_server.server"]
+CMD ["uv", "run", "python", "-m", "inference.server"]
