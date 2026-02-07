@@ -258,12 +258,29 @@ func (s *server) SearchTransactions(ctx context.Context, req *pb.SearchTransacti
 		whereClause = " WHERE " + strings.Join(conditions, " AND ")
 	}
 
-	countQuery := "SELECT COUNT(*) FROM generated_records" + whereClause
 	var total int64
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
-	if err := s.db.QueryRowContext(queryCtx, countQuery, args...).Scan(&total); err != nil {
-		return nil, fmt.Errorf("failed to query transaction count: %v", err)
+
+	// Optimization: detailed count is expensive on large tables.
+	// If checking all records (no filters), use postgres metadata for approximation.
+	if whereClause == "" {
+		est, err := s.getEstimatedCount(queryCtx, "generated_records")
+		if err == nil && est > 0 {
+			total = est
+		} else {
+			// Fallback to exact count if estimate fails
+			countQuery := "SELECT COUNT(*) FROM generated_records"
+			if err := s.db.QueryRowContext(queryCtx, countQuery).Scan(&total); err != nil {
+				return nil, fmt.Errorf("failed to query transaction count: %v", err)
+			}
+		}
+	} else {
+		// Filtered count
+		countQuery := "SELECT COUNT(*) FROM generated_records" + whereClause
+		if err := s.db.QueryRowContext(queryCtx, countQuery, args...).Scan(&total); err != nil {
+			return nil, fmt.Errorf("failed to query transaction count: %v", err)
+		}
 	}
 
 	query := `
@@ -521,6 +538,14 @@ func (s *server) GetDatasetFingerprint(ctx context.Context, req *pb.GetDatasetFi
 }
 
 // Helper functions for advanced sampling
+
+func (s *server) getEstimatedCount(ctx context.Context, table string) (int64, error) {
+	var count int64
+	// reltuples is float4, cast to bigint
+	query := `SELECT reltuples::bigint FROM pg_class WHERE relname = $1`
+	err := s.db.QueryRowContext(ctx, query, table).Scan(&count)
+	return count, err
+}
 
 func getPostgresVersion(ctx context.Context, db *sql.DB) (int, error) {
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)

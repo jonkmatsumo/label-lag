@@ -210,6 +210,39 @@ func TestSearchTransactions(t *testing.T) {
 	assert.True(t, resp.Transactions[0].IsPreFraud)
 }
 
+func TestSearchTransactions_Unfiltered(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := &server{db: db}
+
+	// Expect query to pg_class for estimated count
+	mock.ExpectQuery("SELECT reltuples::bigint FROM pg_class WHERE relname = \\$1").
+		WithArgs("generated_records").
+		WillReturnRows(sqlmock.NewRows([]string{"reltuples"}).AddRow(5000))
+
+	// Expect data query with no WHERE clause
+	mock.ExpectQuery("(?s)SELECT.*FROM generated_records ORDER BY transaction_timestamp DESC OFFSET \\$1 LIMIT \\$2").
+		WithArgs(int32(0), int32(10)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"record_id", "user_id", "transaction_timestamp", "amount",
+			"is_fraudulent", "fraud_type", "is_off_hours_txn",
+			"merchant_risk_score", "amount_to_avg_ratio", "balance_volatility_z_score",
+		}).AddRow("rec-2", "user-2", time.Now(), 50.0, false, "", false, 20, 1.0, 0.0))
+
+	req := &pb.SearchTransactionsRequest{
+		Limit:  10,
+		Offset: 0,
+	}
+
+	resp, err := s.SearchTransactions(context.Background(), req)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, int64(5000), resp.Total)
+	assert.Len(t, resp.Transactions, 1)
+}
+
 func TestGetRecentAlertsRejectsInvalidLimit(t *testing.T) {
 	db, _, err := sqlmock.New()
 	require.NoError(t, err)
