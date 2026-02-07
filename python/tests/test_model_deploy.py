@@ -4,8 +4,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from forecast_server.model_manager import ModelManager
-from training_server.audit import AuditLogger, set_audit_logger
+from forecast.model_manager import ModelManager
+from forecast.service import ForecastService
+from forecast.v1 import forecast_pb2
+from training.audit import AuditLogger, set_audit_logger
 
 
 class TestModelDeploy:
@@ -27,19 +29,21 @@ class TestModelDeploy:
         set_audit_logger(logger)
         return logger
 
-    @patch("forecast_server.routes.get_model_manager")
+    @patch("forecast.service.get_model_manager")
     def test_deploy_triggers_reload(self, mock_get_manager, model_manager):
         """Test that deploy triggers model reload."""
         mock_get_manager.return_value = model_manager
         model_manager.load_production_model = MagicMock(return_value=True)
 
-        # Simulate deploy endpoint logic
-        success = model_manager.load_production_model()
+        service = ForecastService()
+        request = forecast_pb2.DeployModelRequest()
 
-        assert success is True
+        response = service.DeployModel(request, MagicMock())
+
+        assert response.success is True
         model_manager.load_production_model.assert_called_once()
 
-    @patch("forecast_server.routes.get_model_manager")
+    @patch("forecast.service.get_model_manager")
     def test_deploy_creates_audit_event(
         self, mock_get_manager, model_manager, audit_logger
     ):
@@ -49,23 +53,27 @@ class TestModelDeploy:
         model_manager._model_version = "v2"
 
         # Simulate deploy audit logging
-        audit_logger.log(
-            rule_id="model:v2",
-            action="MODEL_DEPLOYED",
-            actor="test_actor",
-            before_state={"model_version": "v1"},
-            after_state={"model_version": "v2"},
-            reason="Model deployed to production",
-        )
+        # (happens inside load_production_model or service?)
+        # In service.py:
+        #   success = manager.load_production_model()
+        #   if success: log_audit(...)
+
+        service = ForecastService()
+        # ensure actor matches expectations
+        request = forecast_pb2.DeployModelRequest(actor="test_actor")
+
+        service.DeployModel(request, MagicMock())
 
         # Verify audit event
+        # Since DeployModel calls audit_logger.log, we don't need to manually call it!
+        # Step 545 view showed DeployModel calls audit_logger.log().
         records = audit_logger.query(action="MODEL_DEPLOYED")
         assert len(records) == 1
         assert records[0].action == "MODEL_DEPLOYED"
         assert records[0].actor == "test_actor"
         assert records[0].rule_id == "model:v2"
 
-    @patch("forecast_server.routes.get_model_manager")
+    @patch("forecast.service.get_model_manager")
     def test_deploy_fails_without_production_model(
         self, mock_get_manager, model_manager
     ):
@@ -73,7 +81,12 @@ class TestModelDeploy:
         mock_get_manager.return_value = model_manager
         model_manager.load_production_model = MagicMock(return_value=False)
 
-        # Simulate deploy failure
-        success = model_manager.load_production_model()
+        service = ForecastService()
+        request = forecast_pb2.DeployModelRequest()
+        mock_context = MagicMock()
+        mock_context.abort.side_effect = Exception("Aborted")
 
-        assert success is False
+        with pytest.raises(Exception, match="Aborted"):
+            service.DeployModel(request, mock_context)
+
+        mock_context.abort.assert_called_once()

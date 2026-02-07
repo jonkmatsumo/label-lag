@@ -17,8 +17,7 @@ dependencies = [
     "scikit-learn>=1.4.0",
     "matplotlib>=3.8.0",
     "plotly>=5.18.0",
-    "fastapi>=0.111.0",
-    "uvicorn>=0.30.0",
+
     "requests>=2.31.0",
     "mlflow>=3.8.0",
     "boto3>=1.34.0",
@@ -52,13 +51,13 @@ packages = ["python/src/synthetic_pipeline"]
 src = ["python/src"]
 line-length = 88
 exclude = [
-    "python/src/inference_server/proto",
-    "python/src/training_server/proto",
-    "python/src/forecast/proto",
-    "python/src/gateway_grpc",
-    "python/src/analytics",
-    "python/src/inference",
-    "python/src/training",
+    "python/src/inference_server/proto",  # legacy
+    "python/src/training_server/proto",   # legacy
+    "python/src/forecast/proto",          # legacy
+    "python/src/gateway_grpc",            # legacy
+    "python/src/**/v1",                   # generated protos
+    "python/src/**/*_pb2.py",             # generated protos
+    "python/src/**/*_pb2_grpc.py",        # generated protos
     "**/proto",
 ]
 

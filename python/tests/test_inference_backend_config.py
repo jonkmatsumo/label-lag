@@ -3,7 +3,7 @@
 Tests the INFERENCE_BACKEND environment variable and backend selection.
 """
 
-from training_server.inference_backend_config import (
+from training.inference_backend_config import (
     InferenceBackend,
     get_inference_backend,
     is_fallback_enabled,

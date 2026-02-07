@@ -28,7 +28,7 @@ def fake_analytics_client():
 
 @pytest.fixture
 def mock_crud_client(fake_analytics_client, monkeypatch):
-    monkeypatch.setattr("training_server.crud_client._client", fake_analytics_client)
+    monkeypatch.setattr("training.crud_client._client", fake_analytics_client)
     return fake_analytics_client
 
 

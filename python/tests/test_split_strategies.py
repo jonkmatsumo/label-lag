@@ -14,7 +14,7 @@ from model.split_strategies import (
     TimeSeriesKFoldStrategy,
     get_strategy,
 )
-from training_server.schemas import SplitConfig, SplitStrategy
+from training.schemas import SplitConfig, SplitStrategy
 
 
 def _make_mock_record(
@@ -121,7 +121,7 @@ class TestSplitManifestStructure:
 
     def test_split_manifest_structure(self, monkeypatch):
         """Manifest contains strategy, seed, train/test ids, sizes."""
-        from training_server import crud_client
+        from training import crud_client
 
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -173,7 +173,7 @@ class TestEnhancedManifest:
 
     def test_manifest_has_unique_user_counts(self, monkeypatch):
         """Manifest includes train_unique_users and test_unique_users."""
-        from training_server import crud_client
+        from training import crud_client
 
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -227,7 +227,7 @@ class TestEnhancedManifest:
 
     def test_manifest_has_hash(self, monkeypatch):
         """Manifest includes manifest_hash."""
-        from training_server import crud_client
+        from training import crud_client
 
         mock_client = MagicMock()
         mock_response = MagicMock()

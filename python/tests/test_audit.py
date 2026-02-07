@@ -4,7 +4,7 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from training_server.audit import (
+from training.audit import (
     AuditLogger,
     AuditRecord,
     get_audit_logger,

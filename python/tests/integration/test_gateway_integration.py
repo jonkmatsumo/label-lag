@@ -2,8 +2,8 @@ import os
 
 import pytest
 
-from training_server.gateway_client import get_gateway_client, reset_gateway_client
-from training_server.gateway_grpc_client import GatewayGrpcClient
+from training.gateway_client import get_gateway_client, reset_gateway_client
+from training.gateway_grpc_client import GatewayGrpcClient
 
 
 # Skip integration tests if not explicitly enabled or if services aren't running

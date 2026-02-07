@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package inference.v1;
 
-option go_package = "github.com/jonkmatsumo/label-lag/go/inference/internal/grpc/inferencev1;inferencev1";
+option go_package = "github.com/jonkmatsumo/label-lag/go/orchestrator/internal/grpc/inferencev1;inferencev1";
 
 import "google/protobuf/struct.proto";
 

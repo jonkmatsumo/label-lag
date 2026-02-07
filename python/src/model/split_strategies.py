@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from training_server.schemas import SplitConfig, SplitStrategy
+from training.schemas import SplitConfig, SplitStrategy
 
 
 @dataclass
