@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/jonkmatsumo/label-lag/go/analytics/generator"
+	"github.com/jonkmatsumo/label-lag/go/analytics/internal/generator"
 	"github.com/jonkmatsumo/label-lag/go/analytics/internal/service"
 	"github.com/jonkmatsumo/label-lag/go/analytics/internal/store"
 	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
