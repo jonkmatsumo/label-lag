@@ -1,27 +1,15 @@
 import json
 import logging
 import os
-import sys
 import uuid
 from typing import Any
 
 import grpc
 from google.protobuf import struct_pb2
 
-# Adjust sys.path to include the generated code directory.
-# This assumes the structure: python/src/training_server/gateway_grpc_client.py
-# and generated code is in: python/src/gateway_grpc
-# So we need to add python/src/gateway_grpc to sys.path
-_CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-_SRC_DIR = os.path.dirname(_CURRENT_DIR)  # python/src
-_GATEWAY_GRPC_DIR = os.path.join(_SRC_DIR, "gateway_grpc")
-
-if _GATEWAY_GRPC_DIR not in sys.path:
-    sys.path.append(_GATEWAY_GRPC_DIR)
-
 try:
-    from go.analytics.proto.crud.v1 import analytics_pb2
-    from go.inference.proto.gateway.v1 import gateway_pb2, gateway_pb2_grpc
+    from training_server.proto.crud.v1 import analytics_pb2
+    from training_server.proto.gateway.v1 import gateway_pb2, gateway_pb2_grpc
 except ImportError as e:
     logging.getLogger(__name__).error(f"Failed to import generated gRPC modules: {e}")
     # Re-raise or handle gracefully? For now, let it crash if imports fail
