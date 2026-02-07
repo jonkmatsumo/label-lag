@@ -2,8 +2,8 @@ import logging
 
 from fastapi import APIRouter
 
-from api.crud_client import get_crud_client
-from api.schemas import (
+from training_server.crud_client import get_crud_client
+from training_server.schemas import (
     ClearDataResponse,
     TrainRequest,
     TrainResponse,

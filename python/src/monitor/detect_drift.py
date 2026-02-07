@@ -16,7 +16,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from api.crud_client import get_crud_client
+from training_server.crud_client import get_crud_client
 
 # Configure logging
 logging.basicConfig(
@@ -180,7 +180,7 @@ def get_reference_data() -> pd.DataFrame | None:
 
 def get_live_data(hours: int = 24) -> pd.DataFrame:
     """Load live data via Analytics service."""
-    from api.proto.proto.crud.v1 import analytics_pb2
+    from training_server.proto.proto.crud.v1 import analytics_pb2
 
     client = get_crud_client()
     try:

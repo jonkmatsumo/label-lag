@@ -3,8 +3,8 @@
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
-from api.schemas import SignalRequest
 from forecast.services import SignalForecaster
+from training_server.schemas import SignalRequest
 
 
 class TestFeatureImportanceResponse:

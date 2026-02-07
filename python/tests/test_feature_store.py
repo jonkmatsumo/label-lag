@@ -27,8 +27,8 @@ class TestFeatureMaterializer:
         """Test that materialize_features calls analytics service."""
         from unittest.mock import MagicMock
 
-        from api import crud_client
         from pipeline.materialize_features import materialize_features
+        from training_server import crud_client
 
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -47,8 +47,8 @@ class TestFeatureMaterializer:
         """Test that materialize_features handles analytics errors gracefully."""
         from unittest.mock import MagicMock
 
-        from api import crud_client
         from pipeline.materialize_features import materialize_features
+        from training_server import crud_client
 
         mock_client = MagicMock()
         mock_client.materialize_features.side_effect = Exception("Analytics error")

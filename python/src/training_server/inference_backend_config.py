@@ -8,7 +8,7 @@ inference backends:
 - "go_with_fallback": Use Go gateway with Python fallback on failure
 
 Usage:
-    from api.inference_backend_config import get_inference_backend
+    from training_server.inference_backend_config import get_inference_backend
 
     backend = get_inference_backend()  # Returns "python", "go", or "go_with_fallback"
 """

@@ -53,7 +53,9 @@ src = ["python/src"]
 line-length = 88
 exclude = [
     "python/src/inference_server/proto",
+    "python/src/training_server/proto",
     "python/src/forecast/proto",
+    "**/proto",
 ]
 
 [tool.ruff.lint]

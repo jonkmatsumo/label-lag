@@ -4,7 +4,7 @@ import logging
 import os
 from typing import Any, Literal
 
-from api.crud_client import get_crud_client
+from training_server.crud_client import get_crud_client
 
 logger = logging.getLogger(__name__)
 

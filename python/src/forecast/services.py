@@ -9,8 +9,8 @@ from typing import Any
 
 import numpy as np
 
-from api.crud_client import get_crud_client
-from api.schemas import (
+from training_server.crud_client import get_crud_client
+from training_server.schemas import (
     SignalRequest,
 )
 

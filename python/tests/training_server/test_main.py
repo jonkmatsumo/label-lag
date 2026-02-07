@@ -6,13 +6,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from api.main import app
-from api.schemas import Currency, SignalRequest
 from forecast.services import (
     FeatureVector,
     SignalForecaster,
     get_forecaster,
 )
+from training_server.main import app
+from training_server.schemas import Currency, SignalRequest
 
 
 @pytest.fixture
@@ -338,7 +338,7 @@ class TestClearDataEndpoint:
 
     def test_clear_data_handles_error(self, client, monkeypatch):
         """Test error handling in data clearing."""
-        from api import crud_client
+        from training_server import crud_client
 
         def raise_error():
             raise Exception("Connection failed")

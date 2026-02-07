@@ -11,8 +11,8 @@ from unittest.mock import MagicMock
 import pandas as pd
 import pytest
 
-from api.schemas import SplitConfig
 from model.loader import DataLoader, TrainTestSplit
+from training_server.schemas import SplitConfig
 
 
 class TestTrainTestSplit:
@@ -120,7 +120,7 @@ class TestFeatureColumnOverride:
 
     def test_load_uses_default_columns_when_none_provided(self, loader, monkeypatch):
         """Verify default behavior when feature_columns is None."""
-        from api import crud_client
+        from training_server import crud_client
 
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -141,7 +141,7 @@ class TestFeatureColumnOverride:
 
     def test_load_uses_override_list_when_provided(self, loader, monkeypatch):
         """Verify custom feature list is used when provided."""
-        from api import crud_client
+        from training_server import crud_client
 
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -162,7 +162,7 @@ class TestFeatureColumnOverride:
 
     def test_load_raises_on_missing_columns(self, loader, monkeypatch):
         """Verify ValueError is raised when requested columns are missing."""
-        from api import crud_client
+        from training_server import crud_client
 
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -185,7 +185,7 @@ class TestFeatureColumnOverride:
 
     def test_load_handles_empty_override_list(self, loader, monkeypatch):
         """Verify empty feature list creates empty DataFrame columns."""
-        from api import crud_client
+        from training_server import crud_client
 
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -212,7 +212,7 @@ class TestDataLoaderTemporalSplit:
 
     def test_cutoff_date_string_parsing(self, loader, monkeypatch):
         """Test that string dates are parsed correctly."""
-        from api import crud_client
+        from training_server import crud_client
 
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -229,7 +229,7 @@ class TestDataLoaderTemporalSplit:
 
     def test_cutoff_date_datetime_accepted(self, loader, monkeypatch):
         """Test that datetime objects are accepted."""
-        from api import crud_client
+        from training_server import crud_client
 
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -243,7 +243,7 @@ class TestDataLoaderTemporalSplit:
 
     def test_train_records_are_from_train_set(self, loader, monkeypatch):
         """Test that train records are correctly processed."""
-        from api import crud_client
+        from training_server import crud_client
 
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -266,7 +266,7 @@ class TestDataLoaderTemporalSplit:
 
     def test_test_records_are_from_test_set(self, loader, monkeypatch):
         """Test that test records are correctly processed."""
-        from api import crud_client
+        from training_server import crud_client
 
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -294,7 +294,7 @@ class TestDataLoaderLabels:
 
     def test_fraudulent_records_labeled_as_1(self, loader, monkeypatch):
         """Test that fraudulent records have label=1."""
-        from api import crud_client
+        from training_server import crud_client
 
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -311,7 +311,7 @@ class TestDataLoaderLabels:
 
     def test_non_fraudulent_records_labeled_as_0(self, loader, monkeypatch):
         """Test that non-fraudulent records have label=0."""
-        from api import crud_client
+        from training_server import crud_client
 
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -334,7 +334,7 @@ class TestSplitConfig:
 
     def test_loader_accepts_split_config(self, monkeypatch):
         """With split_config, split_manifest is populated."""
-        from api import crud_client
+        from training_server import crud_client
 
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -361,7 +361,7 @@ class TestSplitConfig:
 
     def test_loader_default_config_unchanged(self, monkeypatch):
         """Without split_config, split_manifest is None."""
-        from api import crud_client
+        from training_server import crud_client
 
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -377,7 +377,7 @@ class TestSplitConfig:
 
     def test_manifest_has_record_ids(self, monkeypatch):
         """Test that manifest contains train and test record IDs."""
-        from api import crud_client
+        from training_server import crud_client
 
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -403,7 +403,7 @@ class TestSplitConfig:
 
     def test_manifest_has_unique_user_counts(self, monkeypatch):
         """Test that manifest contains unique user counts."""
-        from api import crud_client
+        from training_server import crud_client
 
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -430,7 +430,7 @@ class TestSplitConfig:
 
     def test_manifest_has_hash(self, monkeypatch):
         """Test that manifest contains a hash."""
-        from api import crud_client
+        from training_server import crud_client
 
         mock_client = MagicMock()
         mock_response = MagicMock()
