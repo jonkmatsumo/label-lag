@@ -24,7 +24,8 @@ uv run python -m grpc_tools.protoc \
   -I"$PROTO_ROOT" \
   --python_out="$PYTHON_OUT" \
   --grpc_python_out="$PYTHON_OUT" \
-  "$PROTO_ROOT/gateway/v1/gateway.proto"
+  "$PROTO_ROOT/gateway/v1/gateway.proto" \
+  "$ROOT_DIR/go/analytics/proto/crud/v1/analytics.proto"
 
 # Go generation
 echo "Generating Go stubs..."
