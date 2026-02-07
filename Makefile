@@ -118,6 +118,7 @@ proto-gen: proto-gen-go proto-gen-python
 proto-gen-go:
 	@echo "Generating Go stubs..."
 	# Inference service
+	@mkdir -p go/inference/internal/grpc/inferencev1
 	protoc -I $(PROTO_DIR) \
 		--go_out=. --go_opt=module=github.com/jonkmatsumo/label-lag \
 		--go-grpc_out=. --go-grpc_opt=module=github.com/jonkmatsumo/label-lag \
@@ -127,6 +128,7 @@ proto-gen-go:
 	@rm -rf go/inference/internal/grpc/inferencev1/inference 2>/dev/null || true
 
 	# Gateway service
+	@mkdir -p go/inference/internal/http/gatewayv1
 	protoc -I $(PROTO_DIR) \
 		--go_out=. --go_opt=module=github.com/jonkmatsumo/label-lag \
 		--go-grpc_out=. --go-grpc_opt=module=github.com/jonkmatsumo/label-lag \
@@ -135,6 +137,7 @@ proto-gen-go:
 	@rm -rf go/inference/internal/http/gatewayv1/inference 2>/dev/null || true
 
 	# Analytics service
+	@mkdir -p go/analytics/proto/crud/v1
 	protoc -I $(PROTO_DIR) \
 		--go_out=. --go_opt=module=github.com/jonkmatsumo/label-lag \
 		--go-grpc_out=. --go-grpc_opt=module=github.com/jonkmatsumo/label-lag \
@@ -143,6 +146,7 @@ proto-gen-go:
 	@rm -rf go/analytics/proto/crud/v1/analytics 2>/dev/null || true
 
 	# Training service
+	@mkdir -p go/training/proto/trainingv1
 	protoc -I $(PROTO_DIR) \
 		--go_out=. --go_opt=module=github.com/jonkmatsumo/label-lag \
 		--go-grpc_out=. --go-grpc_opt=module=github.com/jonkmatsumo/label-lag \
@@ -151,6 +155,7 @@ proto-gen-go:
 	@rm -rf go/training/proto/trainingv1/training 2>/dev/null || true
 
 	# Forecast service
+	@mkdir -p go/forecast/proto/forecastv1
 	protoc -I $(PROTO_DIR) \
 		--go_out=. --go_opt=module=github.com/jonkmatsumo/label-lag \
 		--go-grpc_out=. --go-grpc_opt=module=github.com/jonkmatsumo/label-lag \
@@ -161,21 +166,25 @@ proto-gen-go:
 proto-gen-python:
 	@echo "Generating Python stubs..."
 	# Inference Server stubs
+	@mkdir -p $(PYTHON_SRC_DIR)/inference_server/proto
 	uv run python -m grpc_tools.protoc -I $(PROTO_DIR) \
 		--python_out=$(PYTHON_SRC_DIR)/inference_server/proto \
 		--grpc_python_out=$(PYTHON_SRC_DIR)/inference_server/proto \
 		$(PROTO_DIR)/inference/v1/*.proto
 	# Training Server stubs
+	@mkdir -p $(PYTHON_SRC_DIR)/training_server/proto
 	uv run python -m grpc_tools.protoc -I $(PROTO_DIR) \
 		--python_out=$(PYTHON_SRC_DIR)/training_server/proto \
 		--grpc_python_out=$(PYTHON_SRC_DIR)/training_server/proto \
 		$(PROTO_DIR)/training/v1/*.proto
 	# Forecast stubs
+	@mkdir -p $(PYTHON_SRC_DIR)/forecast_server/proto
 	uv run python -m grpc_tools.protoc -I $(PROTO_DIR) \
 		--python_out=$(PYTHON_SRC_DIR)/forecast_server/proto \
 		--grpc_python_out=$(PYTHON_SRC_DIR)/forecast_server/proto \
 		$(PROTO_DIR)/forecast/v1/*.proto
 	# Gateway stubs (legacy)
+	@mkdir -p $(PYTHON_SRC_DIR)/gateway_grpc
 	uv run python -m grpc_tools.protoc -I $(PROTO_DIR) \
 		--python_out=$(PYTHON_SRC_DIR)/gateway_grpc \
 		--grpc_python_out=$(PYTHON_SRC_DIR)/gateway_grpc \
