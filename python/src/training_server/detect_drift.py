@@ -180,7 +180,7 @@ def get_reference_data() -> pd.DataFrame | None:
 
 def get_live_data(hours: int = 24) -> pd.DataFrame:
     """Load live data via Analytics service."""
-    from training_server.proto.analytics.v1 import analytics_pb2
+    from analytics.v1 import analytics_pb2
 
     client = get_crud_client()
     try:

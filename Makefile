@@ -171,20 +171,19 @@ proto-gen-python:
 		--python_out=$(PYTHON_SRC_DIR)/inference_server/proto \
 		--grpc_python_out=$(PYTHON_SRC_DIR)/inference_server/proto \
 		$(PROTO_DIR)/inference/v1/*.proto
-	# Training Server stubs
-	@mkdir -p $(PYTHON_SRC_DIR)/training_server/proto
+	# Training Server & Shared stubs
+	# Generated into python/src so that imports like 'from analytics.v1 import ...' work
 	uv run python -m grpc_tools.protoc -I $(PROTO_DIR) \
-		--python_out=$(PYTHON_SRC_DIR)/training_server/proto \
-		--grpc_python_out=$(PYTHON_SRC_DIR)/training_server/proto \
+		--python_out=$(PYTHON_SRC_DIR) \
+		--grpc_python_out=$(PYTHON_SRC_DIR) \
 		$(PROTO_DIR)/training/v1/*.proto \
 		$(PROTO_DIR)/analytics/v1/analytics.proto \
 		$(PROTO_DIR)/inference/v1/gateway.proto
-	@touch $(PYTHON_SRC_DIR)/training_server/proto/training/__init__.py
-	@touch $(PYTHON_SRC_DIR)/training_server/proto/training/v1/__init__.py
-	@touch $(PYTHON_SRC_DIR)/training_server/proto/analytics/__init__.py
-	@touch $(PYTHON_SRC_DIR)/training_server/proto/analytics/v1/__init__.py
-	@touch $(PYTHON_SRC_DIR)/training_server/proto/inference/__init__.py
-	@touch $(PYTHON_SRC_DIR)/training_server/proto/inference/v1/__init__.py
+	@touch $(PYTHON_SRC_DIR)/training/v1/__init__.py
+	@touch $(PYTHON_SRC_DIR)/analytics/__init__.py
+	@touch $(PYTHON_SRC_DIR)/analytics/v1/__init__.py
+	@touch $(PYTHON_SRC_DIR)/inference/__init__.py
+	@touch $(PYTHON_SRC_DIR)/inference/v1/__init__.py
 	# Forecast stubs
 	@mkdir -p $(PYTHON_SRC_DIR)/forecast_server/proto
 	uv run python -m grpc_tools.protoc -I $(PROTO_DIR) \
