@@ -239,6 +239,7 @@ INFERENCE_GATEWAY_WRITE_TIMEOUT=30s
 INFERENCE_GATEWAY_IDLE_TIMEOUT=60s
 INFERENCE_GATEWAY_RULES_PATH=go/orchestrator/config/default_rules.json
 INFERENCE_GATEWAY_RULES_WATCH=true
+ENABLE_ADMIN_RPCS=false
 ```
 
 The Inference Service provides high-throughput rule evaluation and supports several advanced features:

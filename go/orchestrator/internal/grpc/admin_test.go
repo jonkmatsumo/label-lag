@@ -5,10 +5,12 @@ import (
 	"errors"
 	"testing"
 
+	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
 	gatewayv1 "github.com/jonkmatsumo/label-lag/go/orchestrator/internal/http/gatewayv1"
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/rules"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func TestReloadRules_Disabled(t *testing.T) {
@@ -71,12 +73,79 @@ func TestExplainEvaluation_Disabled(t *testing.T) {
 	}
 }
 
-func TestExplainEvaluation_NotImplemented(t *testing.T) {
-	server := NewGatewayServer(&mockRulesProvider{}, true)
-	req := &gatewayv1.ExplainEvaluationRequest{}
+func TestExplainEvaluation_Success(t *testing.T) {
+	mockRules := rules.RuleSet{
+		Version: "v1",
+		Rules: []rules.Rule{
+			{ID: "r1", Field: "f1", Op: ">", Value: 10, Action: "reject", Status: rules.RuleStatusActive},
+		},
+	}
+	provider := &mockRulesProvider{ruleset: mockRules}
+	server := NewGatewayServer(provider, true)
 
-	_, err := server.ExplainEvaluation(context.Background(), req)
-	if status.Code(err) != codes.Unimplemented {
-		t.Errorf("expected Unimplemented, got %v", err)
+	features, _ := structpb.NewStruct(map[string]any{"f1": 20.0})
+	req := &gatewayv1.ExplainEvaluationRequest{
+		Features: features,
+	}
+
+	resp, err := server.ExplainEvaluation(context.Background(), req)
+	if err != nil {
+		t.Fatalf("ExplainEvaluation failed: %v", err)
+	}
+
+	if resp.MatchedCount != 1 {
+		t.Errorf("expected matched count 1, got %d", resp.MatchedCount)
+	}
+	if len(resp.Traces) != 1 {
+		t.Fatalf("expected 1 trace, got %d", len(resp.Traces))
+	}
+	trace := resp.Traces[0]
+	if trace.RuleId != "r1" {
+		t.Errorf("expected rule id r1, got %s", trace.RuleId)
+	}
+	if !trace.Matched {
+		t.Errorf("expected matched true")
+	}
+	if len(trace.Conditions) != 1 {
+		t.Fatalf("expected 1 condition trace")
+	}
+	cond := trace.Conditions[0]
+	if cond.Field != "f1" {
+		t.Errorf("expected field f1, got %s", cond.Field)
+	}
+	if !cond.Result {
+		t.Errorf("expected condition result true")
+	}
+}
+
+func TestExplainEvaluation_WithProvidedRuleset(t *testing.T) {
+	server := NewGatewayServer(&mockRulesProvider{}, true)
+
+	features, _ := structpb.NewStruct(map[string]any{"f1": 5.0})
+	// Rule r1: f1 > 10 (should not match)
+	customRules := &gatewayv1.RuleSet{
+		Rules: []*crudv1.Rule{
+			{Id: "r1", Field: "f1", Op: ">", ValueJson: "10", Action: "reject", Status: "active"},
+		},
+	}
+
+	req := &gatewayv1.ExplainEvaluationRequest{
+		Features: features,
+		Ruleset:  customRules,
+	}
+
+	resp, err := server.ExplainEvaluation(context.Background(), req)
+	if err != nil {
+		t.Fatalf("ExplainEvaluation failed: %v", err)
+	}
+
+	if resp.MatchedCount != 0 {
+		t.Errorf("expected matched count 0, got %d", resp.MatchedCount)
+	}
+	if len(resp.Traces) != 1 {
+		t.Fatalf("expected 1 trace")
+	}
+	if resp.Traces[0].Matched {
+		t.Errorf("expected matched false")
 	}
 }

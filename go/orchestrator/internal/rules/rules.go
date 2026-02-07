@@ -89,9 +89,27 @@ type RuleResult struct {
 	RulesVersion       string
 	EvaluationTimeMS   float64            `json:"evaluation_time_ms"`
 	PerRuleTimingsMS   map[string]float64 `json:"per_rule_timings_ms,omitempty"`
+	RuleTraces         []RuleTrace        `json:"rule_traces,omitempty"`
 }
 type EvalOptions struct {
-	Debug bool
+	Debug   bool
+	Explain bool
+}
+
+type RuleTrace struct {
+	RuleID     string           `json:"rule_id"`
+	Matched    bool             `json:"matched"`
+	EvalTimeMS float64          `json:"eval_time_ms"`
+	Conditions []ConditionTrace `json:"conditions"`
+}
+
+type ConditionTrace struct {
+	Field               string `json:"field"`
+	Operator            string `json:"operator"`
+	ExpectedType        string `json:"expected_type"`
+	ActualType          string `json:"actual_type"`
+	Result              bool   `json:"result"`
+	ActualValueRedacted string `json:"actual_value_redacted"`
 }
 
 func EvaluateRules(features map[string]any, currentScore int, ruleset *RuleSet, opts EvalOptions) (RuleResult, error) {
@@ -117,6 +135,10 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset *RuleSet, 
 	explanations := make([]Explanation, 0, len(ruleset.Rules))
 	shadowMatched := make([]string, 0, 5) // Shadow rules are typically fewer
 	shadowExplanations := make([]Explanation, 0, 5)
+	var traces []RuleTrace
+	if opts.Explain {
+		traces = make([]RuleTrace, 0, len(ruleset.Rules))
+	}
 	rejected := false
 	overrideApplied := false
 	var perRuleTimings map[string]float64
@@ -126,7 +148,7 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset *RuleSet, 
 	activeRules, shadowRules := ruleset.Split()
 	for _, rule := range activeRules {
 		var startRule time.Time
-		if opts.Debug {
+		if opts.Debug || opts.Explain {
 			startRule = time.Now()
 		}
 		featureValue, ok := features[rule.Field]
@@ -134,9 +156,38 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset *RuleSet, 
 			if opts.Debug {
 				perRuleTimings[rule.ID] = float64(time.Since(startRule).Nanoseconds()) / 1e6
 			}
+			if opts.Explain {
+				traces = append(traces, RuleTrace{
+					RuleID:     rule.ID,
+					Matched:    false,
+					EvalTimeMS: float64(time.Since(startRule).Nanoseconds()) / 1e6,
+					Conditions: []ConditionTrace{{
+						Field:        rule.Field,
+						Result:       false,
+						ActualType:   "missing",
+						ExpectedType: fmt.Sprintf("%T", rule.Value),
+					}},
+				})
+			}
 			continue
 		}
 		matches, err := evaluateCondition(rule.Op, featureValue, rule.Value)
+
+		if opts.Explain {
+			traces = append(traces, RuleTrace{
+				RuleID:     rule.ID,
+				Matched:    matches,
+				EvalTimeMS: float64(time.Since(startRule).Nanoseconds()) / 1e6,
+				Conditions: []ConditionTrace{{
+					Field:        rule.Field,
+					Operator:     rule.Op,
+					ExpectedType: fmt.Sprintf("%T", rule.Value),
+					ActualType:   fmt.Sprintf("%T", featureValue),
+					Result:       matches,
+				}},
+			})
+		}
+
 		if err != nil || !matches {
 			if opts.Debug {
 				perRuleTimings[rule.ID] = float64(time.Since(startRule).Nanoseconds()) / 1e6
@@ -190,8 +241,11 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset *RuleSet, 
 		}
 	}
 	for _, rule := range shadowRules {
+		// Shadow rules processing (simplified for explain, or should we explain shadow too?
+		// Explain often wants "why did I get this result", which implies active rules.
+		// But debug tool might want all. Let's include shadow in traces if Explain is on.
 		var startRule time.Time
-		if opts.Debug {
+		if opts.Debug || opts.Explain {
 			startRule = time.Now()
 		}
 		featureValue, ok := features[rule.Field]
@@ -199,9 +253,38 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset *RuleSet, 
 			if opts.Debug {
 				perRuleTimings[rule.ID] = float64(time.Since(startRule).Nanoseconds()) / 1e6
 			}
+			if opts.Explain {
+				traces = append(traces, RuleTrace{
+					RuleID:     rule.ID,
+					Matched:    false,
+					EvalTimeMS: float64(time.Since(startRule).Nanoseconds()) / 1e6,
+					Conditions: []ConditionTrace{{
+						Field:        rule.Field,
+						Result:       false,
+						ActualType:   "missing",
+						ExpectedType: fmt.Sprintf("%T", rule.Value),
+					}},
+				})
+			}
 			continue
 		}
 		matches, err := evaluateCondition(rule.Op, featureValue, rule.Value)
+
+		if opts.Explain {
+			traces = append(traces, RuleTrace{
+				RuleID:     rule.ID,
+				Matched:    matches,
+				EvalTimeMS: float64(time.Since(startRule).Nanoseconds()) / 1e6,
+				Conditions: []ConditionTrace{{
+					Field:        rule.Field,
+					Operator:     rule.Op,
+					ExpectedType: fmt.Sprintf("%T", rule.Value),
+					ActualType:   fmt.Sprintf("%T", featureValue),
+					Result:       matches,
+				}},
+			})
+		}
+
 		if err != nil || !matches {
 			if opts.Debug {
 				perRuleTimings[rule.ID] = float64(time.Since(startRule).Nanoseconds()) / 1e6
@@ -251,6 +334,7 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset *RuleSet, 
 		RulesVersion:       ruleset.ComputeVersion(),
 		EvaluationTimeMS:   float64(time.Since(startTotal).Nanoseconds()) / 1e6,
 		PerRuleTimingsMS:   perRuleTimings,
+		RuleTraces:         traces,
 	}, nil
 }
 func (rs *RuleSet) Split() (active []Rule, shadow []Rule) {
