@@ -46,6 +46,7 @@ type ForecastClient interface {
 	GetScoreDistribution(ctx context.Context, req *forecastv1.GetScoreDistributionRequest) (*forecastv1.GetScoreDistributionResponse, error)
 	ReloadModel(ctx context.Context, req *forecastv1.ReloadModelRequest) (*forecastv1.ReloadModelResponse, error)
 	DeployModel(ctx context.Context, req *forecastv1.DeployModelRequest) (*forecastv1.DeployModelResponse, error)
+	PredictSignal(ctx context.Context, req *forecastv1.PredictSignalRequest) (*forecastv1.PredictSignalResponse, error)
 }
 
 type Handler struct {
@@ -203,27 +204,23 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.inferenceClient == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "inference backend unavailable")
+	if h.forecastClient == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "forecast backend unavailable")
 		return
 	}
 
-	inferenceResp, err := h.inferenceClient.Score(r.Context(), &inferencev1.ScoreRequest{
+	inferenceResp, err := h.forecastClient.PredictSignal(r.Context(), &forecastv1.PredictSignalRequest{
 		UserId:              req.UserId,
 		Amount:              req.Amount,
 		Currency:            req.Currency,
 		ClientTransactionId: req.ClientTransactionId,
-		RequestId:           requestid.FromContext(r.Context()),
 	})
 	if err != nil {
 		writeRPCError(w, err)
 		return
 	}
 
-	requestID := inferenceResp.GetRequestId()
-	if requestID == "" {
-		requestID = requestid.FromContext(r.Context())
-	}
+	requestID := requestid.FromContext(r.Context())
 
 	// Feature Hydration: Move ownership to Go
 	features := map[string]any{}
@@ -241,14 +238,9 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 3. Merge with features from Python gRPC (diagnostics/prediction features)
-	if inferenceResp.FeaturesUsed != nil {
-		for k, v := range inferenceResp.FeaturesUsed.AsMap() {
-			if _, exists := features[k]; !exists {
-				features[k] = v
-			}
-		}
-	}
+	// 3. Prediction features are not returned in PredictSignal for now
+	// to simplify the migration and reduce payload size if not needed for UI.
+	// If needed later, we can add a Features field to PredictSignalResponse.
 
 	// Add transaction specific features
 	features["transaction_amount"] = req.Amount
@@ -259,7 +251,7 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 		ruleset = rules.RuleSet{}
 	}
 
-	rawScore := int32(math.Round(inferenceResp.GetModelScore()))
+	rawScore := int32(math.Round(inferenceResp.GetProbability() * 100))
 
 	ruleResult, err := rules.EvaluateRules(features, int(rawScore), &ruleset, rules.EvalOptions{Debug: false})
 	if err != nil {

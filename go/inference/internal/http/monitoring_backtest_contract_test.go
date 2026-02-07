@@ -34,7 +34,7 @@ func TestMonitoringDriftContract(t *testing.T) {
 	t.Setenv("INFERENCE_GATEWAY_API_URL", upstream.URL)
 
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, nil, nil, rules.NewEmptyProvider(), 1024, "", "")
+	handler := NewHandler(logger, nil, nil, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/monitoring/drift?hours=24&threshold=0.25&force_refresh=false", nil)
 	req = req.WithContext(requestid.WithRequestID(req.Context(), "req-55"))
@@ -67,7 +67,7 @@ func TestMonitoringDriftContractError(t *testing.T) {
 	t.Setenv("INFERENCE_GATEWAY_API_URL", upstream.URL)
 
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, nil, nil, rules.NewEmptyProvider(), 1024, "", "")
+	handler := NewHandler(logger, nil, nil, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/monitoring/drift", nil)
 	rec := httptest.NewRecorder()
@@ -95,7 +95,7 @@ func TestShadowComparisonContract(t *testing.T) {
 	t.Setenv("INFERENCE_GATEWAY_API_URL", upstream.URL)
 
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, nil, nil, rules.NewEmptyProvider(), 1024, "", "")
+	handler := NewHandler(logger, nil, nil, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/metrics/shadow/comparison?start_date=2025-01-01&end_date=2025-01-31", nil)
 	req = req.WithContext(requestid.WithRequestID(req.Context(), "req-66"))
@@ -122,7 +122,7 @@ func TestShadowComparisonContractError(t *testing.T) {
 	t.Setenv("INFERENCE_GATEWAY_API_URL", upstream.URL)
 
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, nil, nil, rules.NewEmptyProvider(), 1024, "", "")
+	handler := NewHandler(logger, nil, nil, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/metrics/shadow/comparison?start_date=2025-01-01&end_date=2025-01-31", nil)
 	rec := httptest.NewRecorder()
@@ -150,7 +150,7 @@ func TestBacktestResultsContract(t *testing.T) {
 			},
 		},
 	}
-	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024, "", "")
+	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/backtest/results?limit=1", nil)
 	rec := httptest.NewRecorder()
@@ -167,7 +167,7 @@ func TestBacktestResultsContractError(t *testing.T) {
 	stub := &stubAnalyticsClient{
 		err: &grpcclient.RPCError{Code: codes.InvalidArgument, Message: "bad request"},
 	}
-	handler := NewHandler(logger, nil, stub, rules.NewEmptyProvider(), 1024, "", "")
+	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/backtest/results", nil)
 	rec := httptest.NewRecorder()
@@ -181,7 +181,7 @@ func TestBacktestResultsContractError(t *testing.T) {
 
 func TestBacktestResultsRejectsInvalidDate(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, nil, &stubAnalyticsClient{}, rules.NewEmptyProvider(), 1024, "", "")
+	handler := NewHandler(logger, nil, &stubAnalyticsClient{}, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/backtest/results?start_date=not-a-date", nil)
 	rec := httptest.NewRecorder()
@@ -197,7 +197,7 @@ func TestBacktestResultsPreserveRequestIDHeader(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	handler := NewHandler(logger, nil, &stubAnalyticsClient{
 		backtestResultsResp: &crudv1.ListBacktestResultsResponse{},
-	}, rules.NewEmptyProvider(), 1024, "", "")
+	}, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
 	mux := http.NewServeMux()
 	handler.Register(mux)

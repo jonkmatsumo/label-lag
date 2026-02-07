@@ -73,7 +73,8 @@ python/src/training_server/proto/
 python/src/forecast_server/proto/
 go/forecast/proto/
 go/training/proto/
-go/inference/internal/grpc/*_client.go
+# go/inference/internal/grpc/*_client.go (Track hand-written clients)
+go/inference/internal/grpc/inferencev1/
 
 # Generated Go binaries and plugins
 protoc-gen-go
