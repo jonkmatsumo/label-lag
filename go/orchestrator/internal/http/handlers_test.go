@@ -797,6 +797,10 @@ func (errProvider) GetRules(context.Context) (rules.RuleSet, error) {
 	return rules.RuleSet{}, errors.New("rules unavailable")
 }
 
+func (errProvider) Reload(context.Context) error {
+	return errors.New("reload failed")
+}
+
 func TestHandleEvaluateSignal_RulesProviderError(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	handler := NewHandler(logger, stubInferenceClient{}, nil, stubTrainingClient{}, stubForecastClient{}, errProvider{}, 1024, "", "")
