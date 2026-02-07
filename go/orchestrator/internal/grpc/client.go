@@ -104,6 +104,7 @@ func (cb *CircuitBreaker) RecordResult(err error) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
+	// 1. Success case
 	if err == nil {
 		if cb.state == StateHalfOpen {
 			slog.Info("inference circuit breaker: closed", "reason", "success in half-open")
@@ -112,6 +113,31 @@ func (cb *CircuitBreaker) RecordResult(err error) {
 		cb.failureCount = 0
 		return
 	}
+
+	// 2. Filter non-failure errors (Application errors)
+	// We only want to trip the breaker on connectivity/availability issues.
+	// We explicitly ignore NotFound, InvalidArgument, etc.
+	st, _ := status.FromError(err)
+	switch st.Code() {
+	case codes.Unavailable, codes.DeadlineExceeded:
+		// These are failures
+	default:
+		// Treat other errors as "success" for breaker purposes (reset failure count if closed?)
+		// Actually, if we are Closed, and get InvalidArgument, we should probably NOT reset failure count (it's neutral),
+		// OR we treat it as success. If the service replied "InvalidArgument", it IS up.
+		// So treating it as success is correct for "Is the service reachable?".
+		if cb.state == StateHalfOpen {
+			slog.Info("inference circuit breaker: closed", "reason", "application error in half-open")
+			cb.state = StateClosed
+			cb.failureCount = 0
+		}
+		// If Closed, we don't reset failureCount on app error?
+		// Actually, if we get a response, the service is healthy. We should reset.
+		cb.failureCount = 0
+		return
+	}
+
+	// 3. Failure case
 
 	cb.failureCount++
 	cb.lastFailureTime = time.Now()

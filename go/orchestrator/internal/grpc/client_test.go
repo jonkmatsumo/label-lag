@@ -1,9 +1,11 @@
 package grpc
 
 import (
-	"errors"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestCircuitBreaker(t *testing.T) {
@@ -14,13 +16,13 @@ func TestCircuitBreaker(t *testing.T) {
 	}
 
 	// 1. First failure
-	cb.RecordResult(errors.New("fail"))
+	cb.RecordResult(status.Error(codes.Unavailable, "fail"))
 	if cb.state != StateClosed {
 		t.Errorf("expected state Closed, got %v", cb.state)
 	}
 
 	// 2. Second failure -> Open
-	cb.RecordResult(errors.New("fail"))
+	cb.RecordResult(status.Error(codes.Unavailable, "fail"))
 	if cb.state != StateOpen {
 		t.Errorf("expected state Open, got %v", cb.state)
 	}
@@ -63,8 +65,40 @@ func TestCircuitBreaker_HalfOpenFailure(t *testing.T) {
 	}
 
 	// Failure in half-open -> Open immediately
-	cb.RecordResult(errors.New("fail"))
+	cb.RecordResult(status.Error(codes.Unavailable, "fail"))
 	if cb.state != StateOpen {
 		t.Errorf("expected state Open after half-open failure, got %v", cb.state)
+	}
+}
+
+func TestCircuitBreaker_IgnoredErrors(t *testing.T) {
+	cb := &CircuitBreaker{
+		state:            StateClosed,
+		failureThreshold: 2,
+		resetTimeout:     10 * time.Millisecond,
+	}
+
+	// 1. Record NotFound (should be ignored)
+	errNotFound := status.Error(codes.NotFound, "not found")
+	cb.RecordResult(errNotFound)
+	if cb.state != StateClosed {
+		t.Errorf("expected state Closed after NotFound, got %v", cb.state)
+	}
+	if cb.failureCount != 0 {
+		t.Errorf("expected failureCount 0 after NotFound, got %d", cb.failureCount)
+	}
+
+	// 2. Record InvalidArgument (should be ignored)
+	errInvalid := status.Error(codes.InvalidArgument, "invalid")
+	cb.RecordResult(errInvalid)
+	if cb.failureCount != 0 {
+		t.Errorf("expected failureCount 0 after InvalidArgument, got %d", cb.failureCount)
+	}
+
+	// 3. Record Unavailable (should count as failure)
+	errUnavailable := status.Error(codes.Unavailable, "unavailable")
+	cb.RecordResult(errUnavailable)
+	if cb.failureCount != 1 {
+		t.Errorf("expected failureCount 1 after Unavailable, got %d", cb.failureCount)
 	}
 }
