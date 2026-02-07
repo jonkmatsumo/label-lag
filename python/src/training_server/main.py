@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from forecast.model_manager import get_model_manager
 from forecast.routes import router as forecast_router
 from forecast.services import get_forecaster
-from training.routes import router as training_router
+from training_server.routes import router as training_router
 from training_server.schemas import HealthResponse
 
 # Configure logging
