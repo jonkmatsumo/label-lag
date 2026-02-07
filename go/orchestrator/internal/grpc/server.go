@@ -15,13 +15,15 @@ import (
 // GatewayServer implements the GatewayService gRPC interface.
 type GatewayServer struct {
 	gatewayv1.UnimplementedGatewayServiceServer
-	rulesProvider rules.Provider
+	rulesProvider   rules.Provider
+	enableAdminRPCs bool
 }
 
 // NewGatewayServer creates a new instance of GatewayServer.
-func NewGatewayServer(rp rules.Provider) *GatewayServer {
+func NewGatewayServer(rp rules.Provider, enableAdminRPCs bool) *GatewayServer {
 	return &GatewayServer{
-		rulesProvider: rp,
+		rulesProvider:   rp,
+		enableAdminRPCs: enableAdminRPCs,
 	}
 }
 

@@ -147,7 +147,8 @@ func main() {
 		os.Exit(1)
 	}
 	grpcServer := grpc.NewServer()
-	gatewayServer := grpcclient.NewGatewayServer(rulesProvider)
+	enableAdminRPCs := getEnv("ENABLE_ADMIN_RPCS", "false") == "true"
+	gatewayServer := grpcclient.NewGatewayServer(rulesProvider, enableAdminRPCs)
 	gatewayServer.Register(grpcServer)
 
 	go func() {

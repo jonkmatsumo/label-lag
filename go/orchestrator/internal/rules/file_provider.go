@@ -67,6 +67,17 @@ func (p *FileProvider) GetRules(_ context.Context) (RuleSet, error) {
 	return *rs, nil
 }
 
+func (p *FileProvider) Reload(_ context.Context) error {
+	p.logger.Info("reloading rules from file", "path", p.path)
+	rs, err := p.loadRules()
+	if err != nil {
+		return fmt.Errorf("reload rules: %w", err)
+	}
+	p.rs.Store(&rs)
+	p.logger.Info("successfully reloaded rules from file", "version", rs.Version)
+	return nil
+}
+
 func (p *FileProvider) loadRules() (RuleSet, error) {
 	data, err := os.ReadFile(p.path)
 	if err != nil {

@@ -93,6 +93,14 @@ func (p *APIProvider) GetRules(ctx context.Context) (RuleSet, error) {
 	return v.(RuleSet), nil
 }
 
+func (p *APIProvider) Reload(ctx context.Context) error {
+	// Force refresh bypassing cache check
+	_, err, _ := p.flightGroup.Do("get_rules", func() (interface{}, error) {
+		return p.fetchAndCache(ctx)
+	})
+	return err
+}
+
 func (p *APIProvider) fetchAndCache(ctx context.Context) (RuleSet, error) {
 	now := time.Now()
 	p.mu.Lock()
