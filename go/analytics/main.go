@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -16,65 +15,24 @@ import (
 	"time"
 
 	"github.com/jonkmatsumo/label-lag/go/analytics/generator"
+	"github.com/jonkmatsumo/label-lag/go/analytics/internal/config"
+	coreDB "github.com/jonkmatsumo/label-lag/go/analytics/internal/db"
+	"github.com/jonkmatsumo/label-lag/go/analytics/internal/obs"
 	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
 	_ "github.com/lib/pq"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/sdk/resource"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-type contextKey string
-
-const (
-	requestIDKey contextKey = "x-request-id"
-)
-
-func requestIDInterceptor(
-	ctx context.Context,
-	req interface{},
-	info *grpc.UnaryServerInfo,
-	handler grpc.UnaryHandler,
-) (interface{}, error) {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if ok {
-		if ids := md.Get("x-request-id"); len(ids) > 0 {
-			ctx = context.WithValue(ctx, requestIDKey, ids[0])
-		}
-	}
-	return handler(ctx, req)
-}
-
 type server struct {
 	pb.UnimplementedAnalyticsServiceServer
 	db *sql.DB
-}
-
-func mapDBError(err error) error {
-	if err == nil {
-		return nil
-	}
-	if errors.Is(err, sql.ErrNoRows) {
-		return status.Error(codes.NotFound, "resource not found")
-	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		return status.Error(codes.DeadlineExceeded, "database query timed out")
-	}
-	if errors.Is(err, context.Canceled) {
-		return status.Error(codes.Canceled, "request canceled")
-	}
-	return status.Errorf(codes.Internal, "database error: %v", err)
 }
 
 const (
@@ -89,8 +47,8 @@ const (
 	defaultSampleSize    = 100
 	defaultSearchLimit   = 100
 	maxSearchLimit       = 1000
-	defaultDatabaseURL   = "postgresql://synthetic:synthetic_dev_password@localhost:5542/synthetic_data?sslmode=disable"
-	defaultQueryTimeout  = 10 * time.Second
+
+	defaultQueryTimeout = 10 * time.Second
 )
 
 func (s *server) GetDailyStats(ctx context.Context, req *pb.GetDailyStatsRequest) (*pb.GetDailyStatsResponse, error) {
@@ -123,7 +81,7 @@ func (s *server) GetDailyStats(ctx context.Context, req *pb.GetDailyStatsRequest
 
 	rows, err := s.db.QueryContext(queryCtx, query, cutoffDate)
 	if err != nil {
-		return nil, mapDBError(err)
+		return nil, coreDB.MapDBError(err)
 	}
 	defer rows.Close()
 
@@ -187,7 +145,7 @@ func (s *server) GetTransactionDetails(ctx context.Context, req *pb.GetTransacti
 
 	rows, err := s.db.QueryContext(queryCtx, query, cutoffDate, limit)
 	if err != nil {
-		return nil, mapDBError(err)
+		return nil, coreDB.MapDBError(err)
 	}
 	defer rows.Close()
 
@@ -289,14 +247,14 @@ func (s *server) SearchTransactions(ctx context.Context, req *pb.SearchTransacti
 			// Fallback to exact count if estimate fails
 			countQuery := "SELECT COUNT(*) FROM generated_records"
 			if err := s.db.QueryRowContext(queryCtx, countQuery).Scan(&total); err != nil {
-				return nil, mapDBError(err)
+				return nil, coreDB.MapDBError(err)
 			}
 		}
 	} else {
 		// Filtered count
 		countQuery := "SELECT COUNT(*) FROM generated_records" + whereClause
 		if err := s.db.QueryRowContext(queryCtx, countQuery, args...).Scan(&total); err != nil {
-			return nil, mapDBError(err)
+			return nil, coreDB.MapDBError(err)
 		}
 	}
 
@@ -318,7 +276,7 @@ func (s *server) SearchTransactions(ctx context.Context, req *pb.SearchTransacti
 	// Reuse queryCtx/cancel if possible, but let's just make a new one for clarity or keep it simple
 	rows, err := s.db.QueryContext(queryCtx, query, args...)
 	if err != nil {
-		return nil, mapDBError(err)
+		return nil, coreDB.MapDBError(err)
 	}
 	defer rows.Close()
 
@@ -398,7 +356,7 @@ func (s *server) GetRecentAlerts(ctx context.Context, req *pb.GetRecentAlertsReq
 
 	rows, err := s.db.QueryContext(queryCtx, query, alertThreshold, limit)
 	if err != nil {
-		return nil, mapDBError(err)
+		return nil, coreDB.MapDBError(err)
 	}
 	defer rows.Close()
 
@@ -462,7 +420,7 @@ func (s *server) GetOverviewMetrics(ctx context.Context, req *pb.GetOverviewMetr
 		&resp.FraudAmount,
 	)
 	if err != nil {
-		return nil, mapDBError(err)
+		return nil, coreDB.MapDBError(err)
 	}
 
 	if resp.TotalRecords > 0 {
@@ -520,7 +478,7 @@ func (s *server) GetDatasetFingerprint(ctx context.Context, req *pb.GetDatasetFi
 		&maxId,
 	)
 	if err != nil {
-		return nil, mapDBError(err)
+		return nil, coreDB.MapDBError(err)
 	}
 	if maxCr.Valid {
 		resp.GeneratedRecords.MaxCreatedAt = timestamppb.New(maxCr.Time)
@@ -542,7 +500,7 @@ func (s *server) GetDatasetFingerprint(ctx context.Context, req *pb.GetDatasetFi
 		&maxSnapshotId,
 	)
 	if err != nil {
-		return nil, mapDBError(err)
+		return nil, coreDB.MapDBError(err)
 	}
 	if maxComp.Valid {
 		resp.FeatureSnapshots.MaxCreatedAt = timestamppb.New(maxComp.Time)
@@ -686,7 +644,7 @@ func (s *server) GetSchemaSummary(ctx context.Context, req *pb.GetSchemaSummaryR
 
 	rows, err := s.db.QueryContext(queryCtx, query, arrStr)
 	if err != nil {
-		return nil, mapDBError(err)
+		return nil, coreDB.MapDBError(err)
 	}
 	defer rows.Close()
 
@@ -792,7 +750,7 @@ func (s *server) GetTrainingData(ctx context.Context, req *pb.GetTrainingDataReq
 func (s *server) queryTrainingRecords(queryCtx context.Context, query string, cutoff time.Time) ([]*pb.TransactionDetail, error) {
 	rows, err := s.db.QueryContext(queryCtx, query, cutoff)
 	if err != nil {
-		return nil, mapDBError(err)
+		return nil, coreDB.MapDBError(err)
 	}
 	defer rows.Close()
 
@@ -847,7 +805,7 @@ func (s *server) GetBacktestFeatures(ctx context.Context, req *pb.GetBacktestFea
 
 	rows, err := s.db.QueryContext(queryCtx, query, start, end)
 	if err != nil {
-		return nil, mapDBError(err)
+		return nil, coreDB.MapDBError(err)
 	}
 	defer rows.Close()
 
@@ -897,7 +855,7 @@ func (s *server) SaveBacktestResult(ctx context.Context, req *pb.SaveBacktestRes
 	)
 
 	if err != nil {
-		return nil, mapDBError(err)
+		return nil, coreDB.MapDBError(err)
 	}
 
 	return &pb.SaveBacktestResultResponse{Success: true}, nil
@@ -933,7 +891,7 @@ func (s *server) ListBacktestResults(ctx context.Context, req *pb.ListBacktestRe
 
 	rows, err := s.db.QueryContext(queryCtx, query, args...)
 	if err != nil {
-		return nil, mapDBError(err)
+		return nil, coreDB.MapDBError(err)
 	}
 	defer rows.Close()
 
@@ -990,7 +948,7 @@ func (s *server) GetBacktestResult(ctx context.Context, req *pb.GetBacktestResul
 	)
 
 	if err != nil {
-		return nil, mapDBError(err)
+		return nil, coreDB.MapDBError(err)
 	}
 
 	res.RuleId = ruleID.String
@@ -1152,7 +1110,7 @@ func (s *server) StoreGeneratedData(ctx context.Context, req *pb.StoreGeneratedD
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, mapDBError(fmt.Errorf("failed to begin transaction: %w", err))
+		return nil, coreDB.MapDBError(fmt.Errorf("failed to begin transaction: %w", err))
 	}
 	defer tx.Rollback()
 
@@ -1185,7 +1143,7 @@ func (s *server) StoreGeneratedData(ctx context.Context, req *pb.StoreGeneratedD
 			r.IsFraudulent, r.FraudType,
 		)
 		if err != nil {
-			return nil, mapDBError(fmt.Errorf("failed to insert record %s: %w", r.RecordId, err))
+			return nil, coreDB.MapDBError(fmt.Errorf("failed to insert record %s: %w", r.RecordId, err))
 		}
 	}
 
@@ -1208,12 +1166,12 @@ func (s *server) StoreGeneratedData(ctx context.Context, req *pb.StoreGeneratedD
 			m.IsPreFraud, m.DaysToFraud, m.IsTrainEligible,
 		)
 		if err != nil {
-			return nil, mapDBError(fmt.Errorf("failed to insert metadata for %s: %w", m.RecordId, err))
+			return nil, coreDB.MapDBError(fmt.Errorf("failed to insert metadata for %s: %w", m.RecordId, err))
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, mapDBError(fmt.Errorf("failed to commit transaction: %w", err))
+		return nil, coreDB.MapDBError(fmt.Errorf("failed to commit transaction: %w", err))
 	}
 
 	return &pb.StoreGeneratedDataResponse{
@@ -1440,7 +1398,7 @@ func (s *server) MaterializeFeatures(ctx context.Context, req *pb.MaterializeFea
 
 	res, err := s.db.ExecContext(queryCtx, materializeSQL)
 	if err != nil {
-		return nil, mapDBError(fmt.Errorf("failed to materialize features: %w", err))
+		return nil, coreDB.MapDBError(fmt.Errorf("failed to materialize features: %w", err))
 	}
 
 	rowsAffected, _ := res.RowsAffected()
@@ -1479,7 +1437,7 @@ func (s *server) SaveRule(ctx context.Context, req *pb.SaveRuleRequest) (*pb.Sav
 	)
 
 	if err != nil {
-		return nil, mapDBError(fmt.Errorf("failed to save rule: %w", err))
+		return nil, coreDB.MapDBError(fmt.Errorf("failed to save rule: %w", err))
 	}
 
 	return &pb.SaveRuleResponse{Success: true}, nil
@@ -1497,7 +1455,7 @@ func (s *server) GetRule(ctx context.Context, req *pb.GetRuleRequest) (*pb.GetRu
 	)
 
 	if err != nil {
-		return nil, mapDBError(err)
+		return nil, coreDB.MapDBError(err)
 	}
 
 	return &pb.GetRuleResponse{Rule: &r}, nil
@@ -1521,7 +1479,7 @@ func (s *server) ListRules(ctx context.Context, req *pb.ListRulesRequest) (*pb.L
 
 	rows, err := s.db.QueryContext(queryCtx, query, args...)
 	if err != nil {
-		return nil, mapDBError(err)
+		return nil, coreDB.MapDBError(err)
 	}
 	defer rows.Close()
 
@@ -1546,7 +1504,7 @@ func (s *server) DeleteRule(ctx context.Context, req *pb.DeleteRuleRequest) (*pb
 
 	_, err := s.db.ExecContext(queryCtx, query, req.RuleId)
 	if err != nil {
-		return nil, mapDBError(fmt.Errorf("failed to archive rule: %w", err))
+		return nil, coreDB.MapDBError(fmt.Errorf("failed to archive rule: %w", err))
 	}
 	return &pb.DeleteRuleResponse{Success: true}, nil
 }
@@ -1574,7 +1532,7 @@ func (s *server) LogInferenceEvent(ctx context.Context, req *pb.LogInferenceEven
 	)
 
 	if err != nil {
-		return nil, mapDBError(fmt.Errorf("failed to log inference event: %w", err))
+		return nil, coreDB.MapDBError(fmt.Errorf("failed to log inference event: %w", err))
 	}
 
 	return &pb.LogInferenceEventResponse{Success: true}, nil
@@ -1769,83 +1727,6 @@ func parseISODate(value string) (time.Time, bool) {
 }
 
 // loggingInterceptor logs the details of each gRPC request and response.
-func loggingInterceptor(
-	ctx context.Context,
-	req interface{},
-	info *grpc.UnaryServerInfo,
-	handler grpc.UnaryHandler,
-) (interface{}, error) {
-	start := time.Now()
-
-	// Create context with logger loaded with method info
-	logger := slog.With("method", info.FullMethod)
-
-	resp, err := handler(ctx, req)
-
-	duration := time.Since(start)
-
-	if err != nil {
-		st, _ := status.FromError(err)
-		logger.Error("request failed",
-			"duration", duration,
-			"code", st.Code().String(),
-			"error", err,
-		)
-	} else {
-		logger.Info("request completed",
-			"duration", duration,
-			"code", codes.OK.String(),
-		)
-	}
-
-	return resp, err
-}
-
-// initTracer initializes an OTLP exporter, and configures the corresponding trace provider.
-func initTracer(ctx context.Context) (*sdktrace.TracerProvider, error) {
-	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
-	if endpoint == "" {
-		// Use default temporary endpoint or return nil if we don't want to enforce tracing without config
-		// For now, let's default to localhost:4317 if not set, or skip if empty?
-		// Usually in k8s/docker it's set. If not set, maybe disable tracing?
-		// Let's check if OTEL_EXPORTER_OTLP_ENDPOINT is set.
-		return nil, nil
-	}
-
-	res, err := resource.New(ctx,
-		resource.WithAttributes(
-			semconv.ServiceName("analytics-crud"),
-			semconv.ServiceVersion("0.1.0"),
-		),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create resource: %w", err)
-	}
-
-	// Set up trace exporter
-	traceExporter, err := otlptracegrpc.New(ctx,
-		otlptracegrpc.WithInsecure(),
-		otlptracegrpc.WithEndpoint(endpoint),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create trace exporter: %w", err)
-	}
-
-	// Register the trace exporter with a TracerProvider, using a batch
-	// span processor to aggregate spans before export.
-	bsp := sdktrace.NewBatchSpanProcessor(traceExporter)
-	tracerProvider := sdktrace.NewTracerProvider(
-		sdktrace.WithSampler(sdktrace.AlwaysSample()),
-		sdktrace.WithResource(res),
-		sdktrace.WithSpanProcessor(bsp),
-	)
-
-	// set global propagator to tracecontext (the default is no-op).
-	otel.SetTextMapPropagator(propagation.TraceContext{})
-	otel.SetTracerProvider(tracerProvider)
-
-	return tracerProvider, nil
-}
 
 func main() {
 	// Configure structured logging
@@ -1856,7 +1737,7 @@ func main() {
 	ctx := context.Background()
 
 	// Initialize OpenTelemetry
-	tp, err := initTracer(ctx)
+	tp, err := obs.InitTracer(ctx)
 	if err != nil {
 		slog.Error("failed to initialize tracer", "error", err)
 	} else if tp != nil {
@@ -1873,7 +1754,7 @@ func main() {
 		port = "50051"
 	}
 
-	dbURL, err := resolveDatabaseURL(os.Getenv)
+	dbURL, err := config.ResolveDatabaseURL(os.Getenv)
 	if err != nil {
 		slog.Error("failed to resolve database url", "error", err)
 		os.Exit(1)
@@ -1886,7 +1767,7 @@ func main() {
 	}
 	defer db.Close()
 
-	if err := initDB(db); err != nil {
+	if err := coreDB.InitDB(db); err != nil {
 		slog.Error("failed to initialize database", "error", err)
 		os.Exit(1)
 	}
@@ -1909,8 +1790,8 @@ func main() {
 	// Add interceptors: logging and otel tracing
 	opts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(
-			requestIDInterceptor,
-			loggingInterceptor,
+			obs.RequestIDInterceptor,
+			obs.LoggingInterceptor,
 		),
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
 	}
@@ -2177,7 +2058,7 @@ func (s *server) GetRuleReadiness(ctx context.Context, req *pb.GetRuleReadinessR
 	defer cancel()
 	err := s.db.QueryRowContext(queryCtx, "SELECT rule_id, value FROM rules WHERE rule_id = $1", req.RuleId).Scan(&ruleID, &valueJSON)
 	if err != nil {
-		return nil, mapDBError(err)
+		return nil, coreDB.MapDBError(err)
 	}
 
 	checks := []*pb.ReadinessCheck{}
@@ -2299,76 +2180,4 @@ func updateHealthStatus(ctx context.Context, db *sql.DB, healthServer *health.Se
 	}
 	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
 	return nil
-}
-
-func initDB(db *sql.DB) error {
-	queries := []string{
-		`CREATE TABLE IF NOT EXISTS backtest_results (
-			job_id TEXT PRIMARY KEY,
-			rule_id TEXT,
-			ruleset_version TEXT NOT NULL,
-			start_date TIMESTAMP NOT NULL,
-			end_date TIMESTAMP NOT NULL,
-			metrics JSONB NOT NULL,
-			completed_at TIMESTAMP NOT NULL,
-			error TEXT
-		)`,
-		`CREATE TABLE IF NOT EXISTS rules (
-			rule_id TEXT PRIMARY KEY,
-			field TEXT NOT NULL,
-			op TEXT NOT NULL,
-			value TEXT NOT NULL,
-			action TEXT NOT NULL,
-			score INTEGER,
-			severity TEXT NOT NULL,
-			reason TEXT,
-			status TEXT NOT NULL
-		)`,
-		`CREATE TABLE IF NOT EXISTS inference_events (
-			id SERIAL PRIMARY KEY,
-			ts TIMESTAMP NOT NULL DEFAULT NOW(),
-			request_id TEXT NOT NULL,
-			model_version TEXT NOT NULL,
-			rules_version TEXT NOT NULL,
-			model_score INTEGER NOT NULL,
-			final_score INTEGER NOT NULL,
-			rule_impacts JSONB NOT NULL
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_backtest_results_rule_id ON backtest_results(rule_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_backtest_results_completed_at ON backtest_results(completed_at)`,
-		`CREATE INDEX IF NOT EXISTS idx_rules_status ON rules(status)`,
-		`CREATE INDEX IF NOT EXISTS idx_inference_events_ts ON inference_events(ts)`,
-		// Rule Versioning
-		`CREATE TABLE IF NOT EXISTS rule_versions (
-			version_id TEXT PRIMARY KEY,
-			rule_id TEXT NOT NULL,
-			rule_json JSONB NOT NULL,
-			created_at TIMESTAMP NOT NULL,
-			created_by TEXT,
-			change_description TEXT,
-			status TEXT NOT NULL,
-			is_active BOOLEAN DEFAULT FALSE
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_rule_versions_rule_id ON rule_versions(rule_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_rule_versions_created_at ON rule_versions(created_at)`,
-		`ALTER TABLE rules ADD COLUMN IF NOT EXISTS active_version_id TEXT`,
-	}
-
-	for _, q := range queries {
-		if _, err := db.Exec(q); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-func resolveDatabaseURL(getenv func(string) string) (string, error) {
-	if value := strings.TrimSpace(getenv("DATABASE_URL")); value != "" {
-		return value, nil
-	}
-	allowDefaults := strings.EqualFold(getenv("ANALYTICS_CRUD_ALLOW_INSECURE_DEFAULTS"), "true") ||
-		strings.EqualFold(getenv("ANALYTICS_CRUD_ALLOW_INSECURE_DEFAULTS"), "1")
-	if allowDefaults {
-		return defaultDatabaseURL, nil
-	}
-	return "", fmt.Errorf("DATABASE_URL is required")
 }
