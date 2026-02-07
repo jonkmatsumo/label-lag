@@ -5,8 +5,8 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from api.main import app
 from forecast.drift_cache import DriftCache, get_drift_cache
+from training_server.main import app
 
 
 @pytest.fixture
@@ -70,7 +70,7 @@ def mock_drift_result_no_drift():
 class TestDriftEndpoint:
     """Tests for /monitoring/drift endpoint."""
 
-    @patch("monitor.detect_drift.detect_drift")
+    @patch("training_server.detect_drift.detect_drift")
     def test_returns_200(self, mock_detect, client, mock_drift_result):
         """Endpoint should return 200 on success."""
         mock_detect.return_value = mock_drift_result
@@ -79,7 +79,7 @@ class TestDriftEndpoint:
 
         assert response.status_code == 200
 
-    @patch("monitor.detect_drift.detect_drift")
+    @patch("training_server.detect_drift.detect_drift")
     def test_response_structure(self, mock_detect, client, mock_drift_result):
         """Response should have all required fields."""
         mock_detect.return_value = mock_drift_result
@@ -99,7 +99,7 @@ class TestDriftEndpoint:
         assert isinstance(data["top_features"], list)
         assert isinstance(data["thresholds"], dict)
 
-    @patch("monitor.detect_drift.detect_drift")
+    @patch("training_server.detect_drift.detect_drift")
     def test_cached_response_returns_cached_true(
         self, mock_detect, client, mock_drift_result, mock_drift_result_no_drift
     ):
@@ -116,7 +116,7 @@ class TestDriftEndpoint:
         # detect_drift should only be called once
         assert mock_detect.call_count == 1
 
-    @patch("monitor.detect_drift.detect_drift")
+    @patch("training_server.detect_drift.detect_drift")
     def test_force_refresh_bypasses_cache(self, mock_detect, client, mock_drift_result):
         """force_refresh=True should bypass cache."""
         mock_detect.return_value = mock_drift_result
@@ -142,7 +142,7 @@ class TestDriftEndpoint:
         response = client.get("/monitoring/drift?hours=200")
         assert response.status_code == 422
 
-    @patch("monitor.detect_drift.detect_drift")
+    @patch("training_server.detect_drift.detect_drift")
     def test_error_handling_returns_unknown_status(self, mock_detect, client):
         """Errors should return status='unknown' with error message."""
         error_result = {
@@ -164,7 +164,7 @@ class TestDriftEndpoint:
         assert data["status"] == "unknown"
         assert data["error"] == "No reference data available"
 
-    @patch("monitor.detect_drift.detect_drift")
+    @patch("training_server.detect_drift.detect_drift")
     def test_status_classification_ok(
         self, mock_detect, client, mock_drift_result_no_drift
     ):
@@ -177,7 +177,7 @@ class TestDriftEndpoint:
         assert data["status"] == "ok"
         assert data["error"] is None
 
-    @patch("monitor.detect_drift.detect_drift")
+    @patch("training_server.detect_drift.detect_drift")
     def test_status_classification_warn(self, mock_detect, client):
         """WARNING features should result in status='warn'."""
         warn_result = {
@@ -199,7 +199,7 @@ class TestDriftEndpoint:
 
         assert data["status"] == "warn"
 
-    @patch("monitor.detect_drift.detect_drift")
+    @patch("training_server.detect_drift.detect_drift")
     def test_status_classification_fail(self, mock_detect, client, mock_drift_result):
         """CRITICAL features should result in status='fail'."""
         mock_detect.return_value = mock_drift_result
@@ -209,7 +209,7 @@ class TestDriftEndpoint:
 
         assert data["status"] == "fail"
 
-    @patch("monitor.detect_drift.detect_drift")
+    @patch("training_server.detect_drift.detect_drift")
     def test_top_features_sorted_by_psi(self, mock_detect, client, mock_drift_result):
         """Top features should be sorted by PSI descending."""
         mock_detect.return_value = mock_drift_result
@@ -228,7 +228,7 @@ class TestDriftEndpoint:
         assert top_features[0]["psi"] == 0.25
         assert top_features[0]["feature"] == "balance_volatility_z_score"
 
-    @patch("monitor.detect_drift.detect_drift")
+    @patch("training_server.detect_drift.detect_drift")
     def test_thresholds_in_response(self, mock_detect, client, mock_drift_result):
         """Response should include threshold values."""
         mock_detect.return_value = mock_drift_result
@@ -242,7 +242,7 @@ class TestDriftEndpoint:
         assert data["thresholds"]["warn"] == 0.1
         assert data["thresholds"]["fail"] == 0.2
 
-    @patch("monitor.detect_drift.detect_drift")
+    @patch("training_server.detect_drift.detect_drift")
     def test_exception_handling(self, mock_detect, client):
         """Exceptions should return unknown status with error."""
         mock_detect.side_effect = Exception("Database connection failed")

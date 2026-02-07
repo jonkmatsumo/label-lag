@@ -20,11 +20,14 @@ def test_api_main_import_is_lightweight():
                 f"Module {mod} already in sys.modules, skipping lightweight check"
             )
 
-    # Import api.main
+    # Import training_server.main
+    import training_server.main  # noqa: F401
 
     # Check again
     for mod in heavy_modules:
-        assert mod not in sys.modules, f"Module {mod} was imported eagerly by api.main"
+        assert mod not in sys.modules, (
+            f"Module {mod} was imported eagerly by training_server.main"
+        )
 
 
 def test_forecast_import_is_lightweight():

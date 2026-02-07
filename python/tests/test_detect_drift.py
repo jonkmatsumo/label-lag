@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from monitor.detect_drift import (
+from training_server.detect_drift import (
     PSI_THRESHOLD_CRITICAL,
     calculate_psi,
     detect_drift,
@@ -95,8 +95,8 @@ class TestCalculatePsi:
 class TestDetectDrift:
     """Tests for detect_drift function."""
 
-    @patch("monitor.detect_drift.get_reference_data")
-    @patch("monitor.detect_drift.get_live_data")
+    @patch("training_server.detect_drift.get_reference_data")
+    @patch("training_server.detect_drift.get_live_data")
     def test_returns_expected_structure(self, mock_live, mock_ref):
         """detect_drift should return expected dictionary structure."""
         # Mock reference data
@@ -130,8 +130,8 @@ class TestDetectDrift:
         assert isinstance(result["features"], dict)
         assert isinstance(result["drifted_features"], list)
 
-    @patch("monitor.detect_drift.get_reference_data")
-    @patch("monitor.detect_drift.get_live_data")
+    @patch("training_server.detect_drift.get_reference_data")
+    @patch("training_server.detect_drift.get_live_data")
     def test_no_reference_data_returns_error(self, mock_live, mock_ref):
         """Missing reference data should return error in results."""
         mock_ref.return_value = None
@@ -144,8 +144,8 @@ class TestDetectDrift:
         assert result["reference_size"] == 0
         assert result["live_size"] == 0
 
-    @patch("monitor.detect_drift.get_reference_data")
-    @patch("monitor.detect_drift.get_live_data")
+    @patch("training_server.detect_drift.get_reference_data")
+    @patch("training_server.detect_drift.get_live_data")
     def test_no_live_data_returns_error(self, mock_live, mock_ref):
         """Missing live data should return error in results."""
         mock_ref.return_value = pd.DataFrame(
@@ -164,8 +164,8 @@ class TestDetectDrift:
         assert result["reference_size"] > 0
         assert result["live_size"] == 0
 
-    @patch("monitor.detect_drift.get_reference_data")
-    @patch("monitor.detect_drift.get_live_data")
+    @patch("training_server.detect_drift.get_reference_data")
+    @patch("training_server.detect_drift.get_live_data")
     def test_status_classification_ok(self, mock_live, mock_ref):
         """PSI < 0.1 should result in OK status."""
         # Create identical distributions (low PSI)
@@ -194,8 +194,8 @@ class TestDetectDrift:
         for feature, details in result["features"].items():
             assert details["status"] == "OK"
 
-    @patch("monitor.detect_drift.get_reference_data")
-    @patch("monitor.detect_drift.get_live_data")
+    @patch("training_server.detect_drift.get_reference_data")
+    @patch("training_server.detect_drift.get_live_data")
     def test_status_classification_warning(self, mock_live, mock_ref):
         """0.1 <= PSI < 0.2 should result in WARNING status."""
         # Create moderately shifted distributions
@@ -226,8 +226,8 @@ class TestDetectDrift:
         assert isinstance(result["features"], dict)
         assert len(result["features"]) > 0
 
-    @patch("monitor.detect_drift.get_reference_data")
-    @patch("monitor.detect_drift.get_live_data")
+    @patch("training_server.detect_drift.get_reference_data")
+    @patch("training_server.detect_drift.get_live_data")
     def test_status_classification_critical(self, mock_live, mock_ref):
         """PSI >= 0.2 should result in CRITICAL status and drift_detected=True."""
         # Create very different distributions
@@ -263,8 +263,8 @@ class TestDetectDrift:
             assert result["drift_detected"] is True
             assert len(result["drifted_features"]) > 0
 
-    @patch("monitor.detect_drift.get_reference_data")
-    @patch("monitor.detect_drift.get_live_data")
+    @patch("training_server.detect_drift.get_reference_data")
+    @patch("training_server.detect_drift.get_live_data")
     def test_missing_feature_skipped(self, mock_live, mock_ref):
         """Missing features in reference or live data should be skipped."""
         ref_data = pd.DataFrame(

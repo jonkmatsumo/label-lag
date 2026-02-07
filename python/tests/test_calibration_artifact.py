@@ -130,8 +130,8 @@ class TestCalibrationArtifact:
         """Test that SignalForecaster uses the loaded calibrator and reports it (C2)."""
         from decimal import Decimal
 
-        from api.schemas import SignalRequest
         from forecast.services import SignalForecaster
+        from training_server.schemas import SignalRequest
 
         forecaster = SignalForecaster()
         request = SignalRequest(

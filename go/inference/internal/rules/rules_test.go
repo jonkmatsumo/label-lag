@@ -269,3 +269,27 @@ func TestEvaluateRules_MissingFeature(t *testing.T) {
                         t.Errorf("expected 1 error, got %d", len(errs))
                 }
         }
+
+func BenchmarkEvaluateRules_OptimizedSplit(b *testing.B) {
+	rules := make([]Rule, 100)
+	for i := 0; i < 100; i++ {
+		rules[i] = Rule{
+			ID:     "r" + string(rune(i)),
+			Field:  "f",
+			Op:     "==",
+			Value:  1,
+			Action: "reject",
+			Status: RuleStatusActive,
+		}
+	}
+	rs := &RuleSet{
+		Version: "v1",
+		Rules:   rules,
+	}
+	features := map[string]any{"f": 1}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = EvaluateRules(features, 10, rs, EvalOptions{})
+	}
+}

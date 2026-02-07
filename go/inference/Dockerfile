@@ -24,5 +24,6 @@ RUN go build -o inference main.go
 FROM alpine:latest
 WORKDIR /app
 COPY --from=builder /app/go/inference/inference .
+COPY go/inference/config /app/go/inference/config
 EXPOSE 8081
 CMD ["./inference"]

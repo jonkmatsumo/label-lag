@@ -1,10 +1,10 @@
 services:
-  # Python API (ML-only)
-  api:
+  # Python Training/API Server
+  training-server:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: synthetic-data-api
+    container_name: training-server
     env_file:
       - .env
     environment:
@@ -12,13 +12,13 @@ services:
       - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
       - AWS_ACCESS_KEY_ID=minioadmin
       - AWS_SECRET_ACCESS_KEY=minioadmin
-      - PYTHONPATH=/app/src:/app/src/api/proto
+      - PYTHONPATH=/app/src
       - PYTHONHASHSEED=42
     networks:
       - labellag_net
     ports:
-      - "${API_PORT:-8000}:8000"
-    command: [ "uv", "run", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000" ]
+      - "${TRAINING_SERVER_PORT:-8000}:8000"
+    command: [ "uv", "run", "uvicorn", "training_server.main:app", "--host", "0.0.0.0", "--port", "8000" ]
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
@@ -43,22 +43,22 @@ services:
       db:
         condition: service_healthy
 
-  pygrpc:
+  inference-server:
     build:
       context: .
       dockerfile: python/Dockerfile
-    container_name: pygrpc
+    container_name: inference-server
     environment:
-      - PYGRPC_HOST=0.0.0.0
-      - PYGRPC_PORT=50052
-      - PYGRPC_DB_DSN=postgresql://${POSTGRES_USER:-synthetic}:${POSTGRES_PASSWORD:-synthetic_dev_password}@db:5432/${POSTGRES_DB:-synthetic_data}
-      - PYGRPC_MLFLOW_TRACKING_URI=http://mlflow:5000
-      - PYGRPC_INCLUDE_FEATURES_USED=true
+      - INFERENCE_SERVER_HOST=0.0.0.0
+      - INFERENCE_SERVER_PORT=50052
+      - INFERENCE_SERVER_DB_DSN=postgresql://${POSTGRES_USER:-synthetic}:${POSTGRES_PASSWORD:-synthetic_dev_password}@db:5432/${POSTGRES_DB:-synthetic_data}
+      - INFERENCE_SERVER_MLFLOW_TRACKING_URI=http://mlflow:5000
+      - INFERENCE_SERVER_INCLUDE_FEATURES_USED=true
       - PYTHONHASHSEED=42
     networks:
       - labellag_net
     ports:
-      - "${PYGRPC_PORT:-50052}:50052"
+      - "${INFERENCE_SERVER_PORT:-50052}:50052"
     depends_on:
       db:
         condition: service_healthy
@@ -74,17 +74,18 @@ services:
     container_name: inference
     environment:
       - PORT=8081
-      - INFERENCE_GATEWAY_PYTHON_GRPC_ADDR=pygrpc:50052
+      - INFERENCE_GATEWAY_PYTHON_GRPC_ADDR=inference-server:50052
       - INFERENCE_GATEWAY_RULES_PATH=go/inference/config/default_rules.json
       - INFERENCE_GATEWAY_RULES_WATCH=true
     networks:
       - labellag_net
     ports:
       - "${INFERENCE_GATEWAY_PORT:-8081}:8081"
+      - "${INFERENCE_GATEWAY_GRPC_PORT:-50505}:50505"
     depends_on:
       analytics:
         condition: service_started
-      pygrpc:
+      inference-server:
         condition: service_started
 
   generator:
@@ -113,7 +114,7 @@ services:
     environment:
       - BFF_PORT=${BFF_PORT:-3210}
       - BFF_HOST=0.0.0.0
-      - BFF_PYTHON_API_BASE_URL=http://api:8000
+      - BFF_PYTHON_API_BASE_URL=http://training-server:8000
       - BFF_MLFLOW_TRACKING_URI=http://mlflow:5000
       - BFF_GATEWAY_BASE_URL=http://inference:8081
       - BFF_REQUEST_TIMEOUT=30000
@@ -131,7 +132,7 @@ services:
       retries: 3
       start_period: 5s
     depends_on:
-      api:
+      training-server:
         condition: service_healthy
       inference:
         condition: service_started

@@ -17,6 +17,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/status"
 )
 
@@ -136,13 +137,23 @@ func NewInferenceClient(target string, timeout time.Duration) (*InferenceClient,
 		target = os.Getenv("INFERENCE_GATEWAY_PYTHON_GRPC_ADDR")
 	}
 	if target == "" {
-		target = "grpc-inference:50052"
+		target = "inference-server:50052"
 	}
 	if timeout == 0 {
 		timeout = defaultTimeout
 	}
 
-	conn, err := grpc.Dial(target, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	kacp := keepalive.ClientParameters{
+		Time:                10 * time.Second,
+		Timeout:             time.Second,
+		PermitWithoutStream: true,
+	}
+
+	conn, err := grpc.Dial(target,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithKeepaliveParams(kacp),
+		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("dial python inference target: %w", err)
 	}

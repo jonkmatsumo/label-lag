@@ -4,7 +4,12 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from api.audit import AuditLogger, AuditRecord, get_audit_logger, set_audit_logger
+from training_server.audit import (
+    AuditLogger,
+    AuditRecord,
+    get_audit_logger,
+    set_audit_logger,
+)
 
 
 class TestAuditRecord:

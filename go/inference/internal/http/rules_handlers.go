@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -44,18 +45,11 @@ type EvaluateRulesDiffRequest struct {
 	ShadowMode bool           `json:"shadow_mode"`
 }
 
-type RulesDiffSummary struct {
-	Severity            string   `json:"severity"`
-	ScoreDelta          int      `json:"score_delta"`
-	MatchedRulesAdded   []string `json:"matched_rules_added"`
-	MatchedRulesRemoved []string `json:"matched_rules_removed"`
-}
-
 type EvaluateRulesDiffResponse struct {
-	A                     EvaluateRulesResponse `json:"a"`
-	B                     EvaluateRulesResponse `json:"b"`
-	Diff                  RulesDiffSummary      `json:"diff"`
-	TotalEvaluationTimeMS float64               `json:"total_evaluation_time_ms"`
+	A                     EvaluateRulesResponse  `json:"a"`
+	B                     EvaluateRulesResponse  `json:"b"`
+	Diff                  rules.RulesDiffSummary `json:"diff"`
+	TotalEvaluationTimeMS float64                `json:"total_evaluation_time_ms"`
 }
 
 type SandboxMatchedRule struct {
@@ -80,7 +74,7 @@ type SandboxEvaluateResponse struct {
 type SandboxDiffResponse struct {
 	A    SandboxEvaluateResponse `json:"a"`
 	B    SandboxEvaluateResponse `json:"b"`
-	Diff RulesDiffSummary        `json:"diff"`
+	Diff rules.RulesDiffSummary  `json:"diff"`
 }
 
 func (h *Handler) handleSandboxEvaluate(w http.ResponseWriter, r *http.Request) {
@@ -91,11 +85,18 @@ func (h *Handler) handleSandboxEvaluate(w http.ResponseWriter, r *http.Request) 
 
 	debug := r.URL.Query().Get("debug") == "true"
 
+	r.Body = http.MaxBytesReader(w, r.Body, h.maxBodyBytes)
 	var req EvaluateRulesRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		}
 		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
 		return
 	}
+	defer r.Body.Close()
 
 	ruleset := rules.RuleSet{}
 	if req.RuleSet != nil {
@@ -135,11 +136,18 @@ func (h *Handler) handleSandboxDiff(w http.ResponseWriter, r *http.Request) {
 
 	debug := r.URL.Query().Get("debug") == "true"
 
+	r.Body = http.MaxBytesReader(w, r.Body, h.maxBodyBytes)
 	var req EvaluateRulesDiffRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		}
 		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
 		return
 	}
+	defer r.Body.Close()
 
 	// Helper to evaluate a single ruleset
 	eval := func(rs *rules.RuleSet) (rules.RuleResult, error) {
@@ -174,42 +182,8 @@ func (h *Handler) handleSandboxDiff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Compute diff summary (reusing existing logic from EvaluateRulesDiff but returning Sandbox version)
-	diff := RulesDiffSummary{
-		ScoreDelta: resB.FinalScore - resA.FinalScore,
-	}
-	if req.ShadowMode {
-		// Use internal FinalScore from results which is the adjusted score even in shadow mode
-		diff.ScoreDelta = resB.FinalScore - resA.FinalScore
-	}
-
-	mapA := make(map[string]bool)
-	for _, r := range resA.MatchedRules {
-		mapA[r] = true
-	}
-	mapB := make(map[string]bool)
-	for _, r := range resB.MatchedRules {
-		mapB[r] = true
-	}
-
-	for r := range mapB {
-		if !mapA[r] {
-			diff.MatchedRulesAdded = append(diff.MatchedRulesAdded, r)
-		}
-	}
-	for r := range mapA {
-		if !mapB[r] {
-			diff.MatchedRulesRemoved = append(diff.MatchedRulesRemoved, r)
-		}
-	}
-
-	sort.Strings(diff.MatchedRulesAdded)
-	sort.Strings(diff.MatchedRulesRemoved)
-
-	// Use temporary EvaluateRulesResponse for severity computation
-	tempRespA := EvaluateRulesResponse{Rejected: resA.Rejected, Explanations: resA.Explanations}
-	tempRespB := EvaluateRulesResponse{Rejected: resB.Rejected, Explanations: resB.Explanations}
-	diff.Severity = computeDiffSeverity(tempRespA, tempRespB, diff)
+	// Compute diff summary using shared logic
+	diff := rules.ComputeDiff(resA, resB, req.ShadowMode)
 
 	resp := SandboxDiffResponse{
 		A:    mapToSandboxEvaluateResponse(resA, req.BaseScore, req.ShadowMode),
@@ -289,20 +263,27 @@ func (h *Handler) handleEvaluateRulesDiff(w http.ResponseWriter, r *http.Request
 
 	debug := r.URL.Query().Get("debug") == "true"
 
+	r.Body = http.MaxBytesReader(w, r.Body, h.maxBodyBytes)
 	var req EvaluateRulesDiffRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		}
 		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
 		return
 	}
+	defer r.Body.Close()
 
 	// Helper to evaluate a single ruleset
-	eval := func(rs *rules.RuleSet) (EvaluateRulesResponse, error) {
+	eval := func(rs *rules.RuleSet) (rules.RuleResult, EvaluateRulesResponse, error) {
 		ruleset := rules.RuleSet{}
 		var warnings []rules.Conflict
 		if rs != nil {
 			validRules, errs := rules.FilterValidRules(rs.Rules)
 			if len(errs) > 0 {
-				return EvaluateRulesResponse{}, fmt.Errorf("invalid rules: %v", errs)
+				return rules.RuleResult{}, EvaluateRulesResponse{}, fmt.Errorf("invalid rules: %v", errs)
 			}
 			ruleset = *rs
 			ruleset.Rules = validRules
@@ -317,7 +298,7 @@ func (h *Handler) handleEvaluateRulesDiff(w http.ResponseWriter, r *http.Request
 
 		result, err := rules.EvaluateRules(req.Features, req.BaseScore, &ruleset, rules.EvalOptions{Debug: debug})
 		if err != nil {
-			return EvaluateRulesResponse{}, err
+			return rules.RuleResult{}, EvaluateRulesResponse{}, err
 		}
 
 		resp := EvaluateRulesResponse{
@@ -339,16 +320,16 @@ func (h *Handler) handleEvaluateRulesDiff(w http.ResponseWriter, r *http.Request
 			resp.FinalScore = req.BaseScore
 			resp.Rejected = false
 		}
-		return resp, nil
+		return result, resp, nil
 	}
 
-	respA, err := eval(req.RuleSetA)
+	resultA, respA, err := eval(req.RuleSetA)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	respB, err := eval(req.RuleSetB)
+	resultB, respB, err := eval(req.RuleSetB)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -357,40 +338,8 @@ func (h *Handler) handleEvaluateRulesDiff(w http.ResponseWriter, r *http.Request
 	requestID := requestid.FromContext(r.Context())
 	span := trace.SpanFromContext(r.Context())
 
-	// Compute diff
-	diff := RulesDiffSummary{
-		ScoreDelta: respB.FinalScore - respA.FinalScore,
-	}
-	if req.ShadowMode {
-		diff.ScoreDelta = respB.ShadowScore - respA.ShadowScore
-	}
-
-	// Matched rules diff
-	mapA := make(map[string]bool)
-	for _, r := range respA.MatchedRules {
-		mapA[r] = true
-	}
-	mapB := make(map[string]bool)
-	for _, r := range respB.MatchedRules {
-		mapB[r] = true
-	}
-
-	for r := range mapB {
-		if !mapA[r] {
-			diff.MatchedRulesAdded = append(diff.MatchedRulesAdded, r)
-		}
-	}
-	for r := range mapA {
-		if !mapB[r] {
-			diff.MatchedRulesRemoved = append(diff.MatchedRulesRemoved, r)
-		}
-	}
-
-	sort.Strings(diff.MatchedRulesAdded)
-	sort.Strings(diff.MatchedRulesRemoved)
-
-	// Compute severity
-	diff.Severity = computeDiffSeverity(respA, respB, diff)
+	// Compute diff using shared logic
+	diff := rules.ComputeDiff(resultA, resultB, req.ShadowMode)
 
 	totalEvalTime := respA.EvaluationTimeMS + respB.EvaluationTimeMS
 
@@ -437,11 +386,18 @@ func (h *Handler) handleEvaluateRules(w http.ResponseWriter, r *http.Request) {
 
 	debug := r.URL.Query().Get("debug") == "true"
 
+	r.Body = http.MaxBytesReader(w, r.Body, h.maxBodyBytes)
 	var req EvaluateRulesRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		}
 		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
 		return
 	}
+	defer r.Body.Close()
 
 	ruleset := rules.RuleSet{}
 	var warnings []rules.Conflict
@@ -525,43 +481,6 @@ func (h *Handler) handleEvaluateRules(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-func computeDiffSeverity(respA, respB EvaluateRulesResponse, diff RulesDiffSummary) string {
-	// Breaking rules:
-	// 1. reject added/removed
-	if respA.Rejected != respB.Rejected {
-		return "breaking"
-	}
-
-	// 2. action type change for same rule_id
-	actionMapA := make(map[string]string)
-	for _, exp := range respA.Explanations {
-		actionMapA[exp.RuleID] = exp.Action
-	}
-	for _, exp := range respB.Explanations {
-		if oldAction, ok := actionMapA[exp.RuleID]; ok && oldAction != exp.Action {
-			return "breaking"
-		}
-	}
-
-	// 3. |score_delta| > 20
-	if abs(diff.ScoreDelta) > 20 {
-		return "breaking"
-	}
-
-	// Behavioral rules:
-	// 1. any score change
-	if diff.ScoreDelta != 0 {
-		return "behavioral"
-	}
-	// 2. matched rules added/removed
-	if len(diff.MatchedRulesAdded) > 0 || len(diff.MatchedRulesRemoved) > 0 {
-		return "behavioral"
-	}
-
-	// Cosmetic: no effective change
-	return "cosmetic"
-}
-
 func (h *Handler) handleListRules(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -600,11 +519,18 @@ func (h *Handler) handleCreateRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, h.maxBodyBytes)
 	var rule crudv1.Rule
 	if err := json.NewDecoder(r.Body).Decode(&rule); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		}
 		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
 		return
 	}
+	defer r.Body.Close()
 
 	// Force default status if not set
 	if rule.Status == "" {
@@ -659,11 +585,18 @@ func (h *Handler) handleUpdateRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, h.maxBodyBytes)
 	var rule crudv1.Rule
 	if err := json.NewDecoder(r.Body).Decode(&rule); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		}
 		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
 		return
 	}
+	defer r.Body.Close()
 
 	// Ensure ID matches path
 	if rule.Id != "" && rule.Id != ruleID {
@@ -702,13 +635,6 @@ func (h *Handler) handleDeleteRule(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]bool{"success": true})
-}
-
-func abs(x int) int {
-	if x < 0 {
-		return -x
-	}
-	return x
 }
 
 func (h *Handler) handleListRuleVersions(w http.ResponseWriter, r *http.Request) {

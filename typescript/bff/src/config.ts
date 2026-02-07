@@ -44,7 +44,7 @@ export function loadConfig(): Config {
   return {
     port: getEnvAsInt('BFF_PORT', 3210),
     host: getEnvOrDefault('BFF_HOST', '0.0.0.0'),
-    pythonApiBaseUrl: getEnvOrDefault('BFF_PYTHON_API_BASE_URL', 'http://api:8000'),
+    pythonApiBaseUrl: getEnvOrDefault('BFF_PYTHON_API_BASE_URL', 'http://training-server:8000'),
     mlflowTrackingUri: getEnvOrDefault('BFF_MLFLOW_TRACKING_URI', 'http://mlflow:5005'),
     gatewayBaseUrl: getEnvOrDefault('BFF_GATEWAY_BASE_URL', 'http://inference:8081'),
     requestTimeout: getEnvAsInt('BFF_REQUEST_TIMEOUT', 30000),

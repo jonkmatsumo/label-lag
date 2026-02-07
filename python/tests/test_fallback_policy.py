@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from api.schemas import SignalRequest
 from forecast.services import SignalForecaster
+from training_server.schemas import SignalRequest
 
 
 class TestFallbackPolicy:

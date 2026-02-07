@@ -3,7 +3,7 @@
 Tests the FEATURE_MATERIALIZATION_MODE environment variable and mode selection.
 """
 
-from pipeline.materialize_features import (
+from training_server.materialize_features import (
     MaterializationMode,
     get_materialization_mode,
 )

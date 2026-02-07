@@ -183,7 +183,7 @@ class TestCVMetricsLogging:
     @patch("model.train.DataLoader")
     def test_cv_logs_min_max_metrics(self, mock_loader_cls, mock_mlflow, _mock_git):
         """Verify min/max logged when k-fold enabled."""
-        from api.schemas import SplitConfig, SplitStrategy
+        from training_server.schemas import SplitConfig, SplitStrategy
 
         mock_loader = MagicMock()
         mock_loader.FEATURE_COLUMNS = DataLoader.FEATURE_COLUMNS
@@ -239,7 +239,7 @@ class TestCVMetricsLogging:
     @patch("model.train.DataLoader")
     def test_cv_tags_logged(self, mock_loader_cls, mock_mlflow, _mock_git):
         """Verify cv.enabled and cv.n_folds tags set."""
-        from api.schemas import SplitConfig, SplitStrategy
+        from training_server.schemas import SplitConfig, SplitStrategy
 
         mock_loader = MagicMock()
         mock_loader.FEATURE_COLUMNS = DataLoader.FEATURE_COLUMNS

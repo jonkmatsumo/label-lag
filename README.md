@@ -37,7 +37,7 @@ flowchart TB
     end
 
     UI_REACT --> BFF --> GO_INF --> PY_API --> GO_CRUD --> DB
-    GO_INF --> PY_GRPC --> DB
+    GO_INF --> PY_GRPC --> GO_CRUD
     GO_INF --> GO_CRUD
     PY_API --> MLFLOW --> MINIO
 ```
@@ -163,11 +163,16 @@ Training runs are tracked with metrics and artifacts, then promoted through stag
 
 ### Rule Engine (Go Inference Service)
 
-High-performance rule evaluation and management. Rules evaluate transaction features using operators (`>`, `>=`, `<`, `<=`, `==`, `in`, `not_in`) and actions (`override_score`, `clamp_min`, `clamp_max`, `reject`). The gateway manages the lifecycle (draft → review → approval → publish) and supports shadow evaluation, sandbox testing, and automated conflict detection. It delegates model scoring to the Python gRPC service (`pygrpc`).
+High-performance rule evaluation and management. Rules evaluate transaction features using operators (`>`, `>=`, `<`, `<=`, `==`, `in`, `not_in`) and actions (`override_score`, `clamp_min`, `clamp_max`, `reject`). The gateway manages the lifecycle (draft → review → approval → publish) and supports shadow evaluation, sandbox testing, and automated conflict detection.
+
+> [!NOTE]
+> **Rules vs. Model**: The Go Inference Service is the primary orchestrator for the final decision. It calculates rules locally but delegates the heavy ML model scoring to the Python gRPC service (`pygrpc`). The model score is then used as a feature input for the rule engine.
 
 ### Python gRPC Service (pygrpc)
 
 The `pygrpc` service provides a specialized interface for low-latency model inference. It loads registered models from MLflow and serves prediction requests from the Go Inference Service.
+
+> **Data Access Layering**: `pygrpc` is a compute-only service. It does **not** access the database directly; instead, it retrieves user features by calling the Go Analytics Service via gRPC. This ensures centralized authorization and validation in the Analytics layer.
 
 ### Analytics Service (Go)
 
@@ -216,7 +221,7 @@ MINIO_CONSOLE_PORT=9101
 ### BFF Configuration
 
 ```
-BFF_PYTHON_API_BASE_URL=http://api:8000
+BFF_PYTHON_API_BASE_URL=http://training-server:8000
 BFF_MLFLOW_TRACKING_URI=http://mlflow:5000
 BFF_GATEWAY_BASE_URL=http://inference:8081
 BFF_REQUEST_TIMEOUT=30000

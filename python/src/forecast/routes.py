@@ -3,8 +3,11 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query
 
-from api.audit import get_audit_logger
-from api.schemas import (
+from forecast.drift_cache import get_drift_cache
+from forecast.model_manager import get_model_manager
+from forecast.services import get_forecaster
+from training_server.audit import get_audit_logger
+from training_server.schemas import (
     DeployModelRequest,
     DeployModelResponse,
     DriftStatusResponse,
@@ -14,9 +17,6 @@ from api.schemas import (
     ScoreDistributionResponse,
     SignalRequest,
 )
-from forecast.drift_cache import get_drift_cache
-from forecast.model_manager import get_model_manager
-from forecast.services import get_forecaster
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ async def get_drift_status(
     """Check feature distribution drift between reference and live data."""
     import time
 
-    from monitor.detect_drift import (
+    from training_server.detect_drift import (
         PSI_THRESHOLD_CRITICAL,
         PSI_THRESHOLD_WARNING,
         detect_drift,
@@ -149,7 +149,7 @@ def _build_drift_response(
     overall_status: str | None = None,
 ) -> DriftStatusResponse:
     """Build DriftStatusResponse from detect_drift result."""
-    from monitor.detect_drift import (
+    from training_server.detect_drift import (
         PSI_THRESHOLD_CRITICAL,
         PSI_THRESHOLD_WARNING,
     )
@@ -237,7 +237,7 @@ async def get_score_distribution(
     """Check score distribution drift between training baseline and live data."""
     import numpy as np
 
-    from api.crud_client import get_crud_client
+    from training_server.crud_client import get_crud_client
 
     manager = get_model_manager()
     baseline = manager.baseline_distribution

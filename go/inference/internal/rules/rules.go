@@ -45,6 +45,11 @@ type RuleSet struct {
 	versionOnce sync.Once `json:"-"`
 	// computedVersion caches the computed version string (R1).
 	computedVersion string `json:"-"`
+
+	// splitOnce ensures rules are split only once (R1).
+	splitOnce   sync.Once `json:"-"`
+	activeRules []Rule    `json:"-"`
+	shadowRules []Rule    `json:"-"`
 }
 
 func (rs *RuleSet) ComputeVersion() string {
@@ -128,7 +133,7 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset *RuleSet, 
 		perRuleTimings = make(map[string]float64)
 	}
 
-	activeRules, shadowRules := splitRules(ruleset.Rules)
+	activeRules, shadowRules := ruleset.Split()
 
 	for _, rule := range activeRules {
 		var startRule time.Time
@@ -275,16 +280,21 @@ func EvaluateRules(features map[string]any, currentScore int, ruleset *RuleSet, 
 	}, nil
 }
 
-func splitRules(rules []Rule) (active []Rule, shadow []Rule) {
-	for _, rule := range rules {
-		switch rule.Status {
-		case RuleStatusActive:
-			active = append(active, rule)
-		case RuleStatusShadow:
-			shadow = append(shadow, rule)
-		}
+func (rs *RuleSet) Split() (active []Rule, shadow []Rule) {
+	if rs == nil {
+		return nil, nil
 	}
-	return active, shadow
+	rs.splitOnce.Do(func() {
+		for _, rule := range rs.Rules {
+			switch rule.Status {
+			case RuleStatusActive:
+				rs.activeRules = append(rs.activeRules, rule)
+			case RuleStatusShadow:
+				rs.shadowRules = append(rs.shadowRules, rule)
+			}
+		}
+	})
+	return rs.activeRules, rs.shadowRules
 }
 
 func clampScore(score int) int {

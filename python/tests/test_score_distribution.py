@@ -29,7 +29,9 @@ class TestScoreDistribution:
 
         with (
             patch("forecast.routes.get_model_manager", return_value=mock_manager),
-            patch("api.crud_client.get_crud_client", return_value=mock_client),
+            patch(
+                "training_server.crud_client.get_crud_client", return_value=mock_client
+            ),
         ):
             response = await get_score_distribution(hours=24)
 
@@ -59,7 +61,9 @@ class TestScoreDistribution:
 
         with (
             patch("forecast.routes.get_model_manager", return_value=mock_manager),
-            patch("api.crud_client.get_crud_client", return_value=mock_client),
+            patch(
+                "training_server.crud_client.get_crud_client", return_value=mock_client
+            ),
         ):
             response = await get_score_distribution(hours=24)
 
