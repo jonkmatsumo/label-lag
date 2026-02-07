@@ -55,6 +55,9 @@ service AnalyticsService {
 
   // Backtest Compare (Phase 8)
   rpc CompareBacktests(CompareBacktestsRequest) returns (CompareBacktestsResponse);
+
+  // Shadow Comparison (Phase 9)
+  rpc GetShadowComparison(GetShadowComparisonRequest) returns (GetShadowComparisonResponse);
 }
 
 message GetDailyStatsRequest {
@@ -578,6 +581,7 @@ message BatchGetLatestUserFeaturesResponse {
   map<string, UserFeatures> features = 1;
 }
 
+
 // Backtest Compare (Phase 8)
 message CompareBacktestsRequest {
   string baseline_job_id = 1;
@@ -597,4 +601,23 @@ message CompareBacktestsResponse {
   BacktestResult baseline = 1;
   BacktestResult candidate = 2;
   BacktestMetricsDelta delta = 3;
+}
+
+// Shadow Comparison (Phase 9)
+message GetShadowComparisonRequest {
+  int32 hours = 1;
+}
+
+message ShadowModeMetrics {
+    int64 total_evaluations = 1;
+    int64 divergent_scores_count = 2; // how many times shadow score != final_score
+    double divergent_rate = 3;
+    double active_score_mean = 4;
+    double shadow_score_mean = 5;
+    map<string, int32> active_score_distribution = 6;
+    map<string, int32> shadow_score_distribution = 7;
+}
+
+message GetShadowComparisonResponse {
+    ShadowModeMetrics metrics = 1;
 }

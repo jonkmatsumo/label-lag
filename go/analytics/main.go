@@ -2217,6 +2217,40 @@ func (s *server) DiffRuleVersions(ctx context.Context, req *pb.DiffRuleVersionsR
 	}, nil
 }
 
+// GetShadowComparison calculates metrics comparing active vs shadow rule performance
+func (s *server) GetShadowComparison(ctx context.Context, req *pb.GetShadowComparisonRequest) (*pb.GetShadowComparisonResponse, error) {
+	hours := req.GetHours()
+	if hours <= 0 {
+		hours = 24
+	}
+
+	// Placeholder metrics for now.
+	// In a real implementation, we would query the inference_events table.
+	return &pb.GetShadowComparisonResponse{
+		Metrics: &pb.ShadowModeMetrics{
+			TotalEvaluations:     100,
+			DivergentScoresCount: 5,
+			DivergentRate:        0.05,
+			ActiveScoreMean:      50.0,
+			ShadowScoreMean:      55.0,
+			ActiveScoreDistribution: map[string]int32{
+				"0-20":   10,
+				"20-40":  20,
+				"40-60":  40,
+				"60-80":  20,
+				"80-100": 10,
+			},
+			ShadowScoreDistribution: map[string]int32{
+				"0-20":   5,
+				"20-40":  15,
+				"40-60":  45,
+				"60-80":  25,
+				"80-100": 10,
+			},
+		},
+	}, nil
+}
+
 func updateHealthStatus(ctx context.Context, db *sql.DB, healthServer *health.Server, logger *slog.Logger) error {
 	if err := db.PingContext(ctx); err != nil {
 		if logger != nil {

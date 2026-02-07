@@ -5376,6 +5376,187 @@ func (x *CompareBacktestsResponse) GetDelta() *BacktestMetricsDelta {
 	return nil
 }
 
+// Shadow Comparison (Phase 9)
+type GetShadowComparisonRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Hours         int32                  `protobuf:"varint,1,opt,name=hours,proto3" json:"hours,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetShadowComparisonRequest) Reset() {
+	*x = GetShadowComparisonRequest{}
+	mi := &file_analytics_v1_analytics_proto_msgTypes[88]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetShadowComparisonRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetShadowComparisonRequest) ProtoMessage() {}
+
+func (x *GetShadowComparisonRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_analytics_v1_analytics_proto_msgTypes[88]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetShadowComparisonRequest.ProtoReflect.Descriptor instead.
+func (*GetShadowComparisonRequest) Descriptor() ([]byte, []int) {
+	return file_analytics_v1_analytics_proto_rawDescGZIP(), []int{88}
+}
+
+func (x *GetShadowComparisonRequest) GetHours() int32 {
+	if x != nil {
+		return x.Hours
+	}
+	return 0
+}
+
+type ShadowModeMetrics struct {
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	TotalEvaluations        int64                  `protobuf:"varint,1,opt,name=total_evaluations,json=totalEvaluations,proto3" json:"total_evaluations,omitempty"`
+	DivergentScoresCount    int64                  `protobuf:"varint,2,opt,name=divergent_scores_count,json=divergentScoresCount,proto3" json:"divergent_scores_count,omitempty"` // how many times shadow score != final_score
+	DivergentRate           float64                `protobuf:"fixed64,3,opt,name=divergent_rate,json=divergentRate,proto3" json:"divergent_rate,omitempty"`
+	ActiveScoreMean         float64                `protobuf:"fixed64,4,opt,name=active_score_mean,json=activeScoreMean,proto3" json:"active_score_mean,omitempty"`
+	ShadowScoreMean         float64                `protobuf:"fixed64,5,opt,name=shadow_score_mean,json=shadowScoreMean,proto3" json:"shadow_score_mean,omitempty"`
+	ActiveScoreDistribution map[string]int32       `protobuf:"bytes,6,rep,name=active_score_distribution,json=activeScoreDistribution,proto3" json:"active_score_distribution,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	ShadowScoreDistribution map[string]int32       `protobuf:"bytes,7,rep,name=shadow_score_distribution,json=shadowScoreDistribution,proto3" json:"shadow_score_distribution,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *ShadowModeMetrics) Reset() {
+	*x = ShadowModeMetrics{}
+	mi := &file_analytics_v1_analytics_proto_msgTypes[89]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ShadowModeMetrics) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ShadowModeMetrics) ProtoMessage() {}
+
+func (x *ShadowModeMetrics) ProtoReflect() protoreflect.Message {
+	mi := &file_analytics_v1_analytics_proto_msgTypes[89]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ShadowModeMetrics.ProtoReflect.Descriptor instead.
+func (*ShadowModeMetrics) Descriptor() ([]byte, []int) {
+	return file_analytics_v1_analytics_proto_rawDescGZIP(), []int{89}
+}
+
+func (x *ShadowModeMetrics) GetTotalEvaluations() int64 {
+	if x != nil {
+		return x.TotalEvaluations
+	}
+	return 0
+}
+
+func (x *ShadowModeMetrics) GetDivergentScoresCount() int64 {
+	if x != nil {
+		return x.DivergentScoresCount
+	}
+	return 0
+}
+
+func (x *ShadowModeMetrics) GetDivergentRate() float64 {
+	if x != nil {
+		return x.DivergentRate
+	}
+	return 0
+}
+
+func (x *ShadowModeMetrics) GetActiveScoreMean() float64 {
+	if x != nil {
+		return x.ActiveScoreMean
+	}
+	return 0
+}
+
+func (x *ShadowModeMetrics) GetShadowScoreMean() float64 {
+	if x != nil {
+		return x.ShadowScoreMean
+	}
+	return 0
+}
+
+func (x *ShadowModeMetrics) GetActiveScoreDistribution() map[string]int32 {
+	if x != nil {
+		return x.ActiveScoreDistribution
+	}
+	return nil
+}
+
+func (x *ShadowModeMetrics) GetShadowScoreDistribution() map[string]int32 {
+	if x != nil {
+		return x.ShadowScoreDistribution
+	}
+	return nil
+}
+
+type GetShadowComparisonResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Metrics       *ShadowModeMetrics     `protobuf:"bytes,1,opt,name=metrics,proto3" json:"metrics,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetShadowComparisonResponse) Reset() {
+	*x = GetShadowComparisonResponse{}
+	mi := &file_analytics_v1_analytics_proto_msgTypes[90]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetShadowComparisonResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetShadowComparisonResponse) ProtoMessage() {}
+
+func (x *GetShadowComparisonResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_analytics_v1_analytics_proto_msgTypes[90]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetShadowComparisonResponse.ProtoReflect.Descriptor instead.
+func (*GetShadowComparisonResponse) Descriptor() ([]byte, []int) {
+	return file_analytics_v1_analytics_proto_rawDescGZIP(), []int{90}
+}
+
+func (x *GetShadowComparisonResponse) GetMetrics() *ShadowModeMetrics {
+	if x != nil {
+		return x.Metrics
+	}
+	return nil
+}
+
 var File_analytics_v1_analytics_proto protoreflect.FileDescriptor
 
 const file_analytics_v1_analytics_proto_rawDesc = "" +
@@ -5800,7 +5981,25 @@ const file_analytics_v1_analytics_proto_rawDesc = "" +
 	"\x18CompareBacktestsResponse\x123\n" +
 	"\bbaseline\x18\x01 \x01(\v2\x17.crud.v1.BacktestResultR\bbaseline\x125\n" +
 	"\tcandidate\x18\x02 \x01(\v2\x17.crud.v1.BacktestResultR\tcandidate\x123\n" +
-	"\x05delta\x18\x03 \x01(\v2\x1d.crud.v1.BacktestMetricsDeltaR\x05delta2\xd5\x17\n" +
+	"\x05delta\x18\x03 \x01(\v2\x1d.crud.v1.BacktestMetricsDeltaR\x05delta\"2\n" +
+	"\x1aGetShadowComparisonRequest\x12\x14\n" +
+	"\x05hours\x18\x01 \x01(\x05R\x05hours\"\xf7\x04\n" +
+	"\x11ShadowModeMetrics\x12+\n" +
+	"\x11total_evaluations\x18\x01 \x01(\x03R\x10totalEvaluations\x124\n" +
+	"\x16divergent_scores_count\x18\x02 \x01(\x03R\x14divergentScoresCount\x12%\n" +
+	"\x0edivergent_rate\x18\x03 \x01(\x01R\rdivergentRate\x12*\n" +
+	"\x11active_score_mean\x18\x04 \x01(\x01R\x0factiveScoreMean\x12*\n" +
+	"\x11shadow_score_mean\x18\x05 \x01(\x01R\x0fshadowScoreMean\x12s\n" +
+	"\x19active_score_distribution\x18\x06 \x03(\v27.crud.v1.ShadowModeMetrics.ActiveScoreDistributionEntryR\x17activeScoreDistribution\x12s\n" +
+	"\x19shadow_score_distribution\x18\a \x03(\v27.crud.v1.ShadowModeMetrics.ShadowScoreDistributionEntryR\x17shadowScoreDistribution\x1aJ\n" +
+	"\x1cActiveScoreDistributionEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1aJ\n" +
+	"\x1cShadowScoreDistributionEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\"S\n" +
+	"\x1bGetShadowComparisonResponse\x124\n" +
+	"\ametrics\x18\x01 \x01(\v2\x1a.crud.v1.ShadowModeMetricsR\ametrics2\xb7\x18\n" +
 	"\x10AnalyticsService\x12N\n" +
 	"\rGetDailyStats\x12\x1d.crud.v1.GetDailyStatsRequest\x1a\x1e.crud.v1.GetDailyStatsResponse\x12f\n" +
 	"\x15GetTransactionDetails\x12%.crud.v1.GetTransactionDetailsRequest\x1a&.crud.v1.GetTransactionDetailsResponse\x12]\n" +
@@ -5836,7 +6035,8 @@ const file_analytics_v1_analytics_proto_rawDesc = "" +
 	"\x11LogInferenceEvent\x12!.crud.v1.LogInferenceEventRequest\x1a\".crud.v1.LogInferenceEventResponse\x12f\n" +
 	"\x15GetLatestUserFeatures\x12%.crud.v1.GetLatestUserFeaturesRequest\x1a&.crud.v1.GetLatestUserFeaturesResponse\x12u\n" +
 	"\x1aBatchGetLatestUserFeatures\x12*.crud.v1.BatchGetLatestUserFeaturesRequest\x1a+.crud.v1.BatchGetLatestUserFeaturesResponse\x12W\n" +
-	"\x10CompareBacktests\x12 .crud.v1.CompareBacktestsRequest\x1a!.crud.v1.CompareBacktestsResponseBDZBgithub.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1;crudv1b\x06proto3"
+	"\x10CompareBacktests\x12 .crud.v1.CompareBacktestsRequest\x1a!.crud.v1.CompareBacktestsResponse\x12`\n" +
+	"\x13GetShadowComparison\x12#.crud.v1.GetShadowComparisonRequest\x1a$.crud.v1.GetShadowComparisonResponseBDZBgithub.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1;crudv1b\x06proto3"
 
 var (
 	file_analytics_v1_analytics_proto_rawDescOnce sync.Once
@@ -5850,7 +6050,7 @@ func file_analytics_v1_analytics_proto_rawDescGZIP() []byte {
 	return file_analytics_v1_analytics_proto_rawDescData
 }
 
-var file_analytics_v1_analytics_proto_msgTypes = make([]protoimpl.MessageInfo, 90)
+var file_analytics_v1_analytics_proto_msgTypes = make([]protoimpl.MessageInfo, 95)
 var file_analytics_v1_analytics_proto_goTypes = []any{
 	(*GetDailyStatsRequest)(nil),               // 0: crud.v1.GetDailyStatsRequest
 	(*DailyStat)(nil),                          // 1: crud.v1.DailyStat
@@ -5940,143 +6140,153 @@ var file_analytics_v1_analytics_proto_goTypes = []any{
 	(*CompareBacktestsRequest)(nil),            // 85: crud.v1.CompareBacktestsRequest
 	(*BacktestMetricsDelta)(nil),               // 86: crud.v1.BacktestMetricsDelta
 	(*CompareBacktestsResponse)(nil),           // 87: crud.v1.CompareBacktestsResponse
-	nil,                                        // 88: crud.v1.BacktestMetrics.ScoreDistributionEntry
-	nil,                                        // 89: crud.v1.BatchGetLatestUserFeaturesResponse.FeaturesEntry
-	(*timestamppb.Timestamp)(nil),              // 90: google.protobuf.Timestamp
+	(*GetShadowComparisonRequest)(nil),         // 88: crud.v1.GetShadowComparisonRequest
+	(*ShadowModeMetrics)(nil),                  // 89: crud.v1.ShadowModeMetrics
+	(*GetShadowComparisonResponse)(nil),        // 90: crud.v1.GetShadowComparisonResponse
+	nil,                                        // 91: crud.v1.BacktestMetrics.ScoreDistributionEntry
+	nil,                                        // 92: crud.v1.BatchGetLatestUserFeaturesResponse.FeaturesEntry
+	nil,                                        // 93: crud.v1.ShadowModeMetrics.ActiveScoreDistributionEntry
+	nil,                                        // 94: crud.v1.ShadowModeMetrics.ShadowScoreDistributionEntry
+	(*timestamppb.Timestamp)(nil),              // 95: google.protobuf.Timestamp
 }
 var file_analytics_v1_analytics_proto_depIdxs = []int32{
 	1,  // 0: crud.v1.GetDailyStatsResponse.stats:type_name -> crud.v1.DailyStat
-	90, // 1: crud.v1.TransactionDetail.created_at:type_name -> google.protobuf.Timestamp
+	95, // 1: crud.v1.TransactionDetail.created_at:type_name -> google.protobuf.Timestamp
 	4,  // 2: crud.v1.GetTransactionDetailsResponse.transactions:type_name -> crud.v1.TransactionDetail
 	4,  // 3: crud.v1.SearchTransactionsResponse.transactions:type_name -> crud.v1.TransactionDetail
-	90, // 4: crud.v1.Alert.created_at:type_name -> google.protobuf.Timestamp
+	95, // 4: crud.v1.Alert.created_at:type_name -> google.protobuf.Timestamp
 	9,  // 5: crud.v1.GetRecentAlertsResponse.alerts:type_name -> crud.v1.Alert
-	90, // 6: crud.v1.GetOverviewMetricsResponse.min_transaction_timestamp:type_name -> google.protobuf.Timestamp
-	90, // 7: crud.v1.GetOverviewMetricsResponse.max_transaction_timestamp:type_name -> google.protobuf.Timestamp
-	90, // 8: crud.v1.GetOverviewMetricsResponse.min_created_at:type_name -> google.protobuf.Timestamp
-	90, // 9: crud.v1.GetOverviewMetricsResponse.max_created_at:type_name -> google.protobuf.Timestamp
-	90, // 10: crud.v1.TableFingerprint.max_created_at:type_name -> google.protobuf.Timestamp
-	90, // 11: crud.v1.TableFingerprint.max_timestamp:type_name -> google.protobuf.Timestamp
+	95, // 6: crud.v1.GetOverviewMetricsResponse.min_transaction_timestamp:type_name -> google.protobuf.Timestamp
+	95, // 7: crud.v1.GetOverviewMetricsResponse.max_transaction_timestamp:type_name -> google.protobuf.Timestamp
+	95, // 8: crud.v1.GetOverviewMetricsResponse.min_created_at:type_name -> google.protobuf.Timestamp
+	95, // 9: crud.v1.GetOverviewMetricsResponse.max_created_at:type_name -> google.protobuf.Timestamp
+	95, // 10: crud.v1.TableFingerprint.max_created_at:type_name -> google.protobuf.Timestamp
+	95, // 11: crud.v1.TableFingerprint.max_timestamp:type_name -> google.protobuf.Timestamp
 	14, // 12: crud.v1.GetDatasetFingerprintResponse.generated_records:type_name -> crud.v1.TableFingerprint
 	14, // 13: crud.v1.GetDatasetFingerprintResponse.feature_snapshots:type_name -> crud.v1.TableFingerprint
 	17, // 14: crud.v1.GetFeatureSampleResponse.samples:type_name -> crud.v1.FeatureSample
 	20, // 15: crud.v1.GetSchemaSummaryResponse.columns:type_name -> crud.v1.ColumnInfo
-	90, // 16: crud.v1.GetTrainingDataRequest.cutoff_date:type_name -> google.protobuf.Timestamp
+	95, // 16: crud.v1.GetTrainingDataRequest.cutoff_date:type_name -> google.protobuf.Timestamp
 	4,  // 17: crud.v1.GetTrainingDataResponse.train_records:type_name -> crud.v1.TransactionDetail
 	4,  // 18: crud.v1.GetTrainingDataResponse.test_records:type_name -> crud.v1.TransactionDetail
-	90, // 19: crud.v1.GetBacktestFeaturesRequest.start_date:type_name -> google.protobuf.Timestamp
-	90, // 20: crud.v1.GetBacktestFeaturesRequest.end_date:type_name -> google.protobuf.Timestamp
+	95, // 19: crud.v1.GetBacktestFeaturesRequest.start_date:type_name -> google.protobuf.Timestamp
+	95, // 20: crud.v1.GetBacktestFeaturesRequest.end_date:type_name -> google.protobuf.Timestamp
 	25, // 21: crud.v1.GetBacktestFeaturesResponse.features:type_name -> crud.v1.BacktestFeatureVector
-	88, // 22: crud.v1.BacktestMetrics.score_distribution:type_name -> crud.v1.BacktestMetrics.ScoreDistributionEntry
-	90, // 23: crud.v1.BacktestResult.start_date:type_name -> google.protobuf.Timestamp
-	90, // 24: crud.v1.BacktestResult.end_date:type_name -> google.protobuf.Timestamp
+	91, // 22: crud.v1.BacktestMetrics.score_distribution:type_name -> crud.v1.BacktestMetrics.ScoreDistributionEntry
+	95, // 23: crud.v1.BacktestResult.start_date:type_name -> google.protobuf.Timestamp
+	95, // 24: crud.v1.BacktestResult.end_date:type_name -> google.protobuf.Timestamp
 	27, // 25: crud.v1.BacktestResult.metrics:type_name -> crud.v1.BacktestMetrics
-	90, // 26: crud.v1.BacktestResult.completed_at:type_name -> google.protobuf.Timestamp
+	95, // 26: crud.v1.BacktestResult.completed_at:type_name -> google.protobuf.Timestamp
 	28, // 27: crud.v1.SaveBacktestResultRequest.result:type_name -> crud.v1.BacktestResult
-	90, // 28: crud.v1.ListBacktestResultsRequest.start_date:type_name -> google.protobuf.Timestamp
-	90, // 29: crud.v1.ListBacktestResultsRequest.end_date:type_name -> google.protobuf.Timestamp
+	95, // 28: crud.v1.ListBacktestResultsRequest.start_date:type_name -> google.protobuf.Timestamp
+	95, // 29: crud.v1.ListBacktestResultsRequest.end_date:type_name -> google.protobuf.Timestamp
 	28, // 30: crud.v1.ListBacktestResultsResponse.results:type_name -> crud.v1.BacktestResult
 	28, // 31: crud.v1.GetBacktestResultResponse.result:type_name -> crud.v1.BacktestResult
 	4,  // 32: crud.v1.GetDriftWindowResponse.transactions:type_name -> crud.v1.TransactionDetail
 	40, // 33: crud.v1.StoreGeneratedDataRequest.records:type_name -> crud.v1.GeneratedRecord
 	41, // 34: crud.v1.StoreGeneratedDataRequest.metadata:type_name -> crud.v1.EvaluationMetadata
-	90, // 35: crud.v1.GeneratedRecord.transaction_timestamp:type_name -> google.protobuf.Timestamp
-	90, // 36: crud.v1.GeneratedRecord.email_changed_at:type_name -> google.protobuf.Timestamp
-	90, // 37: crud.v1.GeneratedRecord.phone_changed_at:type_name -> google.protobuf.Timestamp
-	90, // 38: crud.v1.EvaluationMetadata.fraud_confirmed_at:type_name -> google.protobuf.Timestamp
+	95, // 35: crud.v1.GeneratedRecord.transaction_timestamp:type_name -> google.protobuf.Timestamp
+	95, // 36: crud.v1.GeneratedRecord.email_changed_at:type_name -> google.protobuf.Timestamp
+	95, // 37: crud.v1.GeneratedRecord.phone_changed_at:type_name -> google.protobuf.Timestamp
+	95, // 38: crud.v1.EvaluationMetadata.fraud_confirmed_at:type_name -> google.protobuf.Timestamp
 	49, // 39: crud.v1.SaveRuleRequest.rule:type_name -> crud.v1.Rule
 	49, // 40: crud.v1.GetRuleResponse.rule:type_name -> crud.v1.Rule
 	49, // 41: crud.v1.ListRulesResponse.rules:type_name -> crud.v1.Rule
-	90, // 42: crud.v1.InferenceEvent.timestamp:type_name -> google.protobuf.Timestamp
+	95, // 42: crud.v1.InferenceEvent.timestamp:type_name -> google.protobuf.Timestamp
 	58, // 43: crud.v1.InferenceEvent.rule_impacts:type_name -> crud.v1.RuleImpact
 	59, // 44: crud.v1.LogInferenceEventRequest.event:type_name -> crud.v1.InferenceEvent
 	49, // 45: crud.v1.ListRuleVersionsResponse.versions:type_name -> crud.v1.Rule
 	49, // 46: crud.v1.GetRuleVersionResponse.rule:type_name -> crud.v1.Rule
-	90, // 47: crud.v1.GetRuleVersionResponse.created_at:type_name -> google.protobuf.Timestamp
+	95, // 47: crud.v1.GetRuleVersionResponse.created_at:type_name -> google.protobuf.Timestamp
 	69, // 48: crud.v1.GetRuleReadinessResponse.checks:type_name -> crud.v1.ReadinessCheck
 	72, // 49: crud.v1.DiffRuleVersionsResponse.changes:type_name -> crud.v1.RuleDiffChange
 	75, // 50: crud.v1.GetRuleStatsResponse.stats:type_name -> crud.v1.RuleStats
 	78, // 51: crud.v1.GetAttributionResponse.items:type_name -> crud.v1.DailyAttribution
-	90, // 52: crud.v1.UserFeatures.snapshot_timestamp:type_name -> google.protobuf.Timestamp
+	95, // 52: crud.v1.UserFeatures.snapshot_timestamp:type_name -> google.protobuf.Timestamp
 	80, // 53: crud.v1.GetLatestUserFeaturesResponse.features:type_name -> crud.v1.UserFeatures
-	89, // 54: crud.v1.BatchGetLatestUserFeaturesResponse.features:type_name -> crud.v1.BatchGetLatestUserFeaturesResponse.FeaturesEntry
+	92, // 54: crud.v1.BatchGetLatestUserFeaturesResponse.features:type_name -> crud.v1.BatchGetLatestUserFeaturesResponse.FeaturesEntry
 	28, // 55: crud.v1.CompareBacktestsResponse.baseline:type_name -> crud.v1.BacktestResult
 	28, // 56: crud.v1.CompareBacktestsResponse.candidate:type_name -> crud.v1.BacktestResult
 	86, // 57: crud.v1.CompareBacktestsResponse.delta:type_name -> crud.v1.BacktestMetricsDelta
-	80, // 58: crud.v1.BatchGetLatestUserFeaturesResponse.FeaturesEntry.value:type_name -> crud.v1.UserFeatures
-	0,  // 59: crud.v1.AnalyticsService.GetDailyStats:input_type -> crud.v1.GetDailyStatsRequest
-	3,  // 60: crud.v1.AnalyticsService.GetTransactionDetails:input_type -> crud.v1.GetTransactionDetailsRequest
-	6,  // 61: crud.v1.AnalyticsService.SearchTransactions:input_type -> crud.v1.SearchTransactionsRequest
-	8,  // 62: crud.v1.AnalyticsService.GetRecentAlerts:input_type -> crud.v1.GetRecentAlertsRequest
-	11, // 63: crud.v1.AnalyticsService.GetOverviewMetrics:input_type -> crud.v1.GetOverviewMetricsRequest
-	13, // 64: crud.v1.AnalyticsService.GetDatasetFingerprint:input_type -> crud.v1.GetDatasetFingerprintRequest
-	16, // 65: crud.v1.AnalyticsService.GetFeatureSample:input_type -> crud.v1.GetFeatureSampleRequest
-	19, // 66: crud.v1.AnalyticsService.GetSchemaSummary:input_type -> crud.v1.GetSchemaSummaryRequest
-	22, // 67: crud.v1.AnalyticsService.GetTrainingData:input_type -> crud.v1.GetTrainingDataRequest
-	24, // 68: crud.v1.AnalyticsService.GetBacktestFeatures:input_type -> crud.v1.GetBacktestFeaturesRequest
-	29, // 69: crud.v1.AnalyticsService.SaveBacktestResult:input_type -> crud.v1.SaveBacktestResultRequest
-	31, // 70: crud.v1.AnalyticsService.ListBacktestResults:input_type -> crud.v1.ListBacktestResultsRequest
-	33, // 71: crud.v1.AnalyticsService.GetBacktestResult:input_type -> crud.v1.GetBacktestResultRequest
-	35, // 72: crud.v1.AnalyticsService.GetDriftWindow:input_type -> crud.v1.GetDriftWindowRequest
-	39, // 73: crud.v1.AnalyticsService.StoreGeneratedData:input_type -> crud.v1.StoreGeneratedDataRequest
-	43, // 74: crud.v1.AnalyticsService.ClearAllData:input_type -> crud.v1.ClearAllDataRequest
-	45, // 75: crud.v1.AnalyticsService.MaterializeFeatures:input_type -> crud.v1.MaterializeFeaturesRequest
-	47, // 76: crud.v1.AnalyticsService.GenerateData:input_type -> crud.v1.GenerateDataRequest
-	37, // 77: crud.v1.AnalyticsService.GetInferenceScores:input_type -> crud.v1.GetInferenceScoresRequest
-	50, // 78: crud.v1.AnalyticsService.SaveRule:input_type -> crud.v1.SaveRuleRequest
-	52, // 79: crud.v1.AnalyticsService.GetRule:input_type -> crud.v1.GetRuleRequest
-	54, // 80: crud.v1.AnalyticsService.ListRules:input_type -> crud.v1.ListRulesRequest
-	56, // 81: crud.v1.AnalyticsService.DeleteRule:input_type -> crud.v1.DeleteRuleRequest
-	62, // 82: crud.v1.AnalyticsService.ListRuleVersions:input_type -> crud.v1.ListRuleVersionsRequest
-	64, // 83: crud.v1.AnalyticsService.GetRuleVersion:input_type -> crud.v1.GetRuleVersionRequest
-	66, // 84: crud.v1.AnalyticsService.PublishRuleVersion:input_type -> crud.v1.PublishRuleVersionRequest
-	68, // 85: crud.v1.AnalyticsService.GetRuleReadiness:input_type -> crud.v1.GetRuleReadinessRequest
-	71, // 86: crud.v1.AnalyticsService.DiffRuleVersions:input_type -> crud.v1.DiffRuleVersionsRequest
-	74, // 87: crud.v1.AnalyticsService.GetRuleStats:input_type -> crud.v1.GetRuleStatsRequest
-	77, // 88: crud.v1.AnalyticsService.GetAttribution:input_type -> crud.v1.GetAttributionRequest
-	60, // 89: crud.v1.AnalyticsService.LogInferenceEvent:input_type -> crud.v1.LogInferenceEventRequest
-	81, // 90: crud.v1.AnalyticsService.GetLatestUserFeatures:input_type -> crud.v1.GetLatestUserFeaturesRequest
-	83, // 91: crud.v1.AnalyticsService.BatchGetLatestUserFeatures:input_type -> crud.v1.BatchGetLatestUserFeaturesRequest
-	85, // 92: crud.v1.AnalyticsService.CompareBacktests:input_type -> crud.v1.CompareBacktestsRequest
-	2,  // 93: crud.v1.AnalyticsService.GetDailyStats:output_type -> crud.v1.GetDailyStatsResponse
-	5,  // 94: crud.v1.AnalyticsService.GetTransactionDetails:output_type -> crud.v1.GetTransactionDetailsResponse
-	7,  // 95: crud.v1.AnalyticsService.SearchTransactions:output_type -> crud.v1.SearchTransactionsResponse
-	10, // 96: crud.v1.AnalyticsService.GetRecentAlerts:output_type -> crud.v1.GetRecentAlertsResponse
-	12, // 97: crud.v1.AnalyticsService.GetOverviewMetrics:output_type -> crud.v1.GetOverviewMetricsResponse
-	15, // 98: crud.v1.AnalyticsService.GetDatasetFingerprint:output_type -> crud.v1.GetDatasetFingerprintResponse
-	18, // 99: crud.v1.AnalyticsService.GetFeatureSample:output_type -> crud.v1.GetFeatureSampleResponse
-	21, // 100: crud.v1.AnalyticsService.GetSchemaSummary:output_type -> crud.v1.GetSchemaSummaryResponse
-	23, // 101: crud.v1.AnalyticsService.GetTrainingData:output_type -> crud.v1.GetTrainingDataResponse
-	26, // 102: crud.v1.AnalyticsService.GetBacktestFeatures:output_type -> crud.v1.GetBacktestFeaturesResponse
-	30, // 103: crud.v1.AnalyticsService.SaveBacktestResult:output_type -> crud.v1.SaveBacktestResultResponse
-	32, // 104: crud.v1.AnalyticsService.ListBacktestResults:output_type -> crud.v1.ListBacktestResultsResponse
-	34, // 105: crud.v1.AnalyticsService.GetBacktestResult:output_type -> crud.v1.GetBacktestResultResponse
-	36, // 106: crud.v1.AnalyticsService.GetDriftWindow:output_type -> crud.v1.GetDriftWindowResponse
-	42, // 107: crud.v1.AnalyticsService.StoreGeneratedData:output_type -> crud.v1.StoreGeneratedDataResponse
-	44, // 108: crud.v1.AnalyticsService.ClearAllData:output_type -> crud.v1.ClearAllDataResponse
-	46, // 109: crud.v1.AnalyticsService.MaterializeFeatures:output_type -> crud.v1.MaterializeFeaturesResponse
-	48, // 110: crud.v1.AnalyticsService.GenerateData:output_type -> crud.v1.GenerateDataResponse
-	38, // 111: crud.v1.AnalyticsService.GetInferenceScores:output_type -> crud.v1.GetInferenceScoresResponse
-	51, // 112: crud.v1.AnalyticsService.SaveRule:output_type -> crud.v1.SaveRuleResponse
-	53, // 113: crud.v1.AnalyticsService.GetRule:output_type -> crud.v1.GetRuleResponse
-	55, // 114: crud.v1.AnalyticsService.ListRules:output_type -> crud.v1.ListRulesResponse
-	57, // 115: crud.v1.AnalyticsService.DeleteRule:output_type -> crud.v1.DeleteRuleResponse
-	63, // 116: crud.v1.AnalyticsService.ListRuleVersions:output_type -> crud.v1.ListRuleVersionsResponse
-	65, // 117: crud.v1.AnalyticsService.GetRuleVersion:output_type -> crud.v1.GetRuleVersionResponse
-	67, // 118: crud.v1.AnalyticsService.PublishRuleVersion:output_type -> crud.v1.PublishRuleVersionResponse
-	70, // 119: crud.v1.AnalyticsService.GetRuleReadiness:output_type -> crud.v1.GetRuleReadinessResponse
-	73, // 120: crud.v1.AnalyticsService.DiffRuleVersions:output_type -> crud.v1.DiffRuleVersionsResponse
-	76, // 121: crud.v1.AnalyticsService.GetRuleStats:output_type -> crud.v1.GetRuleStatsResponse
-	79, // 122: crud.v1.AnalyticsService.GetAttribution:output_type -> crud.v1.GetAttributionResponse
-	61, // 123: crud.v1.AnalyticsService.LogInferenceEvent:output_type -> crud.v1.LogInferenceEventResponse
-	82, // 124: crud.v1.AnalyticsService.GetLatestUserFeatures:output_type -> crud.v1.GetLatestUserFeaturesResponse
-	84, // 125: crud.v1.AnalyticsService.BatchGetLatestUserFeatures:output_type -> crud.v1.BatchGetLatestUserFeaturesResponse
-	87, // 126: crud.v1.AnalyticsService.CompareBacktests:output_type -> crud.v1.CompareBacktestsResponse
-	93, // [93:127] is the sub-list for method output_type
-	59, // [59:93] is the sub-list for method input_type
-	59, // [59:59] is the sub-list for extension type_name
-	59, // [59:59] is the sub-list for extension extendee
-	0,  // [0:59] is the sub-list for field type_name
+	93, // 58: crud.v1.ShadowModeMetrics.active_score_distribution:type_name -> crud.v1.ShadowModeMetrics.ActiveScoreDistributionEntry
+	94, // 59: crud.v1.ShadowModeMetrics.shadow_score_distribution:type_name -> crud.v1.ShadowModeMetrics.ShadowScoreDistributionEntry
+	89, // 60: crud.v1.GetShadowComparisonResponse.metrics:type_name -> crud.v1.ShadowModeMetrics
+	80, // 61: crud.v1.BatchGetLatestUserFeaturesResponse.FeaturesEntry.value:type_name -> crud.v1.UserFeatures
+	0,  // 62: crud.v1.AnalyticsService.GetDailyStats:input_type -> crud.v1.GetDailyStatsRequest
+	3,  // 63: crud.v1.AnalyticsService.GetTransactionDetails:input_type -> crud.v1.GetTransactionDetailsRequest
+	6,  // 64: crud.v1.AnalyticsService.SearchTransactions:input_type -> crud.v1.SearchTransactionsRequest
+	8,  // 65: crud.v1.AnalyticsService.GetRecentAlerts:input_type -> crud.v1.GetRecentAlertsRequest
+	11, // 66: crud.v1.AnalyticsService.GetOverviewMetrics:input_type -> crud.v1.GetOverviewMetricsRequest
+	13, // 67: crud.v1.AnalyticsService.GetDatasetFingerprint:input_type -> crud.v1.GetDatasetFingerprintRequest
+	16, // 68: crud.v1.AnalyticsService.GetFeatureSample:input_type -> crud.v1.GetFeatureSampleRequest
+	19, // 69: crud.v1.AnalyticsService.GetSchemaSummary:input_type -> crud.v1.GetSchemaSummaryRequest
+	22, // 70: crud.v1.AnalyticsService.GetTrainingData:input_type -> crud.v1.GetTrainingDataRequest
+	24, // 71: crud.v1.AnalyticsService.GetBacktestFeatures:input_type -> crud.v1.GetBacktestFeaturesRequest
+	29, // 72: crud.v1.AnalyticsService.SaveBacktestResult:input_type -> crud.v1.SaveBacktestResultRequest
+	31, // 73: crud.v1.AnalyticsService.ListBacktestResults:input_type -> crud.v1.ListBacktestResultsRequest
+	33, // 74: crud.v1.AnalyticsService.GetBacktestResult:input_type -> crud.v1.GetBacktestResultRequest
+	35, // 75: crud.v1.AnalyticsService.GetDriftWindow:input_type -> crud.v1.GetDriftWindowRequest
+	39, // 76: crud.v1.AnalyticsService.StoreGeneratedData:input_type -> crud.v1.StoreGeneratedDataRequest
+	43, // 77: crud.v1.AnalyticsService.ClearAllData:input_type -> crud.v1.ClearAllDataRequest
+	45, // 78: crud.v1.AnalyticsService.MaterializeFeatures:input_type -> crud.v1.MaterializeFeaturesRequest
+	47, // 79: crud.v1.AnalyticsService.GenerateData:input_type -> crud.v1.GenerateDataRequest
+	37, // 80: crud.v1.AnalyticsService.GetInferenceScores:input_type -> crud.v1.GetInferenceScoresRequest
+	50, // 81: crud.v1.AnalyticsService.SaveRule:input_type -> crud.v1.SaveRuleRequest
+	52, // 82: crud.v1.AnalyticsService.GetRule:input_type -> crud.v1.GetRuleRequest
+	54, // 83: crud.v1.AnalyticsService.ListRules:input_type -> crud.v1.ListRulesRequest
+	56, // 84: crud.v1.AnalyticsService.DeleteRule:input_type -> crud.v1.DeleteRuleRequest
+	62, // 85: crud.v1.AnalyticsService.ListRuleVersions:input_type -> crud.v1.ListRuleVersionsRequest
+	64, // 86: crud.v1.AnalyticsService.GetRuleVersion:input_type -> crud.v1.GetRuleVersionRequest
+	66, // 87: crud.v1.AnalyticsService.PublishRuleVersion:input_type -> crud.v1.PublishRuleVersionRequest
+	68, // 88: crud.v1.AnalyticsService.GetRuleReadiness:input_type -> crud.v1.GetRuleReadinessRequest
+	71, // 89: crud.v1.AnalyticsService.DiffRuleVersions:input_type -> crud.v1.DiffRuleVersionsRequest
+	74, // 90: crud.v1.AnalyticsService.GetRuleStats:input_type -> crud.v1.GetRuleStatsRequest
+	77, // 91: crud.v1.AnalyticsService.GetAttribution:input_type -> crud.v1.GetAttributionRequest
+	60, // 92: crud.v1.AnalyticsService.LogInferenceEvent:input_type -> crud.v1.LogInferenceEventRequest
+	81, // 93: crud.v1.AnalyticsService.GetLatestUserFeatures:input_type -> crud.v1.GetLatestUserFeaturesRequest
+	83, // 94: crud.v1.AnalyticsService.BatchGetLatestUserFeatures:input_type -> crud.v1.BatchGetLatestUserFeaturesRequest
+	85, // 95: crud.v1.AnalyticsService.CompareBacktests:input_type -> crud.v1.CompareBacktestsRequest
+	88, // 96: crud.v1.AnalyticsService.GetShadowComparison:input_type -> crud.v1.GetShadowComparisonRequest
+	2,  // 97: crud.v1.AnalyticsService.GetDailyStats:output_type -> crud.v1.GetDailyStatsResponse
+	5,  // 98: crud.v1.AnalyticsService.GetTransactionDetails:output_type -> crud.v1.GetTransactionDetailsResponse
+	7,  // 99: crud.v1.AnalyticsService.SearchTransactions:output_type -> crud.v1.SearchTransactionsResponse
+	10, // 100: crud.v1.AnalyticsService.GetRecentAlerts:output_type -> crud.v1.GetRecentAlertsResponse
+	12, // 101: crud.v1.AnalyticsService.GetOverviewMetrics:output_type -> crud.v1.GetOverviewMetricsResponse
+	15, // 102: crud.v1.AnalyticsService.GetDatasetFingerprint:output_type -> crud.v1.GetDatasetFingerprintResponse
+	18, // 103: crud.v1.AnalyticsService.GetFeatureSample:output_type -> crud.v1.GetFeatureSampleResponse
+	21, // 104: crud.v1.AnalyticsService.GetSchemaSummary:output_type -> crud.v1.GetSchemaSummaryResponse
+	23, // 105: crud.v1.AnalyticsService.GetTrainingData:output_type -> crud.v1.GetTrainingDataResponse
+	26, // 106: crud.v1.AnalyticsService.GetBacktestFeatures:output_type -> crud.v1.GetBacktestFeaturesResponse
+	30, // 107: crud.v1.AnalyticsService.SaveBacktestResult:output_type -> crud.v1.SaveBacktestResultResponse
+	32, // 108: crud.v1.AnalyticsService.ListBacktestResults:output_type -> crud.v1.ListBacktestResultsResponse
+	34, // 109: crud.v1.AnalyticsService.GetBacktestResult:output_type -> crud.v1.GetBacktestResultResponse
+	36, // 110: crud.v1.AnalyticsService.GetDriftWindow:output_type -> crud.v1.GetDriftWindowResponse
+	42, // 111: crud.v1.AnalyticsService.StoreGeneratedData:output_type -> crud.v1.StoreGeneratedDataResponse
+	44, // 112: crud.v1.AnalyticsService.ClearAllData:output_type -> crud.v1.ClearAllDataResponse
+	46, // 113: crud.v1.AnalyticsService.MaterializeFeatures:output_type -> crud.v1.MaterializeFeaturesResponse
+	48, // 114: crud.v1.AnalyticsService.GenerateData:output_type -> crud.v1.GenerateDataResponse
+	38, // 115: crud.v1.AnalyticsService.GetInferenceScores:output_type -> crud.v1.GetInferenceScoresResponse
+	51, // 116: crud.v1.AnalyticsService.SaveRule:output_type -> crud.v1.SaveRuleResponse
+	53, // 117: crud.v1.AnalyticsService.GetRule:output_type -> crud.v1.GetRuleResponse
+	55, // 118: crud.v1.AnalyticsService.ListRules:output_type -> crud.v1.ListRulesResponse
+	57, // 119: crud.v1.AnalyticsService.DeleteRule:output_type -> crud.v1.DeleteRuleResponse
+	63, // 120: crud.v1.AnalyticsService.ListRuleVersions:output_type -> crud.v1.ListRuleVersionsResponse
+	65, // 121: crud.v1.AnalyticsService.GetRuleVersion:output_type -> crud.v1.GetRuleVersionResponse
+	67, // 122: crud.v1.AnalyticsService.PublishRuleVersion:output_type -> crud.v1.PublishRuleVersionResponse
+	70, // 123: crud.v1.AnalyticsService.GetRuleReadiness:output_type -> crud.v1.GetRuleReadinessResponse
+	73, // 124: crud.v1.AnalyticsService.DiffRuleVersions:output_type -> crud.v1.DiffRuleVersionsResponse
+	76, // 125: crud.v1.AnalyticsService.GetRuleStats:output_type -> crud.v1.GetRuleStatsResponse
+	79, // 126: crud.v1.AnalyticsService.GetAttribution:output_type -> crud.v1.GetAttributionResponse
+	61, // 127: crud.v1.AnalyticsService.LogInferenceEvent:output_type -> crud.v1.LogInferenceEventResponse
+	82, // 128: crud.v1.AnalyticsService.GetLatestUserFeatures:output_type -> crud.v1.GetLatestUserFeaturesResponse
+	84, // 129: crud.v1.AnalyticsService.BatchGetLatestUserFeatures:output_type -> crud.v1.BatchGetLatestUserFeaturesResponse
+	87, // 130: crud.v1.AnalyticsService.CompareBacktests:output_type -> crud.v1.CompareBacktestsResponse
+	90, // 131: crud.v1.AnalyticsService.GetShadowComparison:output_type -> crud.v1.GetShadowComparisonResponse
+	97, // [97:132] is the sub-list for method output_type
+	62, // [62:97] is the sub-list for method input_type
+	62, // [62:62] is the sub-list for extension type_name
+	62, // [62:62] is the sub-list for extension extendee
+	0,  // [0:62] is the sub-list for field type_name
 }
 
 func init() { file_analytics_v1_analytics_proto_init() }
@@ -6092,7 +6302,7 @@ func file_analytics_v1_analytics_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_analytics_v1_analytics_proto_rawDesc), len(file_analytics_v1_analytics_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   90,
+			NumMessages:   95,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

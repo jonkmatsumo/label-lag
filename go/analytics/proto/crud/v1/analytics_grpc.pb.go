@@ -53,6 +53,7 @@ const (
 	AnalyticsService_GetLatestUserFeatures_FullMethodName      = "/crud.v1.AnalyticsService/GetLatestUserFeatures"
 	AnalyticsService_BatchGetLatestUserFeatures_FullMethodName = "/crud.v1.AnalyticsService/BatchGetLatestUserFeatures"
 	AnalyticsService_CompareBacktests_FullMethodName           = "/crud.v1.AnalyticsService/CompareBacktests"
+	AnalyticsService_GetShadowComparison_FullMethodName        = "/crud.v1.AnalyticsService/GetShadowComparison"
 )
 
 // AnalyticsServiceClient is the client API for AnalyticsService service.
@@ -100,6 +101,8 @@ type AnalyticsServiceClient interface {
 	BatchGetLatestUserFeatures(ctx context.Context, in *BatchGetLatestUserFeaturesRequest, opts ...grpc.CallOption) (*BatchGetLatestUserFeaturesResponse, error)
 	// Backtest Compare (Phase 8)
 	CompareBacktests(ctx context.Context, in *CompareBacktestsRequest, opts ...grpc.CallOption) (*CompareBacktestsResponse, error)
+	// Shadow Comparison (Phase 9)
+	GetShadowComparison(ctx context.Context, in *GetShadowComparisonRequest, opts ...grpc.CallOption) (*GetShadowComparisonResponse, error)
 }
 
 type analyticsServiceClient struct {
@@ -450,6 +453,16 @@ func (c *analyticsServiceClient) CompareBacktests(ctx context.Context, in *Compa
 	return out, nil
 }
 
+func (c *analyticsServiceClient) GetShadowComparison(ctx context.Context, in *GetShadowComparisonRequest, opts ...grpc.CallOption) (*GetShadowComparisonResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetShadowComparisonResponse)
+	err := c.cc.Invoke(ctx, AnalyticsService_GetShadowComparison_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AnalyticsServiceServer is the server API for AnalyticsService service.
 // All implementations must embed UnimplementedAnalyticsServiceServer
 // for forward compatibility.
@@ -495,6 +508,8 @@ type AnalyticsServiceServer interface {
 	BatchGetLatestUserFeatures(context.Context, *BatchGetLatestUserFeaturesRequest) (*BatchGetLatestUserFeaturesResponse, error)
 	// Backtest Compare (Phase 8)
 	CompareBacktests(context.Context, *CompareBacktestsRequest) (*CompareBacktestsResponse, error)
+	// Shadow Comparison (Phase 9)
+	GetShadowComparison(context.Context, *GetShadowComparisonRequest) (*GetShadowComparisonResponse, error)
 	mustEmbedUnimplementedAnalyticsServiceServer()
 }
 
@@ -606,6 +621,9 @@ func (UnimplementedAnalyticsServiceServer) BatchGetLatestUserFeatures(context.Co
 }
 func (UnimplementedAnalyticsServiceServer) CompareBacktests(context.Context, *CompareBacktestsRequest) (*CompareBacktestsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CompareBacktests not implemented")
+}
+func (UnimplementedAnalyticsServiceServer) GetShadowComparison(context.Context, *GetShadowComparisonRequest) (*GetShadowComparisonResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetShadowComparison not implemented")
 }
 func (UnimplementedAnalyticsServiceServer) mustEmbedUnimplementedAnalyticsServiceServer() {}
 func (UnimplementedAnalyticsServiceServer) testEmbeddedByValue()                          {}
@@ -1240,6 +1258,24 @@ func _AnalyticsService_CompareBacktests_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AnalyticsService_GetShadowComparison_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetShadowComparisonRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AnalyticsServiceServer).GetShadowComparison(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AnalyticsService_GetShadowComparison_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AnalyticsServiceServer).GetShadowComparison(ctx, req.(*GetShadowComparisonRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AnalyticsService_ServiceDesc is the grpc.ServiceDesc for AnalyticsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1382,6 +1418,10 @@ var AnalyticsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CompareBacktests",
 			Handler:    _AnalyticsService_CompareBacktests_Handler,
+		},
+		{
+			MethodName: "GetShadowComparison",
+			Handler:    _AnalyticsService_GetShadowComparison_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
