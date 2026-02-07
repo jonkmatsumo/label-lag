@@ -55,6 +55,7 @@ exclude = [
     "python/src/inference_server/proto",
     "python/src/training_server/proto",
     "python/src/forecast/proto",
+    "python/src/gateway_grpc",
     "**/proto",
 ]
 

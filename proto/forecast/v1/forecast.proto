@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package forecast.v1;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/jonkmatsumo/label-lag/go/forecast/proto/forecastv1;forecastv1";
+
+service ForecastService {
+  // Retrieves health status of the service.
+  rpc GetHealth(GetHealthRequest) returns (GetHealthResponse);
+
+  // Retrieves drift monitoring metrics.
+  rpc GetDriftMonitoring(GetDriftMonitoringRequest) returns (GetDriftMonitoringResponse);
+
+  // Retrieves score distribution for monitoring.
+  rpc GetScoreDistribution(GetScoreDistributionRequest) returns (GetScoreDistributionResponse);
+
+  // Reloads the production model from the model registry.
+  rpc ReloadModel(ReloadModelRequest) returns (ReloadModelResponse);
+
+  // Deploys a specific model version to production.
+  rpc DeployModel(DeployModelRequest) returns (DeployModelResponse);
+}
+
+message GetHealthRequest {}
+
+message GetHealthResponse {
+  string status = 1;
+  map<string, string> components = 2;
+}
+
+message GetDriftMonitoringRequest {
+  int32 hours = 1;
+  double threshold = 2;
+  bool force_refresh = 3;
+}
+
+message GetDriftMonitoringResponse {
+  bool drift_detected = 1;
+  double drift_score = 2;
+  google.protobuf.Struct metrics = 3;
+}
+
+message GetScoreDistributionRequest {
+  int32 hours = 1;
+}
+
+message GetScoreDistributionResponse {
+  repeated int32 scores = 1;
+  map<string, int32> distribution = 2;
+}
+
+message ReloadModelRequest {}
+
+message ReloadModelResponse {
+  bool success = 1;
+  string model_version = 2;
+}
+
+message DeployModelRequest {
+  string model_version = 1;
+  string stage = 2; // e.g., "Production", "Staging"
+}
+
+message DeployModelResponse {
+  bool success = 1;
+  string message = 2;
+}

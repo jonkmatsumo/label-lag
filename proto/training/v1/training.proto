@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package training.v1;
+
+option go_package = "github.com/jonkmatsumo/label-lag/go/training/proto/trainingv1;trainingv1";
+
+service TrainingService {
+  // Clears all data from the database.
+  rpc ClearData(ClearDataRequest) returns (ClearDataResponse);
+
+  // Initiates model training.
+  rpc Train(TrainRequest) returns (TrainResponse);
+}
+
+message ClearDataRequest {}
+
+message ClearDataResponse {
+  bool success = 1;
+  repeated string tables_cleared = 2;
+}
+
+message TrainRequest {
+  string model_name = 1;
+  string dataset_id = 2;
+  map<string, string> parameters = 3;
+}
+
+message TrainResponse {
+  string job_id = 1;
+  string status = 2;
+  string model_version = 3;
+}

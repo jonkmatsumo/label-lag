@@ -117,14 +117,30 @@ proto-gen: proto-gen-go proto-gen-python
 
 proto-gen-go:
 	@echo "Generating Go stubs..."
+	# Inference service
 	protoc -I $(PROTO_DIR) \
 		--go_out=. --go_opt=module=github.com/jonkmatsumo/label-lag \
 		--go-grpc_out=. --go-grpc_opt=module=github.com/jonkmatsumo/label-lag \
-		$(PROTO_DIR)/inference/v1/*.proto
+		$(PROTO_DIR)/inference/v1/inference.proto \
+		$(PROTO_DIR)/inference/v1/signal.proto
+	@mv go/inference/internal/grpc/inferencev1/inference/v1/*.go go/inference/internal/grpc/inferencev1/ 2>/dev/null || true
+	@rm -rf go/inference/internal/grpc/inferencev1/inference 2>/dev/null || true
+
+	# Gateway service
 	protoc -I $(PROTO_DIR) \
 		--go_out=. --go_opt=module=github.com/jonkmatsumo/label-lag \
 		--go-grpc_out=. --go-grpc_opt=module=github.com/jonkmatsumo/label-lag \
-		$(PROTO_DIR)/analytics/v1/*.proto
+		$(PROTO_DIR)/inference/v1/gateway.proto
+	@mv go/inference/internal/http/gatewayv1/inference/v1/*.go go/inference/internal/http/gatewayv1/ 2>/dev/null || true
+	@rm -rf go/inference/internal/http/gatewayv1/inference 2>/dev/null || true
+
+	# Analytics service
+	protoc -I $(PROTO_DIR) \
+		--go_out=. --go_opt=module=github.com/jonkmatsumo/label-lag \
+		--go-grpc_out=. --go-grpc_opt=module=github.com/jonkmatsumo/label-lag \
+		$(PROTO_DIR)/analytics/v1/analytics.proto
+	@mv go/analytics/proto/crud/v1/analytics/v1/*.go go/analytics/proto/crud/v1/ 2>/dev/null || true
+	@rm -rf go/analytics/proto/crud/v1/analytics 2>/dev/null || true
 
 proto-gen-python:
 	@echo "Generating Python stubs..."

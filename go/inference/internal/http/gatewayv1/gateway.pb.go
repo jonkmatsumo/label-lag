@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v6.33.4
-// source: go/inference/proto/gateway/v1/gateway.proto
+// source: inference/v1/gateway.proto
 
 package gatewayv1
 
@@ -35,7 +35,7 @@ type EvaluateRulesRequest struct {
 
 func (x *EvaluateRulesRequest) Reset() {
 	*x = EvaluateRulesRequest{}
-	mi := &file_go_inference_proto_gateway_v1_gateway_proto_msgTypes[0]
+	mi := &file_inference_v1_gateway_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -47,7 +47,7 @@ func (x *EvaluateRulesRequest) String() string {
 func (*EvaluateRulesRequest) ProtoMessage() {}
 
 func (x *EvaluateRulesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_go_inference_proto_gateway_v1_gateway_proto_msgTypes[0]
+	mi := &file_inference_v1_gateway_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -60,7 +60,7 @@ func (x *EvaluateRulesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvaluateRulesRequest.ProtoReflect.Descriptor instead.
 func (*EvaluateRulesRequest) Descriptor() ([]byte, []int) {
-	return file_go_inference_proto_gateway_v1_gateway_proto_rawDescGZIP(), []int{0}
+	return file_inference_v1_gateway_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *EvaluateRulesRequest) GetFeatures() *structpb.Struct {
@@ -110,7 +110,7 @@ type EvaluateRulesResponse struct {
 
 func (x *EvaluateRulesResponse) Reset() {
 	*x = EvaluateRulesResponse{}
-	mi := &file_go_inference_proto_gateway_v1_gateway_proto_msgTypes[1]
+	mi := &file_inference_v1_gateway_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -122,7 +122,7 @@ func (x *EvaluateRulesResponse) String() string {
 func (*EvaluateRulesResponse) ProtoMessage() {}
 
 func (x *EvaluateRulesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_go_inference_proto_gateway_v1_gateway_proto_msgTypes[1]
+	mi := &file_inference_v1_gateway_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -135,7 +135,7 @@ func (x *EvaluateRulesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvaluateRulesResponse.ProtoReflect.Descriptor instead.
 func (*EvaluateRulesResponse) Descriptor() ([]byte, []int) {
-	return file_go_inference_proto_gateway_v1_gateway_proto_rawDescGZIP(), []int{1}
+	return file_inference_v1_gateway_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *EvaluateRulesResponse) GetFinalScore() int32 {
@@ -228,7 +228,7 @@ type EvaluateRulesDiffRequest struct {
 
 func (x *EvaluateRulesDiffRequest) Reset() {
 	*x = EvaluateRulesDiffRequest{}
-	mi := &file_go_inference_proto_gateway_v1_gateway_proto_msgTypes[2]
+	mi := &file_inference_v1_gateway_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -240,7 +240,7 @@ func (x *EvaluateRulesDiffRequest) String() string {
 func (*EvaluateRulesDiffRequest) ProtoMessage() {}
 
 func (x *EvaluateRulesDiffRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_go_inference_proto_gateway_v1_gateway_proto_msgTypes[2]
+	mi := &file_inference_v1_gateway_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -253,7 +253,7 @@ func (x *EvaluateRulesDiffRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvaluateRulesDiffRequest.ProtoReflect.Descriptor instead.
 func (*EvaluateRulesDiffRequest) Descriptor() ([]byte, []int) {
-	return file_go_inference_proto_gateway_v1_gateway_proto_rawDescGZIP(), []int{2}
+	return file_inference_v1_gateway_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *EvaluateRulesDiffRequest) GetFeatures() *structpb.Struct {
@@ -303,7 +303,7 @@ type EvaluateRulesDiffResponse struct {
 
 func (x *EvaluateRulesDiffResponse) Reset() {
 	*x = EvaluateRulesDiffResponse{}
-	mi := &file_go_inference_proto_gateway_v1_gateway_proto_msgTypes[3]
+	mi := &file_inference_v1_gateway_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -315,7 +315,7 @@ func (x *EvaluateRulesDiffResponse) String() string {
 func (*EvaluateRulesDiffResponse) ProtoMessage() {}
 
 func (x *EvaluateRulesDiffResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_go_inference_proto_gateway_v1_gateway_proto_msgTypes[3]
+	mi := &file_inference_v1_gateway_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -328,7 +328,7 @@ func (x *EvaluateRulesDiffResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvaluateRulesDiffResponse.ProtoReflect.Descriptor instead.
 func (*EvaluateRulesDiffResponse) Descriptor() ([]byte, []int) {
-	return file_go_inference_proto_gateway_v1_gateway_proto_rawDescGZIP(), []int{3}
+	return file_inference_v1_gateway_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *EvaluateRulesDiffResponse) GetA() *EvaluateRulesResponse {
@@ -371,7 +371,7 @@ type RulesDiffSummary struct {
 
 func (x *RulesDiffSummary) Reset() {
 	*x = RulesDiffSummary{}
-	mi := &file_go_inference_proto_gateway_v1_gateway_proto_msgTypes[4]
+	mi := &file_inference_v1_gateway_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -383,7 +383,7 @@ func (x *RulesDiffSummary) String() string {
 func (*RulesDiffSummary) ProtoMessage() {}
 
 func (x *RulesDiffSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_go_inference_proto_gateway_v1_gateway_proto_msgTypes[4]
+	mi := &file_inference_v1_gateway_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -396,7 +396,7 @@ func (x *RulesDiffSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RulesDiffSummary.ProtoReflect.Descriptor instead.
 func (*RulesDiffSummary) Descriptor() ([]byte, []int) {
-	return file_go_inference_proto_gateway_v1_gateway_proto_rawDescGZIP(), []int{4}
+	return file_inference_v1_gateway_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *RulesDiffSummary) GetSeverity() string {
@@ -436,7 +436,7 @@ type RuleSet struct {
 
 func (x *RuleSet) Reset() {
 	*x = RuleSet{}
-	mi := &file_go_inference_proto_gateway_v1_gateway_proto_msgTypes[5]
+	mi := &file_inference_v1_gateway_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -448,7 +448,7 @@ func (x *RuleSet) String() string {
 func (*RuleSet) ProtoMessage() {}
 
 func (x *RuleSet) ProtoReflect() protoreflect.Message {
-	mi := &file_go_inference_proto_gateway_v1_gateway_proto_msgTypes[5]
+	mi := &file_inference_v1_gateway_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -461,7 +461,7 @@ func (x *RuleSet) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RuleSet.ProtoReflect.Descriptor instead.
 func (*RuleSet) Descriptor() ([]byte, []int) {
-	return file_go_inference_proto_gateway_v1_gateway_proto_rawDescGZIP(), []int{5}
+	return file_inference_v1_gateway_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *RuleSet) GetRules() []*v1.Rule {
@@ -486,7 +486,7 @@ type Explanation struct {
 
 func (x *Explanation) Reset() {
 	*x = Explanation{}
-	mi := &file_go_inference_proto_gateway_v1_gateway_proto_msgTypes[6]
+	mi := &file_inference_v1_gateway_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -498,7 +498,7 @@ func (x *Explanation) String() string {
 func (*Explanation) ProtoMessage() {}
 
 func (x *Explanation) ProtoReflect() protoreflect.Message {
-	mi := &file_go_inference_proto_gateway_v1_gateway_proto_msgTypes[6]
+	mi := &file_inference_v1_gateway_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -511,7 +511,7 @@ func (x *Explanation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Explanation.ProtoReflect.Descriptor instead.
 func (*Explanation) Descriptor() ([]byte, []int) {
-	return file_go_inference_proto_gateway_v1_gateway_proto_rawDescGZIP(), []int{6}
+	return file_inference_v1_gateway_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Explanation) GetRuleId() string {
@@ -572,7 +572,7 @@ type Conflict struct {
 
 func (x *Conflict) Reset() {
 	*x = Conflict{}
-	mi := &file_go_inference_proto_gateway_v1_gateway_proto_msgTypes[7]
+	mi := &file_inference_v1_gateway_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -584,7 +584,7 @@ func (x *Conflict) String() string {
 func (*Conflict) ProtoMessage() {}
 
 func (x *Conflict) ProtoReflect() protoreflect.Message {
-	mi := &file_go_inference_proto_gateway_v1_gateway_proto_msgTypes[7]
+	mi := &file_inference_v1_gateway_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -597,7 +597,7 @@ func (x *Conflict) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Conflict.ProtoReflect.Descriptor instead.
 func (*Conflict) Descriptor() ([]byte, []int) {
-	return file_go_inference_proto_gateway_v1_gateway_proto_rawDescGZIP(), []int{7}
+	return file_inference_v1_gateway_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Conflict) GetMessage() string {
@@ -607,12 +607,12 @@ func (x *Conflict) GetMessage() string {
 	return ""
 }
 
-var File_go_inference_proto_gateway_v1_gateway_proto protoreflect.FileDescriptor
+var File_inference_v1_gateway_proto protoreflect.FileDescriptor
 
-const file_go_inference_proto_gateway_v1_gateway_proto_rawDesc = "" +
+const file_inference_v1_gateway_proto_rawDesc = "" +
 	"\n" +
-	"+go/inference/proto/gateway/v1/gateway.proto\x12\n" +
-	"gateway.v1\x1a\x1cgoogle/protobuf/struct.proto\x1a*go/analytics/proto/crud/v1/analytics.proto\"\xba\x01\n" +
+	"\x1ainference/v1/gateway.proto\x12\n" +
+	"gateway.v1\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1canalytics/v1/analytics.proto\"\xba\x01\n" +
 	"\x14EvaluateRulesRequest\x123\n" +
 	"\bfeatures\x18\x01 \x01(\v2\x17.google.protobuf.StructR\bfeatures\x12\x1d\n" +
 	"\n" +
@@ -671,19 +671,19 @@ const file_go_inference_proto_gateway_v1_gateway_proto_rawDesc = "" +
 	"\x11EvaluateRulesDiff\x12$.gateway.v1.EvaluateRulesDiffRequest\x1a%.gateway.v1.EvaluateRulesDiffResponseBQZOgithub.com/jonkmatsumo/label-lag/go/inference/internal/http/gatewayv1;gatewayv1b\x06proto3"
 
 var (
-	file_go_inference_proto_gateway_v1_gateway_proto_rawDescOnce sync.Once
-	file_go_inference_proto_gateway_v1_gateway_proto_rawDescData []byte
+	file_inference_v1_gateway_proto_rawDescOnce sync.Once
+	file_inference_v1_gateway_proto_rawDescData []byte
 )
 
-func file_go_inference_proto_gateway_v1_gateway_proto_rawDescGZIP() []byte {
-	file_go_inference_proto_gateway_v1_gateway_proto_rawDescOnce.Do(func() {
-		file_go_inference_proto_gateway_v1_gateway_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_go_inference_proto_gateway_v1_gateway_proto_rawDesc), len(file_go_inference_proto_gateway_v1_gateway_proto_rawDesc)))
+func file_inference_v1_gateway_proto_rawDescGZIP() []byte {
+	file_inference_v1_gateway_proto_rawDescOnce.Do(func() {
+		file_inference_v1_gateway_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_inference_v1_gateway_proto_rawDesc), len(file_inference_v1_gateway_proto_rawDesc)))
 	})
-	return file_go_inference_proto_gateway_v1_gateway_proto_rawDescData
+	return file_inference_v1_gateway_proto_rawDescData
 }
 
-var file_go_inference_proto_gateway_v1_gateway_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
-var file_go_inference_proto_gateway_v1_gateway_proto_goTypes = []any{
+var file_inference_v1_gateway_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_inference_v1_gateway_proto_goTypes = []any{
 	(*EvaluateRulesRequest)(nil),      // 0: gateway.v1.EvaluateRulesRequest
 	(*EvaluateRulesResponse)(nil),     // 1: gateway.v1.EvaluateRulesResponse
 	(*EvaluateRulesDiffRequest)(nil),  // 2: gateway.v1.EvaluateRulesDiffRequest
@@ -695,7 +695,7 @@ var file_go_inference_proto_gateway_v1_gateway_proto_goTypes = []any{
 	(*structpb.Struct)(nil),           // 8: google.protobuf.Struct
 	(*v1.Rule)(nil),                   // 9: crud.v1.Rule
 }
-var file_go_inference_proto_gateway_v1_gateway_proto_depIdxs = []int32{
+var file_inference_v1_gateway_proto_depIdxs = []int32{
 	8,  // 0: gateway.v1.EvaluateRulesRequest.features:type_name -> google.protobuf.Struct
 	5,  // 1: gateway.v1.EvaluateRulesRequest.ruleset:type_name -> gateway.v1.RuleSet
 	6,  // 2: gateway.v1.EvaluateRulesResponse.explanations:type_name -> gateway.v1.Explanation
@@ -719,26 +719,26 @@ var file_go_inference_proto_gateway_v1_gateway_proto_depIdxs = []int32{
 	0,  // [0:12] is the sub-list for field type_name
 }
 
-func init() { file_go_inference_proto_gateway_v1_gateway_proto_init() }
-func file_go_inference_proto_gateway_v1_gateway_proto_init() {
-	if File_go_inference_proto_gateway_v1_gateway_proto != nil {
+func init() { file_inference_v1_gateway_proto_init() }
+func file_inference_v1_gateway_proto_init() {
+	if File_inference_v1_gateway_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_go_inference_proto_gateway_v1_gateway_proto_rawDesc), len(file_go_inference_proto_gateway_v1_gateway_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_inference_v1_gateway_proto_rawDesc), len(file_inference_v1_gateway_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_go_inference_proto_gateway_v1_gateway_proto_goTypes,
-		DependencyIndexes: file_go_inference_proto_gateway_v1_gateway_proto_depIdxs,
-		MessageInfos:      file_go_inference_proto_gateway_v1_gateway_proto_msgTypes,
+		GoTypes:           file_inference_v1_gateway_proto_goTypes,
+		DependencyIndexes: file_inference_v1_gateway_proto_depIdxs,
+		MessageInfos:      file_inference_v1_gateway_proto_msgTypes,
 	}.Build()
-	File_go_inference_proto_gateway_v1_gateway_proto = out.File
-	file_go_inference_proto_gateway_v1_gateway_proto_goTypes = nil
-	file_go_inference_proto_gateway_v1_gateway_proto_depIdxs = nil
+	File_inference_v1_gateway_proto = out.File
+	file_inference_v1_gateway_proto_goTypes = nil
+	file_inference_v1_gateway_proto_depIdxs = nil
 }

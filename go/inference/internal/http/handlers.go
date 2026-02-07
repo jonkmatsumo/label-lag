@@ -14,8 +14,8 @@ import (
 
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
 	grpcclient "github.com/jonkmatsumo/label-lag/go/inference/internal/grpc"
-	inferencev1 "github.com/jonkmatsumo/label-lag/go/inference/internal/grpc/inferencev1/inference/v1"
-	gatewayv1 "github.com/jonkmatsumo/label-lag/go/inference/internal/http/gatewayv1/gateway/v1"
+	inferencev1 "github.com/jonkmatsumo/label-lag/go/inference/internal/grpc/inferencev1"
+	gatewayv1 "github.com/jonkmatsumo/label-lag/go/inference/internal/http/gatewayv1"
 	"github.com/jonkmatsumo/label-lag/go/inference/internal/http/proxy"
 	"github.com/jonkmatsumo/label-lag/go/inference/internal/requestid"
 	"github.com/jonkmatsumo/label-lag/go/inference/internal/rules"

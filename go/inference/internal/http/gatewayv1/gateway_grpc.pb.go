@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.1
 // - protoc             v6.33.4
-// source: go/inference/proto/gateway/v1/gateway.proto
+// source: inference/v1/gateway.proto
 
 package gatewayv1
 
@@ -159,5 +159,5 @@ var GatewayService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "go/inference/proto/gateway/v1/gateway.proto",
+	Metadata: "inference/v1/gateway.proto",
 }

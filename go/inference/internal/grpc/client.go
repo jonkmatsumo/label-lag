@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	inferencev1 "github.com/jonkmatsumo/label-lag/go/inference/internal/grpc/inferencev1/inference/v1"
+	inferencev1 "github.com/jonkmatsumo/label-lag/go/inference/internal/grpc/inferencev1"
 	"github.com/jonkmatsumo/label-lag/go/inference/internal/requestid"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
