@@ -58,7 +58,7 @@ async def get_drift_status(
     """Check feature distribution drift between reference and live data."""
     import time
 
-    from monitor.detect_drift import (
+    from training_server.detect_drift import (
         PSI_THRESHOLD_CRITICAL,
         PSI_THRESHOLD_WARNING,
         detect_drift,
@@ -149,7 +149,7 @@ def _build_drift_response(
     overall_status: str | None = None,
 ) -> DriftStatusResponse:
     """Build DriftStatusResponse from detect_drift result."""
-    from monitor.detect_drift import (
+    from training_server.detect_drift import (
         PSI_THRESHOLD_CRITICAL,
         PSI_THRESHOLD_WARNING,
     )

@@ -6,20 +6,20 @@ class TestFeatureMaterializer:
 
     def test_materialize_function_imports(self):
         """Test that materialize_features function can be imported."""
-        from pipeline.materialize_features import materialize_features
+        from training_server.materialize_features import materialize_features
 
         assert materialize_features is not None
 
     def test_materialization_mode_imports(self):
         """Test that materialization mode function can be imported."""
-        from pipeline.materialize_features import get_materialization_mode
+        from training_server.materialize_features import get_materialization_mode
 
         assert get_materialization_mode is not None
 
     def test_materialization_mode_default_is_legacy(self, monkeypatch):
         """Test that default materialization mode is legacy."""
         monkeypatch.delenv("FEATURE_MATERIALIZATION_MODE", raising=False)
-        from pipeline.materialize_features import get_materialization_mode
+        from training_server.materialize_features import get_materialization_mode
 
         assert get_materialization_mode() == "legacy"
 
@@ -27,8 +27,8 @@ class TestFeatureMaterializer:
         """Test that materialize_features calls analytics service."""
         from unittest.mock import MagicMock
 
-        from pipeline.materialize_features import materialize_features
         from training_server import crud_client
+        from training_server.materialize_features import materialize_features
 
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -47,8 +47,8 @@ class TestFeatureMaterializer:
         """Test that materialize_features handles analytics errors gracefully."""
         from unittest.mock import MagicMock
 
-        from pipeline.materialize_features import materialize_features
         from training_server import crud_client
+        from training_server.materialize_features import materialize_features
 
         mock_client = MagicMock()
         mock_client.materialize_features.side_effect = Exception("Analytics error")

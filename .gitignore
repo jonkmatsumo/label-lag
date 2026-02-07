@@ -66,3 +66,5 @@ rules-cli
 
 # Node
 node_modules/
+# gRPC
+python/src/gateway_grpc/
