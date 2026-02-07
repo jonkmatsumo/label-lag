@@ -8,8 +8,8 @@ import grpc
 from google.protobuf import struct_pb2
 
 try:
-    from training_server.proto.crud.v1 import analytics_pb2
-    from training_server.proto.gateway.v1 import gateway_pb2, gateway_pb2_grpc
+    from training_server.proto.analytics.v1 import analytics_pb2
+    from training_server.proto.inference.v1 import gateway_pb2, gateway_pb2_grpc
 except ImportError as e:
     logging.getLogger(__name__).error(f"Failed to import generated gRPC modules: {e}")
     # Re-raise or handle gracefully? For now, let it crash if imports fail

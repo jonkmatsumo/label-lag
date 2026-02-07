@@ -2,7 +2,7 @@ import os
 
 import grpc
 
-from training_server.proto.crud.v1 import analytics_pb2, analytics_pb2_grpc
+from training_server.proto.analytics.v1 import analytics_pb2, analytics_pb2_grpc
 
 
 def _parse_timeout(value: str | None, default: float) -> float:
