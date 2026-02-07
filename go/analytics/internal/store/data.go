@@ -1,0 +1,610 @@
+package store
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"time"
+
+	"github.com/jonkmatsumo/label-lag/go/analytics/internal/db"
+	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
+)
+
+// ... previous methods ...
+
+func (s *SQLStore) StoreGeneratedData(ctx context.Context, records []*pb.GeneratedRecord, metadata []*pb.EvaluationMetadata) (int64, error) {
+	if len(records) == 0 {
+		return 0, nil
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, db.MapDBError(fmt.Errorf("failed to begin transaction: %w", err))
+	}
+	defer tx.Rollback()
+
+	// Insert generated records
+	recordQuery := `
+		INSERT INTO generated_records (
+			record_id, user_id, full_name, email, phone, transaction_timestamp,
+			is_off_hours_txn, available_balance, balance_to_transaction_ratio,
+			avg_available_balance_30d, balance_volatility_z_score,
+			bank_connections_count_24h, bank_connections_count_7d,
+			bank_connections_avg_30d, amount, amount_to_avg_ratio,
+			merchant_risk_score, is_returned, email_changed_at, phone_changed_at,
+			is_fraudulent, fraud_type
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
+		)
+	`
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	for _, r := range records {
+		_, err := tx.ExecContext(queryCtx, recordQuery,
+			r.RecordId, r.UserId, r.FullName, r.Email, r.Phone,
+			r.TransactionTimestamp.AsTime(), r.IsOffHoursTxn, r.AvailableBalance,
+			r.BalanceToTransactionRatio, r.AvgAvailableBalance_30D,
+			r.BalanceVolatilityZScore, r.BankConnectionsCount_24H,
+			r.BankConnectionsCount_7D, r.BankConnectionsAvg_30D,
+			r.Amount, r.AmountToAvgRatio, r.MerchantRiskScore, r.IsReturned,
+			r.EmailChangedAt.AsTime(), r.PhoneChangedAt.AsTime(),
+			r.IsFraudulent, r.FraudType,
+		)
+		if err != nil {
+			return 0, db.MapDBError(fmt.Errorf("failed to insert record %s: %w", r.RecordId, err))
+		}
+	}
+
+	// Insert evaluation metadata
+	metadataQuery := `
+		INSERT INTO evaluation_metadata (
+			user_id, record_id, sequence_number, fraud_confirmed_at,
+			is_pre_fraud, days_to_fraud, is_train_eligible
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, $7
+		)
+	`
+
+	for _, m := range metadata {
+		var fraudConfirmedAt sql.NullTime
+		if m.FraudConfirmedAt != nil {
+			fraudConfirmedAt = sql.NullTime{Time: m.FraudConfirmedAt.AsTime(), Valid: true}
+		}
+
+		_, err := tx.ExecContext(queryCtx, metadataQuery,
+			m.UserId, m.RecordId, m.SequenceNumber,
+			fraudConfirmedAt, m.IsPreFraud, m.DaysToFraud,
+			m.IsTrainEligible,
+		)
+		if err != nil {
+			return 0, db.MapDBError(fmt.Errorf("failed to insert metadata for record %s: %w", m.RecordId, err))
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, db.MapDBError(fmt.Errorf("transaction commit failed: %w", err))
+	}
+
+	return int64(len(records)), nil
+}
+
+func (s *SQLStore) GetFeatureSample(ctx context.Context, sampleSize int32, stratify bool) ([]*pb.FeatureSample, error) {
+	pgVersion, _ := getPostgresVersion(ctx, s.db)
+	stats, err := getTableStats(ctx, s.db, "generated_records")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get table stats: %v", err)
+	}
+
+	if stats.totalCount == 0 {
+		return []*pb.FeatureSample{}, nil
+	}
+
+	var samples []*pb.FeatureSample
+
+	if stratify {
+		// Get fraud rate for stratification
+		var fraudRate float64
+		queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+		defer cancel()
+		err = s.db.QueryRowContext(queryCtx, "SELECT CAST(SUM(CASE WHEN is_fraudulent THEN 1 ELSE 0 END) AS FLOAT) / COUNT(*) FROM generated_records").Scan(&fraudRate)
+		if err != nil {
+			fraudRate = 0.0 // Fallback
+		}
+
+		fraudTarget, nonFraudTarget := calculateStratifiedCounts(stats.totalCount, fraudRate, sampleSize, 10)
+
+		// Sample fraud
+		if fraudTarget > 0 {
+			fSamples, err := s.sampleClass(ctx, true, fraudTarget, pgVersion, stats)
+			if err != nil {
+				return nil, fmt.Errorf("failed to sample fraud class: %v", err)
+			}
+			samples = append(samples, fSamples...)
+		}
+
+		// Sample non-fraud
+		if nonFraudTarget > 0 {
+			nfSamples, err := s.sampleClass(ctx, false, nonFraudTarget, pgVersion, stats)
+			if err != nil {
+				return nil, fmt.Errorf("failed to sample non-fraud class: %v", err)
+			}
+			samples = append(samples, nfSamples...)
+		}
+	}
+
+	if len(samples) == 0 {
+		// Fallback to generic sampling if stratification failed or not requested
+		samples, err = s.sampleGeneric(ctx, sampleSize, pgVersion, stats)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return samples, nil
+}
+
+func (s *SQLStore) sampleClass(ctx context.Context, isFraudulent bool, limit int32, pgVersion int, stats tableStats) ([]*pb.FeatureSample, error) {
+	var query string
+	if pgVersion >= 16 && stats.totalCount > 100000 {
+		fraction := float64(limit) / float64(stats.totalCount)
+		query = fmt.Sprintf(`
+			SELECT gr.record_id, gr.is_fraudulent, fs.velocity_24h, fs.amount_to_avg_ratio_30d, fs.balance_volatility_z_score
+			FROM generated_records gr TABLESAMPLE SYSTEM (%f)
+			INNER JOIN feature_snapshots fs ON gr.record_id = fs.record_id
+			WHERE gr.is_fraudulent = %t
+			LIMIT %d`, fraction*100, isFraudulent, limit)
+	} else if stats.maxID > stats.minID && stats.totalCount > 10000 {
+		query = fmt.Sprintf(`
+			SELECT gr.record_id, gr.is_fraudulent, fs.velocity_24h, fs.amount_to_avg_ratio_30d, fs.balance_volatility_z_score
+			FROM generated_records gr
+			INNER JOIN feature_snapshots fs ON gr.record_id = fs.record_id
+			WHERE gr.id BETWEEN %d AND %d AND gr.is_fraudulent = %t
+			LIMIT %d`, stats.minID, stats.maxID, isFraudulent, limit)
+	} else {
+		query = fmt.Sprintf(`
+			SELECT gr.record_id, gr.is_fraudulent, fs.velocity_24h, fs.amount_to_avg_ratio_30d, fs.balance_volatility_z_score
+			FROM generated_records gr
+			INNER JOIN feature_snapshots fs ON gr.record_id = fs.record_id
+			WHERE gr.is_fraudulent = %t
+			ORDER BY RANDOM()
+			LIMIT %d`, isFraudulent, limit)
+	}
+	return s.executeQuery(ctx, query)
+}
+
+func (s *SQLStore) sampleGeneric(ctx context.Context, limit int32, pgVersion int, stats tableStats) ([]*pb.FeatureSample, error) {
+	var query string
+	if pgVersion >= 16 && stats.totalCount > 100000 {
+		fraction := float64(limit) / float64(stats.totalCount)
+		query = fmt.Sprintf(`
+			SELECT gr.record_id, gr.is_fraudulent, fs.velocity_24h, fs.amount_to_avg_ratio_30d, fs.balance_volatility_z_score
+			FROM generated_records gr TABLESAMPLE SYSTEM (%f)
+			INNER JOIN feature_snapshots fs ON gr.record_id = fs.record_id
+			LIMIT %d`, fraction*100, limit)
+	} else if stats.maxID > stats.minID && stats.totalCount > 10000 {
+		// Uniform ID sampling hint
+		step := (stats.maxID - stats.minID) / int64(limit)
+		if step < 1 {
+			step = 1
+		}
+		query = fmt.Sprintf(`
+			SELECT gr.record_id, gr.is_fraudulent, fs.velocity_24h, fs.amount_to_avg_ratio_30d, fs.balance_volatility_z_score
+			FROM generated_records gr
+			INNER JOIN feature_snapshots fs ON gr.record_id = fs.record_id
+			WHERE gr.id IN (SELECT generate_series(%d, %d, %d))
+			LIMIT %d`, stats.minID, stats.maxID, step, limit)
+	} else {
+		query = fmt.Sprintf(`
+			SELECT gr.record_id, gr.is_fraudulent, fs.velocity_24h, fs.amount_to_avg_ratio_30d, fs.balance_volatility_z_score
+			FROM generated_records gr
+			INNER JOIN feature_snapshots fs ON gr.record_id = fs.record_id
+			ORDER BY RANDOM()
+			LIMIT %d`, limit)
+	}
+	return s.executeQuery(ctx, query)
+}
+
+func (s *SQLStore) executeQuery(ctx context.Context, query string) ([]*pb.FeatureSample, error) {
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(queryCtx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var samples []*pb.FeatureSample
+	for rows.Next() {
+		var sample pb.FeatureSample
+		err := rows.Scan(
+			&sample.RecordId,
+			&sample.IsFraudulent,
+			&sample.Velocity_24H,
+			&sample.AmountToAvgRatio_30D,
+			&sample.BalanceVolatilityZScore,
+		)
+		if err != nil {
+			return nil, err
+		}
+		samples = append(samples, &sample)
+	}
+	return samples, nil
+}
+
+func calculateStratifiedCounts(total int64, fraudRate float64, sampleSize int32, minPerClass int32) (int32, int32) {
+	if total == 0 {
+		return 0, 0
+	}
+
+	fraudCount := int64(float64(total) * fraudRate)
+	nonFraudCount := total - fraudCount
+
+	if total < int64(minPerClass)*2 {
+		fraudSample := int32(fraudCount)
+		if fraudSample > sampleSize/2 {
+			fraudSample = sampleSize / 2
+		}
+		nonFraudSample := int32(nonFraudCount)
+		if nonFraudSample > sampleSize-fraudSample {
+			nonFraudSample = sampleSize - fraudSample
+		}
+		return fraudSample, nonFraudSample
+	}
+
+	fraudSample := int32(float64(sampleSize) * (float64(fraudCount) / float64(total)))
+	nonFraudSample := sampleSize - fraudSample
+
+	if fraudSample < minPerClass && fraudCount >= int64(minPerClass) {
+		fraudSample = minPerClass
+		nonFraudSample = sampleSize - fraudSample
+		if nonFraudSample < 0 {
+			nonFraudSample = 0
+		}
+	}
+	return fraudSample, nonFraudSample
+}
+
+func (s *SQLStore) GetDriftWindow(ctx context.Context, cutoff time.Time) ([]*pb.TransactionDetail, error) {
+	query := `
+		SELECT
+			record_id,
+			user_id,
+			created_at,
+			velocity_24h,
+			amount_to_avg_ratio_30d,
+			balance_volatility_z_score
+		FROM feature_snapshots
+		WHERE computed_at >= $1
+		ORDER BY computed_at DESC
+	`
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(queryCtx, query, cutoff)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query drift window: %v", err)
+	}
+	defer rows.Close()
+
+	var txs []*pb.TransactionDetail
+	for rows.Next() {
+		var tx pb.TransactionDetail
+		var createdAt time.Time
+		if err := rows.Scan(
+			&tx.RecordId,
+			&tx.UserId,
+			&createdAt,
+			&tx.Velocity_24H,
+			&tx.AmountToAvgRatio_30D,
+			&tx.BalanceVolatilityZScore,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan drift window record: %v", err)
+		}
+		tx.CreatedAt = timestamppb.New(createdAt)
+		txs = append(txs, &tx)
+	}
+
+	return txs, nil
+}
+
+func (s *SQLStore) GetInferenceScores(ctx context.Context, cutoff time.Time) ([]int32, error) {
+	query := `
+		SELECT final_score
+		FROM inference_events
+		WHERE ts >= $1
+		ORDER BY ts DESC
+	`
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(queryCtx, query, cutoff)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query inference scores: %v", err)
+	}
+	defer rows.Close()
+
+	var scores []int32
+	for rows.Next() {
+		var score int32
+		if err := rows.Scan(&score); err != nil {
+			return nil, fmt.Errorf("failed to scan score: %v", err)
+		}
+		scores = append(scores, score)
+	}
+
+	return scores, nil
+}
+
+func (s *SQLStore) GetDatasetFingerprint(ctx context.Context) (*pb.GetDatasetFingerprintResponse, error) {
+	queryGR := `
+		SELECT
+			COUNT(*) as count,
+			MAX(created_at) as max_created_at,
+			MAX(transaction_timestamp) as max_transaction_timestamp,
+			MAX(id) as max_id
+		FROM generated_records
+	`
+	queryFS := `
+		SELECT
+			COUNT(*) as count,
+			MAX(computed_at) as max_computed_at,
+			MAX(snapshot_id) as max_snapshot_id
+		FROM feature_snapshots
+	`
+
+	resp := &pb.GetDatasetFingerprintResponse{
+		GeneratedRecords: &pb.TableFingerprint{},
+		FeatureSnapshots: &pb.TableFingerprint{},
+	}
+
+	var maxCr, maxTx sql.NullTime
+	var maxId sql.NullInt64
+
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	err := s.db.QueryRowContext(queryCtx, queryGR).Scan(
+		&resp.GeneratedRecords.Count,
+		&maxCr,
+		&maxTx,
+		&maxId,
+	)
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+	if maxCr.Valid {
+		resp.GeneratedRecords.MaxCreatedAt = timestamppb.New(maxCr.Time)
+	}
+	if maxTx.Valid {
+		resp.GeneratedRecords.MaxTimestamp = timestamppb.New(maxTx.Time)
+	}
+	if maxId.Valid {
+		resp.GeneratedRecords.MaxId = maxId.Int64
+	}
+
+	var maxComp sql.NullTime
+	var maxSnapshotId sql.NullInt64
+
+	err = s.db.QueryRowContext(queryCtx, queryFS).Scan(
+		&resp.FeatureSnapshots.Count,
+		&maxComp,
+		&maxSnapshotId,
+	)
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+	if maxComp.Valid {
+		resp.FeatureSnapshots.MaxCreatedAt = timestamppb.New(maxComp.Time)
+	}
+	if maxSnapshotId.Valid {
+		resp.FeatureSnapshots.MaxId = maxSnapshotId.Int64
+	}
+
+	return resp, nil
+}
+
+func (s *SQLStore) ClearAllData(ctx context.Context) ([]string, error) {
+	tables := []string{"generated_records", "feature_snapshots", "rules", "rule_versions", "backtest_results", "inference_events"}
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	tx, err := s.db.BeginTx(queryCtx, nil)
+	if err != nil {
+		return nil, db.MapDBError(fmt.Errorf("failed to begin transaction: %w", err))
+	}
+	defer tx.Rollback()
+
+	for _, table := range tables {
+		_, err := tx.ExecContext(queryCtx, fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE", table))
+		if err != nil {
+			return nil, db.MapDBError(fmt.Errorf("failed to truncate table %s: %w", table, err))
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, db.MapDBError(fmt.Errorf("failed to commit transaction: %w", err))
+	}
+
+	return tables, nil
+}
+
+func (s *SQLStore) LogInferenceEvent(ctx context.Context, event *pb.InferenceEvent) error {
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	tx, err := s.db.BeginTx(queryCtx, nil)
+	if err != nil {
+		return db.MapDBError(fmt.Errorf("failed to begin transaction: %w", err))
+	}
+	defer tx.Rollback()
+
+	// Insert into inference_events
+	queryEvent := `
+		INSERT INTO inference_events (
+			request_id, timestamp, model_version, rules_version,
+			model_score, final_score
+		) VALUES ($1, $2, $3, $4, $5, $6)
+	`
+	_, err = tx.ExecContext(queryCtx, queryEvent,
+		event.RequestId,
+		event.Timestamp.AsTime(),
+		event.ModelVersion,
+		event.RulesVersion,
+		event.ModelScore,
+		event.FinalScore,
+	)
+	if err != nil {
+		return db.MapDBError(fmt.Errorf("failed to insert inference event: %w", err))
+	}
+
+	// Insert rule impacts
+	queryImpact := `
+		INSERT INTO rule_impacts (
+			request_id, rule_id, is_shadow, score_delta
+		) VALUES ($1, $2, $3, $4)
+	`
+	stmt, err := tx.PrepareContext(queryCtx, queryImpact)
+	if err != nil {
+		return db.MapDBError(fmt.Errorf("failed to prepare impact statement: %w", err))
+	}
+	defer stmt.Close()
+
+	for _, impact := range event.RuleImpacts {
+		_, err := stmt.ExecContext(queryCtx,
+			event.RequestId,
+			impact.RuleId,
+			impact.IsShadow,
+			impact.ScoreDelta,
+		)
+		if err != nil {
+			return db.MapDBError(fmt.Errorf("failed to insert rule impact: %w", err))
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return db.MapDBError(fmt.Errorf("failed to commit transaction: %w", err))
+	}
+
+	return nil
+}
+
+func (s *SQLStore) MaterializeFeatures(ctx context.Context) (int64, error) {
+	// SQL taken from materialize_features.py
+	materializeSQL := `
+		INSERT INTO feature_snapshots (
+			record_id, user_id, velocity_24h, amount_to_avg_ratio_30d,
+			balance_volatility_z_score, experimental_signals, computed_at
+		)
+		SELECT
+			fc.record_id,
+			fc.user_id,
+			fc.velocity_24h::INTEGER,
+			fc.amount_to_avg_ratio_30d::FLOAT,
+			fc.balance_volatility_z_score::FLOAT,
+			fc.experimental_signals,
+			NOW()
+		FROM (
+			WITH feature_calculations AS (
+				SELECT
+					gr.record_id,
+					gr.user_id,
+					gr.transaction_timestamp,
+					gr.amount,
+					gr.available_balance,
+					COUNT(*) OVER (
+						PARTITION BY gr.user_id
+						ORDER BY gr.transaction_timestamp
+						RANGE BETWEEN INTERVAL '24 hours' PRECEDING AND CURRENT ROW
+					) AS velocity_24h,
+					CASE
+						WHEN AVG(gr.amount) OVER (
+							PARTITION BY gr.user_id
+							ORDER BY gr.transaction_timestamp
+							RANGE BETWEEN INTERVAL '30 days' PRECEDING AND CURRENT ROW
+						) > 0
+						THEN gr.amount / AVG(gr.amount) OVER (
+							PARTITION BY gr.user_id
+							ORDER BY gr.transaction_timestamp
+							RANGE BETWEEN INTERVAL '30 days' PRECEDING AND CURRENT ROW
+						)
+						ELSE 1.0
+					END AS amount_to_avg_ratio_30d,
+					CASE
+						WHEN COALESCE(STDDEV(gr.available_balance) OVER (
+							PARTITION BY gr.user_id
+							ORDER BY gr.transaction_timestamp
+							RANGE BETWEEN INTERVAL '30 days' PRECEDING AND CURRENT ROW
+						), 0) > 0
+						THEN (
+							gr.available_balance - AVG(gr.available_balance) OVER (
+								PARTITION BY gr.user_id
+								ORDER BY gr.transaction_timestamp
+								RANGE BETWEEN INTERVAL '30 days' PRECEDING AND CURRENT ROW
+							)
+						) / STDDEV(gr.available_balance) OVER (
+							PARTITION BY gr.user_id
+							ORDER BY gr.transaction_timestamp
+							RANGE BETWEEN INTERVAL '30 days' PRECEDING AND CURRENT ROW
+						)
+						ELSE 0.0
+					END AS balance_volatility_z_score,
+					COUNT(*) OVER (
+						PARTITION BY gr.user_id
+						ORDER BY gr.transaction_timestamp
+						RANGE BETWEEN INTERVAL '7 days' PRECEDING AND CURRENT ROW
+					) AS velocity_7d,
+					MAX(gr.amount) OVER (
+						PARTITION BY gr.user_id
+						ORDER BY gr.transaction_timestamp
+						RANGE BETWEEN INTERVAL '30 days' PRECEDING AND CURRENT ROW
+					) AS max_amount_30d,
+					SUM(CASE WHEN gr.is_off_hours_txn THEN 1 ELSE 0 END) OVER (
+						PARTITION BY gr.user_id
+						ORDER BY gr.transaction_timestamp
+						RANGE BETWEEN INTERVAL '7 days' PRECEDING AND CURRENT ROW
+					) AS off_hours_count_7d,
+					gr.bank_connections_count_24h,
+					gr.merchant_risk_score
+				FROM generated_records gr
+				WHERE gr.record_id NOT IN (SELECT record_id FROM feature_snapshots)
+			)
+			SELECT
+				record_id,
+				user_id,
+				velocity_24h,
+				amount_to_avg_ratio_30d,
+				balance_volatility_z_score,
+				jsonb_build_object(
+					'velocity_7d', velocity_7d,
+					'max_amount_30d', max_amount_30d::FLOAT,
+					'off_hours_count_7d', off_hours_count_7d,
+					'bank_connections_24h', bank_connections_count_24h,
+					'merchant_risk_score', merchant_risk_score
+				) AS experimental_signals
+			FROM feature_calculations
+		) fc
+		ON CONFLICT (record_id) DO UPDATE SET
+			velocity_24h = EXCLUDED.velocity_24h,
+			amount_to_avg_ratio_30d = EXCLUDED.amount_to_avg_ratio_30d,
+			balance_volatility_z_score = EXCLUDED.balance_volatility_z_score,
+			experimental_signals = EXCLUDED.experimental_signals,
+			computed_at = EXCLUDED.computed_at;
+	`
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	res, err := s.db.ExecContext(queryCtx, materializeSQL)
+	if err != nil {
+		return 0, db.MapDBError(fmt.Errorf("failed to materialize features: %w", err))
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	return rowsAffected, nil
+}

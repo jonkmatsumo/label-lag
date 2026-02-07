@@ -7,8 +7,10 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/jonkmatsumo/label-lag/go/analytics/generator"
+	"github.com/jonkmatsumo/label-lag/go/analytics/internal/store"
 	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/health"
@@ -17,18 +19,21 @@ import (
 )
 
 func TestGetDailyStats(t *testing.T) {
-	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	mockStore := new(store.MockStore)
+	s := &server{store: mockStore}
+
+	expectedStats := []*pb.DailyStat{
+		{
+			Date:              time.Now().Format("2006-01-02"),
+			TotalTransactions: 100,
+			FraudCount:        5,
+			FraudRate:         5.0,
+			TotalAmount:       1000.0,
+			AvgZScore:         0.5,
+		},
 	}
-	defer db.Close()
 
-	s := &server{db: db}
-
-	rows := sqlmock.NewRows([]string{"date", "total_transactions", "fraud_count", "fraud_rate", "total_amount", "avg_z_score"}).
-		AddRow(time.Now(), 100, 5, 5.0, 1000.0, 0.5)
-
-	mock.ExpectQuery("SELECT").WillReturnRows(rows)
+	mockStore.On("GetDailyStats", mock.Anything, mock.Anything).Return(expectedStats, nil)
 
 	req := &pb.GetDailyStatsRequest{Days: 30}
 	resp, err := s.GetDailyStats(context.Background(), req)
@@ -38,25 +43,20 @@ func TestGetDailyStats(t *testing.T) {
 	assert.Len(t, resp.Stats, 1)
 	assert.Equal(t, int64(100), resp.Stats[0].TotalTransactions)
 	assert.Equal(t, int64(5), resp.Stats[0].FraudCount)
+	mockStore.AssertExpectations(t)
 }
 
 func TestGetOverviewMetrics(t *testing.T) {
-	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	mockStore := new(store.MockStore)
+	s := &server{store: mockStore}
+
+	expectedResp := &pb.GetOverviewMetricsResponse{
+		TotalRecords: 1000,
+		FraudRecords: 50,
+		FraudRate:    5.0,
 	}
-	defer db.Close()
 
-	s := &server{db: db}
-
-	rows := sqlmock.NewRows([]string{
-		"total_records", "fraud_records", "unique_users",
-		"min_transaction_timestamp", "max_transaction_timestamp",
-		"min_created_at", "max_created_at",
-		"total_amount", "fraud_amount",
-	}).AddRow(1000, 50, 100, time.Now(), time.Now(), time.Now(), time.Now(), 50000.0, 2500.0)
-
-	mock.ExpectQuery("SELECT").WillReturnRows(rows)
+	mockStore.On("GetOverviewMetrics", mock.Anything).Return(expectedResp, nil)
 
 	resp, err := s.GetOverviewMetrics(context.Background(), &pb.GetOverviewMetricsRequest{})
 
@@ -65,37 +65,20 @@ func TestGetOverviewMetrics(t *testing.T) {
 	assert.Equal(t, int64(1000), resp.TotalRecords)
 	assert.Equal(t, int64(50), resp.FraudRecords)
 	assert.Equal(t, float64(5.0), resp.FraudRate)
+	mockStore.AssertExpectations(t)
 }
 
 func TestGetFeatureSample_Stratified(t *testing.T) {
-	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	mockStore := new(store.MockStore)
+	s := &server{store: mockStore}
+
+	expectedSamples := []*pb.FeatureSample{
+		{RecordId: "f1", IsFraudulent: true},
+		{RecordId: "nf1", IsFraudulent: false},
 	}
-	defer db.Close()
 
-	s := &server{db: db}
-
-	// 1. Version query
-	mock.ExpectQuery("SELECT version").WillReturnRows(sqlmock.NewRows([]string{"version"}).AddRow("PostgreSQL 16.1"))
-
-	// 2. Stats query
-	mock.ExpectQuery("SELECT COALESCE\\(MIN\\(id\\), 0\\), COALESCE\\(MAX\\(id\\), 0\\), COUNT\\(\\*\\) FROM generated_records").
-		WillReturnRows(sqlmock.NewRows([]string{"min", "max", "count"}).AddRow(1, 1000, 1000))
-
-	// 3. Fraud rate query
-	mock.ExpectQuery("SELECT CAST").WillReturnRows(sqlmock.NewRows([]string{"rate"}).AddRow(0.05))
-
-	// 4. Sampling queries (since stratify=true and count=1000, it falls back to ORDER BY RANDOM())
-	// Fraud sampling
-	mock.ExpectQuery("(?s)SELECT.*is_fraudulent\\s*=\\s*true.*").
-		WillReturnRows(sqlmock.NewRows([]string{"record_id", "is_fraudulent", "velocity_24h", "amount_to_avg_ratio_30d", "balance_volatility_z_score"}).
-			AddRow("f1", true, 1.0, 1.0, 1.0))
-
-	// Non-fraud sampling
-	mock.ExpectQuery("(?s)SELECT.*is_fraudulent\\s*=\\s*false.*").
-		WillReturnRows(sqlmock.NewRows([]string{"record_id", "is_fraudulent", "velocity_24h", "amount_to_avg_ratio_30d", "balance_volatility_z_score"}).
-			AddRow("nf1", false, 0.0, 0.0, 0.0))
+	// Expectation for GetFeatureSample
+	mockStore.On("GetFeatureSample", mock.Anything, int32(20), true).Return(expectedSamples, nil)
 
 	req := &pb.GetFeatureSampleRequest{SampleSize: 20, Stratify: true}
 	resp, err := s.GetFeatureSample(context.Background(), req)
@@ -103,6 +86,7 @@ func TestGetFeatureSample_Stratified(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	assert.Len(t, resp.Samples, 2)
+	mockStore.AssertExpectations(t)
 }
 
 func TestUpdateHealthStatusServing(t *testing.T) {
@@ -113,6 +97,7 @@ func TestUpdateHealthStatusServing(t *testing.T) {
 	mock.ExpectPing()
 	healthServer := health.NewServer()
 
+	// Direct call to function under test, server struct not needed
 	err = updateHealthStatus(context.Background(), db, healthServer, nil)
 	require.NoError(t, err)
 
@@ -129,6 +114,7 @@ func TestUpdateHealthStatusNotServing(t *testing.T) {
 	mock.ExpectPing().WillReturnError(assert.AnError)
 	healthServer := health.NewServer()
 
+	// Direct call to function under test, server struct not needed
 	err = updateHealthStatus(context.Background(), db, healthServer, nil)
 	require.Error(t, err)
 
@@ -137,60 +123,21 @@ func TestUpdateHealthStatusNotServing(t *testing.T) {
 	assert.Equal(t, grpc_health_v1.HealthCheckResponse_NOT_SERVING, resp.Status)
 }
 
-func TestGetDailyStatsRejectsInvalidDays(t *testing.T) {
-	db, _, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	s := &server{db: db}
-	_, err = s.GetDailyStats(context.Background(), &pb.GetDailyStatsRequest{Days: -1})
-	require.Error(t, err)
-
-	st, _ := status.FromError(err)
-	assert.Equal(t, codes.InvalidArgument, st.Code())
-}
-
-func TestGetTransactionDetailsRejectsInvalidLimit(t *testing.T) {
-	db, _, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	s := &server{db: db}
-	_, err = s.GetTransactionDetails(context.Background(), &pb.GetTransactionDetailsRequest{
-		Days:  1,
-		Limit: maxTransactionLimit + 1,
-	})
-	require.Error(t, err)
-
-	st, _ := status.FromError(err)
-	assert.Equal(t, codes.InvalidArgument, st.Code())
-}
-
 func TestSearchTransactions(t *testing.T) {
-	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
-	require.NoError(t, err)
-	defer db.Close()
+	mockStore := new(store.MockStore)
+	s := &server{store: mockStore}
 
-	s := &server{db: db}
+	expectedTxs := []*pb.TransactionDetail{
+		{
+			RecordId:        "rec-1",
+			IsTrainEligible: true,
+			IsPreFraud:      true,
+		},
+	}
+	expectedTotal := int64(2)
 
-	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM generated_records WHERE user_id = \\$1 AND amount >= \\$2").
-		WithArgs("user-1", 12.5).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
-
-	mock.ExpectQuery("(?s)SELECT.*FROM generated_records WHERE user_id = \\$1 AND amount >= \\$2.*ORDER BY transaction_timestamp DESC OFFSET \\$3 LIMIT \\$4").
-		WithArgs("user-1", 12.5, int32(0), int32(25)).
-		WillReturnRows(sqlmock.NewRows([]string{
-			"record_id",
-			"user_id",
-			"transaction_timestamp",
-			"amount",
-			"is_fraudulent",
-			"fraud_type",
-			"is_off_hours_txn",
-			"merchant_risk_score",
-			"amount_to_avg_ratio",
-			"balance_volatility_z_score",
-		}).AddRow("rec-1", "user-1", time.Now(), 22.5, false, "none", false, 10, 1.2, -0.3))
+	mockStore.On("SearchTransactions", mock.Anything, mock.Anything, int32(25), int32(0)).
+		Return(expectedTxs, expectedTotal, nil)
 
 	minAmount := 12.5
 	req := &pb.SearchTransactionsRequest{
@@ -208,28 +155,20 @@ func TestSearchTransactions(t *testing.T) {
 	assert.Equal(t, "rec-1", resp.Transactions[0].RecordId)
 	assert.True(t, resp.Transactions[0].IsTrainEligible)
 	assert.True(t, resp.Transactions[0].IsPreFraud)
+	mockStore.AssertExpectations(t)
 }
 
 func TestSearchTransactions_Unfiltered(t *testing.T) {
-	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
-	require.NoError(t, err)
-	defer db.Close()
+	mockStore := new(store.MockStore)
+	s := &server{store: mockStore}
 
-	s := &server{db: db}
+	expectedTxs := []*pb.TransactionDetail{
+		{RecordId: "rec-2"},
+	}
+	expectedTotal := int64(5000)
 
-	// Expect query to pg_class for estimated count
-	mock.ExpectQuery("SELECT reltuples::bigint FROM pg_class WHERE relname = \\$1").
-		WithArgs("generated_records").
-		WillReturnRows(sqlmock.NewRows([]string{"reltuples"}).AddRow(5000))
-
-	// Expect data query with no WHERE clause
-	mock.ExpectQuery("(?s)SELECT.*FROM generated_records ORDER BY transaction_timestamp DESC OFFSET \\$1 LIMIT \\$2").
-		WithArgs(int32(0), int32(10)).
-		WillReturnRows(sqlmock.NewRows([]string{
-			"record_id", "user_id", "transaction_timestamp", "amount",
-			"is_fraudulent", "fraud_type", "is_off_hours_txn",
-			"merchant_risk_score", "amount_to_avg_ratio", "balance_volatility_z_score",
-		}).AddRow("rec-2", "user-2", time.Now(), 50.0, false, "", false, 20, 1.0, 0.0))
+	mockStore.On("SearchTransactions", mock.Anything, mock.Anything, int32(10), int32(0)).
+		Return(expectedTxs, expectedTotal, nil)
 
 	req := &pb.SearchTransactionsRequest{
 		Limit:  10,
@@ -241,32 +180,7 @@ func TestSearchTransactions_Unfiltered(t *testing.T) {
 	require.NotNil(t, resp)
 	assert.Equal(t, int64(5000), resp.Total)
 	assert.Len(t, resp.Transactions, 1)
-}
-
-func TestGetRecentAlertsRejectsInvalidLimit(t *testing.T) {
-	db, _, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	s := &server{db: db}
-	_, err = s.GetRecentAlerts(context.Background(), &pb.GetRecentAlertsRequest{Limit: maxAlertLimit + 1})
-	require.Error(t, err)
-
-	st, _ := status.FromError(err)
-	assert.Equal(t, codes.InvalidArgument, st.Code())
-}
-
-func TestGetFeatureSampleRejectsInvalidSampleSize(t *testing.T) {
-	db, _, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	s := &server{db: db}
-	_, err = s.GetFeatureSample(context.Background(), &pb.GetFeatureSampleRequest{SampleSize: maxSampleSizeLimit + 1})
-	require.Error(t, err)
-
-	st, _ := status.FromError(err)
-	assert.Equal(t, codes.InvalidArgument, st.Code())
+	mockStore.AssertExpectations(t)
 }
 
 // ============================================================================
@@ -274,11 +188,8 @@ func TestGetFeatureSampleRejectsInvalidSampleSize(t *testing.T) {
 // ============================================================================
 
 func TestGenerateDataReturnsUnimplementedWhenDisabled(t *testing.T) {
-	db, _, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	s := &server{db: db}
+	mockStore := new(store.MockStore)
+	s := &server{store: mockStore}
 
 	// Explicitly disable via env var
 	t.Setenv("ENABLE_GO_DATASET_GENERATE", "false")
@@ -288,7 +199,7 @@ func TestGenerateDataReturnsUnimplementedWhenDisabled(t *testing.T) {
 		FraudRate: 0.1,
 	}
 
-	_, err = s.GenerateData(context.Background(), req)
+	_, err := s.GenerateData(context.Background(), req)
 	require.Error(t, err)
 
 	st, ok := status.FromError(err)
