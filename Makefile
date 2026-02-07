@@ -198,13 +198,3 @@ proto-gen-python:
 		$(PROTO_DIR)/inference/v1/gateway.proto \
 		$(PROTO_DIR)/analytics/v1/analytics.proto
 	# Ensure __init__.py files
-	@touch $(PYTHON_SRC_DIR)/inference_server/proto/inference/__init__.py
-	@touch $(PYTHON_SRC_DIR)/inference_server/proto/inference/v1/__init__.py
-	@touch $(PYTHON_SRC_DIR)/training_server/proto/training/__init__.py
-	@touch $(PYTHON_SRC_DIR)/training_server/proto/training/v1/__init__.py
-	@touch $(PYTHON_SRC_DIR)/forecast_server/proto/forecast/__init__.py
-	@touch $(PYTHON_SRC_DIR)/forecast_server/proto/forecast/v1/__init__.py
-	@touch $(PYTHON_SRC_DIR)/gateway_grpc/inference/__init__.py
-	@touch $(PYTHON_SRC_DIR)/gateway_grpc/inference/v1/__init__.py
-	@touch $(PYTHON_SRC_DIR)/gateway_grpc/analytics/__init__.py
-	@touch $(PYTHON_SRC_DIR)/gateway_grpc/analytics/v1/__init__.py

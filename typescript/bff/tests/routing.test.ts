@@ -41,10 +41,10 @@ describe('Core UI Read Routing', () => {
         path: '/analytics/overview',
       },
       {
-        name: 'monitoring drift -> python',
+        name: 'monitoring drift -> gateway',
         method: 'GET',
         url: '/bff/v1/monitoring/drift',
-        target: 'python',
+        target: 'gateway',
         path: '/monitoring/drift?hours=24&threshold=0.25&force_refresh=false',
       },
       {
