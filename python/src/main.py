@@ -32,16 +32,6 @@ def seed(
         int | None,
         typer.Option("--seed", "-s", help="Random seed for reproducibility"),
     ] = None,
-    database_url: Annotated[
-        str | None,
-        typer.Option(
-            "--database-url", envvar="DATABASE_URL", help="Database URL (ignored)"
-        ),
-    ] = None,
-    drop_tables: Annotated[
-        bool,
-        typer.Option("--drop-tables", help="Drop existing tables before seeding"),
-    ] = False,
     json_logs: Annotated[
         bool,
         typer.Option("--json-logs", help="Output logs in JSON format"),
@@ -50,12 +40,9 @@ def seed(
         bool,
         typer.Option("--verbose", "-v", help="Enable verbose logging"),
     ] = False,
-    legacy_mode: Annotated[
+    drop_tables: Annotated[
         bool,
-        typer.Option(
-            "--legacy",
-            help="[DEPRECATED] Ignored. Go generator always uses sequence mode.",
-        ),
+        typer.Option("--drop-tables", help="Drop existing tables before seeding"),
     ] = False,
 ) -> None:
     """Generate synthetic transaction profiles and seed via Analytics service."""
@@ -72,9 +59,6 @@ def seed(
     if num_users < 1:
         log.error("Invalid user count", num_users=num_users)
         raise typer.BadParameter("User count must be at least 1")
-
-    if legacy_mode:
-        log.warning("Legacy mode is deprecated and ignored. Using Go generator.")
 
     log.info(
         "Starting data generation via Analytics service",
@@ -116,31 +100,13 @@ def seed(
 
 
 @app.command()
-def init_db(
-    database_url: Annotated[
-        str | None,
-        typer.Option(
-            "--database-url", envvar="DATABASE_URL", help="Database URL (ignored)"
-        ),
-    ] = None,
-    drop_tables: Annotated[
-        bool,
-        typer.Option("--drop-tables", help="Drop existing tables (ignored)"),
-    ] = False,
-) -> None:
+def init_db() -> None:
     """Initialization is now handled by the Analytics service on startup."""
     typer.echo("Database initialization is now managed by the Analytics service.")
 
 
 @app.command()
-def stats(
-    database_url: Annotated[
-        str | None,
-        typer.Option(
-            "--database-url", envvar="DATABASE_URL", help="Database URL (ignored)"
-        ),
-    ] = None,
-) -> None:
+def stats() -> None:
     """Show statistics via Analytics service."""
     configure_logging()
     log = get_logger("stats")
