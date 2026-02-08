@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import optuna
 import pandas as pd
 from optuna.integration import XGBoostPruningCallback
@@ -44,35 +46,30 @@ def _create_objective(
     metric: str,
     scale_pos_weight: float,
     seed: int,
+    search_space: dict,
 ):
     """Build Optuna objective that trains XGBoost and returns validation metric."""
 
     def objective(trial: optuna.Trial) -> float:
         params = {
-            "max_depth": trial.suggest_int(
-                "max_depth", *DEFAULT_SEARCH_SPACE["max_depth"]
-            ),
+            "max_depth": trial.suggest_int("max_depth", *search_space["max_depth"]),
             "n_estimators": trial.suggest_int(
-                "n_estimators", *DEFAULT_SEARCH_SPACE["n_estimators"]
+                "n_estimators", *search_space["n_estimators"]
             ),
             "learning_rate": trial.suggest_float(
-                "learning_rate", *DEFAULT_SEARCH_SPACE["learning_rate"], log=True
+                "learning_rate", *search_space["learning_rate"], log=True
             ),
             "min_child_weight": trial.suggest_int(
-                "min_child_weight", *DEFAULT_SEARCH_SPACE["min_child_weight"]
+                "min_child_weight", *search_space["min_child_weight"]
             ),
-            "subsample": trial.suggest_float(
-                "subsample", *DEFAULT_SEARCH_SPACE["subsample"]
-            ),
+            "subsample": trial.suggest_float("subsample", *search_space["subsample"]),
             "colsample_bytree": trial.suggest_float(
-                "colsample_bytree", *DEFAULT_SEARCH_SPACE["colsample_bytree"]
+                "colsample_bytree", *search_space["colsample_bytree"]
             ),
-            "gamma": trial.suggest_float("gamma", *DEFAULT_SEARCH_SPACE["gamma"]),
-            "reg_alpha": trial.suggest_float(
-                "reg_alpha", *DEFAULT_SEARCH_SPACE["reg_alpha"]
-            ),
+            "gamma": trial.suggest_float("gamma", *search_space["gamma"]),
+            "reg_alpha": trial.suggest_float("reg_alpha", *search_space["reg_alpha"]),
             "reg_lambda": trial.suggest_float(
-                "reg_lambda", *DEFAULT_SEARCH_SPACE["reg_lambda"]
+                "reg_lambda", *search_space["reg_lambda"]
             ),
         }
         pruning_callback = XGBoostPruningCallback(trial, "validation_0-logloss")
@@ -140,6 +137,7 @@ def run_tuning_study(
     scale_pos_weight: float = 1.0,
     direction: str = "maximize",
     strategy: str = "bayesian",
+    search_space_overrides: dict[str, str] | None = None,
 ) -> tuple[dict, pd.DataFrame]:
     """Run Optuna study and return best params and trial history.
 
@@ -155,13 +153,39 @@ def run_tuning_study(
         scale_pos_weight: Class weight for positive class.
         direction: "maximize" or "minimize".
         strategy: "bayesian", "random", or "grid".
+        search_space_overrides: Optional overrides for search space (JSON strings).
 
     Returns:
         (best_params, trials_df) where trials_df has columns like
         trial, value, params_max_depth, params_learning_rate, ...
     """
+    resolved_search_space = DEFAULT_SEARCH_SPACE.copy()
+    if search_space_overrides:
+        for k, v in search_space_overrides.items():
+            if k in resolved_search_space:
+                try:
+                    resolved_search_space[k] = tuple(json.loads(v))
+                except json.JSONDecodeError:
+                    pass  # Fallback to default if invalid JSON
+
+    # Log resolved search space
+    # (mock mlflow import locally to avoid side effects if not available)
+    try:
+        import mlflow
+
+        mlflow.log_dict(resolved_search_space, "resolved_search_space.json")
+    except ImportError:
+        pass
+
     objective = _create_objective(
-        x_train, y_train, x_val, y_val, metric, scale_pos_weight, seed
+        x_train,
+        y_train,
+        x_val,
+        y_val,
+        metric,
+        scale_pos_weight,
+        seed,
+        resolved_search_space,
     )
 
     if strategy == "grid":
