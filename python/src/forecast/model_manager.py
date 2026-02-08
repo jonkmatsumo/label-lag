@@ -153,6 +153,20 @@ class ModelManager:
             # Try to load feature_columns.json artifact
             self._load_feature_columns_artifact()
 
+            # Validate loaded features against registry (Commit 7)
+            from features.registry import FeatureRegistry
+
+            if self._required_features:
+                registered_features = set(FeatureRegistry.list_features())
+                unknown_features = [
+                    f for f in self._required_features if f not in registered_features
+                ]
+                if unknown_features:
+                    logger.warning(
+                        f"Model requires features not in registry: {unknown_features}. "
+                        "This may indicate a registry/model sync issue."
+                    )
+
             # Try to load calibrator.pkl artifact (C2)
             self._load_calibrator_artifact()
 
