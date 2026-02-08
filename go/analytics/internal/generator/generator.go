@@ -82,6 +82,26 @@ func (g *Generator) sampleLogNormalAmount() float64 {
 	return float64(int(amount*100+0.5)) / 100
 }
 
+func (g *Generator) populateDynamicFeatures(r *pb.GeneratedRecord) {
+	if r.NumericalFeatures == nil {
+		r.NumericalFeatures = make(map[string]float64)
+	}
+	if r.CategoricalFeatures == nil {
+		r.CategoricalFeatures = make(map[string]string)
+	}
+
+	// Add experimental numeric features
+	r.NumericalFeatures["experimental_velocity_7d"] = float64(r.BankConnectionsCount_7D) * 1.5
+	r.NumericalFeatures["experimental_balance_delta_abs"] = g.rng.Float64Range(0, 500)
+
+	// Duplicate some existing for demonstration
+	r.NumericalFeatures["amount_dyn"] = r.Amount
+
+	// Add experimental categorical feature
+	deviceTypes := []string{"iphone", "android", "web", "tablet"}
+	r.CategoricalFeatures["device_type"] = deviceTypes[g.rng.IntN(len(deviceTypes))]
+}
+
 // GenerateLegitimate creates legitimate (non-fraudulent) transaction records.
 // Characteristics:
 // - Log-normal distribution for amounts
@@ -146,6 +166,7 @@ func (g *Generator) GenerateLegitimate(count int) []*pb.GeneratedRecord {
 			FraudType:                 "",
 		}
 
+		g.populateDynamicFeatures(record)
 		records = append(records, record)
 	}
 
@@ -272,7 +293,7 @@ func (g *Generator) generateLegitimateForUser(userID string, pii PII) *pb.Genera
 		balanceToTxnRatio = availableBalance / amount
 	}
 
-	return &pb.GeneratedRecord{
+	record := &pb.GeneratedRecord{
 		RecordId:                  uuid.New().String()[:8],
 		UserId:                    userID,
 		FullName:                  pii.FullName,
@@ -294,6 +315,9 @@ func (g *Generator) generateLegitimateForUser(userID string, pii PII) *pb.Genera
 		IsFraudulent:              false,
 		FraudType:                 "",
 	}
+
+	g.populateDynamicFeatures(record)
+	return record
 }
 
 // generateFraudForUser creates a fraudulent record for a specific user.
@@ -317,5 +341,6 @@ func (g *Generator) generateFraudForUser(userID string, pii PII, fraudType Fraud
 	record.Email = pii.Email
 	record.Phone = pii.Phone
 
+	g.populateDynamicFeatures(record)
 	return record
 }

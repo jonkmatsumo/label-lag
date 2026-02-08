@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -72,7 +73,9 @@ func (s *SQLStore) GetTransactionDetails(ctx context.Context, cutoffDate time.Ti
 			gr.merchant_risk_score,
 			fs.velocity_24h,
 			fs.amount_to_avg_ratio_30d,
-			fs.balance_volatility_z_score
+			fs.balance_volatility_z_score,
+			gr.numerical_features,
+			gr.categorical_features
 		FROM evaluation_metadata em
 		LEFT JOIN generated_records gr ON em.record_id = gr.record_id
 		LEFT JOIN feature_snapshots fs ON em.record_id = fs.record_id
@@ -93,6 +96,7 @@ func (s *SQLStore) GetTransactionDetails(ctx context.Context, cutoffDate time.Ti
 	for rows.Next() {
 		var d pb.TransactionDetail
 		var createdAt time.Time
+		var numFeaturesJSON, catFeaturesJSON []byte
 		if err := rows.Scan(
 			&d.RecordId,
 			&d.UserId,
@@ -105,10 +109,20 @@ func (s *SQLStore) GetTransactionDetails(ctx context.Context, cutoffDate time.Ti
 			&d.Velocity_24H,
 			&d.AmountToAvgRatio_30D,
 			&d.BalanceVolatilityZScore,
+			&numFeaturesJSON,
+			&catFeaturesJSON,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan transaction detail: %v", err)
 		}
 		d.CreatedAt = timestamppb.New(createdAt)
+
+		if len(numFeaturesJSON) > 0 {
+			json.Unmarshal(numFeaturesJSON, &d.NumericalFeatures)
+		}
+		if len(catFeaturesJSON) > 0 {
+			json.Unmarshal(catFeaturesJSON, &d.CategoricalFeatures)
+		}
+
 		details = append(details, &d)
 	}
 	return details, nil
@@ -129,7 +143,9 @@ func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransac
 			gr.merchant_risk_score,
 			fs.velocity_24h,
 			fs.amount_to_avg_ratio_30d,
-			fs.balance_volatility_z_score
+			fs.balance_volatility_z_score,
+			gr.numerical_features,
+			gr.categorical_features
 		FROM evaluation_metadata em
 		LEFT JOIN generated_records gr ON em.record_id = gr.record_id
 		LEFT JOIN feature_snapshots fs ON em.record_id = fs.record_id
@@ -194,6 +210,7 @@ func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransac
 	for rows.Next() {
 		var d pb.TransactionDetail
 		var createdAt time.Time
+		var numFeaturesJSON, catFeaturesJSON []byte
 		if err := rows.Scan(
 			&d.RecordId,
 			&d.UserId,
@@ -208,10 +225,20 @@ func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransac
 			&d.Velocity_24H,
 			&d.AmountToAvgRatio_30D,
 			&d.BalanceVolatilityZScore,
+			&numFeaturesJSON,
+			&catFeaturesJSON,
 		); err != nil {
 			return nil, 0, fmt.Errorf("failed to scan search result: %v", err)
 		}
 		d.CreatedAt = timestamppb.New(createdAt)
+
+		if len(numFeaturesJSON) > 0 {
+			json.Unmarshal(numFeaturesJSON, &d.NumericalFeatures)
+		}
+		if len(catFeaturesJSON) > 0 {
+			json.Unmarshal(catFeaturesJSON, &d.CategoricalFeatures)
+		}
+
 		details = append(details, &d)
 	}
 	return details, total, nil

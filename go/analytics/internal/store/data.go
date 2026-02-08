@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -33,15 +34,19 @@ func (s *SQLStore) StoreGeneratedData(ctx context.Context, records []*pb.Generat
 			bank_connections_count_24h, bank_connections_count_7d,
 			bank_connections_avg_30d, amount, amount_to_avg_ratio,
 			merchant_risk_score, is_returned, email_changed_at, phone_changed_at,
-			is_fraudulent, fraud_type
+			is_fraudulent, fraud_type,
+			numerical_features, categorical_features
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
 		)
 	`
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
 	for _, r := range records {
+		numFeaturesJSON, _ := json.Marshal(r.NumericalFeatures)
+		catFeaturesJSON, _ := json.Marshal(r.CategoricalFeatures)
+
 		_, err := tx.ExecContext(queryCtx, recordQuery,
 			r.RecordId, r.UserId, r.FullName, r.Email, r.Phone,
 			r.TransactionTimestamp.AsTime(), r.IsOffHoursTxn, r.AvailableBalance,
@@ -51,6 +56,7 @@ func (s *SQLStore) StoreGeneratedData(ctx context.Context, records []*pb.Generat
 			r.Amount, r.AmountToAvgRatio, r.MerchantRiskScore, r.IsReturned,
 			r.EmailChangedAt.AsTime(), r.PhoneChangedAt.AsTime(),
 			r.IsFraudulent, r.FraudType,
+			numFeaturesJSON, catFeaturesJSON,
 		)
 		if err != nil {
 			return 0, db.MapDBError(fmt.Errorf("failed to insert record %s: %w", r.RecordId, err))

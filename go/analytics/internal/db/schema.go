@@ -55,6 +55,9 @@ func InitDB(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_rule_versions_rule_id ON rule_versions(rule_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_rule_versions_created_at ON rule_versions(created_at)`,
 		`ALTER TABLE rules ADD COLUMN IF NOT EXISTS active_version_id TEXT`,
+		// Dynamic features support
+		`ALTER TABLE generated_records ADD COLUMN IF NOT EXISTS numerical_features JSONB`,
+		`ALTER TABLE generated_records ADD COLUMN IF NOT EXISTS categorical_features JSONB`,
 	}
 
 	for _, q := range queries {

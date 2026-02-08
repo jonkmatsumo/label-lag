@@ -115,7 +115,9 @@ func TestSearchTransactions(t *testing.T) {
 			"velocity_24h",
 			"amount_to_avg_ratio_30d",
 			"balance_volatility_z_score",
-		}).AddRow("rec-1", "user-1", time.Now(), true, true, 22.5, false, "none", false, 10, 1, 1.0, -0.3))
+			"numerical_features",
+			"categorical_features",
+		}).AddRow("rec-1", "user-1", time.Now(), true, true, 22.5, false, "none", false, 10, 1, 1.0, -0.3, []byte("{}"), []byte("{}")))
 
 	minAmount := 12.5
 	req := &pb.SearchTransactionsRequest{

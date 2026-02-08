@@ -33,7 +33,9 @@ func (s *SQLStore) GetTrainingData(ctx context.Context, cutoff time.Time) ([]*pb
 				THEN TRUE
 				ELSE FALSE
 			END AS is_fraudulent,
-			COALESCE(gr.fraud_type, '')
+			COALESCE(gr.fraud_type, ''),
+			gr.numerical_features,
+			gr.categorical_features
 		FROM feature_snapshots fs
 		INNER JOIN evaluation_metadata em ON fs.record_id = em.record_id
 		INNER JOIN generated_records gr ON fs.record_id = gr.record_id
@@ -56,7 +58,9 @@ func (s *SQLStore) GetTrainingData(ctx context.Context, cutoff time.Time) ([]*pb
 			fs.amount_to_avg_ratio_30d,
 			fs.balance_volatility_z_score,
 			gr.is_fraudulent,
-			COALESCE(gr.fraud_type, '')
+			COALESCE(gr.fraud_type, ''),
+			gr.numerical_features,
+			gr.categorical_features
 		FROM feature_snapshots fs
 		INNER JOIN evaluation_metadata em ON fs.record_id = em.record_id
 		INNER JOIN generated_records gr ON fs.record_id = gr.record_id
@@ -90,6 +94,7 @@ func (s *SQLStore) queryTrainingRecords(ctx context.Context, query string, cutof
 	for rows.Next() {
 		var tx pb.TransactionDetail
 		var createdAt time.Time
+		var numFeaturesJSON, catFeaturesJSON []byte
 		err := rows.Scan(
 			&tx.RecordId,
 			&tx.UserId,
@@ -104,11 +109,21 @@ func (s *SQLStore) queryTrainingRecords(ctx context.Context, query string, cutof
 			&tx.BalanceVolatilityZScore,
 			&tx.IsFraudulent,
 			&tx.FraudType,
+			&numFeaturesJSON,
+			&catFeaturesJSON,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan training record: %v", err)
 		}
 		tx.CreatedAt = timestamppb.New(createdAt)
+
+		if len(numFeaturesJSON) > 0 {
+			json.Unmarshal(numFeaturesJSON, &tx.NumericalFeatures)
+		}
+		if len(catFeaturesJSON) > 0 {
+			json.Unmarshal(catFeaturesJSON, &tx.CategoricalFeatures)
+		}
+
 		records = append(records, &tx)
 	}
 	return records, nil
