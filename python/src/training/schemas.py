@@ -267,6 +267,10 @@ class TuningConfig(BaseModel):
             "If None, uses best trial automatically."
         ),
     )
+    search_space: dict[str, str] | None = Field(
+        default=None,
+        description="Optional overrides for search space (JSON strings).",
+    )
 
 
 class TrainRequest(BaseModel):
@@ -306,6 +310,14 @@ class TrainRequest(BaseModel):
     reg_lambda: float = Field(default=1.0, ge=0.0, le=10.0)
     random_state: int = Field(default=42)
     early_stopping_rounds: int | None = Field(default=None, ge=5, le=50)
+    feature_groups: list[str] | None = Field(
+        default=None,
+        description="List of feature groups to include (e.g. 'transaction')",
+    )
+    feature_resolution_mode: Literal["strict", "best_effort"] = Field(
+        default="strict",
+        description="How to handle missing features from groups",
+    )
 
     def model_post_init(self, __context) -> None:
         """Validate selected_feature_columns if provided."""

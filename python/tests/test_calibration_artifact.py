@@ -12,7 +12,8 @@ from model.train import train_model
 class TestCalibrationArtifact:
     """Tests for calibration artifact flow (C2)."""
 
-    def test_calibrator_fitting_during_training(self):
+    @patch("features.registry.FeatureRegistry.get")
+    def test_calibrator_fitting_during_training(self, _mock_registry):
         """Test that ScoreCalibrator is fitted and logged during training (C2)."""
         # Mock mlflow
         with (

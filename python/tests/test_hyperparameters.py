@@ -12,11 +12,12 @@ from model.train import train_model
 class TestHyperparamsPassedToXGBoost:
     """Hyperparameters are passed to XGBClassifier."""
 
+    @patch("features.registry.FeatureRegistry.get")
     @patch("model.train.mlflow")
     @patch("model.train.DataLoader")
     @patch("model.train._get_git_sha", return_value="x")
     def test_hyperparams_passed_to_xgboost(
-        self, _mock_git, mock_loader_cls, mock_mlflow
+        self, _mock_git, mock_loader_cls, mock_mlflow, _mock_registry
     ):
         mock_loader = MagicMock()
         mock_loader.FEATURE_COLUMNS = DataLoader.FEATURE_COLUMNS
@@ -71,11 +72,12 @@ class TestHyperparamsPassedToXGBoost:
 class TestHyperparamsLoggedToMlflow:
     """Hyperparameters are logged to MLflow."""
 
+    @patch("features.registry.FeatureRegistry.get")
     @patch("model.train.mlflow")
     @patch("model.train.DataLoader")
     @patch("model.train._get_git_sha", return_value="x")
     def test_hyperparams_logged_to_mlflow(
-        self, _mock_git, mock_loader_cls, mock_mlflow
+        self, _mock_git, mock_loader_cls, mock_mlflow, _mock_registry
     ):
         mock_loader = MagicMock()
         mock_loader.FEATURE_COLUMNS = DataLoader.FEATURE_COLUMNS
@@ -107,11 +109,12 @@ class TestHyperparamsLoggedToMlflow:
 class TestEarlyStopping:
     """Early stopping behavior."""
 
+    @patch("features.registry.FeatureRegistry.get")
     @patch("model.train.mlflow")
     @patch("model.train.DataLoader")
     @patch("model.train._get_git_sha", return_value="x")
     def test_early_stopping_logs_best_iteration(
-        self, _mock_git, mock_loader_cls, mock_mlflow
+        self, _mock_git, mock_loader_cls, mock_mlflow, _mock_registry
     ):
         mock_loader = MagicMock()
         mock_loader.FEATURE_COLUMNS = DataLoader.FEATURE_COLUMNS
@@ -140,11 +143,12 @@ class TestEarlyStopping:
 class TestDefaultHyperparamsUnchanged:
     """Default hyperparameters match schema."""
 
+    @patch("features.registry.FeatureRegistry.get")
     @patch("model.train.mlflow")
     @patch("model.train.DataLoader")
     @patch("model.train._get_git_sha", return_value="x")
     def test_default_hyperparams_unchanged(
-        self, _mock_git, mock_loader_cls, mock_mlflow
+        self, _mock_git, mock_loader_cls, mock_mlflow, _mock_registry
     ):
         mock_loader = MagicMock()
         mock_loader.FEATURE_COLUMNS = DataLoader.FEATURE_COLUMNS

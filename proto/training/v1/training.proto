@@ -35,6 +35,9 @@ message TrainRequest {
   float reg_lambda = 13;
   int32 random_state = 14;
   optional int32 early_stopping_rounds = 15;
+  optional string feature_set_id = 16;
+  repeated string feature_groups = 17;
+  string feature_resolution_mode = 18; // strict (default) | best_effort
 }
 
 message SplitConfig {
@@ -54,6 +57,7 @@ message TuningConfig {
   string metric = 5;
   string direction = 6; // maximize, minimize
   optional int32 selected_trial_number = 7;
+  map<string, string> search_space = 8; // JSON-encoded range, e.g. "[2, 12]"
 }
 
 message TrainResponse {
