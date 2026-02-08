@@ -123,11 +123,11 @@ func TestGenerateLegitimateAmountDistribution(t *testing.T) {
 	}
 }
 
-func TestGenerateDatasetWithSequences(t *testing.T) {
+func TestGenerateDatasetWithSequences(context.Background(), t *testing.T) {
 	seed := int64(42)
 	gen := NewGenerator(&seed, nil)
 
-	result := gen.GenerateDatasetWithSequences(10, 0.10) // 10 users, 10% fraud
+	result := gen.GenerateDatasetWithSequences(context.Background(), 10, 0.10) // 10 users, 10% fraud
 
 	// Should have records
 	if len(result.Records) == 0 {

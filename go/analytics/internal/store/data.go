@@ -44,6 +44,11 @@ func (s *SQLStore) StoreGeneratedData(ctx context.Context, records []*pb.Generat
 	defer cancel()
 
 	for _, r := range records {
+		select {
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		default:
+		}
 		numFeaturesJSON, _ := json.Marshal(r.NumericalFeatures)
 		catFeaturesJSON, _ := json.Marshal(r.CategoricalFeatures)
 
@@ -74,6 +79,11 @@ func (s *SQLStore) StoreGeneratedData(ctx context.Context, records []*pb.Generat
 	`
 
 	for _, m := range metadata {
+		select {
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		default:
+		}
 		var fraudConfirmedAt sql.NullTime
 		if m.FraudConfirmedAt != nil {
 			fraudConfirmedAt = sql.NullTime{Time: m.FraudConfirmedAt.AsTime(), Valid: true}

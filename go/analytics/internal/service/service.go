@@ -288,7 +288,7 @@ func (s *Service) GenerateData(ctx context.Context, req *pb.GenerateDataRequest)
 	}
 
 	gen := generator.NewGenerator(&seed, s.registry)
-	result := gen.GenerateDatasetWithSequences(int(req.NumUsers), req.FraudRate)
+	result := gen.GenerateDatasetWithSequences(ctx, int(req.NumUsers), req.FraudRate)
 
 	// Count fraud records for the response
 	var fraudCount int64

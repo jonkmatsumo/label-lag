@@ -190,7 +190,7 @@ type DatasetResult struct {
 // numUsers: total number of users to generate
 // fraudRate: fraction of users that are fraudulent (0.0 to 1.0)
 // Returns records and evaluation metadata for training.
-func (g *Generator) GenerateDatasetWithSequences(numUsers int, fraudRate float64) *DatasetResult {
+func (g *Generator) GenerateDatasetWithSequences(ctx context.Context, numUsers int, fraudRate float64) *DatasetResult {
 	var allRecords []*pb.GeneratedRecord
 	var allMetadata []*pb.EvaluationMetadata
 
@@ -199,6 +199,11 @@ func (g *Generator) GenerateDatasetWithSequences(numUsers int, fraudRate float64
 
 	// Generate legitimate user sequences
 	for i := 0; i < legitUserCount; i++ {
+		select {
+		case <-ctx.Done():
+			return &DatasetResult{}
+		default:
+		}
 		userRecords := g.generateUserSequence(false)
 		for seq, r := range userRecords {
 			allRecords = append(allRecords, r)
@@ -214,6 +219,11 @@ func (g *Generator) GenerateDatasetWithSequences(numUsers int, fraudRate float64
 
 	// Generate fraudulent user sequences
 	for i := 0; i < fraudUserCount; i++ {
+		select {
+		case <-ctx.Done():
+			return &DatasetResult{}
+		default:
+		}
 		userRecords := g.generateUserSequence(true)
 		fraudConfirmedAt := userRecords[len(userRecords)-1].TransactionTimestamp
 

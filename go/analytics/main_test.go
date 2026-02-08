@@ -215,7 +215,7 @@ func TestGeneratorPackageIntegration(t *testing.T) {
 	gen := generator.NewGenerator(&seed, nil)
 
 	// Generate a small dataset
-	result := gen.GenerateDatasetWithSequences(5, 0.2)
+	result := gen.GenerateDatasetWithSequences(context.Background(), 5, 0.2)
 
 	// Verify records exist
 	assert.NotEmpty(t, result.Records)
@@ -254,8 +254,8 @@ func TestGeneratorDeterminism(t *testing.T) {
 	gen1 := generator.NewGenerator(&seed, nil)
 	gen2 := generator.NewGenerator(&seed, nil)
 
-	result1 := gen1.GenerateDatasetWithSequences(3, 0.1)
-	result2 := gen2.GenerateDatasetWithSequences(3, 0.1)
+	result1 := gen1.GenerateDatasetWithSequences(context.Background(), 3, 0.1)
+	result2 := gen2.GenerateDatasetWithSequences(context.Background(), 3, 0.1)
 
 	require.Equal(t, len(result1.Records), len(result2.Records))
 
@@ -274,7 +274,7 @@ func TestGeneratorFraudTypeDistribution(t *testing.T) {
 	gen := generator.NewGenerator(&seed, nil)
 
 	// Generate with 100% fraud rate to ensure we get fraud records
-	result := gen.GenerateDatasetWithSequences(10, 1.0)
+	result := gen.GenerateDatasetWithSequences(context.Background(), 10, 1.0)
 
 	fraudTypes := make(map[string]int)
 	for _, r := range result.Records {
