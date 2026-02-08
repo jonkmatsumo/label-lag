@@ -302,12 +302,12 @@ func (s *Service) GenerateData(ctx context.Context, req *pb.GenerateDataRequest)
 
 	// Idempotency check
 	if req.IdempotencyKey != "" {
-		existing, status, err := s.store.GetGenerationJob(ctx, req.IdempotencyKey)
+		existing, jobStatus, err := s.store.GetGenerationJob(ctx, req.IdempotencyKey)
 		if err != nil {
 			return nil, err
 		}
 		if existing != nil {
-			if status == "in_progress" {
+			if jobStatus == "in_progress" {
 				return nil, status.Error(codes.AlreadyExists, "generation job already in progress")
 			}
 			return existing, nil

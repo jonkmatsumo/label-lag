@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"context"
 	"testing"
 )
 
@@ -123,7 +124,7 @@ func TestGenerateLegitimateAmountDistribution(t *testing.T) {
 	}
 }
 
-func TestGenerateDatasetWithSequences(context.Background(), t *testing.T) {
+func TestGenerateDatasetWithSequences(t *testing.T) {
 	seed := int64(42)
 	gen := NewGenerator(&seed, nil)
 
