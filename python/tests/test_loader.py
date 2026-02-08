@@ -448,3 +448,65 @@ class TestSplitConfig:
         split = loader.load_train_test_split(datetime(2024, 4, 1), split_config=config)
 
         assert split.split_manifest["manifest_hash"].startswith("sha256:")
+
+
+class TestDynamicFeatures:
+    """Tests for dynamic feature unpacking."""
+
+    @pytest.fixture
+    def loader(self):
+        return DataLoader()
+
+    def test_unpack_dynamic_numerical_features(self, loader, monkeypatch):
+        """Verify dynamic numerical features are unpacked into columns."""
+        from training import crud_client
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+
+        # Create a mock record with dynamic features
+        record = _make_mock_record(
+            "rec1", "user1", 5, 1.5, 0.2, False, datetime(2024, 3, 1)
+        )
+        record.numerical_features = {"experimental_feat": 123.45}
+        record.categorical_features = {"device": "mobile"}
+
+        mock_response.train_records = [record]
+        mock_response.test_records = []
+        mock_client.get_training_data.return_value = mock_response
+        monkeypatch.setattr(crud_client, "_client", mock_client)
+
+        split = loader.load_train_test_split(
+            datetime(2024, 4, 1),
+            feature_columns=["velocity_24h", "experimental_feat", "device"],
+        )
+
+        assert "experimental_feat" in split.X_train.columns
+        assert split.X_train["experimental_feat"].iloc[0] == 123.45
+        assert "device" in split.X_train.columns
+        assert split.X_train["device"].iloc[0] == "mobile"
+
+    def test_handle_feature_conflicts(self, loader, monkeypatch):
+        """Verify dynamic feature names suffix when conflicting with base columns."""
+        from training import crud_client
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+
+        record = _make_mock_record(
+            "rec1", "user1", 5, 1.5, 0.2, False, datetime(2024, 3, 1)
+        )
+        record.numerical_features = {"velocity_24h": 999}
+
+        mock_response.train_records = [record]
+        mock_response.test_records = []
+        mock_client.get_training_data.return_value = mock_response
+        monkeypatch.setattr(crud_client, "_client", mock_client)
+
+        # We request both the original and the dynamic one (which is suffixed)
+        split = loader.load_train_test_split(
+            datetime(2024, 4, 1), feature_columns=["velocity_24h", "velocity_24h__dyn"]
+        )
+
+        assert split.X_train["velocity_24h"].iloc[0] == 5
+        assert split.X_train["velocity_24h__dyn"].iloc[0] == 999
