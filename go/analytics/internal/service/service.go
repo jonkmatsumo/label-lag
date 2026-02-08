@@ -282,6 +282,24 @@ func (s *Service) GenerateData(ctx context.Context, req *pb.GenerateDataRequest)
 		return nil, status.Error(codes.InvalidArgument, "fraud_rate must be between 0.0 and 1.0")
 	}
 
+	// Idempotency check
+	if req.IdempotencyKey != "" {
+		existing, status, err := s.store.GetGenerationJob(ctx, req.IdempotencyKey)
+		if err != nil {
+			return nil, err
+		}
+		if existing != nil {
+			if status == "in_progress" {
+				return nil, status.Error(codes.AlreadyExists, "generation job already in progress")
+			}
+			return existing, nil
+		}
+
+		if err := s.store.CreateGenerationJob(ctx, req.IdempotencyKey); err != nil {
+			return nil, err
+		}
+	}
+
 	seed := time.Now().UnixNano()
 	if req.Seed != nil {
 		seed = *req.Seed
@@ -289,6 +307,14 @@ func (s *Service) GenerateData(ctx context.Context, req *pb.GenerateDataRequest)
 
 	gen := generator.NewGenerator(&seed, s.registry)
 	result := gen.GenerateDatasetWithSequences(ctx, int(req.NumUsers), req.FraudRate)
+
+	// Check for context cancellation after heavy generation
+	if ctx.Err() != nil {
+		if req.IdempotencyKey != "" {
+			s.store.FailGenerationJob(context.Background(), req.IdempotencyKey, ctx.Err().Error())
+		}
+		return nil, ctx.Err()
+	}
 
 	// Count fraud records for the response
 	var fraudCount int64
@@ -300,24 +326,38 @@ func (s *Service) GenerateData(ctx context.Context, req *pb.GenerateDataRequest)
 
 	if req.DropExisting {
 		if _, err := s.store.ClearAllData(ctx); err != nil {
+			if req.IdempotencyKey != "" {
+				s.store.FailGenerationJob(context.Background(), req.IdempotencyKey, err.Error())
+			}
 			return nil, err
 		}
 	}
 
 	count, err := s.store.StoreGeneratedData(ctx, result.Records, result.Metadata)
 	if err != nil {
+		if req.IdempotencyKey != "" {
+			s.store.FailGenerationJob(context.Background(), req.IdempotencyKey, err.Error())
+		}
 		return nil, err
 	}
 
 	// Trigger feature materialization automatically after generation
 	materialized, _ := s.store.MaterializeFeatures(ctx)
 
-	return &pb.GenerateDataResponse{
+	resp := &pb.GenerateDataResponse{
 		Success:              true,
 		TotalRecords:         count,
 		FraudRecords:         fraudCount,
 		FeaturesMaterialized: materialized,
-	}, nil
+	}
+
+	if req.IdempotencyKey != "" {
+		if err := s.store.CompleteGenerationJob(ctx, req.IdempotencyKey, resp); err != nil {
+			// Just log error, don't fail the request if generation succeeded
+		}
+	}
+
+	return resp, nil
 }
 
 func (s *Service) ClearAllData(ctx context.Context, req *pb.ClearAllDataRequest) (*pb.ClearAllDataResponse, error) {

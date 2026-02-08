@@ -93,6 +93,16 @@ func InitDB(db *sql.DB) error {
 			is_shadow BOOLEAN,
 			score_delta INTEGER
 		)`,
+		`CREATE TABLE IF NOT EXISTS generation_jobs (
+			idempotency_key TEXT PRIMARY KEY,
+			status TEXT NOT NULL,
+			total_records INTEGER,
+			fraud_records INTEGER,
+			features_materialized INTEGER,
+			error TEXT,
+			created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+			completed_at TIMESTAMP
+		)`,
 		`CREATE INDEX IF NOT EXISTS idx_generated_records_record_id ON generated_records(record_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_evaluation_metadata_record_id ON evaluation_metadata(record_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_feature_snapshots_record_id ON feature_snapshots(record_id)`,

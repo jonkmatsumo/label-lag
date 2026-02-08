@@ -417,6 +417,7 @@ message GenerateDataRequest {
   double fraud_rate = 2;    // Fraction of fraudulent users (0.0 to 1.0)
   bool drop_existing = 3;   // Clear existing data before generating
   optional int64 seed = 4;  // Optional seed for deterministic generation
+  string idempotency_key = 5; // Prevent duplicate generation
 }
 
 message GenerateDataResponse {
