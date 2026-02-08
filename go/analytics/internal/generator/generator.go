@@ -12,17 +12,19 @@ import (
 // Generator creates synthetic transaction data.
 // It mirrors the Python DataGenerator's behavior for parity testing.
 type Generator struct {
-	rng *RNG
-	pii *PIIGenerator
+	rng      *RNG
+	pii      *PIIGenerator
+	registry *GeneratorRegistry
 }
 
-// NewGenerator creates a generator with the given seed.
+// NewGenerator creates a generator with the given seed and registry.
 // If seed is nil, uses a random seed.
-func NewGenerator(seed *int64) *Generator {
+func NewGenerator(seed *int64, registry *GeneratorRegistry) *Generator {
 	rng := NewRNG(seed)
 	return &Generator{
-		rng: rng,
-		pii: NewPIIGenerator(rng),
+		rng:      rng,
+		pii:      NewPIIGenerator(rng),
+		registry: registry,
 	}
 }
 
@@ -83,6 +85,11 @@ func (g *Generator) sampleLogNormalAmount() float64 {
 }
 
 func (g *Generator) populateDynamicFeatures(r *pb.GeneratedRecord) {
+	if g.registry != nil {
+		g.registry.Populate(g.rng, r)
+		return
+	}
+
 	if r.NumericalFeatures == nil {
 		r.NumericalFeatures = make(map[string]float64)
 	}

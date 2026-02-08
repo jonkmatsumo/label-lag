@@ -14,12 +14,14 @@ import (
 
 type Service struct {
 	pb.UnimplementedAnalyticsServiceServer
-	store store.Store
+	store    store.Store
+	registry *generator.GeneratorRegistry
 }
 
-func NewService(store store.Store) *Service {
+func NewService(store store.Store, registry *generator.GeneratorRegistry) *Service {
 	return &Service{
-		store: store,
+		store:    store,
+		registry: registry,
 	}
 }
 
@@ -270,7 +272,11 @@ func (s *Service) GenerateData(ctx context.Context, req *pb.GenerateDataRequest)
 	}
 
 	seed := time.Now().UnixNano()
-	gen := generator.NewGenerator(&seed)
+	if req.Seed != nil {
+		seed = *req.Seed
+	}
+
+	gen := generator.NewGenerator(&seed, s.registry)
 	result := gen.GenerateDatasetWithSequences(int(req.NumUsers), req.FraudRate)
 
 	count, err := s.store.StoreGeneratedData(ctx, result.Records, result.Metadata)

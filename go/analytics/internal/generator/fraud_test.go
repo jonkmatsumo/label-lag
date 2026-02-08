@@ -6,7 +6,7 @@ import (
 
 func TestGenerateFraudulent(t *testing.T) {
 	seed := int64(42)
-	gen := NewGenerator(&seed)
+	gen := NewGenerator(&seed, nil)
 
 	fraudTypes := []FraudType{
 		FraudTypeLiquidityCrunch,
@@ -36,7 +36,7 @@ func TestGenerateFraudulent(t *testing.T) {
 
 func TestLiquidityCrunchCharacteristics(t *testing.T) {
 	seed := int64(42)
-	gen := NewGenerator(&seed)
+	gen := NewGenerator(&seed, nil)
 
 	records := gen.GenerateFraudulent(FraudTypeLiquidityCrunch, 20)
 
@@ -62,7 +62,7 @@ func TestLiquidityCrunchCharacteristics(t *testing.T) {
 
 func TestLinkBurstCharacteristics(t *testing.T) {
 	seed := int64(42)
-	gen := NewGenerator(&seed)
+	gen := NewGenerator(&seed, nil)
 
 	records := gen.GenerateFraudulent(FraudTypeLinkBurst, 20)
 
@@ -83,7 +83,7 @@ func TestLinkBurstCharacteristics(t *testing.T) {
 
 func TestATOCharacteristics(t *testing.T) {
 	seed := int64(42)
-	gen := NewGenerator(&seed)
+	gen := NewGenerator(&seed, nil)
 
 	records := gen.GenerateFraudulent(FraudTypeATO, 20)
 

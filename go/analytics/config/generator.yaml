@@ -1,0 +1,21 @@
+generators:
+  - name: "experimental_velocity_7d"
+    enabled: true
+    type: "numeric"
+    params:
+      multiplier: 1.5
+  - name: "experimental_balance_delta_abs"
+    enabled: true
+    type: "numeric"
+    params:
+      min: 0
+      max: 500
+  - name: "amount_dyn"
+    enabled: true
+    type: "numeric"
+    params: {}
+  - name: "device_type"
+    enabled: true
+    type: "categorical"
+    params:
+      values: ["iphone", "android", "web", "tablet"]
