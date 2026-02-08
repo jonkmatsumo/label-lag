@@ -10,6 +10,12 @@ from training.crud_client import get_crud_client
 @pytest.fixture(scope="module")
 def crud_client():
     client = get_crud_client()
+    # Check connectivity before running integration tests
+    try:
+        # Simple ping-like call to verify DNS and connectivity
+        client.get_overview_metrics()
+    except Exception as e:
+        pytest.skip(f"Analytics service is not reachable: {e}")
     return client
 
 
