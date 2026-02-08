@@ -138,6 +138,8 @@ def run_tuning_study(
     timeout_seconds: int | None = None,
     seed: int = 42,
     scale_pos_weight: float = 1.0,
+    direction: str = "maximize",
+    strategy: str = "bayesian",
 ) -> tuple[dict, pd.DataFrame]:
     """Run Optuna study and return best params and trial history.
 
@@ -151,6 +153,8 @@ def run_tuning_study(
         timeout_seconds: Optional timeout for the study.
         seed: Random seed.
         scale_pos_weight: Class weight for positive class.
+        direction: "maximize" or "minimize".
+        strategy: "bayesian", "random", or "grid".
 
     Returns:
         (best_params, trials_df) where trials_df has columns like
@@ -159,9 +163,22 @@ def run_tuning_study(
     objective = _create_objective(
         x_train, y_train, x_val, y_val, metric, scale_pos_weight, seed
     )
-    sampler = optuna.samplers.TPESampler(seed=seed, n_startup_trials=5)
+
+    if strategy == "grid":
+        # GridSampler requires search space passed to constructor.
+        # Since we use continuous ranges in suggest_*, we need explicit grid values.
+        # This requires search space customization (Commit 3).
+        pass
+
+    if strategy == "random":
+        sampler = optuna.samplers.RandomSampler(seed=seed)
+    elif strategy == "grid":
+        raise ValueError("Grid strategy requires explicit search space definition.")
+    else:  # bayesian / default
+        sampler = optuna.samplers.TPESampler(seed=seed, n_startup_trials=5)
+
     pruner = MedianPruner(n_startup_trials=5, n_warmup_steps=10)
-    study = optuna.create_study(direction="maximize", sampler=sampler, pruner=pruner)
+    study = optuna.create_study(direction=direction, sampler=sampler, pruner=pruner)
     study.optimize(
         objective,
         n_trials=n_trials,

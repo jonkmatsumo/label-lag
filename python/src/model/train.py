@@ -335,6 +335,8 @@ def train_model(
                     timeout_seconds=tuning_config.timeout_minutes * 60,
                     seed=split_config.seed if split_config else 42,
                     scale_pos_weight=scale_pos_weight,
+                    direction=tuning_config.direction,
+                    strategy=tuning_config.strategy.value,
                 )
                 selected_params = best
                 selection_type = "auto"
