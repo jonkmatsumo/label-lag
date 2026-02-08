@@ -222,6 +222,17 @@ def _compute_metrics(y_true, y_pred, y_proba):
     }
 
 
+def _to_python_type(obj):
+    """Convert numpy types to python types for JSON serialization."""
+    import numpy as np
+
+    if isinstance(obj, (np.integer, np.floating)):
+        return obj.item()
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    return obj
+
+
 def train_model(
     scale_pos_weight: float | None = None,
     max_depth: int = 6,
@@ -413,7 +424,9 @@ def train_model(
             "training_window_days": training_window_days,
         }
         # Ensure deterministic JSON
-        config_json = json.dumps(config_to_hash, sort_keys=True)
+        config_json = json.dumps(
+            config_to_hash, sort_keys=True, default=_to_python_type
+        )
         training_config_hash = hashlib.sha256(config_json.encode("utf-8")).hexdigest()
 
         _mlflow.set_tag("training_config_hash", training_config_hash)
