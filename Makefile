@@ -188,3 +188,11 @@ proto-gen-python:
 	@touch $(PYTHON_SRC_DIR)/inference/__init__.py
 	@touch $(PYTHON_SRC_DIR)/inference/v1/__init__.py
 	@touch $(PYTHON_SRC_DIR)/forecast/v1/__init__.py
+
+db-migrate:
+	cd go/analytics && go run cmd/migrate/main.go
+
+db-verify:
+	@echo "Verifying migrations apply cleanly..."
+	# This target expects a running DB or can be used in CI with a service container
+	cd go/analytics && go run cmd/migrate/main.go

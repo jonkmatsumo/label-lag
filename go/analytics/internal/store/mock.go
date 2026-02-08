@@ -231,6 +231,29 @@ func (m *MockStore) GetInferenceScores(ctx context.Context, cutoff time.Time) ([
 	return args.Get(0).([]int32), args.Error(1)
 }
 
+func (m *MockStore) GetGenerationJob(ctx context.Context, key string) (*pb.GenerateDataResponse, string, error) {
+	args := m.Called(ctx, key)
+	if args.Get(0) == nil {
+		return nil, "", args.Error(2)
+	}
+	return args.Get(0).(*pb.GenerateDataResponse), args.String(1), args.Error(2)
+}
+
+func (m *MockStore) CreateGenerationJob(ctx context.Context, key string) error {
+	args := m.Called(ctx, key)
+	return args.Error(0)
+}
+
+func (m *MockStore) CompleteGenerationJob(ctx context.Context, key string, resp *pb.GenerateDataResponse) error {
+	args := m.Called(ctx, key, resp)
+	return args.Error(0)
+}
+
+func (m *MockStore) FailGenerationJob(ctx context.Context, key string, errMsg string) error {
+	args := m.Called(ctx, key, errMsg)
+	return args.Error(0)
+}
+
 func (m *MockStore) GetDatasetProfile(ctx context.Context, datasetID string, limitFeatures, numBuckets int32) (*pb.GetDatasetProfileResponse, error) {
 	args := m.Called(ctx, datasetID, limitFeatures, numBuckets)
 	if args.Get(0) == nil {

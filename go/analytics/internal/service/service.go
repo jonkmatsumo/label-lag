@@ -2,24 +2,30 @@ package service
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"time"
 
 	"github.com/jonkmatsumo/label-lag/go/analytics/internal/generator"
 	"github.com/jonkmatsumo/label-lag/go/analytics/internal/store"
 	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 type Service struct {
 	pb.UnimplementedAnalyticsServiceServer
-	store store.Store
+	store    store.Store
+	registry *generator.GeneratorRegistry
 }
 
-func NewService(store store.Store) *Service {
+func NewService(store store.Store, registry *generator.GeneratorRegistry) *Service {
 	return &Service{
-		store: store,
+		store:    store,
+		registry: registry,
 	}
 }
 
@@ -265,23 +271,123 @@ func (s *Service) GetDatasetProfile(ctx context.Context, req *pb.GetDatasetProfi
 }
 
 func (s *Service) GenerateData(ctx context.Context, req *pb.GenerateDataRequest) (*pb.GenerateDataResponse, error) {
+	tracer := otel.Tracer("analytics-crud")
+	ctx, span := tracer.Start(ctx, "GenerateData", trace.WithAttributes(
+		attribute.Int("num_users", int(req.NumUsers)),
+		attribute.Float64("fraud_rate", req.FraudRate),
+		attribute.String("idempotency_key", req.IdempotencyKey),
+	))
+	defer span.End()
+
+	slog.Info("Starting dataset generation",
+		"num_users", req.NumUsers,
+		"fraud_rate", req.FraudRate,
+		"idempotency_key", req.IdempotencyKey)
+
+	// ENABLE_GO_DATASET_GENERATE: Set to "true" to enable this endpoint.
 	if os.Getenv("ENABLE_GO_DATASET_GENERATE") != "true" {
 		return nil, status.Error(codes.Unimplemented, "dataset generation is disabled")
 	}
 
+	// Validation
+	if req.NumUsers <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "num_users must be positive")
+	}
+	if req.NumUsers > 10000 {
+		return nil, status.Error(codes.InvalidArgument, "num_users exceeds maximum limit of 10000")
+	}
+	if req.FraudRate < 0 || req.FraudRate > 1.0 {
+		return nil, status.Error(codes.InvalidArgument, "fraud_rate must be between 0.0 and 1.0")
+	}
+
+	// Idempotency check
+	if req.IdempotencyKey != "" {
+		existing, jobStatus, err := s.store.GetGenerationJob(ctx, req.IdempotencyKey)
+		if err != nil {
+			return nil, err
+		}
+		if existing != nil {
+			if jobStatus == "in_progress" {
+				return nil, status.Error(codes.AlreadyExists, "generation job already in progress")
+			}
+			return existing, nil
+		}
+
+		if err := s.store.CreateGenerationJob(ctx, req.IdempotencyKey); err != nil {
+			return nil, err
+		}
+	}
+
 	seed := time.Now().UnixNano()
-	gen := generator.NewGenerator(&seed)
-	result := gen.GenerateDatasetWithSequences(int(req.NumUsers), req.FraudRate)
+	if req.Seed != nil {
+		seed = *req.Seed
+	}
+
+	gen := generator.NewGenerator(&seed, s.registry)
+	result := gen.GenerateDatasetWithSequences(ctx, int(req.NumUsers), req.FraudRate)
+
+	// Check for context cancellation after heavy generation
+	if ctx.Err() != nil {
+		if req.IdempotencyKey != "" {
+			s.store.FailGenerationJob(context.Background(), req.IdempotencyKey, ctx.Err().Error())
+		}
+		return nil, ctx.Err()
+	}
+
+	// Count fraud records for the response
+	var fraudCount int64
+	for _, r := range result.Records {
+		if r.IsFraudulent {
+			fraudCount++
+		}
+	}
+
+	if req.DropExisting {
+		if _, err := s.store.ClearAllData(ctx); err != nil {
+			if req.IdempotencyKey != "" {
+				s.store.FailGenerationJob(context.Background(), req.IdempotencyKey, err.Error())
+			}
+			return nil, err
+		}
+	}
 
 	count, err := s.store.StoreGeneratedData(ctx, result.Records, result.Metadata)
 	if err != nil {
+		if req.IdempotencyKey != "" {
+			s.store.FailGenerationJob(context.Background(), req.IdempotencyKey, err.Error())
+		}
 		return nil, err
 	}
 
-	return &pb.GenerateDataResponse{
-		Success:      true,
-		TotalRecords: count,
-	}, nil
+	// Trigger feature materialization automatically after generation
+	materialized, _ := s.store.MaterializeFeatures(ctx)
+
+	resp := &pb.GenerateDataResponse{
+		Success:              true,
+		TotalRecords:         count,
+		FraudRecords:         fraudCount,
+		FeaturesMaterialized: materialized,
+	}
+
+	if req.IdempotencyKey != "" {
+		if err := s.store.CompleteGenerationJob(ctx, req.IdempotencyKey, resp); err != nil {
+			slog.Error("failed to complete generation job", "error", err, "idempotency_key", req.IdempotencyKey)
+		}
+	}
+
+	span.SetAttributes(
+		attribute.Int64("total_records", resp.TotalRecords),
+		attribute.Int64("fraud_records", resp.FraudRecords),
+		attribute.Int64("features_materialized", resp.FeaturesMaterialized),
+	)
+
+	slog.Info("Completed dataset generation",
+		"total_records", resp.TotalRecords,
+		"fraud_records", resp.FraudRecords,
+		"features_materialized", resp.FeaturesMaterialized,
+		"idempotency_key", req.IdempotencyKey)
+
+	return resp, nil
 }
 
 func (s *Service) ClearAllData(ctx context.Context, req *pb.ClearAllDataRequest) (*pb.ClearAllDataResponse, error) {

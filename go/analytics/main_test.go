@@ -21,7 +21,7 @@ import (
 
 func TestGetDailyStats(t *testing.T) {
 	mockStore := new(store.MockStore)
-	s := service.NewService(mockStore)
+	s := service.NewService(mockStore, nil)
 
 	expectedStats := []*pb.DailyStat{
 		{
@@ -49,7 +49,7 @@ func TestGetDailyStats(t *testing.T) {
 
 func TestGetOverviewMetrics(t *testing.T) {
 	mockStore := new(store.MockStore)
-	s := service.NewService(mockStore)
+	s := service.NewService(mockStore, nil)
 
 	expectedResp := &pb.GetOverviewMetricsResponse{
 		TotalRecords: 1000,
@@ -71,7 +71,7 @@ func TestGetOverviewMetrics(t *testing.T) {
 
 func TestGetFeatureSample_Stratified(t *testing.T) {
 	mockStore := new(store.MockStore)
-	s := service.NewService(mockStore)
+	s := service.NewService(mockStore, nil)
 
 	expectedSamples := []*pb.FeatureSample{
 		{RecordId: "f1", IsFraudulent: true},
@@ -126,7 +126,7 @@ func TestUpdateHealthStatusNotServing(t *testing.T) {
 
 func TestSearchTransactions(t *testing.T) {
 	mockStore := new(store.MockStore)
-	s := service.NewService(mockStore)
+	s := service.NewService(mockStore, nil)
 
 	expectedTxs := []*pb.TransactionDetail{
 		{
@@ -161,7 +161,7 @@ func TestSearchTransactions(t *testing.T) {
 
 func TestSearchTransactions_Unfiltered(t *testing.T) {
 	mockStore := new(store.MockStore)
-	s := service.NewService(mockStore)
+	s := service.NewService(mockStore, nil)
 
 	expectedTxs := []*pb.TransactionDetail{
 		{RecordId: "rec-2"},
@@ -190,7 +190,7 @@ func TestSearchTransactions_Unfiltered(t *testing.T) {
 
 func TestGenerateDataReturnsUnimplementedWhenDisabled(t *testing.T) {
 	mockStore := new(store.MockStore)
-	s := service.NewService(mockStore)
+	s := service.NewService(mockStore, nil)
 
 	// Explicitly disable via env var
 	t.Setenv("ENABLE_GO_DATASET_GENERATE", "false")
@@ -212,10 +212,10 @@ func TestGenerateDataReturnsUnimplementedWhenDisabled(t *testing.T) {
 func TestGeneratorPackageIntegration(t *testing.T) {
 	// Tests that the generator package produces valid data
 	seed := int64(42)
-	gen := generator.NewGenerator(&seed)
+	gen := generator.NewGenerator(&seed, nil)
 
 	// Generate a small dataset
-	result := gen.GenerateDatasetWithSequences(5, 0.2)
+	result := gen.GenerateDatasetWithSequences(context.Background(), 5, 0.2)
 
 	// Verify records exist
 	assert.NotEmpty(t, result.Records)
@@ -251,11 +251,11 @@ func TestGeneratorDeterminism(t *testing.T) {
 	// Two generators with same seed should produce identical output
 	seed := int64(12345)
 
-	gen1 := generator.NewGenerator(&seed)
-	gen2 := generator.NewGenerator(&seed)
+	gen1 := generator.NewGenerator(&seed, nil)
+	gen2 := generator.NewGenerator(&seed, nil)
 
-	result1 := gen1.GenerateDatasetWithSequences(3, 0.1)
-	result2 := gen2.GenerateDatasetWithSequences(3, 0.1)
+	result1 := gen1.GenerateDatasetWithSequences(context.Background(), 3, 0.1)
+	result2 := gen2.GenerateDatasetWithSequences(context.Background(), 3, 0.1)
 
 	require.Equal(t, len(result1.Records), len(result2.Records))
 
@@ -271,10 +271,10 @@ func TestGeneratorDeterminism(t *testing.T) {
 
 func TestGeneratorFraudTypeDistribution(t *testing.T) {
 	seed := int64(999)
-	gen := generator.NewGenerator(&seed)
+	gen := generator.NewGenerator(&seed, nil)
 
 	// Generate with 100% fraud rate to ensure we get fraud records
-	result := gen.GenerateDatasetWithSequences(10, 1.0)
+	result := gen.GenerateDatasetWithSequences(context.Background(), 10, 1.0)
 
 	fraudTypes := make(map[string]int)
 	for _, r := range result.Records {

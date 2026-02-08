@@ -1,12 +1,13 @@
 package generator
 
 import (
+	"context"
 	"testing"
 )
 
 func TestNewGenerator(t *testing.T) {
 	seed := int64(42)
-	gen := NewGenerator(&seed)
+	gen := NewGenerator(&seed, nil)
 
 	if gen == nil {
 		t.Fatal("NewGenerator returned nil")
@@ -21,7 +22,7 @@ func TestNewGenerator(t *testing.T) {
 
 func TestGenerateLegitimate(t *testing.T) {
 	seed := int64(42)
-	gen := NewGenerator(&seed)
+	gen := NewGenerator(&seed, nil)
 
 	records := gen.GenerateLegitimate(10)
 
@@ -78,8 +79,8 @@ func TestGenerateLegitimate(t *testing.T) {
 func TestGenerateLegitimateIsDeterministic(t *testing.T) {
 	seed := int64(42)
 
-	gen1 := NewGenerator(&seed)
-	gen2 := NewGenerator(&seed)
+	gen1 := NewGenerator(&seed, nil)
+	gen2 := NewGenerator(&seed, nil)
 
 	records1 := gen1.GenerateLegitimate(5)
 	records2 := gen2.GenerateLegitimate(5)
@@ -104,7 +105,7 @@ func TestGenerateLegitimateIsDeterministic(t *testing.T) {
 
 func TestGenerateLegitimateAmountDistribution(t *testing.T) {
 	seed := int64(42)
-	gen := NewGenerator(&seed)
+	gen := NewGenerator(&seed, nil)
 
 	records := gen.GenerateLegitimate(1000)
 
@@ -125,9 +126,9 @@ func TestGenerateLegitimateAmountDistribution(t *testing.T) {
 
 func TestGenerateDatasetWithSequences(t *testing.T) {
 	seed := int64(42)
-	gen := NewGenerator(&seed)
+	gen := NewGenerator(&seed, nil)
 
-	result := gen.GenerateDatasetWithSequences(10, 0.10) // 10 users, 10% fraud
+	result := gen.GenerateDatasetWithSequences(context.Background(), 10, 0.10) // 10 users, 10% fraud
 
 	// Should have records
 	if len(result.Records) == 0 {

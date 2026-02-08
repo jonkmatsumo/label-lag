@@ -121,3 +121,68 @@ jobs:
       - name: Run Go tests
         working-directory: ${{ matrix.module }}
         run: go test ./...
+
+  generate-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: synthetic_data
+          POSTGRES_USER: synthetic
+          POSTGRES_PASSWORD: synthetic_dev_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.5'
+
+      - name: Set up Python 3.12
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Install Protoc
+        run: |
+          PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+          curl -LO --retry 5 --retry-delay 5 $PB_REL/download/v23.4/protoc-23.4-linux-x86_64.zip
+          sudo unzip -o protoc-23.4-linux-x86_64.zip -d /usr/local bin/protoc
+          sudo unzip -o protoc-23.4-linux-x86_64.zip -d /usr/local 'include/*'
+          rm -f protoc-23.4-linux-x86_64.zip
+
+      - name: Generate Protos
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+          make proto-gen
+
+      - name: Start Analytics Service
+        env:
+          DATABASE_URL: postgresql://synthetic:synthetic_dev_password@localhost:5432/synthetic_data?sslmode=disable
+          ENABLE_GO_DATASET_GENERATE: "true"
+          GENERATOR_CONFIG_PATH: go/analytics/config/generator.yaml
+        run: |
+          cd go/analytics
+          go run main.go &
+          # Wait for service to start
+          for i in {1..30}; do
+            nc -z localhost 50051 && break
+            sleep 1
+          done
+
+      - name: Run Generate Integration Test
+        env:
+          ANALYTICS_CRUD_TARGET: localhost:50051
+        run: uv run pytest python/tests/integration/test_generate.py -v

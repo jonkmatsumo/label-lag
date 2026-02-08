@@ -6,6 +6,55 @@ import (
 
 func InitDB(db *sql.DB) error {
 	queries := []string{
+		`CREATE TABLE IF NOT EXISTS generated_records (
+			id SERIAL PRIMARY KEY,
+			record_id TEXT UNIQUE NOT NULL,
+			user_id TEXT NOT NULL,
+			full_name TEXT,
+			email TEXT,
+			phone TEXT,
+			transaction_timestamp TIMESTAMP NOT NULL,
+			is_off_hours_txn BOOLEAN,
+			available_balance FLOAT,
+			balance_to_transaction_ratio FLOAT,
+			avg_available_balance_30d FLOAT,
+			balance_volatility_z_score FLOAT,
+			bank_connections_count_24h INTEGER,
+			bank_connections_count_7d INTEGER,
+			bank_connections_avg_30d FLOAT,
+			amount FLOAT,
+			amount_to_avg_ratio FLOAT,
+			merchant_risk_score INTEGER,
+			is_returned BOOLEAN,
+			email_changed_at TIMESTAMP,
+			phone_changed_at TIMESTAMP,
+			is_fraudulent BOOLEAN,
+			fraud_type TEXT,
+			numerical_features JSONB,
+			categorical_features JSONB,
+			created_at TIMESTAMP NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE TABLE IF NOT EXISTS evaluation_metadata (
+			id SERIAL PRIMARY KEY,
+			user_id TEXT NOT NULL,
+			record_id TEXT UNIQUE NOT NULL,
+			sequence_number INTEGER,
+			fraud_confirmed_at TIMESTAMP,
+			is_pre_fraud BOOLEAN,
+			days_to_fraud INTEGER,
+			is_train_eligible BOOLEAN,
+			created_at TIMESTAMP NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE TABLE IF NOT EXISTS feature_snapshots (
+			id SERIAL PRIMARY KEY,
+			record_id TEXT UNIQUE NOT NULL,
+			user_id TEXT NOT NULL,
+			velocity_24h INTEGER,
+			amount_to_avg_ratio_30d FLOAT,
+			balance_volatility_z_score FLOAT,
+			experimental_signals JSONB,
+			computed_at TIMESTAMP NOT NULL DEFAULT NOW()
+		)`,
 		`CREATE TABLE IF NOT EXISTS backtest_results (
 			job_id TEXT PRIMARY KEY,
 			rule_id TEXT,
@@ -37,6 +86,26 @@ func InitDB(db *sql.DB) error {
 			final_score INTEGER NOT NULL,
 			rule_impacts JSONB NOT NULL
 		)`,
+		`CREATE TABLE IF NOT EXISTS rule_impacts (
+			id SERIAL PRIMARY KEY,
+			request_id TEXT NOT NULL,
+			rule_id TEXT NOT NULL,
+			is_shadow BOOLEAN,
+			score_delta INTEGER
+		)`,
+		`CREATE TABLE IF NOT EXISTS generation_jobs (
+			idempotency_key TEXT PRIMARY KEY,
+			status TEXT NOT NULL,
+			total_records INTEGER,
+			fraud_records INTEGER,
+			features_materialized INTEGER,
+			error TEXT,
+			created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+			completed_at TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_generated_records_record_id ON generated_records(record_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_evaluation_metadata_record_id ON evaluation_metadata(record_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_feature_snapshots_record_id ON feature_snapshots(record_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_backtest_results_rule_id ON backtest_results(rule_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_backtest_results_completed_at ON backtest_results(completed_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_rules_status ON rules(status)`,
@@ -55,7 +124,7 @@ func InitDB(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_rule_versions_rule_id ON rule_versions(rule_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_rule_versions_created_at ON rule_versions(created_at)`,
 		`ALTER TABLE rules ADD COLUMN IF NOT EXISTS active_version_id TEXT`,
-		// Dynamic features support
+		// Dynamic features support (redundant if tables created above but good for safety)
 		`ALTER TABLE generated_records ADD COLUMN IF NOT EXISTS numerical_features JSONB`,
 		`ALTER TABLE generated_records ADD COLUMN IF NOT EXISTS categorical_features JSONB`,
 	}

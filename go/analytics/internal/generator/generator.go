@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -12,17 +13,19 @@ import (
 // Generator creates synthetic transaction data.
 // It mirrors the Python DataGenerator's behavior for parity testing.
 type Generator struct {
-	rng *RNG
-	pii *PIIGenerator
+	rng      *RNG
+	pii      *PIIGenerator
+	registry *GeneratorRegistry
 }
 
-// NewGenerator creates a generator with the given seed.
+// NewGenerator creates a generator with the given seed and registry.
 // If seed is nil, uses a random seed.
-func NewGenerator(seed *int64) *Generator {
+func NewGenerator(seed *int64, registry *GeneratorRegistry) *Generator {
 	rng := NewRNG(seed)
 	return &Generator{
-		rng: rng,
-		pii: NewPIIGenerator(rng),
+		rng:      rng,
+		pii:      NewPIIGenerator(rng),
+		registry: registry,
 	}
 }
 
@@ -83,6 +86,11 @@ func (g *Generator) sampleLogNormalAmount() float64 {
 }
 
 func (g *Generator) populateDynamicFeatures(r *pb.GeneratedRecord) {
+	if g.registry != nil {
+		g.registry.Populate(g.rng, r)
+		return
+	}
+
 	if r.NumericalFeatures == nil {
 		r.NumericalFeatures = make(map[string]float64)
 	}
@@ -183,7 +191,7 @@ type DatasetResult struct {
 // numUsers: total number of users to generate
 // fraudRate: fraction of users that are fraudulent (0.0 to 1.0)
 // Returns records and evaluation metadata for training.
-func (g *Generator) GenerateDatasetWithSequences(numUsers int, fraudRate float64) *DatasetResult {
+func (g *Generator) GenerateDatasetWithSequences(ctx context.Context, numUsers int, fraudRate float64) *DatasetResult {
 	var allRecords []*pb.GeneratedRecord
 	var allMetadata []*pb.EvaluationMetadata
 
@@ -192,6 +200,11 @@ func (g *Generator) GenerateDatasetWithSequences(numUsers int, fraudRate float64
 
 	// Generate legitimate user sequences
 	for i := 0; i < legitUserCount; i++ {
+		select {
+		case <-ctx.Done():
+			return &DatasetResult{}
+		default:
+		}
 		userRecords := g.generateUserSequence(false)
 		for seq, r := range userRecords {
 			allRecords = append(allRecords, r)
@@ -207,6 +220,11 @@ func (g *Generator) GenerateDatasetWithSequences(numUsers int, fraudRate float64
 
 	// Generate fraudulent user sequences
 	for i := 0; i < fraudUserCount; i++ {
+		select {
+		case <-ctx.Done():
+			return &DatasetResult{}
+		default:
+		}
 		userRecords := g.generateUserSequence(true)
 		fraudConfirmedAt := userRecords[len(userRecords)-1].TransactionTimestamp
 

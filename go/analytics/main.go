@@ -13,6 +13,7 @@ import (
 
 	"github.com/jonkmatsumo/label-lag/go/analytics/internal/config"
 	coreDB "github.com/jonkmatsumo/label-lag/go/analytics/internal/db"
+	"github.com/jonkmatsumo/label-lag/go/analytics/internal/generator"
 	"github.com/jonkmatsumo/label-lag/go/analytics/internal/obs"
 	"github.com/jonkmatsumo/label-lag/go/analytics/internal/service"
 	"github.com/jonkmatsumo/label-lag/go/analytics/internal/store"
@@ -58,6 +59,10 @@ func main() {
 		slog.Error("failed to resolve database url", "error", err)
 		os.Exit(1)
 	}
+	if dbURL == "" {
+		slog.Error("DATABASE_URL is required but not set")
+		os.Exit(1)
+	}
 
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
@@ -96,7 +101,21 @@ func main() {
 	}
 	s := grpc.NewServer(opts...)
 	analyticsStore := store.NewSQLStore(db)
-	svc := service.NewService(analyticsStore)
+
+	// Initialize generator registry
+	// GENERATOR_CONFIG_PATH: Path to the generator configuration file
+	// (default: go/analytics/config/generator.yaml)
+	reg := generator.NewGeneratorRegistry()
+	configPath := os.Getenv("GENERATOR_CONFIG_PATH")
+	if configPath == "" {
+		configPath = "go/analytics/config/generator.yaml" // Default for local dev if run from root
+	}
+	if err := reg.LoadConfig(configPath); err != nil {
+		slog.Error("failed to load generator config", "error", err, "path", configPath)
+		os.Exit(1)
+	}
+
+	svc := service.NewService(analyticsStore, reg)
 	pb.RegisterAnalyticsServiceServer(s, svc)
 
 	// Register health service

@@ -44,6 +44,11 @@ func (s *SQLStore) StoreGeneratedData(ctx context.Context, records []*pb.Generat
 	defer cancel()
 
 	for _, r := range records {
+		select {
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		default:
+		}
 		numFeaturesJSON, _ := json.Marshal(r.NumericalFeatures)
 		catFeaturesJSON, _ := json.Marshal(r.CategoricalFeatures)
 
@@ -74,6 +79,11 @@ func (s *SQLStore) StoreGeneratedData(ctx context.Context, records []*pb.Generat
 	`
 
 	for _, m := range metadata {
+		select {
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		default:
+		}
 		var fraudConfirmedAt sql.NullTime
 		if m.FraudConfirmedAt != nil {
 			fraudConfirmedAt = sql.NullTime{Time: m.FraudConfirmedAt.AsTime(), Valid: true}
@@ -342,6 +352,70 @@ func (s *SQLStore) GetInferenceScores(ctx context.Context, cutoff time.Time) ([]
 	}
 
 	return scores, nil
+}
+
+func (s *SQLStore) GetGenerationJob(ctx context.Context, key string) (*pb.GenerateDataResponse, string, error) {
+	query := `
+		SELECT status, total_records, fraud_records, features_materialized, error
+		FROM generation_jobs
+		WHERE idempotency_key = $1
+	`
+	var status string
+	var total, fraud, materialized sql.NullInt64
+	var errMsg sql.NullString
+
+	err := s.db.QueryRowContext(ctx, query, key).Scan(&status, &total, &fraud, &materialized, &errMsg)
+	if err == sql.ErrNoRows {
+		return nil, "", nil
+	}
+	if err != nil {
+		return nil, "", err
+	}
+
+	resp := &pb.GenerateDataResponse{
+		Success:              status == "completed",
+		TotalRecords:         total.Int64,
+		FraudRecords:         fraud.Int64,
+		FeaturesMaterialized: materialized.Int64,
+		Error:                errMsg.String,
+	}
+
+	return resp, status, nil
+}
+
+func (s *SQLStore) CreateGenerationJob(ctx context.Context, key string) error {
+	query := `
+		INSERT INTO generation_jobs (idempotency_key, status, created_at)
+		VALUES ($1, 'in_progress', NOW())
+	`
+	_, err := s.db.ExecContext(ctx, query, key)
+	return err
+}
+
+func (s *SQLStore) CompleteGenerationJob(ctx context.Context, key string, resp *pb.GenerateDataResponse) error {
+	query := `
+		UPDATE generation_jobs
+		SET status = 'completed',
+		    total_records = $1,
+		    fraud_records = $2,
+		    features_materialized = $3,
+		    completed_at = NOW()
+		WHERE idempotency_key = $4
+	`
+	_, err := s.db.ExecContext(ctx, query, resp.TotalRecords, resp.FraudRecords, resp.FeaturesMaterialized, key)
+	return err
+}
+
+func (s *SQLStore) FailGenerationJob(ctx context.Context, key string, errMsg string) error {
+	query := `
+		UPDATE generation_jobs
+		SET status = 'failed',
+		    error = $1,
+		    completed_at = NOW()
+		WHERE idempotency_key = $2
+	`
+	_, err := s.db.ExecContext(ctx, query, errMsg, key)
+	return err
 }
 
 func (s *SQLStore) GetDatasetFingerprint(ctx context.Context) (*pb.GetDatasetFingerprintResponse, error) {

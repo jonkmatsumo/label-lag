@@ -430,6 +430,13 @@ func (s *SQLStore) GetSchemaSummary(ctx context.Context) (*pb.GetSchemaSummaryRe
 	return &pb.GetSchemaSummaryResponse{Columns: columns}, nil
 }
 
+const (
+	MaxNumericKeysProfiled     = 25
+	MaxCategoricalKeysProfiled = 25
+	DefaultTopK                = 10
+	MaxHistogramBuckets        = 50
+)
+
 func (s *SQLStore) GetDatasetProfile(ctx context.Context, datasetID string, limitFeatures, numBuckets int32) (*pb.GetDatasetProfileResponse, error) {
 	// 1. Get total records
 	var totalRecords int64
@@ -442,20 +449,26 @@ func (s *SQLStore) GetDatasetProfile(ctx context.Context, datasetID string, limi
 		return &pb.GetDatasetProfileResponse{TotalRecords: 0}, nil
 	}
 
-	// 2. Define features to profile
-	numericFeatures := []string{
-		"amount", "available_balance", "balance_to_transaction_ratio",
-		"avg_available_balance_30d", "balance_volatility_z_score",
-		"merchant_risk_score",
+	if numBuckets > MaxHistogramBuckets {
+		numBuckets = MaxHistogramBuckets
 	}
 
 	resp := &pb.GetDatasetProfileResponse{
 		TotalRecords: totalRecords,
 	}
 
-	for _, feat := range numericFeatures {
+	// 2. Profile static numeric features
+	staticNumericFeatures := []string{
+		"amount", "available_balance", "balance_to_transaction_ratio",
+		"avg_available_balance_30d", "balance_volatility_z_score",
+		"merchant_risk_score",
+	}
+
+	for _, feat := range staticNumericFeatures {
 		if int32(len(resp.FeatureProfiles)) >= limitFeatures {
-			break
+			resp.IsPartial = true
+			resp.TruncatedKeys++
+			continue
 		}
 		profile, err := s.profileNumericFeature(ctx, "generated_records", feat, totalRecords, numBuckets)
 		if err != nil {
@@ -464,10 +477,82 @@ func (s *SQLStore) GetDatasetProfile(ctx context.Context, datasetID string, limi
 		resp.FeatureProfiles = append(resp.FeatureProfiles, profile)
 	}
 
+	// 3. Profile dynamic numeric features
+	dynamicNumericKeys, err := s.discoverJSONBKeys(ctx, "generated_records", "numerical_features", MaxNumericKeysProfiled)
+	if err == nil {
+		for _, key := range dynamicNumericKeys {
+			if int32(len(resp.FeatureProfiles)) >= limitFeatures {
+				resp.IsPartial = true
+				resp.TruncatedKeys++
+				continue
+			}
+			profile, err := s.profileNumericJSONBKey(ctx, "generated_records", "numerical_features", key, totalRecords, numBuckets)
+			if err != nil {
+				continue
+			}
+			resp.FeatureProfiles = append(resp.FeatureProfiles, profile)
+		}
+	}
+
+	// 4. Profile dynamic categorical features
+	dynamicCategoricalKeys, err := s.discoverJSONBKeys(ctx, "generated_records", "categorical_features", MaxCategoricalKeysProfiled)
+	if err == nil {
+		for _, key := range dynamicCategoricalKeys {
+			if int32(len(resp.FeatureProfiles)) >= limitFeatures {
+				resp.IsPartial = true
+				resp.TruncatedKeys++
+				continue
+			}
+			profile, err := s.profileCategoricalJSONBKey(ctx, "generated_records", "categorical_features", key, totalRecords, DefaultTopK)
+			if err != nil {
+				continue
+			}
+			resp.FeatureProfiles = append(resp.FeatureProfiles, profile)
+		}
+	}
+
 	return resp, nil
 }
 
+func (s *SQLStore) discoverJSONBKeys(ctx context.Context, table, column string, limit int) ([]string, error) {
+	// Use a subquery to avoid full table expansion before distinct/limit
+	query := fmt.Sprintf(`
+		SELECT DISTINCT key
+		FROM (
+			SELECT jsonb_object_keys(%[2]s) as key
+			FROM (SELECT %[2]s FROM %[1]s WHERE %[2]s IS NOT NULL AND %[2]s != '{}'::jsonb LIMIT 1000) as sub
+		) as keys
+		LIMIT %[3]d
+	`, table, column, limit)
+
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var keys []string
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err == nil {
+			keys = append(keys)
+			keys = append(keys, key)
+		}
+	}
+	// Deduplicate just in case, though SQL does it
+	return keys, nil
+}
+
+func (s *SQLStore) profileNumericJSONBKey(ctx context.Context, table, column, key string, totalRecords int64, numBuckets int32) (*pb.FeatureProfile, error) {
+	columnExpr := fmt.Sprintf("(%s->>'%s')::numeric", column, key)
+	return s.profileNumericFeatureExpr(ctx, table, columnExpr, key, totalRecords, numBuckets)
+}
+
 func (s *SQLStore) profileNumericFeature(ctx context.Context, table, column string, totalRecords int64, numBuckets int32) (*pb.FeatureProfile, error) {
+	return s.profileNumericFeatureExpr(ctx, table, column, column, totalRecords, numBuckets)
+}
+
+func (s *SQLStore) profileNumericFeatureExpr(ctx context.Context, table, expr, name string, totalRecords int64, numBuckets int32) (*pb.FeatureProfile, error) {
 	query := fmt.Sprintf(`
 		SELECT
 			AVG(%[1]s) as mean,
@@ -476,7 +561,7 @@ func (s *SQLStore) profileNumericFeature(ctx context.Context, table, column stri
 			MIN(%[1]s) as min_val,
 			MAX(%[1]s) as max_val
 		FROM %[2]s
-	`, column, table)
+	`, expr, table)
 
 	var mean, stddev, minVal, maxVal sql.NullFloat64
 	var nullCount int64
@@ -486,7 +571,7 @@ func (s *SQLStore) profileNumericFeature(ctx context.Context, table, column stri
 	}
 
 	profile := &pb.FeatureProfile{
-		Name:     column,
+		Name:     name,
 		Type:     "numeric",
 		NullRate: float64(nullCount) / float64(totalRecords),
 		Mean:     mean.Float64,
@@ -513,7 +598,7 @@ func (s *SQLStore) profileNumericFeature(ctx context.Context, table, column stri
 			WHERE %[1]s IS NOT NULL
 			GROUP BY bucket
 			ORDER BY bucket
-		`, column, minVal.Float64, upperBound, numBuckets, table)
+		`, expr, minVal.Float64, upperBound, numBuckets, table)
 
 		rows, err := s.db.QueryContext(ctx, histQuery)
 		if err == nil {
@@ -537,6 +622,61 @@ func (s *SQLStore) profileNumericFeature(ctx context.Context, table, column stri
 				})
 			}
 		}
+	}
+
+	return profile, nil
+}
+
+func (s *SQLStore) profileCategoricalJSONBKey(ctx context.Context, table, column, key string, totalRecords int64, topK int) (*pb.FeatureProfile, error) {
+	expr := fmt.Sprintf("%s->>'%s'", column, key)
+
+	// Get null rate
+	var nullCount int64
+	nullQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s IS NULL", table, expr)
+	err := s.db.QueryRowContext(ctx, nullQuery).Scan(&nullCount)
+	if err != nil {
+		return nil, err
+	}
+
+	profile := &pb.FeatureProfile{
+		Name:     key,
+		Type:     "categorical",
+		NullRate: float64(nullCount) / float64(totalRecords),
+	}
+
+	// Get top-K frequencies
+	topQuery := fmt.Sprintf(`
+		SELECT %[1]s as value, COUNT(*) as count
+		FROM %[2]s
+		WHERE %[1]s IS NOT NULL
+		GROUP BY value
+		ORDER BY count DESC, value
+		LIMIT %[3]d
+	`, expr, table, topK)
+
+	rows, err := s.db.QueryContext(ctx, topQuery)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var topValues []*pb.ValueCount
+	var topTotalCount int64
+	for rows.Next() {
+		var vc pb.ValueCount
+		if err := rows.Scan(&vc.Value, &vc.Count); err == nil {
+			topValues = append(topValues, &vc)
+			topTotalCount += vc.Count
+		}
+	}
+	profile.TopValues = topValues
+
+	// Add "other" if applicable
+	if totalRecords-nullCount > topTotalCount {
+		profile.TopValues = append(profile.TopValues, &pb.ValueCount{
+			Value: "_other",
+			Count: totalRecords - nullCount - topTotalCount,
+		})
 	}
 
 	return profile, nil

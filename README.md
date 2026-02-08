@@ -181,8 +181,12 @@ A gRPC service responsible for:
 Provides the gRPC data access layer for all compute services. It manages PostgreSQL interactions, ensuring that Python services remain stateless and compute-focused.
 
 Key features:
+- **Config-Driven Generator Registry**: Synthetic data generation is now parameterized via `config/generator.yaml`. This allows dynamic features to be enabled, disabled, and configured (e.g., multipliers, ranges, categorical values) without code changes.
 - **Dynamic Feature Transport**: Supports flexible feature flow via `numerical_features` and `categorical_features` maps in `TransactionDetail`, allowing new features to be added without schema changes.
-- **Dataset Profiling**: New `GetDatasetProfile` RPC provides on-demand SQL-based profiling of generated datasets, including null rates, means, standard deviations, and histograms.
+- **Dataset Profiling**: The `GetDatasetProfile` RPC provides on-demand SQL-based profiling of generated datasets. It now supports profiling of both static columns and dynamic features within JSONB maps, with built-in guardrails for performance and safety.
+  - **Numeric Profiling**: Computes mean, stddev, null rates, and histograms.
+  - **Categorical Profiling**: Computes top-K value frequencies with an "other" category for long-tail values.
+- **Safety Guardrails**: Profiling is bounded by configurable limits: `MaxNumericKeysProfiled` (25), `MaxCategoricalKeysProfiled` (25), `DefaultTopK` (10), and `MaxHistogramBuckets` (50).
 - **Temporal Splitting**: Handles strict temporal data splitting and label maturity logic for model training.
 
 ### Synthetic Data Generator
@@ -264,7 +268,14 @@ ANALYTICS_CRUD_PORT=50051
 ANALYTICS_CRUD_TARGET=analytics:50051
 ANALYTICS_CRUD_TIMEOUT_SECONDS=15
 ANALYTICS_CRUD_ALLOW_INSECURE_DEFAULTS=false
+GENERATOR_CONFIG_PATH=go/analytics/config/generator.yaml
 ```
+
+#### Database Migrations
+The Analytics service manages its own database schema on startup. For manual management or CI verification:
+- `make db-migrate`: Applies migrations to the database.
+- `make db-verify`: Verifies that migrations apply cleanly on a fresh database.
+- Schema is defined in `go/analytics/internal/db/schema.go`.
 
 ### MLflow / MinIO
 

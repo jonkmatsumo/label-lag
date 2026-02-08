@@ -345,19 +345,27 @@ class GenerateDataRequest(BaseModel):
 
     num_users: int = Field(
         default=500,
-        ge=10,
+        ge=1,
         le=10000,
         description="Number of unique users to generate",
     )
     fraud_rate: float = Field(
         default=0.05,
         ge=0.0,
-        le=0.5,
-        description="Fraction of users with fraud events (0.0-0.5)",
+        le=1.0,
+        description="Fraction of users with fraud events (0.0-1.0)",
     )
     drop_existing: bool = Field(
         default=False,
         description="Drop existing tables before generating new data",
+    )
+    seed: int | None = Field(
+        default=None,
+        description="Random seed for reproducibility",
+    )
+    idempotency_key: str = Field(
+        default="",
+        description="Optional key to prevent duplicate generation",
     )
 
 
@@ -365,10 +373,10 @@ class GenerateDataResponse(BaseModel):
     """Response schema for data generation endpoint."""
 
     success: bool = Field(..., description="Whether generation completed successfully")
-    total_records: int = Field(0, description="Total records generated")
-    fraud_records: int = Field(0, description="Number of fraud records")
+    total_records: int = Field(..., description="Total records generated")
+    fraud_records: int = Field(..., description="Number of fraud records")
     features_materialized: int = Field(
-        0, description="Number of feature snapshots created"
+        ..., description="Number of feature snapshots created"
     )
     error: str | None = Field(None, description="Error message if generation failed")
 

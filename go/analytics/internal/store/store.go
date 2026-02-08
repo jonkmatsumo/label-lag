@@ -57,6 +57,12 @@ type Store interface {
 	GetDriftWindow(ctx context.Context, cutoff time.Time) ([]*pb.TransactionDetail, error)
 	GetInferenceScores(ctx context.Context, cutoff time.Time) ([]int32, error)
 
+	// Idempotency
+	GetGenerationJob(ctx context.Context, key string) (*pb.GenerateDataResponse, string, error)
+	CreateGenerationJob(ctx context.Context, key string) error
+	CompleteGenerationJob(ctx context.Context, key string, resp *pb.GenerateDataResponse) error
+	FailGenerationJob(ctx context.Context, key string, errMsg string) error
+
 	// Profiling
 	GetDatasetProfile(ctx context.Context, datasetID string, limitFeatures, numBuckets int32) (*pb.GetDatasetProfileResponse, error)
 }
