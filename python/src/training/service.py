@@ -1,10 +1,13 @@
 import logging
 
 import grpc
+from pydantic import ValidationError
 
+from model.loader import DataLoader
 from model.train import train_model
 from training.crud_client import get_crud_client
 from training.proto.training.v1 import training_pb2, training_pb2_grpc
+from training.schemas import SplitConfig, TuningConfig
 
 logger = logging.getLogger(__name__)
 
@@ -26,44 +29,63 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
     def Train(self, request, context):  # noqa: N802
         """Train a new model with specified parameters."""
         try:
-            # Map proto fields to internal function arguments
-            # Note: tuning_config is a message, likely needs conversion to dict
-            # if train_model expects one.
-            # But based on the proto -> internal mapping standard,
-            # let's pass fields directly.
+            # 1. Validate Feature Columns
+            if request.selected_feature_columns:
+                unknown_features = [
+                    f
+                    for f in request.selected_feature_columns
+                    if f not in DataLoader.FEATURE_COLUMNS
+                ]
+                if unknown_features:
+                    context.abort(
+                        grpc.StatusCode.INVALID_ARGUMENT,
+                        f"Unknown features: {unknown_features}. "
+                        f"Available: {DataLoader.FEATURE_COLUMNS}",
+                    )
 
-            # Helper to convert TuningConfig message to dict if needed by train_model
+            # 2. Validate Configs using Pydantic Models
             tuning_config = None
             if request.HasField("tuning_config"):
-                tuning_config = {
-                    "enabled": request.tuning_config.enabled,
-                    "strategy": request.tuning_config.strategy,
-                    "n_trials": request.tuning_config.n_trials,
-                    "timeout_minutes": request.tuning_config.timeout_minutes,
-                    "metric": request.tuning_config.metric,
-                    "direction": request.tuning_config.direction,
-                    "selected_trial_number": (
-                        request.tuning_config.selected_trial_number
-                        if request.tuning_config.HasField("selected_trial_number")
-                        else None
-                    ),
-                }
+                try:
+                    tuning_data = {
+                        "enabled": request.tuning_config.enabled,
+                        "strategy": request.tuning_config.strategy,
+                        "n_trials": request.tuning_config.n_trials,
+                        "timeout_minutes": request.tuning_config.timeout_minutes,
+                        "metric": request.tuning_config.metric,
+                        "direction": request.tuning_config.direction,
+                        "selected_trial_number": (
+                            request.tuning_config.selected_trial_number
+                            if request.tuning_config.HasField("selected_trial_number")
+                            else None
+                        ),
+                    }
+                    tuning_config = TuningConfig(**tuning_data)
+                except ValidationError as e:
+                    context.abort(
+                        grpc.StatusCode.INVALID_ARGUMENT, f"Invalid TuningConfig: {e}"
+                    )
 
-            # Helper for SplitConfig
             split_config = None
             if request.HasField("split_config"):
-                split_config = {
-                    "strategy": request.split_config.strategy,
-                    "n_folds": request.split_config.n_folds,
-                    "stratify_column": (
-                        request.split_config.stratify_column
-                        if request.split_config.HasField("stratify_column")
-                        else None
-                    ),
-                    "group_column": request.split_config.group_column,
-                    "validation_fraction": request.split_config.validation_fraction,
-                    "seed": request.split_config.seed,
-                }
+                try:
+                    split_data = {
+                        "strategy": request.split_config.strategy,
+                        "n_folds": request.split_config.n_folds,
+                        "stratify_column": (
+                            request.split_config.stratify_column
+                            if request.split_config.HasField("stratify_column")
+                            else None
+                        ),
+                        "group_column": request.split_config.group_column,
+                        "validation_fraction": request.split_config.validation_fraction,
+                        "seed": request.split_config.seed,
+                    }
+                    split_config = SplitConfig(**split_data)
+                except ValidationError as e:
+                    context.abort(
+                        grpc.StatusCode.INVALID_ARGUMENT, f"Invalid SplitConfig: {e}"
+                    )
 
             run_id = train_model(
                 max_depth=request.max_depth,
