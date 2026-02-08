@@ -139,9 +139,23 @@ class AnalyticsCRUDClient:
             seed=seed,
             idempotency_key=idempotency_key,
         )
-        return self.stub.GenerateData(
-            request, timeout=300.0, metadata=self._get_metadata(request_id)
-        )
+        try:
+            return self.stub.GenerateData(
+                request, timeout=300.0, metadata=self._get_metadata(request_id)
+            )
+        except grpc.RpcError as e:
+            status_code = e.code()
+            details = e.details()
+            if status_code == grpc.StatusCode.INVALID_ARGUMENT:
+                raise ValueError(f"Invalid generation parameters: {details}") from e
+            if status_code == grpc.StatusCode.ALREADY_EXISTS:
+                # Should be treated as conflict/in-progress for idempotency
+                raise RuntimeError(f"Generation job conflict: {details}") from e
+            if status_code == grpc.StatusCode.DEADLINE_EXCEEDED:
+                raise TimeoutError(f"Generation timed out: {details}") from e
+            if status_code == grpc.StatusCode.UNIMPLEMENTED:
+                raise NotImplementedError(f"Generation not enabled: {details}") from e
+            raise RuntimeError(f"Generation failed ({status_code}): {details}") from e
 
     def clear_all_data(self, request_id: str | None = None):
         """Clear all data via ClearAllData."""
