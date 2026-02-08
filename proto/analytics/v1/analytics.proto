@@ -96,6 +96,10 @@ message TransactionDetail {
   int32 velocity_24h = 11;
   double amount_to_avg_ratio_30d = 12;
   double balance_volatility_z_score = 13;
+
+  // Dynamic features
+  map<string, double> numerical_features = 100;
+  map<string, string> categorical_features = 101;
 }
 
 message GetTransactionDetailsResponse {
