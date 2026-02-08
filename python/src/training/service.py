@@ -3,6 +3,7 @@ import logging
 import grpc
 from pydantic import ValidationError
 
+from features.registry import FeatureRegistry
 from model.loader import DataLoader
 from model.train import train_model
 from training.crud_client import get_crud_client
@@ -29,14 +30,47 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
     def Train(self, request, context):  # noqa: N802
         """Train a new model with specified parameters."""
         try:
-            # 1. Validate Feature Columns
+            # 0. Resolve Features from Groups (Commit 9)
+            resolved_features = set()
             if request.selected_feature_columns:
+                resolved_features.update(request.selected_feature_columns)
+
+            if request.feature_groups:
+                for group in request.feature_groups:
+                    group_features = FeatureRegistry.expand_group(group)
+                    if not group_features:
+                        if request.feature_resolution_mode == "strict":
+                            context.abort(
+                                grpc.StatusCode.INVALID_ARGUMENT,
+                                f"Unknown or empty feature group: {group}",
+                            )
+                        # best_effort: ignore empty groups
+                    resolved_features.update(group_features)
+
+            final_feature_list = sorted(list(resolved_features))
+
+            # 1. Validate Feature Columns
+            if final_feature_list:
+                # If "strict", we already validated groups.
+                # Now check if features exist in DataLoader/Registry?
+                # DataLoader.FEATURE_COLUMNS is the "known available" list
+                # for training data.
+                # Registry is the "known definitions".
+                # Commit 1 validation checked against DataLoader.FEATURE_COLUMNS.
+                # If we expanded from registry, they exist in registry.
+                # But do they exist in DataLoader?
+                # DataLoader.FEATURE_COLUMNS was updated to be "default".
+                # Actually, we should check if they are *available* in the data.
+                # For now, let's stick to checking if they are known.
                 unknown_features = [
-                    f
-                    for f in request.selected_feature_columns
-                    if f not in DataLoader.FEATURE_COLUMNS
+                    f for f in final_feature_list if f not in DataLoader.FEATURE_COLUMNS
                 ]
-                if unknown_features:
+                # If strict, fail. If best_effort, drop unknown.
+                if request.feature_resolution_mode == "best_effort":
+                    final_feature_list = [
+                        f for f in final_feature_list if f in DataLoader.FEATURE_COLUMNS
+                    ]
+                elif unknown_features:
                     context.abort(
                         grpc.StatusCode.INVALID_ARGUMENT,
                         f"Unknown features: {unknown_features}. "
@@ -59,6 +93,7 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                             if request.tuning_config.HasField("selected_trial_number")
                             else None
                         ),
+                        "search_space": dict(request.tuning_config.search_space),
                     }
                     tuning_config = TuningConfig(**tuning_data)
                 except ValidationError as e:
@@ -90,7 +125,7 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
             run_id = train_model(
                 max_depth=request.max_depth,
                 training_window_days=request.training_window_days,
-                feature_columns=list(request.selected_feature_columns),
+                feature_columns=final_feature_list if final_feature_list else None,
                 split_config=split_config,
                 n_estimators=request.n_estimators,
                 learning_rate=request.learning_rate,
@@ -107,6 +142,9 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                     else None
                 ),
                 tuning_config=tuning_config,
+                feature_set_id=request.feature_set_id
+                if request.HasField("feature_set_id")
+                else None,
             )
             return training_pb2.TrainResponse(
                 success=True,
