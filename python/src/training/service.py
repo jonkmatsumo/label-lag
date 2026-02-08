@@ -56,18 +56,33 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                     resolved_features.update(request.selected_feature_columns)
 
                 if request.feature_groups:
+                    valid_groups = {"transaction", "user", "merchant", "network"}
                     for group in request.feature_groups:
-                        group_features = FeatureRegistry.expand_group(group)
+                        # Canonicalize (FF4)
+                        c_group = group.strip().lower()
+
+                        if c_group not in valid_groups:
+                            if request.feature_resolution_mode == "strict":
+                                context.abort(
+                                    grpc.StatusCode.INVALID_ARGUMENT,
+                                    f"Unknown feature group: '{group}'. "
+                                    f"Valid groups: {sorted(list(valid_groups))}",
+                                )
+                            logger.warning(f"Ignoring unknown feature group: {group}")
+                            continue
+
+                        group_features = FeatureRegistry.expand_group(c_group)
                         if not group_features:
                             if request.feature_resolution_mode == "strict":
                                 context.abort(
                                     grpc.StatusCode.INVALID_ARGUMENT,
-                                    f"Unknown or empty feature group: {group}",
+                                    f"Feature group '{group}' "
+                                    "expanded to zero features",
                                 )
                             # best_effort: ignore empty groups
                         resolved_features.update(group_features)
 
-            final_feature_list = sorted(list(resolved_features))
+                final_feature_list = sorted(list(resolved_features))
 
             # 1. Validate Feature Columns
             if final_feature_list:

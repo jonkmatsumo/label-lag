@@ -22,7 +22,25 @@ message ClearDataResponse {
 message TrainRequest {
   int32 max_depth = 1;
   int32 training_window_days = 2;
+
+  // Feature Selection (Precedence: feature_set_id > [selected_feature_columns + feature_groups])
+  // Providing both feature_set_id and any other feature field will return INVALID_ARGUMENT.
+
+  // Explicit list of feature names.
   repeated string selected_feature_columns = 3;
+
+  // Versioned feature set identifier.
+  optional string feature_set_id = 16;
+
+  // Feature groups to expand (e.g. "transaction", "user", "merchant", "network").
+  // Case-insensitive, whitespace is stripped.
+  repeated string feature_groups = 17;
+
+  // Resolution mode:
+  // "strict" (default): Fail if any feature/group is unknown or group is empty.
+  // "best_effort": Drop unknown features/groups and proceed with what's found.
+  string feature_resolution_mode = 18;
+
   SplitConfig split_config = 4;
   TuningConfig tuning_config = 5;
   int32 n_estimators = 6;
@@ -35,9 +53,6 @@ message TrainRequest {
   float reg_lambda = 13;
   int32 random_state = 14;
   optional int32 early_stopping_rounds = 15;
-  optional string feature_set_id = 16;
-  repeated string feature_groups = 17;
-  string feature_resolution_mode = 18; // strict (default) | best_effort
 }
 
 message SplitConfig {

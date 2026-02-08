@@ -116,11 +116,19 @@ class SignalForecaster:
 
         latency_ms = (time.time() - start_time) * 1000
 
+        # Attempt to get coverage diagnostics if we predicted with model
+        coverage_info = {}
+        if manager.model_loaded and features.has_history:
+            # We don't have direct access to internal counts here without refactoring,
+            # but we can infer basic presence.
+            coverage_info["required_count"] = len(manager.required_features)
+
         diagnostics = {
             "has_history": features.has_history,
             "raw_probability": float(raw_probability),
             "fallback_used": fallback_used,
             "calibrator_loaded": manager.calibrator_loaded,
+            **coverage_info,
         }
         if fallback_used:
             diagnostics["fallback_mode_effective"] = effective_fallback_mode
@@ -161,38 +169,51 @@ class SignalForecaster:
             # Build feature dict using only required features
             # Map from FeatureVector attributes (which may not have all features)
             feature_dict = {}
+            available_count = 0
+            missing_features = []
+
             for feature_name in required_features:
                 # Try to get attribute from FeatureVector (case-insensitive)
-                attr_name = feature_name
-                if hasattr(features, attr_name):
-                    feature_dict[feature_name] = getattr(features, attr_name)
+                if hasattr(features, feature_name):
+                    val = getattr(features, feature_name)
+                    if val is not None:
+                        feature_dict[feature_name] = val
+                        available_count += 1
+                    else:
+                        missing_features.append(feature_name)
+                        feature_dict[feature_name] = None
                 else:
-                    # Feature not available in FeatureVector - will trigger fallback
-                    logger.debug(
-                        f"Required feature '{feature_name}' "
-                        f"not available in FeatureVector"
-                    )
+                    missing_features.append(feature_name)
                     feature_dict[feature_name] = None
 
-            # Check if any required features are missing
-            missing_features = [f for f, v in feature_dict.items() if v is None]
-            if missing_features:
-                logger.warning(
-                    f"Cannot use ML model: missing features {missing_features}. "
-                    "Falling back to heuristic prediction."
-                )
-                return self._calculate_probability(features)
+            # Compute coverage metrics (FF3)
+            total_required = len(required_features)
+            coverage_ratio = (
+                available_count / total_required if total_required > 0 else 1.0
+            )
 
-            # Remove None values before prediction
-            feature_dict = {k: v for k, v in feature_dict.items() if v is not None}
+            log_data = {
+                "event": "inference_feature_coverage",
+                "model_version": manager.model_version,
+                "required_count": total_required,
+                "available_count": available_count,
+                "coverage_ratio": round(coverage_ratio, 4),
+            }
+
+            if coverage_ratio < 1.0:
+                log_data["missing_features"] = missing_features[:10]
+                logger.warning(f"Incomplete feature coverage for inference: {log_data}")
+            else:
+                logger.info(f"Full feature coverage for inference: {log_data}")
+
+            # Check if any required features are missing
+            if missing_features:
+                # Still log the failure but provide metrics above
+                return self._calculate_probability(features)
 
             probability = manager.predict_single(feature_dict)
             if probability is None:
                 # predict_single returned None due to missing features
-                logger.warning(
-                    "ML model prediction failed due to missing features. "
-                    "Falling back to heuristic prediction."
-                )
                 return self._calculate_probability(features)
 
             logger.debug(f"ML model prediction: {probability}")

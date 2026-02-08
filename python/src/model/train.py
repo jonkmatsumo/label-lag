@@ -572,11 +572,22 @@ def train_model(
                 json.dump(baseline_dist, f, indent=2)
             _mlflow.log_artifact(dist_path)
 
-            # Save feature columns list as artifact for inference
+            # Save feature columns list as artifact for inference (Legacy)
             feature_columns_path = os.path.join(tmpdir, "feature_columns.json")
             with open(feature_columns_path, "w") as f:
                 json.dump(actual_feature_columns, f, indent=2)
             _mlflow.log_artifact(feature_columns_path)
+
+            # Save required_features.json artifact (FF5)
+            required_features_data = {
+                "features": actual_feature_columns,
+                "feature_set_hash": feature_spec.hash,
+                "training_config_hash": training_config_hash,
+            }
+            required_features_path = os.path.join(tmpdir, "required_features.json")
+            with open(required_features_path, "w") as f:
+                json.dump(required_features_data, f, indent=2)
+            _mlflow.log_artifact(required_features_path)
 
             cm_path = os.path.join(tmpdir, "confusion_matrix.png")
             _save_confusion_matrix_plot(split.y_test, y_pred, cm_path)
