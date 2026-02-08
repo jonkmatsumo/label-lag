@@ -58,6 +58,36 @@ service AnalyticsService {
 
   // Shadow Comparison (Phase 9)
   rpc GetShadowComparison(GetShadowComparisonRequest) returns (GetShadowComparisonResponse);
+
+  // Dataset Profiling (Proposal B)
+  rpc GetDatasetProfile(GetDatasetProfileRequest) returns (GetDatasetProfileResponse);
+}
+
+message GetDatasetProfileRequest {
+  string dataset_id = 1; // can be run_id or name
+  int32 limit_features = 2; // default server-side if 0
+  int32 num_buckets = 3; // default 10
+}
+
+message Bucket {
+  double lower = 1;
+  double upper = 2;
+  int64 count = 3;
+}
+
+message FeatureProfile {
+  string name = 1;
+  string type = 2; // "numeric" | "categorical"
+  double null_rate = 3;
+  // Numeric stats
+  double mean = 4;
+  double std_dev = 5;
+  repeated Bucket histogram = 6;
+}
+
+message GetDatasetProfileResponse {
+  int64 total_records = 1;
+  repeated FeatureProfile feature_profiles = 2;
 }
 
 message GetDailyStatsRequest {
@@ -96,6 +126,10 @@ message TransactionDetail {
   int32 velocity_24h = 11;
   double amount_to_avg_ratio_30d = 12;
   double balance_volatility_z_score = 13;
+
+  // Dynamic features
+  map<string, double> numerical_features = 100;
+  map<string, string> categorical_features = 101;
 }
 
 message GetTransactionDetailsResponse {
@@ -328,6 +362,10 @@ message GeneratedRecord {
   google.protobuf.Timestamp phone_changed_at = 20;
   bool is_fraudulent = 21;
   string fraud_type = 22;
+
+  // Dynamic features
+  map<string, double> numerical_features = 100;
+  map<string, string> categorical_features = 101;
 }
 
 // EvaluationMetadata tracks temporal relationships for model evaluation.

@@ -244,6 +244,26 @@ func (s *Service) GetShadowComparison(ctx context.Context, req *pb.GetShadowComp
 	return &pb.GetShadowComparisonResponse{Metrics: metrics}, nil
 }
 
+func (s *Service) GetDatasetProfile(ctx context.Context, req *pb.GetDatasetProfileRequest) (*pb.GetDatasetProfileResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "request required")
+	}
+
+	limitFeatures, _ := normalizeLimit(req.LimitFeatures, 50, 500, "limit_features")
+	numBuckets := req.NumBuckets
+	if numBuckets <= 0 {
+		numBuckets = 10
+	}
+	if numBuckets < 2 {
+		numBuckets = 2
+	}
+	if numBuckets > 50 {
+		numBuckets = 50
+	}
+
+	return s.store.GetDatasetProfile(ctx, req.DatasetId, limitFeatures, numBuckets)
+}
+
 func (s *Service) GenerateData(ctx context.Context, req *pb.GenerateDataRequest) (*pb.GenerateDataResponse, error) {
 	if os.Getenv("ENABLE_GO_DATASET_GENERATE") != "true" {
 		return nil, status.Error(codes.Unimplemented, "dataset generation is disabled")

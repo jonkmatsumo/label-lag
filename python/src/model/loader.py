@@ -115,17 +115,29 @@ class DataLoader:
         """Convert proto records to DataFrame."""
         data = []
         for r in records:
-            data.append(
-                {
-                    "record_id": r.record_id,
-                    "user_id": r.user_id,
-                    "velocity_24h": r.velocity_24h,
-                    "amount_to_avg_ratio_30d": r.amount_to_avg_ratio_30d,
-                    "balance_volatility_z_score": r.balance_volatility_z_score,
-                    "label": 1 if r.is_fraudulent else 0,
-                    "transaction_timestamp": r.created_at.ToDatetime(),
-                }
-            )
+            item = {
+                "record_id": r.record_id,
+                "user_id": r.user_id,
+                "velocity_24h": r.velocity_24h,
+                "amount_to_avg_ratio_30d": r.amount_to_avg_ratio_30d,
+                "balance_volatility_z_score": r.balance_volatility_z_score,
+                "label": 1 if r.is_fraudulent else 0,
+                "transaction_timestamp": r.created_at.ToDatetime(),
+            }
+
+            # Unpack dynamic numerical features
+            if hasattr(r, "numerical_features"):
+                for k, v in r.numerical_features.items():
+                    col_name = k if k not in item else f"{k}__dyn"
+                    item[col_name] = v
+
+            # Unpack dynamic categorical features
+            if hasattr(r, "categorical_features"):
+                for k, v in r.categorical_features.items():
+                    col_name = k if k not in item else f"{k}__dyn"
+                    item[col_name] = v
+
+            data.append(item)
         return pd.DataFrame(data)
 
     def _prepare_split(

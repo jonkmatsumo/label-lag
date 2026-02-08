@@ -230,3 +230,11 @@ func (m *MockStore) GetInferenceScores(ctx context.Context, cutoff time.Time) ([
 	}
 	return args.Get(0).([]int32), args.Error(1)
 }
+
+func (m *MockStore) GetDatasetProfile(ctx context.Context, datasetID string, limitFeatures, numBuckets int32) (*pb.GetDatasetProfileResponse, error) {
+	args := m.Called(ctx, datasetID, limitFeatures, numBuckets)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.GetDatasetProfileResponse), args.Error(1)
+}

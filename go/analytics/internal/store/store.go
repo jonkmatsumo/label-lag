@@ -56,6 +56,9 @@ type Store interface {
 	GetFeatureSample(ctx context.Context, sampleSize int32, stratify bool) ([]*pb.FeatureSample, error)
 	GetDriftWindow(ctx context.Context, cutoff time.Time) ([]*pb.TransactionDetail, error)
 	GetInferenceScores(ctx context.Context, cutoff time.Time) ([]int32, error)
+
+	// Profiling
+	GetDatasetProfile(ctx context.Context, datasetID string, limitFeatures, numBuckets int32) (*pb.GetDatasetProfileResponse, error)
 }
 
 // SQLStore implements Store using a PostgreSQL database.
