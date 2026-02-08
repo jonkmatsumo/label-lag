@@ -1,5 +1,6 @@
 """MLflow-enabled training pipeline for fraud detection model."""
 
+import hashlib
 import json
 import os
 import platform
@@ -270,6 +271,11 @@ def train_model(
     for f in actual_feature_columns:
         FeatureRegistry.get(f)
 
+    # Create FeatureSetSpec (Commit 8)
+    from features.spec import FeatureSetSpec
+
+    feature_spec = FeatureSetSpec.from_features(actual_feature_columns)
+
     if split.train_size == 0:
         raise ValueError("No training data available. Generate data first.")
     if split.test_size == 0:
@@ -383,10 +389,6 @@ def train_model(
                     }
                 )
 
-        # ... tuning block ends ...
-
-        import hashlib
-
         # ... after param selection ...
         final_hyperparams = {
             "scale_pos_weight": scale_pos_weight,
@@ -407,7 +409,7 @@ def train_model(
         config_to_hash = {
             "features": sorted(actual_feature_columns),
             "hyperparameters": final_hyperparams,
-            "split_config": split_config.model_dump() if split_config else None,
+            "split_config": (split_config.model_dump() if split_config else None),
             "training_window_days": training_window_days,
         }
         # Ensure deterministic JSON
@@ -416,6 +418,10 @@ def train_model(
 
         _mlflow.set_tag("training_config_hash", training_config_hash)
         _mlflow.log_dict(config_to_hash, "resolved_training_config.json")
+
+        # Log feature set spec (Commit 8)
+        _mlflow.log_dict(feature_spec.model_dump(), "feature_set.json")
+        _mlflow.set_tag("feature_set_hash", feature_spec.hash)
 
         params_log = {
             "scale_pos_weight": scale_pos_weight,
