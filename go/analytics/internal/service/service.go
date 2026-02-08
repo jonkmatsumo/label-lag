@@ -271,6 +271,17 @@ func (s *Service) GenerateData(ctx context.Context, req *pb.GenerateDataRequest)
 		return nil, status.Error(codes.Unimplemented, "dataset generation is disabled")
 	}
 
+	// Validation
+	if req.NumUsers <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "num_users must be positive")
+	}
+	if req.NumUsers > 10000 {
+		return nil, status.Error(codes.InvalidArgument, "num_users exceeds maximum limit of 10000")
+	}
+	if req.FraudRate < 0 || req.FraudRate > 1.0 {
+		return nil, status.Error(codes.InvalidArgument, "fraud_rate must be between 0.0 and 1.0")
+	}
+
 	seed := time.Now().UnixNano()
 	if req.Seed != nil {
 		seed = *req.Seed
