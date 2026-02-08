@@ -180,6 +180,11 @@ A gRPC service responsible for:
 
 Provides the gRPC data access layer for all compute services. It manages PostgreSQL interactions, ensuring that Python services remain stateless and compute-focused.
 
+Key features:
+- **Dynamic Feature Transport**: Supports flexible feature flow via `numerical_features` and `categorical_features` maps in `TransactionDetail`, allowing new features to be added without schema changes.
+- **Dataset Profiling**: New `GetDatasetProfile` RPC provides on-demand SQL-based profiling of generated datasets, including null rates, means, standard deviations, and histograms.
+- **Temporal Splitting**: Handles strict temporal data splitting and label maturity logic for model training.
+
 ### Synthetic Data Generator
 
 Generates labeled transaction streams with controlled fraud patterns and label delay to support realistic training and backtesting. It can create data via CLI entrypoints.
