@@ -247,6 +247,7 @@ def train_model(
     import numpy as np
     from mlflow.models import infer_signature
 
+    from features.registry import FeatureRegistry
     from training.schemas import SplitStrategy
 
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
@@ -265,6 +266,9 @@ def train_model(
     actual_feature_columns = (
         feature_columns if feature_columns is not None else loader.FEATURE_COLUMNS
     )
+    # Validate features against registry
+    for f in actual_feature_columns:
+        FeatureRegistry.get(f)
 
     if split.train_size == 0:
         raise ValueError("No training data available. Generate data first.")
