@@ -279,14 +279,33 @@ func (s *Service) GenerateData(ctx context.Context, req *pb.GenerateDataRequest)
 	gen := generator.NewGenerator(&seed, s.registry)
 	result := gen.GenerateDatasetWithSequences(int(req.NumUsers), req.FraudRate)
 
+	// Count fraud records for the response
+	var fraudCount int64
+	for _, r := range result.Records {
+		if r.IsFraudulent {
+			fraudCount++
+		}
+	}
+
+	if req.DropExisting {
+		if _, err := s.store.ClearAllData(ctx); err != nil {
+			return nil, err
+		}
+	}
+
 	count, err := s.store.StoreGeneratedData(ctx, result.Records, result.Metadata)
 	if err != nil {
 		return nil, err
 	}
 
+	// Trigger feature materialization automatically after generation
+	materialized, _ := s.store.MaterializeFeatures(ctx)
+
 	return &pb.GenerateDataResponse{
-		Success:      true,
-		TotalRecords: count,
+		Success:              true,
+		TotalRecords:         count,
+		FraudRecords:         fraudCount,
+		FeaturesMaterialized: materialized,
 	}, nil
 }
 
