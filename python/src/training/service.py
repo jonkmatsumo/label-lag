@@ -4,6 +4,7 @@ import grpc
 from pydantic import ValidationError
 
 from features.registry import FeatureRegistry
+from features.store import get_feature_store
 from model.loader import DataLoader
 from model.train import train_model
 from training.crud_client import get_crud_client
@@ -30,22 +31,41 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
     def Train(self, request, context):  # noqa: N802
         """Train a new model with specified parameters."""
         try:
-            # 0. Resolve Features from Groups (Commit 9)
-            resolved_features = set()
-            if request.selected_feature_columns:
-                resolved_features.update(request.selected_feature_columns)
+            # -1. Feature Set Resolution (FF1)
+            # If feature_set_id is present, we must not have inline features/groups
+            if request.HasField("feature_set_id"):
+                if request.selected_feature_columns or request.feature_groups:
+                    context.abort(
+                        grpc.StatusCode.INVALID_ARGUMENT,
+                        "Cannot specify both feature_set_id and inline features/groups",
+                    )
 
-            if request.feature_groups:
-                for group in request.feature_groups:
-                    group_features = FeatureRegistry.expand_group(group)
-                    if not group_features:
-                        if request.feature_resolution_mode == "strict":
-                            context.abort(
-                                grpc.StatusCode.INVALID_ARGUMENT,
-                                f"Unknown or empty feature group: {group}",
-                            )
-                        # best_effort: ignore empty groups
-                    resolved_features.update(group_features)
+                store = get_feature_store()
+                spec = store.get(request.feature_set_id)
+                if not spec:
+                    context.abort(
+                        grpc.StatusCode.INVALID_ARGUMENT,
+                        f"Feature set {request.feature_set_id} not found",
+                    )
+                # Use features from spec
+                resolved_features = set(spec.features)
+            else:
+                # 0. Resolve Features from Groups (Commit 9)
+                resolved_features = set()
+                if request.selected_feature_columns:
+                    resolved_features.update(request.selected_feature_columns)
+
+                if request.feature_groups:
+                    for group in request.feature_groups:
+                        group_features = FeatureRegistry.expand_group(group)
+                        if not group_features:
+                            if request.feature_resolution_mode == "strict":
+                                context.abort(
+                                    grpc.StatusCode.INVALID_ARGUMENT,
+                                    f"Unknown or empty feature group: {group}",
+                                )
+                            # best_effort: ignore empty groups
+                        resolved_features.update(group_features)
 
             final_feature_list = sorted(list(resolved_features))
 
