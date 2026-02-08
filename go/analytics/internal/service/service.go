@@ -2,12 +2,16 @@ package service
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"time"
 
 	"github.com/jonkmatsumo/label-lag/go/analytics/internal/generator"
 	"github.com/jonkmatsumo/label-lag/go/analytics/internal/store"
 	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -267,6 +271,19 @@ func (s *Service) GetDatasetProfile(ctx context.Context, req *pb.GetDatasetProfi
 }
 
 func (s *Service) GenerateData(ctx context.Context, req *pb.GenerateDataRequest) (*pb.GenerateDataResponse, error) {
+	tracer := otel.Tracer("analytics-crud")
+	ctx, span := tracer.Start(ctx, "GenerateData", trace.WithAttributes(
+		attribute.Int("num_users", int(req.NumUsers)),
+		attribute.Float64("fraud_rate", req.FraudRate),
+		attribute.String("idempotency_key", req.IdempotencyKey),
+	))
+	defer span.End()
+
+	slog.Info("Starting dataset generation",
+		"num_users", req.NumUsers,
+		"fraud_rate", req.FraudRate,
+		"idempotency_key", req.IdempotencyKey)
+
 	if os.Getenv("ENABLE_GO_DATASET_GENERATE") != "true" {
 		return nil, status.Error(codes.Unimplemented, "dataset generation is disabled")
 	}
@@ -353,9 +370,21 @@ func (s *Service) GenerateData(ctx context.Context, req *pb.GenerateDataRequest)
 
 	if req.IdempotencyKey != "" {
 		if err := s.store.CompleteGenerationJob(ctx, req.IdempotencyKey, resp); err != nil {
-			// Just log error, don't fail the request if generation succeeded
+			slog.Error("failed to complete generation job", "error", err, "idempotency_key", req.IdempotencyKey)
 		}
 	}
+
+	span.SetAttributes(
+		attribute.Int64("total_records", resp.TotalRecords),
+		attribute.Int64("fraud_records", resp.FraudRecords),
+		attribute.Int64("features_materialized", resp.FeaturesMaterialized),
+	)
+
+	slog.Info("Completed dataset generation",
+		"total_records", resp.TotalRecords,
+		"fraud_records", resp.FraudRecords,
+		"features_materialized", resp.FeaturesMaterialized,
+		"idempotency_key", req.IdempotencyKey)
 
 	return resp, nil
 }
