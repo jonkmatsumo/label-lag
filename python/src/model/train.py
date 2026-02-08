@@ -251,6 +251,9 @@ def train_model(
     random_state: int = 42,
     early_stopping_rounds: int | None = None,
     tuning_config: "TuningConfig | None" = None,
+    feature_set_id: str | None = None,
+    feature_resolution_mode: str = "strict",
+    feature_groups: list[str] | None = None,
 ) -> str:
     """Train an XGBoost model with MLflow tracking."""
     _mlflow = _get_mlflow()
@@ -435,6 +438,26 @@ def train_model(
         # Log feature set spec (Commit 8)
         _mlflow.log_dict(feature_spec.model_dump(), "feature_set.json")
         _mlflow.set_tag("feature_set_hash", feature_spec.hash)
+
+        # Log training run spec (NF1)
+        from training.schemas import TrainingRunSpec
+
+        run_spec = TrainingRunSpec(
+            run_id=run.info.run_id,
+            model_name=EXPERIMENT_NAME,
+            created_at=datetime.now(UTC).isoformat(),
+            training_config_hash=training_config_hash,
+            feature_set_id=feature_set_id,
+            feature_set_hash=feature_spec.hash,
+            resolved_features=actual_feature_columns,
+            feature_resolution_mode=feature_resolution_mode,
+            requested_feature_groups=feature_groups,
+            split_config=split_config,
+            tuning_config=tuning_config,
+            training_window_days=training_window_days,
+        )
+        _mlflow.log_dict(run_spec.model_dump(), "training_run_spec.json")
+        _mlflow.set_tag("training_run_spec_version", str(run_spec.schema_version))
 
         params_log = {
             "scale_pos_weight": scale_pos_weight,

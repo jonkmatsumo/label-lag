@@ -180,6 +180,10 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                 feature_set_id=request.feature_set_id
                 if request.HasField("feature_set_id")
                 else None,
+                feature_resolution_mode=request.feature_resolution_mode,
+                feature_groups=(
+                    list(request.feature_groups) if request.feature_groups else None
+                ),
             )
             return training_pb2.TrainResponse(
                 success=True,

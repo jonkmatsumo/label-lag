@@ -404,6 +404,25 @@ class ClearDataResponse(BaseModel):
     error: str | None = Field(None, description="Error message if clearing failed")
 
 
+class TrainingRunSpec(BaseModel):
+    """Canonical specification for a training run, used for reproducibility."""
+
+    schema_version: int = 1
+    run_id: str
+    model_name: str
+    created_at: str
+    training_config_hash: str
+    feature_set_id: str | None = None
+    feature_set_hash: str
+    resolved_features: list[str]
+    feature_resolution_mode: str
+    requested_feature_groups: list[str] | None = None
+    resolved_feature_groups: list[str] | None = None
+    split_config: SplitConfig | None = None
+    tuning_config: TuningConfig | None = None
+    training_window_days: int
+
+
 # =============================================================================
 # Monitoring and Drift Schemas
 # =============================================================================

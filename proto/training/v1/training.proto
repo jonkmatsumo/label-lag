@@ -10,6 +10,12 @@ service TrainingService {
 
   // Initiates model training.
   rpc Train(TrainRequest) returns (TrainResponse);
+
+  // Fetches metadata for a specific training run.
+  rpc GetTrainingRunInfo(GetTrainingRunInfoRequest) returns (GetTrainingRunInfoResponse);
+
+  // Fetches info about the active production model.
+  rpc GetModelInfo(GetModelInfoRequest) returns (GetModelInfoResponse);
 }
 
 message ClearDataRequest {}
@@ -81,4 +87,27 @@ message TrainResponse {
   string status = 3;
   string model_version = 4;
   string error = 5;
+}
+
+message GetTrainingRunInfoRequest {
+  string run_id = 1;
+}
+
+message GetTrainingRunInfoResponse {
+  // JSON-serialized TrainingRunSpec
+  string run_spec_json = 1;
+}
+
+message GetModelInfoRequest {
+  // Optional: model name, defaults to production if empty.
+  string model_name = 1;
+}
+
+message GetModelInfoResponse {
+  string model_name = 1;
+  string model_version = 2;
+  repeated string required_features = 3;
+  string feature_set_hash = 4;
+  string training_config_hash = 5;
+  string run_id = 6;
 }
