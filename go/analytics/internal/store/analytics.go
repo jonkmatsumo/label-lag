@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -427,4 +428,116 @@ func (s *SQLStore) GetSchemaSummary(ctx context.Context) (*pb.GetSchemaSummaryRe
 	}
 
 	return &pb.GetSchemaSummaryResponse{Columns: columns}, nil
+}
+
+func (s *SQLStore) GetDatasetProfile(ctx context.Context, datasetID string, limitFeatures, numBuckets int32) (*pb.GetDatasetProfileResponse, error) {
+	// 1. Get total records
+	var totalRecords int64
+	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM generated_records").Scan(&totalRecords)
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+
+	if totalRecords == 0 {
+		return &pb.GetDatasetProfileResponse{TotalRecords: 0}, nil
+	}
+
+	// 2. Define features to profile
+	numericFeatures := []string{
+		"amount", "available_balance", "balance_to_transaction_ratio",
+		"avg_available_balance_30d", "balance_volatility_z_score",
+		"merchant_risk_score",
+	}
+
+	resp := &pb.GetDatasetProfileResponse{
+		TotalRecords: totalRecords,
+	}
+
+	for _, feat := range numericFeatures {
+		if int32(len(resp.FeatureProfiles)) >= limitFeatures {
+			break
+		}
+		profile, err := s.profileNumericFeature(ctx, "generated_records", feat, totalRecords, numBuckets)
+		if err != nil {
+			continue
+		}
+		resp.FeatureProfiles = append(resp.FeatureProfiles, profile)
+	}
+
+	return resp, nil
+}
+
+func (s *SQLStore) profileNumericFeature(ctx context.Context, table, column string, totalRecords int64, numBuckets int32) (*pb.FeatureProfile, error) {
+	query := fmt.Sprintf(`
+		SELECT
+			AVG(%[1]s) as mean,
+			STDDEV(%[1]s) as stddev,
+			COUNT(*) FILTER (WHERE %[1]s IS NULL) as null_count,
+			MIN(%[1]s) as min_val,
+			MAX(%[1]s) as max_val
+		FROM %[2]s
+	`, column, table)
+
+	var mean, stddev, minVal, maxVal sql.NullFloat64
+	var nullCount int64
+	err := s.db.QueryRowContext(ctx, query).Scan(&mean, &stddev, &nullCount, &minVal, &maxVal)
+	if err != nil {
+		return nil, err
+	}
+
+	profile := &pb.FeatureProfile{
+		Name:     column,
+		Type:     "numeric",
+		NullRate: float64(nullCount) / float64(totalRecords),
+		Mean:     mean.Float64,
+		StdDev:   stddev.Float64,
+	}
+
+	if minVal.Valid && maxVal.Valid && maxVal.Float64 >= minVal.Float64 {
+		// Equi-width histogram
+		var bucketSize float64
+		if maxVal.Float64 > minVal.Float64 {
+			bucketSize = (maxVal.Float64 - minVal.Float64) / float64(numBuckets)
+		} else {
+			bucketSize = 1.0 // Single value case
+		}
+
+		// Adjust max for WIDTH_BUCKET exclusive upper bound
+		upperBound := maxVal.Float64 + 0.000001
+
+		histQuery := fmt.Sprintf(`
+			SELECT
+				WIDTH_BUCKET(%[1]s, %[2]f, %[3]f, %[4]d) as bucket,
+				COUNT(*) as count
+			FROM %[5]s
+			WHERE %[1]s IS NOT NULL
+			GROUP BY bucket
+			ORDER BY bucket
+		`, column, minVal.Float64, upperBound, numBuckets, table)
+
+		rows, err := s.db.QueryContext(ctx, histQuery)
+		if err == nil {
+			defer rows.Close()
+			buckets := make(map[int]int64)
+			for rows.Next() {
+				var b int
+				var c int64
+				if err := rows.Scan(&b, &c); err == nil {
+					buckets[b] = c
+				}
+			}
+
+			for i := 1; i <= int(numBuckets); i++ {
+				lower := minVal.Float64 + float64(i-1)*bucketSize
+				upper := minVal.Float64 + float64(i)*bucketSize
+				profile.Histogram = append(profile.Histogram, &pb.Bucket{
+					Lower: lower,
+					Upper: upper,
+					Count: buckets[i],
+				})
+			}
+		}
+	}
+
+	return profile, nil
 }

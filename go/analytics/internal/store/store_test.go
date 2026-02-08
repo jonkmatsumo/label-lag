@@ -131,3 +131,34 @@ func TestSearchTransactions(t *testing.T) {
 	assert.Len(t, details, 1)
 	assert.Equal(t, "rec-1", details[0].RecordId)
 }
+
+func TestGetDatasetProfile(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+
+	// 1. Total records count
+	mock.ExpectQuery("SELECT COUNT").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(100))
+
+	// 2. Mock numeric feature profiling (one example: amount)
+	mock.ExpectQuery("SELECT AVG\\(amount\\)").WillReturnRows(sqlmock.NewRows([]string{"mean", "stddev", "null_count", "min_val", "max_val"}).
+		AddRow(100.0, 10.0, 0, 50.0, 150.0))
+
+	// 3. Mock histogram query
+	mock.ExpectQuery("SELECT WIDTH_BUCKET\\(amount").WillReturnRows(sqlmock.NewRows([]string{"bucket", "count"}).
+		AddRow(1, 10).AddRow(2, 20).AddRow(3, 70))
+
+	// Mock remaining features to avoid test failure due to unexpected queries
+	for i := 0; i < 5; i++ {
+		mock.ExpectQuery("SELECT AVG").WillReturnRows(sqlmock.NewRows([]string{"mean", "stddev", "null_count", "min_val", "max_val"}).
+			AddRow(0.0, 0.0, 0, 0.0, 0.0))
+	}
+
+	resp, err := s.GetDatasetProfile(context.Background(), "test-dataset", 50, 10)
+	require.NoError(t, err)
+	assert.Equal(t, int64(100), resp.TotalRecords)
+	assert.NotEmpty(t, resp.FeatureProfiles)
+	assert.Equal(t, "amount", resp.FeatureProfiles[0].Name)
+}
