@@ -59,6 +59,10 @@ func main() {
 		slog.Error("failed to resolve database url", "error", err)
 		os.Exit(1)
 	}
+	if dbURL == "" {
+		slog.Error("DATABASE_URL is required but not set")
+		os.Exit(1)
+	}
 
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
@@ -99,6 +103,8 @@ func main() {
 	analyticsStore := store.NewSQLStore(db)
 
 	// Initialize generator registry
+	// GENERATOR_CONFIG_PATH: Path to the generator configuration file
+	// (default: go/analytics/config/generator.yaml)
 	reg := generator.NewGeneratorRegistry()
 	configPath := os.Getenv("GENERATOR_CONFIG_PATH")
 	if configPath == "" {

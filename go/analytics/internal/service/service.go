@@ -284,6 +284,7 @@ func (s *Service) GenerateData(ctx context.Context, req *pb.GenerateDataRequest)
 		"fraud_rate", req.FraudRate,
 		"idempotency_key", req.IdempotencyKey)
 
+	// ENABLE_GO_DATASET_GENERATE: Set to "true" to enable this endpoint.
 	if os.Getenv("ENABLE_GO_DATASET_GENERATE") != "true" {
 		return nil, status.Error(codes.Unimplemented, "dataset generation is disabled")
 	}
