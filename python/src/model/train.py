@@ -383,54 +383,51 @@ def train_model(
                     }
                 )
 
-            import hashlib
+        # ... tuning block ends ...
 
-            # ... after param selection ...
+        import hashlib
 
-            final_hyperparams = {
-                "scale_pos_weight": scale_pos_weight,
-                "max_depth": max_depth,
-                "n_estimators": n_estimators,
-                "learning_rate": learning_rate,
-                "min_child_weight": min_child_weight,
-                "subsample": subsample,
-                "colsample_bytree": colsample_bytree,
-                "gamma": gamma,
-                "reg_alpha": reg_alpha,
-                "reg_lambda": reg_lambda,
-                "random_state": random_state,
-                "early_stopping_rounds": early_stopping_rounds,
-            }
+        # ... after param selection ...
+        final_hyperparams = {
+            "scale_pos_weight": scale_pos_weight,
+            "max_depth": max_depth,
+            "n_estimators": n_estimators,
+            "learning_rate": learning_rate,
+            "min_child_weight": min_child_weight,
+            "subsample": subsample,
+            "colsample_bytree": colsample_bytree,
+            "gamma": gamma,
+            "reg_alpha": reg_alpha,
+            "reg_lambda": reg_lambda,
+            "random_state": random_state,
+            "early_stopping_rounds": early_stopping_rounds,
+        }
 
-            # Compute Unified Training Config Hash (Commit 4)
+        # Compute Unified Training Config Hash (Commit 4)
+        config_to_hash = {
+            "features": sorted(actual_feature_columns),
+            "hyperparameters": final_hyperparams,
+            "split_config": split_config.model_dump() if split_config else None,
+            "training_window_days": training_window_days,
+        }
+        # Ensure deterministic JSON
+        config_json = json.dumps(config_to_hash, sort_keys=True)
+        training_config_hash = hashlib.sha256(config_json.encode("utf-8")).hexdigest()
 
-            config_to_hash = {
-                "features": sorted(actual_feature_columns),
-                "hyperparameters": final_hyperparams,
-                "split_config": split_config.model_dump() if split_config else None,
-                "training_window_days": training_window_days,
-            }
+        _mlflow.set_tag("training_config_hash", training_config_hash)
+        _mlflow.log_dict(config_to_hash, "resolved_training_config.json")
 
-            # Ensure deterministic JSON
-            config_json = json.dumps(config_to_hash, sort_keys=True)
-            training_config_hash = hashlib.sha256(
-                config_json.encode("utf-8")
-            ).hexdigest()
-
-            _mlflow.set_tag("training_config_hash", training_config_hash)
-            _mlflow.log_dict(config_to_hash, "resolved_training_config.json")
-
-            params_log = {
-                "scale_pos_weight": scale_pos_weight,
-                "max_depth": max_depth,
-                "training_window_days": training_window_days,
-                "train_size": split.train_size,
-                "test_size": split.test_size,
-                "n_estimators": n_estimators,
-                "learning_rate": learning_rate,
-                "random_state": random_state,
-                "feature_columns": json.dumps(actual_feature_columns),
-            }
+        params_log = {
+            "scale_pos_weight": scale_pos_weight,
+            "max_depth": max_depth,
+            "training_window_days": training_window_days,
+            "train_size": split.train_size,
+            "test_size": split.test_size,
+            "n_estimators": n_estimators,
+            "learning_rate": learning_rate,
+            "random_state": random_state,
+            "feature_columns": json.dumps(actual_feature_columns),
+        }
         if early_stopping_rounds:
             params_log["early_stopping_rounds"] = early_stopping_rounds
         _mlflow.log_params(params_log)
