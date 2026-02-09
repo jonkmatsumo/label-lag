@@ -20,10 +20,13 @@ from model.train import (
 class TestExpandedMetricsComputed:
     """Verify all 9+ metrics are computed and logged."""
 
+    @patch("features.registry.FeatureRegistry.get")
     @patch("model.train._get_git_sha", return_value="abc123")
     @patch("model.train.mlflow")
     @patch("model.train.DataLoader")
-    def test_expanded_metrics_computed(self, mock_loader_cls, mock_mlflow, _mock_git):
+    def test_expanded_metrics_computed(
+        self, mock_loader_cls, mock_mlflow, _mock_git, _mock_registry
+    ):
         """Verify f1, roc_auc, log_loss, brier, tp, fp, tn, fn are logged."""
         mock_loader = MagicMock()
         mock_loader.FEATURE_COLUMNS = DataLoader.FEATURE_COLUMNS
@@ -79,10 +82,13 @@ class TestExpandedMetricsComputed:
 class TestConfusionMatrixCountsCorrect:
     """Verify TP/FP/TN/FN from confusion matrix."""
 
+    @patch("features.registry.FeatureRegistry.get")
     @patch("model.train._get_git_sha", return_value="abc")
     @patch("model.train.mlflow")
     @patch("model.train.DataLoader")
-    def test_confusion_matrix_counts_correct(self, mock_loader_cls, mock_mlflow, _git):
+    def test_confusion_matrix_counts_correct(
+        self, mock_loader_cls, mock_mlflow, _git, _mock_registry
+    ):
         """tp, fp, tn, fn non-negative and sum to test size."""
         mock_loader = MagicMock()
         mock_loader.FEATURE_COLUMNS = ["v", "a", "b"]
@@ -178,10 +184,13 @@ class TestConfusionMatrixPlot:
 class TestCVMetricsLogging:
     """Verify CV fold metrics are logged with min/max and tags."""
 
+    @patch("features.registry.FeatureRegistry.get")
     @patch("model.train._get_git_sha", return_value="abc123")
     @patch("model.train.mlflow")
     @patch("model.train.DataLoader")
-    def test_cv_logs_min_max_metrics(self, mock_loader_cls, mock_mlflow, _mock_git):
+    def test_cv_logs_min_max_metrics(
+        self, mock_loader_cls, mock_mlflow, _mock_git, _mock_registry
+    ):
         """Verify min/max logged when k-fold enabled."""
         from training.schemas import SplitConfig, SplitStrategy
 
@@ -234,10 +243,13 @@ class TestCVMetricsLogging:
         assert has_min, "min metrics not logged"
         assert has_max, "max metrics not logged"
 
+    @patch("features.registry.FeatureRegistry.get")
     @patch("model.train._get_git_sha", return_value="abc123")
     @patch("model.train.mlflow")
     @patch("model.train.DataLoader")
-    def test_cv_tags_logged(self, mock_loader_cls, mock_mlflow, _mock_git):
+    def test_cv_tags_logged(
+        self, mock_loader_cls, mock_mlflow, _mock_git, _mock_registry
+    ):
         """Verify cv.enabled and cv.n_folds tags set."""
         from training.schemas import SplitConfig, SplitStrategy
 
@@ -296,11 +308,12 @@ class TestCVMetricsLogging:
 class TestPerformanceMetricsLogging:
     """Verify training_time_seconds and model_size_bytes are logged when applicable."""
 
+    @patch("features.registry.FeatureRegistry.get")
     @patch("model.train._get_git_sha", return_value="abc123")
     @patch("model.train.mlflow")
     @patch("model.train.DataLoader")
     def test_training_time_seconds_logged(
-        self, mock_loader_cls, mock_mlflow, _mock_git
+        self, mock_loader_cls, mock_mlflow, _mock_git, _mock_registry
     ):
         """training_time_seconds is logged via log_metric after training."""
         mock_loader = MagicMock()
@@ -341,11 +354,12 @@ class TestPerformanceMetricsLogging:
         value = log_metric_calls[idx][0][1]
         assert isinstance(value, (int, float)) and value >= 0
 
+    @patch("features.registry.FeatureRegistry.get")
     @patch("model.train._get_git_sha", return_value="abc123")
     @patch("model.train.mlflow")
     @patch("model.train.DataLoader")
     def test_model_size_bytes_positive_when_logged(
-        self, mock_loader_cls, mock_mlflow, _mock_git
+        self, mock_loader_cls, mock_mlflow, _mock_git, _mock_registry
     ):
         """When model_size_bytes is logged, value is a positive number."""
         mock_loader = MagicMock()

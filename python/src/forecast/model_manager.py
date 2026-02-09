@@ -150,8 +150,36 @@ class ModelManager:
             self._model_version = self._get_production_version()
             self._model_source = "mlflow"
 
-            # Try to load feature_columns.json artifact
-            self._load_feature_columns_artifact()
+            # Try to load required_features.json artifact (FF5)
+            # Falls back to feature_columns.json if missing (legacy)
+            self._load_required_features_artifact()
+
+            # Validate loaded features against registry (Commit 7)
+            from features.registry import FeatureRegistry
+
+            if self._required_features:
+                registered_features = set(FeatureRegistry.list_features())
+                unknown_features = [
+                    f for f in self._required_features if f not in registered_features
+                ]
+
+                enforce_strict = (
+                    os.getenv("ENFORCE_MODEL_FEATURES", "false").lower() == "true"
+                )
+
+                if unknown_features:
+                    msg = (
+                        f"Model requires features not in registry: {unknown_features}. "
+                        "This may indicate a registry/model sync issue."
+                    )
+                    if enforce_strict:
+                        logger.critical(f"STRICT ENFORCEMENT FAILURE: {msg}")
+                        raise ValueError(msg)
+                    logger.warning(msg)
+                    # Check for missing required features in registry?
+                # (Registry is source of truth for what exists,
+                # model is source of truth for what it NEEDS).
+                # Mismatch means model needs more than what registry defines.
 
             # Try to load calibrator.pkl artifact (C2)
             self._load_calibrator_artifact()
@@ -178,11 +206,11 @@ class ModelManager:
             )
             return False
 
-    def _load_feature_columns_artifact(self) -> None:
-        """Load feature_columns.json artifact from the model run.
+    def _load_required_features_artifact(self) -> None:
+        """Load required_features.json artifact from the model run.
 
-        Sets self._required_features if artifact is found. If not found,
-        falls back to default FEATURE_COLUMNS.
+        Attempts to load required_features.json (new format).
+        Falls back to feature_columns.json (legacy format) if missing.
         """
         try:
             import mlflow
@@ -190,29 +218,46 @@ class ModelManager:
             client = mlflow.MlflowClient()
             versions = client.search_model_versions(f"name='{MODEL_NAME}'")
             for v in versions:
-                if v.current_stage == "Production":
+                if (
+                    v.current_stage == "Production"
+                    and v.version == self._model_version.lstrip("v")
+                ):
                     run_id = v.run_id
-                    # Try to download the artifact
+                    # 1. Try new format: required_features.json
                     try:
-                        artifact_path = client.download_artifacts(
-                            run_id, "feature_columns.json"
+                        path = client.download_artifacts(
+                            run_id, "required_features.json"
                         )
-                        with open(artifact_path) as f:
-                            self._required_features = json.load(f)
+                        with open(path) as f:
+                            data = json.load(f)
+                        self._required_features = data["features"]
                         logger.info(
-                            f"Loaded feature columns from artifact: "
+                            f"Loaded required features from metadata: "
                             f"{self._required_features}"
                         )
                         return
                     except Exception:
-                        # Artifact not found - this is OK for older models
-                        logger.debug(
-                            "feature_columns.json artifact not found, "
-                            "using default columns"
+                        logger.debug("required_features.json not found, trying legacy")
+
+                    # 2. Try legacy format: feature_columns.json
+                    try:
+                        path = client.download_artifacts(run_id, "feature_columns.json")
+                        with open(path) as f:
+                            self._required_features = json.load(f)
+                        logger.warning(
+                            f"Loaded features from legacy artifact: "
+                            f"{self._required_features}. "
+                            "Please retrain model to generate full metadata."
+                        )
+                        return
+                    except Exception:
+                        logger.warning(
+                            "No feature artifacts found. "
+                            "Falling back to default columns."
                         )
                         break
         except Exception as e:
-            logger.debug(f"Could not load feature_columns artifact: {e}")
+            logger.debug(f"Could not load required features metadata: {e}")
 
     def _load_calibrator_artifact(self) -> None:
         """Load calibrator.pkl artifact from the model run.

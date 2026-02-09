@@ -16,7 +16,8 @@ from model.tuning import (
 class TestTuningStudy:
     """Tests for run_tuning_study."""
 
-    def test_tuning_runs_n_trials(self):
+    @patch("mlflow.log_dict")
+    def test_tuning_runs_n_trials(self, mock_log_dict):
         """Study runs requested number of trials."""
         n = 60
         x = pd.DataFrame({"a": list(range(n)), "b": [1.0] * n, "c": [0.1] * n})
@@ -32,7 +33,8 @@ class TestTuningStudy:
         assert "trial" in df.columns
         assert "value" in df.columns
 
-    def test_tuning_returns_best_params(self):
+    @patch("mlflow.log_dict")
+    def test_tuning_returns_best_params(self, mock_log_dict):
         """Best params dict is returned."""
         n = 60
         x = pd.DataFrame({"a": list(range(n)), "b": [1.0] * n, "c": [0.1] * n})
@@ -48,7 +50,8 @@ class TestTuningStudy:
         assert "max_depth" in best
         assert "learning_rate" in best
 
-    def test_tuning_respects_timeout(self):
+    @patch("mlflow.log_dict")
+    def test_tuning_respects_timeout(self, mock_log_dict):
         """Study stops within timeout."""
         n = 80
         x = pd.DataFrame({"a": list(range(n)), "b": [1.0] * n, "c": [0.1] * n})
@@ -66,7 +69,8 @@ class TestTuningStudy:
         )
         assert len(df) < 100
 
-    def test_disabled_tuning_skipped(self):
+    @patch("features.registry.FeatureRegistry.get")
+    def test_disabled_tuning_skipped(self, _mock_registry):
         """When tuning disabled, train_model does not run study."""
         from model.loader import DataLoader, TrainTestSplit
         from model.train import train_model
@@ -156,11 +160,12 @@ class TestGetTrialParams:
 class TestSelectedTrialOverride:
     """Manual trial selection overrides best trial."""
 
+    @patch("features.registry.FeatureRegistry.get")
     @patch("model.train._get_git_sha", return_value="abc")
     @patch("model.train.mlflow")
     @patch("model.train.DataLoader")
     def test_selected_trial_overrides_best(
-        self, mock_loader_cls, mock_mlflow, _mock_git
+        self, mock_loader_cls, mock_mlflow, _mock_git, _mock_registry
     ):
         """When selected_trial_number is set, uses that trial's params."""
         from model.loader import TrainTestSplit

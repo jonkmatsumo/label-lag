@@ -15,7 +15,7 @@ install:
 	uv run pre-commit install
 
 test:
-	uv run pytest --cov=python/src/synthetic_pipeline --cov-report=term-missing
+	uv run pytest
 
 lint:
 	uv run ruff check python/src python/tests

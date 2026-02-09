@@ -1,5 +1,6 @@
 """MLflow-enabled training pipeline for fraud detection model."""
 
+import hashlib
 import json
 import os
 import platform
@@ -67,6 +68,29 @@ def _get_run_tuning_study():
 
         run_tuning_study = _run_tuning_study
     return run_tuning_study
+
+
+def _safe_run_id(run_obj, mlflow_obj) -> str:
+    """Safely extract a string run_id from run object or active run."""
+    try:
+        rid = getattr(getattr(run_obj, "info", None), "run_id", None)
+        if isinstance(rid, str) and rid:
+            return rid
+    except Exception:
+        pass
+
+    try:
+        ar = getattr(mlflow_obj, "active_run", None)
+        if callable(ar):
+            active = ar()
+            rid2 = getattr(getattr(active, "info", None), "run_id", None)
+            if isinstance(rid2, str) and rid2:
+                return rid2
+    except Exception:
+        pass
+
+    # If mocked, rid may be MagicMock; don't pass that to pydantic.
+    return "unknown"
 
 
 # experiment name
@@ -221,6 +245,17 @@ def _compute_metrics(y_true, y_pred, y_proba):
     }
 
 
+def _to_python_type(obj):
+    """Convert numpy types to python types for JSON serialization."""
+    import numpy as np
+
+    if isinstance(obj, (np.integer, np.floating)):
+        return obj.item()
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    return obj
+
+
 def train_model(
     scale_pos_weight: float | None = None,
     max_depth: int = 6,
@@ -239,6 +274,9 @@ def train_model(
     random_state: int = 42,
     early_stopping_rounds: int | None = None,
     tuning_config: "TuningConfig | None" = None,
+    feature_set_id: str | None = None,
+    feature_resolution_mode: str = "strict",
+    feature_groups: list[str] | None = None,
 ) -> str:
     """Train an XGBoost model with MLflow tracking."""
     _mlflow = _get_mlflow()
@@ -247,6 +285,7 @@ def train_model(
     import numpy as np
     from mlflow.models import infer_signature
 
+    from features.registry import FeatureRegistry
     from training.schemas import SplitStrategy
 
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
@@ -265,6 +304,14 @@ def train_model(
     actual_feature_columns = (
         feature_columns if feature_columns is not None else loader.FEATURE_COLUMNS
     )
+    # Validate features against registry
+    for f in actual_feature_columns:
+        FeatureRegistry.get(f)
+
+    # Create FeatureSetSpec (Commit 8)
+    from features.spec import FeatureSetSpec
+
+    feature_spec = FeatureSetSpec.from_features(actual_feature_columns)
 
     if split.train_size == 0:
         raise ValueError("No training data available. Generate data first.")
@@ -335,6 +382,9 @@ def train_model(
                     timeout_seconds=tuning_config.timeout_minutes * 60,
                     seed=split_config.seed if split_config else 42,
                     scale_pos_weight=scale_pos_weight,
+                    direction=tuning_config.direction,
+                    strategy=tuning_config.strategy.value,
+                    search_space_overrides=tuning_config.search_space,
                 )
                 selected_params = best
                 selection_type = "auto"
@@ -375,6 +425,63 @@ def train_model(
                         "tuning.n_trials": str(tuning_config.n_trials),
                     }
                 )
+
+        # ... after param selection ...
+        final_hyperparams = {
+            "scale_pos_weight": scale_pos_weight,
+            "max_depth": max_depth,
+            "n_estimators": n_estimators,
+            "learning_rate": learning_rate,
+            "min_child_weight": min_child_weight,
+            "subsample": subsample,
+            "colsample_bytree": colsample_bytree,
+            "gamma": gamma,
+            "reg_alpha": reg_alpha,
+            "reg_lambda": reg_lambda,
+            "random_state": random_state,
+            "early_stopping_rounds": early_stopping_rounds,
+        }
+
+        # Compute Unified Training Config Hash (Commit 4)
+        config_to_hash = {
+            "features": sorted(actual_feature_columns),
+            "hyperparameters": final_hyperparams,
+            "split_config": (split_config.model_dump() if split_config else None),
+            "training_window_days": training_window_days,
+        }
+        # Ensure deterministic JSON
+        config_json = json.dumps(
+            config_to_hash, sort_keys=True, default=_to_python_type
+        )
+        training_config_hash = hashlib.sha256(config_json.encode("utf-8")).hexdigest()
+
+        _mlflow.set_tag("training_config_hash", training_config_hash)
+        _mlflow.log_dict(config_to_hash, "resolved_training_config.json")
+
+        # Log feature set spec (Commit 8)
+        _mlflow.log_dict(feature_spec.model_dump(), "feature_set.json")
+        _mlflow.set_tag("feature_set_hash", feature_spec.hash)
+
+        # Log training run spec (NF1)
+        from training.schemas import TrainingRunSpec
+
+        run_id = _safe_run_id(run, _mlflow)
+        run_spec = TrainingRunSpec(
+            run_id=run_id,
+            model_name=EXPERIMENT_NAME,
+            created_at=datetime.now(UTC).isoformat(),
+            training_config_hash=training_config_hash,
+            feature_set_id=feature_set_id,
+            feature_set_hash=feature_spec.hash,
+            resolved_features=actual_feature_columns,
+            feature_resolution_mode=feature_resolution_mode,
+            requested_feature_groups=feature_groups,
+            split_config=split_config,
+            tuning_config=tuning_config,
+            training_window_days=training_window_days,
+        )
+        _mlflow.log_dict(run_spec.model_dump(), "training_run_spec.json")
+        _mlflow.set_tag("training_run_spec_version", str(run_spec.schema_version))
 
         params_log = {
             "scale_pos_weight": scale_pos_weight,
@@ -512,11 +619,22 @@ def train_model(
                 json.dump(baseline_dist, f, indent=2)
             _mlflow.log_artifact(dist_path)
 
-            # Save feature columns list as artifact for inference
+            # Save feature columns list as artifact for inference (Legacy)
             feature_columns_path = os.path.join(tmpdir, "feature_columns.json")
             with open(feature_columns_path, "w") as f:
                 json.dump(actual_feature_columns, f, indent=2)
             _mlflow.log_artifact(feature_columns_path)
+
+            # Save required_features.json artifact (FF5)
+            required_features_data = {
+                "features": actual_feature_columns,
+                "feature_set_hash": feature_spec.hash,
+                "training_config_hash": training_config_hash,
+            }
+            required_features_path = os.path.join(tmpdir, "required_features.json")
+            with open(required_features_path, "w") as f:
+                json.dump(required_features_data, f, indent=2)
+            _mlflow.log_artifact(required_features_path)
 
             cm_path = os.path.join(tmpdir, "confusion_matrix.png")
             _save_confusion_matrix_plot(split.y_test, y_pred, cm_path)
@@ -530,9 +648,9 @@ def train_model(
             _mlflow.log_artifact(fi_png)
 
         _mlflow.log_metric("training_time_seconds", time.time() - training_start_time)
-        model_uri = f"runs:/{run.info.run_id}/model"
+        model_uri = f"runs:/{run_id}/model"
         _mlflow.register_model(model_uri, EXPERIMENT_NAME)
-        return run.info.run_id
+        return run_id
 
 
 def get_latest_model_version(model_name: str = EXPERIMENT_NAME) -> int | None:

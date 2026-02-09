@@ -6,6 +6,7 @@ from datetime import datetime
 
 import pandas as pd
 
+from features.registry import FeatureRegistry
 from training.crud_client import get_crud_client
 from training.schemas import SplitConfig
 
@@ -55,6 +56,7 @@ class DataLoader:
     """
 
     # Feature columns from feature_snapshots table
+    # Validated against FeatureRegistry
     FEATURE_COLUMNS = [
         "velocity_24h",
         "amount_to_avg_ratio_30d",
@@ -67,7 +69,9 @@ class DataLoader:
         Args:
             database_url: Ignored in compute-only mode.
         """
-        pass
+        # Validate default features exist in registry
+        for f in self.FEATURE_COLUMNS:
+            FeatureRegistry.get(f)
 
     def load_train_test_split(
         self,

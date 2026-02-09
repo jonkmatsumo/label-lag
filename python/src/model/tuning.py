@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import logging
+
 import optuna
 import pandas as pd
 from optuna.integration import XGBoostPruningCallback
@@ -14,6 +17,8 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 from xgboost import XGBClassifier
+
+logger = logging.getLogger(__name__)
 
 _METRIC_FNS = {
     "pr_auc": lambda y, p, prob: average_precision_score(y, prob),
@@ -44,35 +49,30 @@ def _create_objective(
     metric: str,
     scale_pos_weight: float,
     seed: int,
+    search_space: dict,
 ):
     """Build Optuna objective that trains XGBoost and returns validation metric."""
 
     def objective(trial: optuna.Trial) -> float:
         params = {
-            "max_depth": trial.suggest_int(
-                "max_depth", *DEFAULT_SEARCH_SPACE["max_depth"]
-            ),
+            "max_depth": trial.suggest_int("max_depth", *search_space["max_depth"]),
             "n_estimators": trial.suggest_int(
-                "n_estimators", *DEFAULT_SEARCH_SPACE["n_estimators"]
+                "n_estimators", *search_space["n_estimators"]
             ),
             "learning_rate": trial.suggest_float(
-                "learning_rate", *DEFAULT_SEARCH_SPACE["learning_rate"], log=True
+                "learning_rate", *search_space["learning_rate"], log=True
             ),
             "min_child_weight": trial.suggest_int(
-                "min_child_weight", *DEFAULT_SEARCH_SPACE["min_child_weight"]
+                "min_child_weight", *search_space["min_child_weight"]
             ),
-            "subsample": trial.suggest_float(
-                "subsample", *DEFAULT_SEARCH_SPACE["subsample"]
-            ),
+            "subsample": trial.suggest_float("subsample", *search_space["subsample"]),
             "colsample_bytree": trial.suggest_float(
-                "colsample_bytree", *DEFAULT_SEARCH_SPACE["colsample_bytree"]
+                "colsample_bytree", *search_space["colsample_bytree"]
             ),
-            "gamma": trial.suggest_float("gamma", *DEFAULT_SEARCH_SPACE["gamma"]),
-            "reg_alpha": trial.suggest_float(
-                "reg_alpha", *DEFAULT_SEARCH_SPACE["reg_alpha"]
-            ),
+            "gamma": trial.suggest_float("gamma", *search_space["gamma"]),
+            "reg_alpha": trial.suggest_float("reg_alpha", *search_space["reg_alpha"]),
             "reg_lambda": trial.suggest_float(
-                "reg_lambda", *DEFAULT_SEARCH_SPACE["reg_lambda"]
+                "reg_lambda", *search_space["reg_lambda"]
             ),
         }
         pruning_callback = XGBoostPruningCallback(trial, "validation_0-logloss")
@@ -138,6 +138,9 @@ def run_tuning_study(
     timeout_seconds: int | None = None,
     seed: int = 42,
     scale_pos_weight: float = 1.0,
+    direction: str = "maximize",
+    strategy: str = "bayesian",
+    search_space_overrides: dict[str, str] | None = None,
 ) -> tuple[dict, pd.DataFrame]:
     """Run Optuna study and return best params and trial history.
 
@@ -151,17 +154,58 @@ def run_tuning_study(
         timeout_seconds: Optional timeout for the study.
         seed: Random seed.
         scale_pos_weight: Class weight for positive class.
+        direction: "maximize" or "minimize".
+        strategy: "bayesian", "random", or "grid".
+        search_space_overrides: Optional overrides for search space (JSON strings).
 
     Returns:
         (best_params, trials_df) where trials_df has columns like
         trial, value, params_max_depth, params_learning_rate, ...
     """
+    resolved_search_space = DEFAULT_SEARCH_SPACE.copy()
+    if search_space_overrides:
+        for k, v in search_space_overrides.items():
+            if k in resolved_search_space:
+                try:
+                    resolved_search_space[k] = tuple(json.loads(v))
+                except json.JSONDecodeError:
+                    pass  # Fallback to default if invalid JSON
+
+    # Log resolved search space
+    # (mock mlflow import locally to avoid side effects if not available)
+    try:
+        import mlflow
+
+        mlflow.log_dict(resolved_search_space, "resolved_search_space.json")
+    except ImportError:
+        pass
+
     objective = _create_objective(
-        x_train, y_train, x_val, y_val, metric, scale_pos_weight, seed
+        x_train,
+        y_train,
+        x_val,
+        y_val,
+        metric,
+        scale_pos_weight,
+        seed,
+        resolved_search_space,
     )
-    sampler = optuna.samplers.TPESampler(seed=seed, n_startup_trials=5)
+
+    if strategy == "grid":
+        # GridSampler requires search space passed to constructor.
+        # Since we use continuous ranges in suggest_*, we need explicit grid values.
+        # This requires search space customization (Commit 3).
+        pass
+
+    if strategy == "random":
+        sampler = optuna.samplers.RandomSampler(seed=seed)
+    elif strategy == "grid":
+        raise ValueError("Grid strategy requires explicit search space definition.")
+    else:  # bayesian / default
+        sampler = optuna.samplers.TPESampler(seed=seed, n_startup_trials=5)
+
     pruner = MedianPruner(n_startup_trials=5, n_warmup_steps=10)
-    study = optuna.create_study(direction="maximize", sampler=sampler, pruner=pruner)
+    study = optuna.create_study(direction=direction, sampler=sampler, pruner=pruner)
     study.optimize(
         objective,
         n_trials=n_trials,
@@ -191,7 +235,52 @@ def run_tuning_study(
             pruned_count += 1
         elif str(t.state) == "TrialState.COMPLETE":
             completed_count += 1
+
     trials_df = pd.DataFrame(rows)
     # Store pruning stats for logging
     trials_df.attrs = {"pruned_count": pruned_count, "completed_count": completed_count}
+
+    # Log trials summary (NF4)
+    try:
+        import mlflow
+
+        # Sort trials by value based on direction
+        reverse = direction == "maximize"
+        completed_trials = [
+            t for t in study.trials if str(t.state) == "TrialState.COMPLETE"
+        ]
+        sorted_trials = sorted(
+            completed_trials,
+            key=lambda x: (
+                x.value
+                if x.value is not None
+                else (float("-inf") if reverse else float("inf"))
+            ),
+            reverse=reverse,
+        )
+
+        top_k = 10
+        summary = {
+            "schema_version": 1,
+            "metric": metric,
+            "direction": direction,
+            "total_trials": len(study.trials),
+            "completed_trials": len(completed_trials),
+            "pruned_trials": pruned_count,
+            "top_trials": [
+                {
+                    "trial_number": t.number,
+                    "value": float(t.value) if t.value is not None else None,
+                    "params": t.params,
+                    "datetime": (
+                        t.datetime_start.isoformat() if t.datetime_start else None
+                    ),
+                }
+                for t in sorted_trials[:top_k]
+            ],
+        }
+        mlflow.log_dict(summary, "trials_summary.json")
+    except Exception as e:
+        logger.warning(f"Failed to log trials summary: {e}")
+
     return best, trials_df

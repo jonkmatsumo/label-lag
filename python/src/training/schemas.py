@@ -267,6 +267,10 @@ class TuningConfig(BaseModel):
             "If None, uses best trial automatically."
         ),
     )
+    search_space: dict[str, str] | None = Field(
+        default=None,
+        description="Optional overrides for search space (JSON strings).",
+    )
 
 
 class TrainRequest(BaseModel):
@@ -306,6 +310,14 @@ class TrainRequest(BaseModel):
     reg_lambda: float = Field(default=1.0, ge=0.0, le=10.0)
     random_state: int = Field(default=42)
     early_stopping_rounds: int | None = Field(default=None, ge=5, le=50)
+    feature_groups: list[str] | None = Field(
+        default=None,
+        description="List of feature groups to include (e.g. 'transaction')",
+    )
+    feature_resolution_mode: Literal["strict", "best_effort"] = Field(
+        default="strict",
+        description="How to handle missing features from groups",
+    )
 
     def model_post_init(self, __context) -> None:
         """Validate selected_feature_columns if provided."""
@@ -390,6 +402,25 @@ class ClearDataResponse(BaseModel):
         description="List of tables that were cleared",
     )
     error: str | None = Field(None, description="Error message if clearing failed")
+
+
+class TrainingRunSpec(BaseModel):
+    """Canonical specification for a training run, used for reproducibility."""
+
+    schema_version: int = 1
+    run_id: str
+    model_name: str
+    created_at: str
+    training_config_hash: str
+    feature_set_id: str | None = None
+    feature_set_hash: str
+    resolved_features: list[str]
+    feature_resolution_mode: str
+    requested_feature_groups: list[str] | None = None
+    resolved_feature_groups: list[str] | None = None
+    split_config: SplitConfig | None = None
+    tuning_config: TuningConfig | None = None
+    training_window_days: int
 
 
 # =============================================================================
