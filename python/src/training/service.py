@@ -450,3 +450,31 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
         except Exception as e:
             logger.exception("ValidateTrainRequest failed")
             context.abort(grpc.StatusCode.INTERNAL, str(e))
+
+    def ListFeatureSets(self, request, context):  # noqa: N802
+        """List registered feature sets with pagination."""
+        try:
+            limit = request.limit or 50
+            cursor = request.cursor if request.cursor else None
+
+            store = get_feature_store()
+            specs, next_cursor = store.list(limit=limit, cursor=cursor)
+
+            summaries = [
+                training_pb2.ListFeatureSetsResponse.FeatureSetSummary(
+                    id=s.id,
+                    hash=s.hash,
+                    feature_count=len(s.features),
+                    created_at=s.created_at,
+                    created_by=s.created_by,
+                )
+                for s in specs
+            ]
+
+            return training_pb2.ListFeatureSetsResponse(
+                feature_sets=summaries,
+                next_cursor=next_cursor if next_cursor else "",
+            )
+        except Exception as e:
+            logger.exception("ListFeatureSets failed")
+            context.abort(grpc.StatusCode.INTERNAL, str(e))

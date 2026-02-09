@@ -24,6 +24,13 @@ class FeatureSetStore(ABC):
         """Retrieve a feature set specification by ID."""
         pass
 
+    @abstractmethod
+    def list(
+        self, limit: int = 50, cursor: str | None = None
+    ) -> tuple[list[FeatureSetSpec], str | None]:
+        """List feature sets with optional pagination."""
+        pass
+
 
 class MLflowFeatureSetStore(FeatureSetStore):
     """MLflow-backed storage for FeatureSetSpecs using runs and tags."""
@@ -103,6 +110,48 @@ class MLflowFeatureSetStore(FeatureSetStore):
         except Exception as e:
             logger.error(f"Error retrieving feature set {feature_set_id}: {e}")
             return None
+
+    def list(
+        self, limit: int = 50, cursor: str | None = None
+    ) -> tuple[list[FeatureSetSpec], str | None]:
+        """List feature sets by searching for runs with feature_set_id tag."""
+        try:
+            client = self._mlflow.MlflowClient()
+            experiment = client.get_experiment_by_name(self.experiment_name)
+            if not experiment:
+                return [], None
+
+            # MLflow search_runs uses page_token for pagination
+            runs = client.search_runs(
+                experiment_ids=[experiment.experiment_id],
+                filter_string="tags.feature_set_id != ''",
+                max_results=limit,
+                page_token=cursor,
+            )
+
+            specs = []
+            for run in runs:
+                # We can optimize by NOT downloading every artifact if we
+                # only need metadata, but the spec has the full feature list.
+                # For a "list" view, maybe we should return a summary?
+                # The requirements say "ID + hash + feature count".
+                # Full spec has these.
+                try:
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        path = client.download_artifacts(
+                            run.info.run_id, "feature_set.json", tmpdir
+                        )
+                        with open(path) as f:
+                            data = json.load(f)
+                        specs.append(FeatureSetSpec(**data))
+                except Exception as e:
+                    logger.debug(f"Failed to load spec for run {run.info.run_id}: {e}")
+
+            return specs, runs.token
+
+        except Exception as e:
+            logger.error(f"Error listing feature sets: {e}")
+            return [], None
 
 
 def get_feature_store() -> FeatureSetStore:

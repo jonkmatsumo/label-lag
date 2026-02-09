@@ -19,6 +19,9 @@ service TrainingService {
 
   // Validates a training request without executing training.
   rpc ValidateTrainRequest(TrainRequest) returns (ValidateTrainRequestResponse);
+
+  // Lists all registered feature sets.
+  rpc ListFeatureSets(ListFeatureSetsRequest) returns (ListFeatureSetsResponse);
 }
 
 message ClearDataRequest {}
@@ -121,4 +124,21 @@ message ValidateTrainRequestResponse {
   string feature_set_hash = 3;
   string training_config_hash = 4;
   repeated string warnings = 5;
+}
+
+message ListFeatureSetsRequest {
+  int32 limit = 1;
+  string cursor = 2;
+}
+
+message ListFeatureSetsResponse {
+  message FeatureSetSummary {
+    string id = 1;
+    string hash = 2;
+    int32 feature_count = 3;
+    string created_at = 4;
+    string created_by = 5;
+  }
+  repeated FeatureSetSummary feature_sets = 1;
+  string next_cursor = 2;
 }
