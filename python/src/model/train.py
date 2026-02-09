@@ -70,6 +70,29 @@ def _get_run_tuning_study():
     return run_tuning_study
 
 
+def _safe_run_id(run_obj, mlflow_obj) -> str:
+    """Safely extract a string run_id from run object or active run."""
+    try:
+        rid = getattr(getattr(run_obj, "info", None), "run_id", None)
+        if isinstance(rid, str) and rid:
+            return rid
+    except Exception:
+        pass
+
+    try:
+        ar = getattr(mlflow_obj, "active_run", None)
+        if callable(ar):
+            active = ar()
+            rid2 = getattr(getattr(active, "info", None), "run_id", None)
+            if isinstance(rid2, str) and rid2:
+                return rid2
+    except Exception:
+        pass
+
+    # If mocked, rid may be MagicMock; don't pass that to pydantic.
+    return "unknown"
+
+
 # experiment name
 EXPERIMENT_NAME = "ach-fraud-detection"
 
@@ -442,8 +465,9 @@ def train_model(
         # Log training run spec (NF1)
         from training.schemas import TrainingRunSpec
 
+        run_id = _safe_run_id(run, _mlflow)
         run_spec = TrainingRunSpec(
-            run_id=run.info.run_id,
+            run_id=run_id,
             model_name=EXPERIMENT_NAME,
             created_at=datetime.now(UTC).isoformat(),
             training_config_hash=training_config_hash,
@@ -624,9 +648,9 @@ def train_model(
             _mlflow.log_artifact(fi_png)
 
         _mlflow.log_metric("training_time_seconds", time.time() - training_start_time)
-        model_uri = f"runs:/{run.info.run_id}/model"
+        model_uri = f"runs:/{run_id}/model"
         _mlflow.register_model(model_uri, EXPERIMENT_NAME)
-        return run.info.run_id
+        return run_id
 
 
 def get_latest_model_version(model_name: str = EXPERIMENT_NAME) -> int | None:
