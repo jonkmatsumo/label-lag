@@ -1,6 +1,12 @@
+from __future__ import annotations
+
+import hashlib
+import json
 import logging
+from datetime import datetime
 
 import grpc
+import mlflow
 from pydantic import ValidationError
 
 from features.registry import FeatureRegistry
@@ -8,6 +14,9 @@ from features.store import get_feature_store
 from model.loader import DataLoader
 from model.train import train_model
 from training.crud_client import get_crud_client
+from training.job_queue import JobQueue
+from training.job_store import JobStore
+from training.jobs import TuningJob, TuningJobStatus
 from training.proto.training.v1 import training_pb2, training_pb2_grpc
 from training.schemas import SplitConfig, TuningConfig
 
@@ -15,6 +24,10 @@ logger = logging.getLogger(__name__)
 
 
 class TrainingService(training_pb2_grpc.TrainingServiceServicer):
+    def __init__(self, job_store: JobStore, job_queue: JobQueue):
+        self.job_store = job_store
+        self.job_queue = job_queue
+
     def ClearData(self, request, context):  # noqa: N802
         """Clear all data from the database via Analytics service."""
         try:
@@ -211,8 +224,6 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
             if not request.run_id:
                 context.abort(grpc.StatusCode.INVALID_ARGUMENT, "run_id is required")
 
-            import mlflow
-
             client = mlflow.MlflowClient()
             try:
                 local_path = client.download_artifacts(
@@ -239,10 +250,6 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
             from forecast.model_manager import MODEL_NAME
 
             model_name = request.model_name or MODEL_NAME
-
-            import json
-
-            import mlflow
 
             client = mlflow.MlflowClient()
             try:
@@ -304,7 +311,6 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
         """Validate a training request without executing training."""
         try:
             # Shared resolution logic
-            from features.registry import FeatureRegistry
             from features.spec import FeatureSetSpec
             from model.train import _to_python_type
             from training.grpc_errors import abort_invalid_argument
@@ -386,10 +392,6 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
             feature_spec = FeatureSetSpec.from_features(final_feature_list)
 
             # Hyperparams preview
-            # (Just use request values or defaults if missing)
-            import hashlib
-            import json
-
             preview_hyperparams = {
                 "scale_pos_weight": 1.0,  # Placeholder as we don't load data
                 "max_depth": request.max_depth or 6,
@@ -478,3 +480,231 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
         except Exception as e:
             logger.exception("ListFeatureSets failed")
             context.abort(grpc.StatusCode.INTERNAL, str(e))
+
+    def StartTuningJob(self, request, context):  # noqa: N802
+        """Starts an asynchronous hyperparameter tuning job."""
+        try:
+            # Shared resolution logic
+            from training.grpc_errors import abort_invalid_argument
+
+            resolved_features_set = set()
+
+            if request.HasField("feature_set_id"):
+                if request.selected_feature_columns or request.feature_groups:
+                    abort_invalid_argument(
+                        context,
+                        "feature_set_id",
+                        "Cannot specify both feature_set_id and inline features/groups",
+                    )
+                store = get_feature_store()
+                spec = store.get(request.feature_set_id)
+                if not spec:
+                    abort_invalid_argument(
+                        context,
+                        "feature_set_id",
+                        f"Feature set {request.feature_set_id} not found",
+                    )
+                resolved_features_set = set(spec.features)
+            else:
+                if request.selected_feature_columns:
+                    resolved_features_set.update(request.selected_feature_columns)
+
+                if request.feature_groups:
+                    valid_groups = {"transaction", "user", "merchant", "network"}
+                    for group in request.feature_groups:
+                        c_group = group.strip().lower()
+                        if c_group not in valid_groups:
+                            if request.feature_resolution_mode == "strict":
+                                abort_invalid_argument(
+                                    context,
+                                    "feature_groups",
+                                    f"Unknown feature group: '{group}'",
+                                )
+                            continue
+
+                        group_features = FeatureRegistry.expand_group(c_group)
+                        resolved_features_set.update(group_features)
+
+            final_feature_list = sorted(list(resolved_features_set))
+
+            # Validate against DataLoader.FEATURE_COLUMNS
+            if final_feature_list:
+                unknown_features = [
+                    f for f in final_feature_list if f not in DataLoader.FEATURE_COLUMNS
+                ]
+                if (
+                    request.feature_resolution_mode == "best_effort"
+                    and unknown_features
+                ):
+                    final_feature_list = [
+                        f for f in final_feature_list if f in DataLoader.FEATURE_COLUMNS
+                    ]
+                elif unknown_features:
+                    abort_invalid_argument(
+                        context,
+                        "selected_feature_columns",
+                        f"Unknown features: {unknown_features}",
+                    )
+
+            if not final_feature_list:
+                context.abort(grpc.StatusCode.INVALID_ARGUMENT, "No features selected")
+
+            if (
+                not request.HasField("tuning_config")
+                or not request.tuning_config.enabled
+            ):
+                context.abort(
+                    grpc.StatusCode.INVALID_ARGUMENT, "Tuning must be enabled"
+                )
+
+            # Create MLflow parent run
+            from forecast.model_manager import MODEL_NAME
+
+            mlflow.set_experiment(MODEL_NAME)
+            with mlflow.start_run(
+                run_name=f"tuning_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            ) as run:
+                mlflow_run_id = run.info.run_id
+                mlflow.set_tag("run_type", "tuning_job")
+
+                # Store config for worker
+                job_config = {
+                    "training_window_days": request.training_window_days,
+                    "feature_columns": final_feature_list,
+                    "split_config": {
+                        "strategy": request.split_config.strategy,
+                        "n_folds": request.split_config.n_folds,
+                        "stratify_column": (
+                            request.split_config.stratify_column
+                            if request.split_config.HasField("stratify_column")
+                            else None
+                        ),
+                        "group_column": request.split_config.group_column,
+                        "validation_fraction": request.split_config.validation_fraction,
+                        "seed": request.split_config.seed,
+                    },
+                    "tuning_config": {
+                        "enabled": True,
+                        "strategy": request.tuning_config.strategy,
+                        "n_trials": request.tuning_config.n_trials,
+                        "timeout_minutes": request.tuning_config.timeout_minutes,
+                        "metric": request.tuning_config.metric,
+                        "direction": request.tuning_config.direction,
+                        "search_space": dict(request.tuning_config.search_space),
+                    },
+                }
+
+                job = TuningJob.create(
+                    config=job_config,
+                    total_trials=request.tuning_config.n_trials,
+                    mlflow_run_id=mlflow_run_id,
+                )
+
+                mlflow.set_tag("job_id", job.job_id)
+                self.job_store.create(job)
+                self.job_queue.enqueue(job.job_id)
+
+                return training_pb2.StartTuningJobResponse(
+                    job_id=job.job_id,
+                    status=job.status.value,
+                    mlflow_run_id=mlflow_run_id,
+                )
+
+        except grpc.RpcError:
+            raise
+        except Exception as e:
+            logger.exception("StartTuningJob failed")
+            context.abort(grpc.StatusCode.INTERNAL, str(e))
+
+    def GetTuningStatus(self, request, context):  # noqa: N802
+        """Checks the status of a tuning job."""
+        job = self.job_store.get(request.job_id)
+        if not job:
+            context.abort(grpc.StatusCode.NOT_FOUND, f"Job {request.job_id} not found")
+
+        return training_pb2.TuningJobStatusResponse(
+            job_id=job.job_id,
+            status=job.status.value,
+            completed_trials=job.completed_trials,
+            total_trials=job.total_trials,
+            pruned_trials=job.pruned_trials,
+            best_value=job.best_value if job.best_value is not None else 0.0,
+            best_params=job.best_params,
+            mlflow_run_id=job.mlflow_run_id or "",
+            error_message=job.error_message or "",
+            created_at=int(job.created_at.timestamp() * 1000),
+            started_at=int(job.started_at.timestamp() * 1000) if job.started_at else 0,
+            updated_at=int(job.updated_at.timestamp() * 1000),
+            ended_at=int(job.ended_at.timestamp() * 1000) if job.ended_at else 0,
+        )
+
+    def ListTrials(self, request, context):  # noqa: N802
+        """Lists trials for a specific tuning job."""
+        job = self.job_store.get(request.job_id)
+        if not job:
+            context.abort(grpc.StatusCode.NOT_FOUND, f"Job {request.job_id} not found")
+
+        trials = job.trials
+        if request.sort_by == "value":
+            trials = sorted(
+                trials,
+                key=lambda t: t.value if t.value is not None else -1e9,
+                reverse=True,
+            )
+
+        limit = request.limit or 100
+        trials = trials[:limit]
+
+        return training_pb2.ListTrialsResponse(
+            trials=[
+                training_pb2.TrialRecord(
+                    trial_number=t.trial_number,
+                    state=t.state,
+                    value=t.value if t.value is not None else 0.0,
+                    params=t.params,
+                    started_at=int(t.started_at.timestamp() * 1000)
+                    if t.started_at
+                    else 0,
+                    ended_at=int(t.ended_at.timestamp() * 1000) if t.ended_at else 0,
+                    duration_ms=t.duration_ms or 0.0,
+                )
+                for t in trials
+            ]
+        )
+
+    def CancelTuningJob(self, request, context):  # noqa: N802
+        """Cancels a running tuning job."""
+        job = self.job_store.get(request.job_id)
+        if not job:
+            context.abort(grpc.StatusCode.NOT_FOUND, f"Job {request.job_id} not found")
+
+        if job.status.is_terminal():
+            return self.GetTuningStatus(request, context)
+
+        def set_canceling(j):
+            j.status = TuningJobStatus.CANCELING
+            j.updated_at = datetime.utcnow()
+
+        updated_job = self.job_store.update(request.job_id, set_canceling)
+
+        return training_pb2.TuningJobStatusResponse(
+            job_id=updated_job.job_id,
+            status=updated_job.status.value,
+            completed_trials=updated_job.completed_trials,
+            total_trials=updated_job.total_trials,
+            pruned_trials=updated_job.pruned_trials,
+            best_value=updated_job.best_value
+            if updated_job.best_value is not None
+            else 0.0,
+            best_params=updated_job.best_params,
+            mlflow_run_id=updated_job.mlflow_run_id or "",
+            error_message=updated_job.error_message or "",
+            created_at=int(updated_job.created_at.timestamp() * 1000),
+            started_at=int(updated_job.started_at.timestamp() * 1000)
+            if updated_job.started_at
+            else 0,
+            updated_at=int(updated_job.updated_at.timestamp() * 1000),
+            ended_at=int(updated_job.ended_at.timestamp() * 1000)
+            if updated_job.ended_at
+            else 0,
+        )

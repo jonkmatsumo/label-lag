@@ -25,8 +25,11 @@ from forecast.proto.forecast.v1 import forecast_pb2_grpc  # noqa: E402
 from forecast.model_manager import get_model_manager  # noqa: E402
 from forecast.service import ForecastService  # noqa: E402
 from training.config import load_config  # noqa: E402
+from training.job_queue import JobQueue  # noqa: E402
+from training.job_store import InMemoryJobStore  # noqa: E402
 from training.proto.training.v1 import training_pb2_grpc  # noqa: E402
 from training.service import TrainingService  # noqa: E402
+from training.worker import TuningWorker  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -45,13 +48,21 @@ def serve():
     else:
         logger.warning("No model loaded - API will use rule-based evaluation only")
 
+    # Initialize Job infrastructure
+    job_store = InMemoryJobStore()
+    job_queue = JobQueue()
+    worker = TuningWorker(job_store, job_queue)
+    worker.start()
+
     # Start gRPC server in main process
     # Adjust max_workers as needed config not available globally, assume load_config
     config = load_config()
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=config.max_workers))
 
     # Register both services
-    training_pb2_grpc.add_TrainingServiceServicer_to_server(TrainingService(), server)
+    training_pb2_grpc.add_TrainingServiceServicer_to_server(
+        TrainingService(job_store, job_queue), server
+    )
     forecast_pb2_grpc.add_ForecastServiceServicer_to_server(ForecastService(), server)
 
     listen_addr = f"{config.host}:{config.port}"
@@ -63,6 +74,8 @@ def serve():
         server.wait_for_termination()
     except KeyboardInterrupt:
         logger.info("Stopping servers...")
+    finally:
+        worker.stop()
 
 
 if __name__ == "__main__":
