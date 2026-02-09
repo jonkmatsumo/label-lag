@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from hashlib import sha256
 
 from pydantic import BaseModel, Field
@@ -10,7 +10,7 @@ class FeatureSetSpec(BaseModel):
     id: str = Field(..., description="Unique identifier for this feature set")
     features: list[str] = Field(..., description="Sorted list of feature names")
     hash: str = Field(..., description="SHA256 hash of the feature list")
-    created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     created_by: str = Field(default="system")
 
     @classmethod
