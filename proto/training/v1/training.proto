@@ -16,6 +16,9 @@ service TrainingService {
 
   // Fetches info about the active production model.
   rpc GetModelInfo(GetModelInfoRequest) returns (GetModelInfoResponse);
+
+  // Validates a training request without executing training.
+  rpc ValidateTrainRequest(TrainRequest) returns (ValidateTrainRequestResponse);
 }
 
 message ClearDataRequest {}
@@ -110,4 +113,12 @@ message GetModelInfoResponse {
   string feature_set_hash = 4;
   string training_config_hash = 5;
   string run_id = 6;
+}
+
+message ValidateTrainRequestResponse {
+  bool valid = 1;
+  repeated string resolved_features = 2;
+  string feature_set_hash = 3;
+  string training_config_hash = 4;
+  repeated string warnings = 5;
 }

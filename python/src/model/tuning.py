@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 
 import optuna
 import pandas as pd
@@ -16,6 +17,8 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 from xgboost import XGBClassifier
+
+logger = logging.getLogger(__name__)
 
 _METRIC_FNS = {
     "pr_auc": lambda y, p, prob: average_precision_score(y, prob),
@@ -232,7 +235,52 @@ def run_tuning_study(
             pruned_count += 1
         elif str(t.state) == "TrialState.COMPLETE":
             completed_count += 1
+
     trials_df = pd.DataFrame(rows)
     # Store pruning stats for logging
     trials_df.attrs = {"pruned_count": pruned_count, "completed_count": completed_count}
+
+    # Log trials summary (NF4)
+    try:
+        import mlflow
+
+        # Sort trials by value based on direction
+        reverse = direction == "maximize"
+        completed_trials = [
+            t for t in study.trials if str(t.state) == "TrialState.COMPLETE"
+        ]
+        sorted_trials = sorted(
+            completed_trials,
+            key=lambda x: (
+                x.value
+                if x.value is not None
+                else (float("-inf") if reverse else float("inf"))
+            ),
+            reverse=reverse,
+        )
+
+        top_k = 10
+        summary = {
+            "schema_version": 1,
+            "metric": metric,
+            "direction": direction,
+            "total_trials": len(study.trials),
+            "completed_trials": len(completed_trials),
+            "pruned_trials": pruned_count,
+            "top_trials": [
+                {
+                    "trial_number": t.number,
+                    "value": float(t.value) if t.value is not None else None,
+                    "params": t.params,
+                    "datetime": (
+                        t.datetime_start.isoformat() if t.datetime_start else None
+                    ),
+                }
+                for t in sorted_trials[:top_k]
+            ],
+        }
+        mlflow.log_dict(summary, "trials_summary.json")
+    except Exception as e:
+        logger.warning(f"Failed to log trials summary: {e}")
+
     return best, trials_df

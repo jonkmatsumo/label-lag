@@ -33,19 +33,24 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
         try:
             # -1. Feature Set Resolution (FF1)
             # If feature_set_id is present, we must not have inline features/groups
+            from training.grpc_errors import abort_invalid_argument
+
             if request.HasField("feature_set_id"):
                 if request.selected_feature_columns or request.feature_groups:
-                    context.abort(
-                        grpc.StatusCode.INVALID_ARGUMENT,
+                    abort_invalid_argument(
+                        context,
+                        "feature_set_id",
                         "Cannot specify both feature_set_id and inline features/groups",
                     )
 
                 store = get_feature_store()
                 spec = store.get(request.feature_set_id)
                 if not spec:
-                    context.abort(
-                        grpc.StatusCode.INVALID_ARGUMENT,
+                    abort_invalid_argument(
+                        context,
+                        "feature_set_id",
                         f"Feature set {request.feature_set_id} not found",
+                        "List available feature sets via ListFeatureSets",
                     )
                 # Use features from spec
                 resolved_features = set(spec.features)
@@ -63,9 +68,10 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
 
                         if c_group not in valid_groups:
                             if request.feature_resolution_mode == "strict":
-                                context.abort(
-                                    grpc.StatusCode.INVALID_ARGUMENT,
-                                    f"Unknown feature group: '{group}'. "
+                                abort_invalid_argument(
+                                    context,
+                                    "feature_groups",
+                                    f"Unknown feature group: '{group}'",
                                     f"Valid groups: {sorted(list(valid_groups))}",
                                 )
                             logger.warning(f"Ignoring unknown feature group: {group}")
@@ -74,8 +80,9 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                         group_features = FeatureRegistry.expand_group(c_group)
                         if not group_features:
                             if request.feature_resolution_mode == "strict":
-                                context.abort(
-                                    grpc.StatusCode.INVALID_ARGUMENT,
+                                abort_invalid_argument(
+                                    context,
+                                    "feature_groups",
                                     f"Feature group '{group}' "
                                     "expanded to zero features",
                                 )
@@ -105,10 +112,11 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                     final_feature_list = [
                         f for f in final_feature_list if f in DataLoader.FEATURE_COLUMNS
                     ]
-                elif unknown_features:
-                    context.abort(
-                        grpc.StatusCode.INVALID_ARGUMENT,
-                        f"Unknown features: {unknown_features}. "
+                if unknown_features:
+                    abort_invalid_argument(
+                        context,
+                        "selected_feature_columns",
+                        f"Unknown features: {unknown_features}",
                         f"Available: {DataLoader.FEATURE_COLUMNS}",
                     )
 
@@ -196,3 +204,249 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
         except Exception as e:
             logger.exception("Training failed")
             context.abort(grpc.StatusCode.INTERNAL, f"Training failed: {e}")
+
+    def GetTrainingRunInfo(self, request, context):  # noqa: N802
+        """Fetch TrainingRunSpec from MLflow for a specific run."""
+        try:
+            if not request.run_id:
+                context.abort(grpc.StatusCode.INVALID_ARGUMENT, "run_id is required")
+
+            import mlflow
+
+            client = mlflow.MlflowClient()
+            try:
+                local_path = client.download_artifacts(
+                    request.run_id, "training_run_spec.json"
+                )
+                with open(local_path) as f:
+                    spec_json = f.read()
+                return training_pb2.GetTrainingRunInfoResponse(run_spec_json=spec_json)
+            except Exception as e:
+                logger.warning(f"Run spec not found for {request.run_id}: {e}")
+                context.abort(
+                    grpc.StatusCode.NOT_FOUND,
+                    f"Run spec not found for {request.run_id}",
+                )
+        except grpc.RpcError:
+            raise
+        except Exception as e:
+            logger.exception("GetTrainingRunInfo failed")
+            context.abort(grpc.StatusCode.INTERNAL, str(e))
+
+    def GetModelInfo(self, request, context):  # noqa: N802
+        """Fetch metadata for the active production model."""
+        try:
+            from forecast.model_manager import MODEL_NAME
+
+            model_name = request.model_name or MODEL_NAME
+
+            import json
+
+            import mlflow
+
+            client = mlflow.MlflowClient()
+            try:
+                versions = client.search_model_versions(f"name='{model_name}'")
+                prod_v = next(
+                    (v for v in versions if v.current_stage == "Production"), None
+                )
+                if not prod_v:
+                    context.abort(
+                        grpc.StatusCode.NOT_FOUND,
+                        f"No production version for {model_name}",
+                    )
+
+                # Try to load metadata from artifacts
+                required_features = []
+                f_hash = ""
+                t_hash = ""
+
+                try:
+                    path = client.download_artifacts(
+                        prod_v.run_id, "required_features.json"
+                    )
+                    with open(path) as f:
+                        data = json.load(f)
+                    required_features = data.get("features", [])
+                    f_hash = data.get("feature_set_hash", "")
+                    t_hash = data.get("training_config_hash", "")
+                except Exception:
+                    # Fallback to feature_columns.json
+                    try:
+                        path = client.download_artifacts(
+                            prod_v.run_id, "feature_columns.json"
+                        )
+                        with open(path) as f:
+                            required_features = json.load(f)
+                    except Exception:
+                        pass
+
+                return training_pb2.GetModelInfoResponse(
+                    model_name=model_name,
+                    model_version=f"v{prod_v.version}",
+                    required_features=required_features,
+                    feature_set_hash=f_hash,
+                    training_config_hash=t_hash,
+                    run_id=prod_v.run_id,
+                )
+            except grpc.RpcError:
+                raise
+            except Exception as e:
+                logger.warning(f"Model info failed for {model_name}: {e}")
+                context.abort(grpc.StatusCode.NOT_FOUND, f"Model info failed: {e}")
+        except grpc.RpcError:
+            raise
+        except Exception as e:
+            logger.exception("GetModelInfo failed")
+            context.abort(grpc.StatusCode.INTERNAL, str(e))
+
+    def ValidateTrainRequest(self, request, context):  # noqa: N802
+        """Validate a training request without executing training."""
+        try:
+            # Shared resolution logic
+            from features.registry import FeatureRegistry
+            from features.spec import FeatureSetSpec
+            from model.train import _to_python_type
+            from training.grpc_errors import abort_invalid_argument
+
+            warnings = []
+            resolved_features_set = set()
+
+            if request.HasField("feature_set_id"):
+                if request.selected_feature_columns or request.feature_groups:
+                    abort_invalid_argument(
+                        context,
+                        "feature_set_id",
+                        "Cannot specify both feature_set_id and inline features/groups",
+                    )
+                store = get_feature_store()
+                spec = store.get(request.feature_set_id)
+                if not spec:
+                    abort_invalid_argument(
+                        context,
+                        "feature_set_id",
+                        f"Feature set {request.feature_set_id} not found",
+                    )
+                resolved_features_set = set(spec.features)
+            else:
+                if request.selected_feature_columns:
+                    resolved_features_set.update(request.selected_feature_columns)
+
+                if request.feature_groups:
+                    valid_groups = {"transaction", "user", "merchant", "network"}
+                    for group in request.feature_groups:
+                        c_group = group.strip().lower()
+                        if c_group not in valid_groups:
+                            if request.feature_resolution_mode == "strict":
+                                abort_invalid_argument(
+                                    context,
+                                    "feature_groups",
+                                    f"Unknown feature group: '{group}'",
+                                    f"Valid groups: {sorted(list(valid_groups))}",
+                                )
+                            warnings.append(f"Ignored unknown feature group: {group}")
+                            continue
+
+                        group_features = FeatureRegistry.expand_group(c_group)
+                        if not group_features:
+                            if request.feature_resolution_mode == "strict":
+                                abort_invalid_argument(
+                                    context,
+                                    "feature_groups",
+                                    f"Feature group '{group}' "
+                                    "expanded to zero features",
+                                )
+                            warnings.append(f"Feature group '{group}' is empty")
+                        resolved_features_set.update(group_features)
+
+            final_feature_list = sorted(list(resolved_features_set))
+
+            # Validate against DataLoader.FEATURE_COLUMNS
+            if final_feature_list:
+                unknown_features = [
+                    f for f in final_feature_list if f not in DataLoader.FEATURE_COLUMNS
+                ]
+                if (
+                    request.feature_resolution_mode == "best_effort"
+                    and unknown_features
+                ):
+                    warnings.append(f"Dropped unknown features: {unknown_features}")
+                    final_feature_list = [
+                        f for f in final_feature_list if f in DataLoader.FEATURE_COLUMNS
+                    ]
+                elif unknown_features:
+                    abort_invalid_argument(
+                        context,
+                        "selected_feature_columns",
+                        f"Unknown features: {unknown_features}",
+                        f"Available: {DataLoader.FEATURE_COLUMNS}",
+                    )
+
+            # Compute preview hashes
+            feature_spec = FeatureSetSpec.from_features(final_feature_list)
+
+            # Hyperparams preview
+            # (Just use request values or defaults if missing)
+            import hashlib
+            import json
+
+            preview_hyperparams = {
+                "scale_pos_weight": 1.0,  # Placeholder as we don't load data
+                "max_depth": request.max_depth or 6,
+                "n_estimators": request.n_estimators or 100,
+                "learning_rate": request.learning_rate or 0.1,
+                "min_child_weight": request.min_child_weight or 1,
+                "subsample": request.subsample or 1.0,
+                "colsample_bytree": request.colsample_bytree or 1.0,
+                "gamma": request.gamma or 0.0,
+                "reg_alpha": request.reg_alpha or 0.0,
+                "reg_lambda": request.reg_lambda or 1.0,
+                "random_state": request.random_state or 42,
+                "early_stopping_rounds": (
+                    request.early_stopping_rounds
+                    if request.HasField("early_stopping_rounds")
+                    else None
+                ),
+            }
+
+            # Fake TuningConfig for hashing if provided
+            split_dict = None
+            if request.HasField("split_config"):
+                split_dict = {
+                    "strategy": request.split_config.strategy,
+                    "n_folds": request.split_config.n_folds,
+                    "stratify_column": (
+                        request.split_config.stratify_column
+                        if request.split_config.HasField("stratify_column")
+                        else None
+                    ),
+                    "group_column": request.split_config.group_column,
+                    "validation_fraction": request.split_config.validation_fraction,
+                    "seed": request.split_config.seed,
+                }
+
+            config_to_hash = {
+                "features": final_feature_list,
+                "hyperparameters": preview_hyperparams,
+                "split_config": split_dict,
+                "training_window_days": request.training_window_days,
+            }
+            config_json = json.dumps(
+                config_to_hash, sort_keys=True, default=_to_python_type
+            )
+            training_config_hash = hashlib.sha256(
+                config_json.encode("utf-8")
+            ).hexdigest()
+
+            return training_pb2.ValidateTrainRequestResponse(
+                valid=True,
+                resolved_features=final_feature_list,
+                feature_set_hash=feature_spec.hash,
+                training_config_hash=training_config_hash,
+                warnings=warnings,
+            )
+        except grpc.RpcError:
+            raise
+        except Exception as e:
+            logger.exception("ValidateTrainRequest failed")
+            context.abort(grpc.StatusCode.INTERNAL, str(e))
