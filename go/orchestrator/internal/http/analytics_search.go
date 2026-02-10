@@ -56,6 +56,11 @@ type AnalyticsClient interface {
 	GetJob(ctx context.Context, req *crudv1.GetJobRequest) (*crudv1.GetJobResponse, error)
 	GetJobEvents(ctx context.Context, req *crudv1.GetJobEventsRequest) (*crudv1.GetJobEventsResponse, error)
 
+	// Dataset Profiles (Phase A2)
+	GetDatasetSummary(ctx context.Context, req *crudv1.GetDatasetSummaryRequest) (*crudv1.GetDatasetSummaryResponse, error)
+	ListDatasetProfiles(ctx context.Context, req *crudv1.ListDatasetProfilesRequest) (*crudv1.ListDatasetProfilesResponse, error)
+	CompareDatasetProfiles(ctx context.Context, req *crudv1.CompareDatasetProfilesRequest) (*crudv1.CompareDatasetProfilesResponse, error)
+
 	// Shadow Comparison (Phase 9)
 	GetShadowComparison(ctx context.Context, req *crudv1.GetShadowComparisonRequest) (*crudv1.GetShadowComparisonResponse, error)
 }

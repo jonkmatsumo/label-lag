@@ -1275,3 +1275,105 @@ func (c *AnalyticsClient) GetJobEvents(ctx context.Context, req *crudv1.GetJobEv
 	}
 	return resp, nil
 }
+
+func (c *AnalyticsClient) GetDatasetSummary(ctx context.Context, req *crudv1.GetDatasetSummaryRequest) (*crudv1.GetDatasetSummaryResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	span := trace.SpanFromContext(ctx)
+	if err := c.breaker.Allow(); err != nil {
+		span.SetAttributes(
+			attribute.String("analytics.breaker_state", c.breaker.State().String()),
+			attribute.String("analytics.breaker_open_reason", "cooldown"),
+		)
+		return nil, mapRPCError(err)
+	}
+
+	callCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	resp, err := c.stub.GetDatasetSummary(c.withMetadata(callCtx), req)
+	c.breaker.RecordResult(err)
+
+	span.SetAttributes(
+		attribute.String("analytics.breaker_state", c.breaker.State().String()),
+	)
+
+	if err != nil {
+		return nil, mapRPCError(err)
+	}
+	return resp, nil
+}
+
+func (c *AnalyticsClient) ListDatasetProfiles(ctx context.Context, req *crudv1.ListDatasetProfilesRequest) (*crudv1.ListDatasetProfilesResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	span := trace.SpanFromContext(ctx)
+	if err := c.breaker.Allow(); err != nil {
+		span.SetAttributes(
+			attribute.String("analytics.breaker_state", c.breaker.State().String()),
+			attribute.String("analytics.breaker_open_reason", "cooldown"),
+		)
+		return nil, mapRPCError(err)
+	}
+
+	callCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	resp, err := c.stub.ListDatasetProfiles(c.withMetadata(callCtx), req)
+	c.breaker.RecordResult(err)
+
+	span.SetAttributes(
+		attribute.String("analytics.breaker_state", c.breaker.State().String()),
+	)
+
+	if err != nil {
+		return nil, mapRPCError(err)
+	}
+	return resp, nil
+}
+
+func (c *AnalyticsClient) CompareDatasetProfiles(ctx context.Context, req *crudv1.CompareDatasetProfilesRequest) (*crudv1.CompareDatasetProfilesResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	span := trace.SpanFromContext(ctx)
+	if err := c.breaker.Allow(); err != nil {
+		span.SetAttributes(
+			attribute.String("analytics.breaker_state", c.breaker.State().String()),
+			attribute.String("analytics.breaker_open_reason", "cooldown"),
+		)
+		return nil, mapRPCError(err)
+	}
+
+	callCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	resp, err := c.stub.CompareDatasetProfiles(c.withMetadata(callCtx), req)
+	c.breaker.RecordResult(err)
+
+	span.SetAttributes(
+		attribute.String("analytics.breaker_state", c.breaker.State().String()),
+	)
+
+	if err != nil {
+		return nil, mapRPCError(err)
+	}
+	return resp, nil
+}

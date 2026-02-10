@@ -31,7 +31,7 @@ func TestAnalyticsOverviewContract(t *testing.T) {
 			FraudAmount:             12.34,
 		},
 	}
-	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false)
+	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/analytics/overview", nil)
 	rec := httptest.NewRecorder()
@@ -72,7 +72,7 @@ func TestAnalyticsDailyStatsContract(t *testing.T) {
 			},
 		},
 	}
-	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false)
+	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/analytics/daily-stats", nil)
 	rec := httptest.NewRecorder()
@@ -105,7 +105,7 @@ func TestAnalyticsTransactionsContract(t *testing.T) {
 			},
 		},
 	}
-	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false)
+	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/analytics/transactions", nil)
 	rec := httptest.NewRecorder()
@@ -138,7 +138,7 @@ func TestAnalyticsRecentAlertsContract(t *testing.T) {
 			},
 		},
 	}
-	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false)
+	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/analytics/recent-alerts", nil)
 	rec := httptest.NewRecorder()
@@ -166,7 +166,7 @@ func TestAnalyticsFingerprintContract(t *testing.T) {
 			FeatureSnapshots: &crudv1.TableFingerprint{Count: 5},
 		},
 	}
-	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false)
+	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/analytics/fingerprint", nil)
 	rec := httptest.NewRecorder()
@@ -196,7 +196,7 @@ func TestAnalyticsFeatureSampleContract(t *testing.T) {
 			},
 		},
 	}
-	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false)
+	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/analytics/feature-sample", nil)
 	rec := httptest.NewRecorder()
@@ -231,7 +231,7 @@ func TestAnalyticsSchemaContract(t *testing.T) {
 			},
 		},
 	}
-	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false)
+	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/analytics/schema", nil)
 	rec := httptest.NewRecorder()
@@ -272,7 +272,7 @@ func TestAnalyticsHandlersMapDownstreamErrors(t *testing.T) {
 			stub := &stubAnalyticsClient{
 				err: &grpcclient.RPCError{Code: codes.InvalidArgument, Message: "bad request"},
 			}
-			handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false)
+			handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false)
 			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
 			rec := httptest.NewRecorder()
 
@@ -295,7 +295,7 @@ func TestAnalyticsHandlersPreserveRequestIDHeader(t *testing.T) {
 		fingerprintResp:        &crudv1.GetDatasetFingerprintResponse{},
 		featureSampleResp:      &crudv1.GetFeatureSampleResponse{},
 		schemaSummaryResp:      &crudv1.GetSchemaSummaryResponse{},
-	}, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false)
+	}, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false)
 
 	mux := http.NewServeMux()
 	handler.Register(mux)

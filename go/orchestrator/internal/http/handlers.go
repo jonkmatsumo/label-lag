@@ -64,6 +64,7 @@ type Handler struct {
 	enableDecisionAPIs bool
 	enableKpiAPIs      bool
 	enableJobAPIs      bool
+	enableProfileAPIs  bool
 	logQueue           chan inferenceLogEvent
 	logWg              sync.WaitGroup
 	droppedLogs        atomic.Int64
@@ -76,7 +77,7 @@ type inferenceLogEvent struct {
 	requestID   string
 }
 
-func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient AnalyticsClient, trainingClient TrainingClient, forecastClient ForecastClient, provider rules.Provider, maxBodyBytes int64, pythonURL, mlflowURL string, enableDecisionAPIs bool, enableKpiAPIs bool, enableJobAPIs bool) *Handler {
+func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient AnalyticsClient, trainingClient TrainingClient, forecastClient ForecastClient, provider rules.Provider, maxBodyBytes int64, pythonURL, mlflowURL string, enableDecisionAPIs bool, enableKpiAPIs bool, enableJobAPIs bool, enableProfileAPIs bool) *Handler {
 	if maxBodyBytes <= 0 {
 		maxBodyBytes = 1 << 20
 	}
@@ -93,6 +94,7 @@ func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient Ana
 		enableDecisionAPIs: enableDecisionAPIs,
 		enableKpiAPIs:      enableKpiAPIs,
 		enableJobAPIs:      enableJobAPIs,
+		enableProfileAPIs:  enableProfileAPIs,
 		logQueue:           make(chan inferenceLogEvent, 100),
 	}
 	h.startWorkers()
@@ -186,6 +188,12 @@ func (h *Handler) Register(mux *http.ServeMux) {
 		mux.HandleFunc("GET /jobs", h.handleListJobs)
 		mux.HandleFunc("GET /jobs/{id}", h.handleGetJob)
 		mux.HandleFunc("GET /jobs/{id}/events", h.handleGetJobEvents)
+	}
+
+	if h.enableProfileAPIs {
+		mux.HandleFunc("GET /dataset/summary", h.handleGetDatasetSummary)
+		mux.HandleFunc("GET /dataset/profiles", h.handleListDatasetProfiles)
+		mux.HandleFunc("GET /dataset/profiles/compare", h.handleCompareDatasetProfiles)
 	}
 
 	mux.HandleFunc("/data/clear", h.handleDatasetClear)
