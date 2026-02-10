@@ -222,3 +222,22 @@ func TestGetAttribution(t *testing.T) {
 	assert.Equal(t, "rule-2", items[0].RuleId)
 	assert.Equal(t, int64(500), items[0].ContributionScore)
 }
+
+func TestGetShadowComparison(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+
+	rows := sqlmock.NewRows([]string{"total_evaluations", "divergent_scores_count", "active_score_mean", "shadow_score_mean"}).
+		AddRow(100, 10, 50.0, 60.0)
+
+	mock.ExpectQuery("SELECT").WillReturnRows(rows)
+
+	m, err := s.GetShadowComparison(context.Background(), 24)
+	require.NoError(t, err)
+	assert.Equal(t, int64(100), m.TotalEvaluations)
+	assert.Equal(t, int64(10), m.DivergentScoresCount)
+	assert.Equal(t, 0.1, m.DivergentRate)
+}
