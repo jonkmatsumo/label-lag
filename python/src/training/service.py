@@ -3,16 +3,19 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import uuid
 from datetime import UTC, datetime
 
 import grpc
 import mlflow
+from google.protobuf.timestamp_pb2 import Timestamp
 from pydantic import ValidationError
 
+from analytics.v1 import analytics_pb2
 from features.registry import FeatureRegistry
 from features.store import get_feature_store
 from model.loader import DataLoader
-from model.train import train_model
+from model.train import EXPERIMENT_NAME, train_model
 from training.crud_client import get_crud_client
 from training.job_queue import JobQueue
 from training.job_store import JobStore
@@ -43,7 +46,25 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
 
     def Train(self, request, context):  # noqa: N802
         """Train a new model with specified parameters."""
+        analytics_run_id = str(uuid.uuid4())
+        crud = get_crud_client()
+
         try:
+            # Report Start
+            start_ts = Timestamp()
+            start_ts.GetCurrentTime()
+
+            run_start = analytics_pb2.TrainingRun(
+                run_id=analytics_run_id,
+                model_name=EXPERIMENT_NAME,
+                status="RUNNING",
+                started_at=start_ts,
+            )
+            try:
+                crud.report_training_run(run_start)
+            except Exception as e:
+                logger.warning(f"Failed to report training start: {e}")
+
             # -1. Feature Set Resolution (FF1)
             # If feature_set_id is present, we must not have inline features/groups
             from training.grpc_errors import abort_invalid_argument
@@ -206,6 +227,21 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                     list(request.feature_groups) if request.feature_groups else None
                 ),
             )
+
+            # Report Success
+            end_ts = Timestamp()
+            end_ts.GetCurrentTime()
+            run_complete = analytics_pb2.TrainingRun(
+                run_id=analytics_run_id,
+                status="COMPLETED",
+                ended_at=end_ts,
+                mlflow_run_id=run_id,
+            )
+            try:
+                crud.report_training_run(run_complete)
+            except Exception as e:
+                logger.warning(f"Failed to report training completion: {e}")
+
             return training_pb2.TrainResponse(
                 success=True,
                 run_id=run_id,
@@ -213,8 +249,34 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                 model_version=f"v{run_id[:8]}",  # Placeholder
             )
         except ValueError as e:
+            # Report Failure
+            end_ts = Timestamp()
+            end_ts.GetCurrentTime()
+            try:
+                crud.report_training_run(
+                    analytics_pb2.TrainingRun(
+                        run_id=analytics_run_id,
+                        status="FAILED",
+                        ended_at=end_ts,
+                    )
+                )
+            except Exception:
+                pass
             context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(e))
         except Exception as e:
+            # Report Failure
+            end_ts = Timestamp()
+            end_ts.GetCurrentTime()
+            try:
+                crud.report_training_run(
+                    analytics_pb2.TrainingRun(
+                        run_id=analytics_run_id,
+                        status="FAILED",
+                        ended_at=end_ts,
+                    )
+                )
+            except Exception:
+                pass
             logger.exception("Training failed")
             context.abort(grpc.StatusCode.INTERNAL, f"Training failed: {e}")
 
