@@ -14,7 +14,7 @@ import (
 
 func TestHandleEvaluateRules(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, nil, nil, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false, false)
+	handler := NewHandler(logger, nil, nil, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
 	payload := EvaluateRulesRequest{
 		Features:  map[string]any{"velocity_24h": 10},
@@ -62,7 +62,7 @@ func TestHandleEvaluateRules(t *testing.T) {
 
 func TestHandleEvaluateRulesDiff(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, nil, nil, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false, false)
+	handler := NewHandler(logger, nil, nil, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
 	payload := EvaluateRulesDiffRequest{
 		Features:  map[string]any{"velocity_24h": 10},
@@ -106,7 +106,7 @@ func TestHandleEvaluateRulesDiff(t *testing.T) {
 
 func TestHandleEvaluateRules_Debug(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, nil, nil, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false, false)
+	handler := NewHandler(logger, nil, nil, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
 	payload := EvaluateRulesRequest{
 		Features:  map[string]any{"velocity_24h": 10},
