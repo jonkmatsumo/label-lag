@@ -9,6 +9,8 @@ import (
 
 	"github.com/jonkmatsumo/label-lag/go/analytics/internal/db"
 	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -118,10 +120,14 @@ func (s *SQLStore) queryTrainingRecords(ctx context.Context, query string, cutof
 		tx.CreatedAt = timestamppb.New(createdAt)
 
 		if len(numFeaturesJSON) > 0 {
-			json.Unmarshal(numFeaturesJSON, &tx.NumericalFeatures)
+			if err := json.Unmarshal(numFeaturesJSON, &tx.NumericalFeatures); err != nil {
+				return nil, status.Errorf(codes.Internal, "invalid json payload: %v", err)
+			}
 		}
 		if len(catFeaturesJSON) > 0 {
-			json.Unmarshal(catFeaturesJSON, &tx.CategoricalFeatures)
+			if err := json.Unmarshal(catFeaturesJSON, &tx.CategoricalFeatures); err != nil {
+				return nil, status.Errorf(codes.Internal, "invalid json payload: %v", err)
+			}
 		}
 
 		records = append(records, &tx)
@@ -250,9 +256,10 @@ func (s *SQLStore) ListBacktestResults(ctx context.Context, ruleID string, start
 		res.CompletedAt = timestamppb.New(completed)
 
 		var metrics pb.BacktestMetrics
-		if err := json.Unmarshal(metricsJSON, &metrics); err == nil {
-			res.Metrics = &metrics
+		if err := json.Unmarshal(metricsJSON, &metrics); err != nil {
+			return nil, status.Errorf(codes.Internal, "invalid json payload: %v", err)
 		}
+		res.Metrics = &metrics
 		results = append(results, &res)
 	}
 	return results, nil
@@ -290,9 +297,10 @@ func (s *SQLStore) GetBacktestResult(ctx context.Context, jobID string) (*pb.Bac
 	res.CompletedAt = timestamppb.New(completed)
 
 	var metrics pb.BacktestMetrics
-	if err := json.Unmarshal(metricsJSON, &metrics); err == nil {
-		res.Metrics = &metrics
+	if err := json.Unmarshal(metricsJSON, &metrics); err != nil {
+		return nil, status.Errorf(codes.Internal, "invalid json payload: %v", err)
 	}
+	res.Metrics = &metrics
 
 	return &res, nil
 }
