@@ -588,9 +588,23 @@ func (s *Service) GetRuleStats(ctx context.Context, req *pb.GetRuleStatsRequest)
 }
 
 func (s *Service) GetAttribution(ctx context.Context, req *pb.GetAttributionRequest) (*pb.GetAttributionResponse, error) {
-	// Stub implementation from main.go
+	days, err := normalizeDays(req.Days, 7, 90)
+	if err != nil {
+		return nil, err
+	}
+	limit, err := normalizeLimit(req.Limit, 100, 1000, "limit")
+	if err != nil {
+		return nil, err
+	}
+	cutoff := time.Now().AddDate(0, 0, -int(days))
+
+	items, err := s.store.GetAttribution(ctx, cutoff, limit)
+	if err != nil {
+		return nil, err
+	}
+
 	return &pb.GetAttributionResponse{
-		Items: []*pb.DailyAttribution{},
+		Items: items,
 	}, nil
 }
 

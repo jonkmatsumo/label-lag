@@ -203,3 +203,22 @@ func TestGetRuleStats(t *testing.T) {
 	assert.Equal(t, int64(10), stats[0].ShadowTriggeredCount)
 	assert.Equal(t, 0.85, stats[0].ApprovalRate)
 }
+func TestGetAttribution(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+
+	cutoff := time.Now().AddDate(0, 0, -7)
+	rows := sqlmock.NewRows([]string{"date", "rule_id", "contribution_score", "volume"}).
+		AddRow(time.Now(), "rule-2", 500, 50)
+
+	mock.ExpectQuery("SELECT").WithArgs(cutoff, int32(20)).WillReturnRows(rows)
+
+	items, err := s.GetAttribution(context.Background(), cutoff, 20)
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, "rule-2", items[0].RuleId)
+	assert.Equal(t, int64(500), items[0].ContributionScore)
+}

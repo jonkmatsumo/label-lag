@@ -734,3 +734,43 @@ func (s *SQLStore) GetRuleStats(ctx context.Context, ruleID string, cutoff time.
 	}
 	return stats, nil
 }
+func (s *SQLStore) GetAttribution(ctx context.Context, cutoff time.Time, limit int32) ([]*pb.DailyAttribution, error) {
+	query := `
+		SELECT
+			DATE(ie.ts) as date,
+			ri.rule_id,
+			SUM(ri.score_delta) as contribution_score,
+			COUNT(*) as volume
+		FROM rule_impacts ri
+		INNER JOIN inference_events ie ON ri.request_id = ie.request_id
+		WHERE ie.ts >= $1
+		GROUP BY date, ri.rule_id
+		ORDER BY date DESC, contribution_score DESC
+		LIMIT $2
+	`
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(queryCtx, query, cutoff, limit)
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+	defer rows.Close()
+
+	var items []*pb.DailyAttribution
+	for rows.Next() {
+		var item pb.DailyAttribution
+		var date time.Time
+		if err := rows.Scan(
+			&date,
+			&item.RuleId,
+			&item.ContributionScore,
+			&item.Volume,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan attribution item: %v", err)
+		}
+		item.Date = date.Format("2006-01-02")
+		items = append(items, &item)
+	}
+	return items, nil
+}
