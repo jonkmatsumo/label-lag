@@ -51,6 +51,11 @@ type AnalyticsClient interface {
 	GetVolumeSeries(ctx context.Context, req *crudv1.GetVolumeSeriesRequest) (*crudv1.GetVolumeSeriesResponse, error)
 	GetConfusionMatrix(ctx context.Context, req *crudv1.GetConfusionMatrixRequest) (*crudv1.GetConfusionMatrixResponse, error)
 
+	// Jobs (Phase A1)
+	ListJobs(ctx context.Context, req *crudv1.ListJobsRequest) (*crudv1.ListJobsResponse, error)
+	GetJob(ctx context.Context, req *crudv1.GetJobRequest) (*crudv1.GetJobResponse, error)
+	GetJobEvents(ctx context.Context, req *crudv1.GetJobEventsRequest) (*crudv1.GetJobEventsResponse, error)
+
 	// Shadow Comparison (Phase 9)
 	GetShadowComparison(ctx context.Context, req *crudv1.GetShadowComparisonRequest) (*crudv1.GetShadowComparisonResponse, error)
 }

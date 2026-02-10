@@ -1173,3 +1173,105 @@ func (c *AnalyticsClient) GetConfusionMatrix(ctx context.Context, req *crudv1.Ge
 	}
 	return resp, nil
 }
+
+func (c *AnalyticsClient) ListJobs(ctx context.Context, req *crudv1.ListJobsRequest) (*crudv1.ListJobsResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	span := trace.SpanFromContext(ctx)
+	if err := c.breaker.Allow(); err != nil {
+		span.SetAttributes(
+			attribute.String("analytics.breaker_state", c.breaker.State().String()),
+			attribute.String("analytics.breaker_open_reason", "cooldown"),
+		)
+		return nil, mapRPCError(err)
+	}
+
+	callCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	resp, err := c.stub.ListJobs(c.withMetadata(callCtx), req)
+	c.breaker.RecordResult(err)
+
+	span.SetAttributes(
+		attribute.String("analytics.breaker_state", c.breaker.State().String()),
+	)
+
+	if err != nil {
+		return nil, mapRPCError(err)
+	}
+	return resp, nil
+}
+
+func (c *AnalyticsClient) GetJob(ctx context.Context, req *crudv1.GetJobRequest) (*crudv1.GetJobResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	span := trace.SpanFromContext(ctx)
+	if err := c.breaker.Allow(); err != nil {
+		span.SetAttributes(
+			attribute.String("analytics.breaker_state", c.breaker.State().String()),
+			attribute.String("analytics.breaker_open_reason", "cooldown"),
+		)
+		return nil, mapRPCError(err)
+	}
+
+	callCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	resp, err := c.stub.GetJob(c.withMetadata(callCtx), req)
+	c.breaker.RecordResult(err)
+
+	span.SetAttributes(
+		attribute.String("analytics.breaker_state", c.breaker.State().String()),
+	)
+
+	if err != nil {
+		return nil, mapRPCError(err)
+	}
+	return resp, nil
+}
+
+func (c *AnalyticsClient) GetJobEvents(ctx context.Context, req *crudv1.GetJobEventsRequest) (*crudv1.GetJobEventsResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	span := trace.SpanFromContext(ctx)
+	if err := c.breaker.Allow(); err != nil {
+		span.SetAttributes(
+			attribute.String("analytics.breaker_state", c.breaker.State().String()),
+			attribute.String("analytics.breaker_open_reason", "cooldown"),
+		)
+		return nil, mapRPCError(err)
+	}
+
+	callCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	resp, err := c.stub.GetJobEvents(c.withMetadata(callCtx), req)
+	c.breaker.RecordResult(err)
+
+	span.SetAttributes(
+		attribute.String("analytics.breaker_state", c.breaker.State().String()),
+	)
+
+	if err != nil {
+		return nil, mapRPCError(err)
+	}
+	return resp, nil
+}

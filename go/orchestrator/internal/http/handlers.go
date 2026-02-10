@@ -63,6 +63,7 @@ type Handler struct {
 	maxBodyBytes       int64
 	enableDecisionAPIs bool
 	enableKpiAPIs      bool
+	enableJobAPIs      bool
 	logQueue           chan inferenceLogEvent
 	logWg              sync.WaitGroup
 	droppedLogs        atomic.Int64
@@ -75,7 +76,7 @@ type inferenceLogEvent struct {
 	requestID   string
 }
 
-func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient AnalyticsClient, trainingClient TrainingClient, forecastClient ForecastClient, provider rules.Provider, maxBodyBytes int64, pythonURL, mlflowURL string, enableDecisionAPIs bool, enableKpiAPIs bool) *Handler {
+func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient AnalyticsClient, trainingClient TrainingClient, forecastClient ForecastClient, provider rules.Provider, maxBodyBytes int64, pythonURL, mlflowURL string, enableDecisionAPIs bool, enableKpiAPIs bool, enableJobAPIs bool) *Handler {
 	if maxBodyBytes <= 0 {
 		maxBodyBytes = 1 << 20
 	}
@@ -91,6 +92,7 @@ func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient Ana
 		mlflowURL:          mlflowURL,
 		enableDecisionAPIs: enableDecisionAPIs,
 		enableKpiAPIs:      enableKpiAPIs,
+		enableJobAPIs:      enableJobAPIs,
 		logQueue:           make(chan inferenceLogEvent, 100),
 	}
 	h.startWorkers()
@@ -178,6 +180,12 @@ func (h *Handler) Register(mux *http.ServeMux) {
 		mux.HandleFunc("GET /kpis", h.handleGetKpis)
 		mux.HandleFunc("GET /volume", h.handleGetVolumeSeries)
 		mux.HandleFunc("GET /analytics/confusion-matrix", h.handleGetConfusionMatrix)
+	}
+
+	if h.enableJobAPIs {
+		mux.HandleFunc("GET /jobs", h.handleListJobs)
+		mux.HandleFunc("GET /jobs/{id}", h.handleGetJob)
+		mux.HandleFunc("GET /jobs/{id}/events", h.handleGetJobEvents)
 	}
 
 	mux.HandleFunc("/data/clear", h.handleDatasetClear)
