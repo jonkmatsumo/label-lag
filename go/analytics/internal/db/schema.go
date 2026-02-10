@@ -182,6 +182,15 @@ func InitDB(db *sql.DB) error {
 			details JSONB
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_job_events_job_id ON job_events(job_id)`,
+		// A2: Dataset Profiles
+		`CREATE TABLE IF NOT EXISTS dataset_profiles (
+			profile_id TEXT PRIMARY KEY,
+			tenant_id TEXT DEFAULT '',
+			computed_at TIMESTAMP NOT NULL DEFAULT NOW(),
+			record_count BIGINT NOT NULL,
+			feature_profiles JSONB NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_dataset_profiles_computed_at ON dataset_profiles(computed_at DESC)`,
 	}
 
 	for _, q := range queries {
