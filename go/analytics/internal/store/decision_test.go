@@ -73,6 +73,10 @@ func TestGetDecisionTrace(t *testing.T) {
 
 	s := NewSQLStore(db)
 
+	mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM inference_events WHERE request_id = \$1\)`).
+		WithArgs("req-1").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+
 	rows := sqlmock.NewRows([]string{"rule_id", "is_shadow", "score_delta"}).
 		AddRow("rule-1", false, 10.5).
 		AddRow("rule-2", true, 5.0)
@@ -102,6 +106,10 @@ func TestGetRuleImpact(t *testing.T) {
 		RuleId:    "rule-1",
 		StartDate: timestamppb.New(startDate),
 	}
+
+	mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM rules WHERE rule_id = \$1\)`).
+		WithArgs("rule-1").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
 
 	mock.ExpectQuery(`SELECT COUNT\(\*\), COALESCE\(AVG\(ri.score_delta\), 0\)`).
 		WithArgs("rule-1", startDate).

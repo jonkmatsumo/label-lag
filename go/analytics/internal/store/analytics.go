@@ -1080,7 +1080,7 @@ func (s *SQLStore) GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactReque
 		%s
 	`, baseWhere)
 
-	err := s.db.QueryRowContext(ctx, summaryQuery, args...).Scan(&resp.TotalTriggers, &resp.AvgScoreDelta)
+	err = s.db.QueryRowContext(ctx, summaryQuery, args...).Scan(&resp.TotalTriggers, &resp.AvgScoreDelta)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, db.MapDBError(err)
 	}
