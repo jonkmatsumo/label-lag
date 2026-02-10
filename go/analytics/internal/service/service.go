@@ -68,9 +68,13 @@ func (s *Service) GetTransactionDetails(ctx context.Context, req *pb.GetTransact
 	if err != nil {
 		return nil, err
 	}
+	offset, err := normalizeOffset(req.Offset)
+	if err != nil {
+		return nil, err
+	}
 	cutoffDate := time.Now().AddDate(0, 0, -int(days))
 
-	details, err := s.store.GetTransactionDetails(ctx, cutoffDate, limit)
+	details, err := s.store.GetTransactionDetails(ctx, cutoffDate, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -110,8 +114,12 @@ func (s *Service) GetRecentAlerts(ctx context.Context, req *pb.GetRecentAlertsRe
 	if err != nil {
 		return nil, err
 	}
+	offset, err := normalizeOffset(req.Offset)
+	if err != nil {
+		return nil, err
+	}
 
-	alerts, err := s.store.GetRecentAlerts(ctx, limit)
+	alerts, err := s.store.GetRecentAlerts(ctx, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +196,16 @@ func (s *Service) ListBacktestResults(ctx context.Context, req *pb.ListBacktestR
 		end = &t
 	}
 
-	results, err := s.store.ListBacktestResults(ctx, req.RuleId, start, end)
+	limit, err := normalizeLimit(req.Limit, 20, 100, "limit")
+	if err != nil {
+		return nil, err
+	}
+	offset, err := normalizeOffset(req.Offset)
+	if err != nil {
+		return nil, err
+	}
+
+	results, err := s.store.ListBacktestResults(ctx, req.RuleId, start, end, limit, offset)
 	if err != nil {
 		return nil, err
 	}

@@ -65,7 +65,7 @@ func (s *SQLStore) GetDailyStats(ctx context.Context, cutoffDate time.Time) ([]*
 	return stats, nil
 }
 
-func (s *SQLStore) GetTransactionDetails(ctx context.Context, cutoffDate time.Time, limit int32) ([]*pb.TransactionDetail, error) {
+func (s *SQLStore) GetTransactionDetails(ctx context.Context, cutoffDate time.Time, limit, offset int32) ([]*pb.TransactionDetail, error) {
 	query := `
 		SELECT
 			em.record_id,
@@ -86,12 +86,12 @@ func (s *SQLStore) GetTransactionDetails(ctx context.Context, cutoffDate time.Ti
 		LEFT JOIN feature_snapshots fs ON em.record_id = fs.record_id
 		WHERE em.created_at >= $1
 		ORDER BY em.created_at DESC
-		LIMIT $2
+		LIMIT $2 OFFSET $3
 	`
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	rows, err := s.db.QueryContext(queryCtx, query, cutoffDate, limit)
+	rows, err := s.db.QueryContext(queryCtx, query, cutoffDate, limit, offset)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -313,7 +313,7 @@ func (s *SQLStore) GetShadowComparison(ctx context.Context, hours int32) (*pb.Sh
 
 // (Keeping the rest of the file intact)
 
-func (s *SQLStore) GetRecentAlerts(ctx context.Context, limit int32) ([]*pb.Alert, error) {
+func (s *SQLStore) GetRecentAlerts(ctx context.Context, limit, offset int32) ([]*pb.Alert, error) {
 	query := `
 		SELECT
 			fs.record_id,
@@ -331,13 +331,13 @@ func (s *SQLStore) GetRecentAlerts(ctx context.Context, limit int32) ([]*pb.Aler
 		INNER JOIN generated_records gr ON fs.record_id = gr.record_id
 		WHERE gr.is_fraudulent = TRUE
 		ORDER BY em.created_at DESC
-		LIMIT $1
+		LIMIT $1 OFFSET $2
 	`
 
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	rows, err := s.db.QueryContext(queryCtx, query, limit)
+	rows, err := s.db.QueryContext(queryCtx, query, limit, offset)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}

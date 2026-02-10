@@ -23,8 +23,8 @@ func (m *MockStore) GetDailyStats(ctx context.Context, cutoffDate time.Time) ([]
 	return args.Get(0).([]*pb.DailyStat), args.Error(1)
 }
 
-func (m *MockStore) GetTransactionDetails(ctx context.Context, cutoffDate time.Time, limit int32) ([]*pb.TransactionDetail, error) {
-	args := m.Called(ctx, cutoffDate, limit)
+func (m *MockStore) GetTransactionDetails(ctx context.Context, cutoffDate time.Time, limit, offset int32) ([]*pb.TransactionDetail, error) {
+	args := m.Called(ctx, cutoffDate, limit, offset)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -39,8 +39,8 @@ func (m *MockStore) SearchTransactions(ctx context.Context, req *pb.SearchTransa
 	return args.Get(0).([]*pb.TransactionDetail), args.Get(1).(int64), args.Error(2)
 }
 
-func (m *MockStore) GetRecentAlerts(ctx context.Context, limit int32) ([]*pb.Alert, error) {
-	args := m.Called(ctx, limit)
+func (m *MockStore) GetRecentAlerts(ctx context.Context, limit, offset int32) ([]*pb.Alert, error) {
+	args := m.Called(ctx, limit, offset)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -168,8 +168,8 @@ func (m *MockStore) SaveBacktestResult(ctx context.Context, res *pb.BacktestResu
 	return args.Error(0)
 }
 
-func (m *MockStore) ListBacktestResults(ctx context.Context, ruleID string, start, end *time.Time) ([]*pb.BacktestResult, error) {
-	args := m.Called(ctx, ruleID, start, end)
+func (m *MockStore) ListBacktestResults(ctx context.Context, ruleID string, start, end *time.Time, limit, offset int32) ([]*pb.BacktestResult, error) {
+	args := m.Called(ctx, ruleID, start, end, limit, offset)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
