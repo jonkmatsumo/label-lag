@@ -787,6 +787,22 @@ func (s *stubAnalyticsClient) GetShadowComparison(ctx context.Context, req *crud
 	return s.shadowComparisonResp, s.err
 }
 
+func (s *stubAnalyticsClient) ListDecisions(ctx context.Context, req *crudv1.ListDecisionsRequest) (*crudv1.ListDecisionsResponse, error) {
+	return &crudv1.ListDecisionsResponse{}, s.err
+}
+
+func (s *stubAnalyticsClient) GetDecision(ctx context.Context, req *crudv1.GetDecisionRequest) (*crudv1.GetDecisionResponse, error) {
+	return &crudv1.GetDecisionResponse{}, s.err
+}
+
+func (s *stubAnalyticsClient) GetDecisionTrace(ctx context.Context, req *crudv1.GetDecisionTraceRequest) (*crudv1.GetDecisionTraceResponse, error) {
+	return &crudv1.GetDecisionTraceResponse{}, s.err
+}
+
+func (s *stubAnalyticsClient) GetRuleImpact(ctx context.Context, req *crudv1.GetRuleImpactRequest) (*crudv1.GetRuleImpactResponse, error) {
+	return &crudv1.GetRuleImpactResponse{}, s.err
+}
+
 func (s *stubAnalyticsClient) GenerateData(ctx context.Context, req *crudv1.GenerateDataRequest) (*crudv1.GenerateDataResponse, error) {
 	return s.generateDataResp, s.err
 }
