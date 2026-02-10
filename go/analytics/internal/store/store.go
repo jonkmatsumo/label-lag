@@ -51,6 +51,12 @@ type Store interface {
 	GetDatasetProfileCached(ctx context.Context, profileID string) (*pb.DatasetProfile, error)
 	ListDatasetProfiles(ctx context.Context, limit, offset int32) ([]*pb.DatasetProfile, int64, error)
 
+	// Training Runs (Phase B)
+	SaveTrainingRun(ctx context.Context, run *pb.TrainingRun) error
+	ListTrainingRuns(ctx context.Context, modelName string, limit, offset int32) ([]*pb.TrainingRun, int64, error)
+	GetTrainingRun(ctx context.Context, runID string) (*pb.TrainingRun, error)
+	GetMetricSeries(ctx context.Context, modelName, metricName string, start, end time.Time) ([]*pb.MetricPoint, error)
+
 	// Feature Hydration
 	GetLatestUserFeatures(ctx context.Context, userID string) (*pb.UserFeatures, bool, error)
 	BatchGetLatestUserFeatures(ctx context.Context, userIDs []string) (map[string]*pb.UserFeatures, error)

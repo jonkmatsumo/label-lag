@@ -39,7 +39,7 @@ func TestHandleEvaluateSignal_RejectsLargeBody(t *testing.T) {
 
 func TestHandleEvaluateSignal_RejectsUnknownFields(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, nil, nil, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false)
+	handler := NewHandler(logger, nil, nil, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false)
 
 	payload := `{"user_id":"u1","amount":12.3,"currency":"USD","client_transaction_id":"t1","unknown":"x"}`
 	req := httptest.NewRequest(http.MethodPost, "/evaluate/signal", strings.NewReader(payload))
@@ -460,7 +460,7 @@ func TestHandleMonitoringDrift(t *testing.T) {
 			DriftDetected: true,
 		},
 	}
-	handler := NewHandler(logger, nil, nil, stubTrainingClient{}, stub, rules.NewEmptyProvider(), 1024, "", "", false, false, false)
+	handler := NewHandler(logger, nil, nil, stubTrainingClient{}, stub, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/monitoring/drift?hours=24", nil)
 	rec := httptest.NewRecorder()
@@ -825,6 +825,18 @@ func (s *stubAnalyticsClient) GetJob(ctx context.Context, req *crudv1.GetJobRequ
 
 func (s *stubAnalyticsClient) GetJobEvents(ctx context.Context, req *crudv1.GetJobEventsRequest) (*crudv1.GetJobEventsResponse, error) {
 	return &crudv1.GetJobEventsResponse{}, s.err
+}
+
+func (s *stubAnalyticsClient) GetDatasetSummary(ctx context.Context, req *crudv1.GetDatasetSummaryRequest) (*crudv1.GetDatasetSummaryResponse, error) {
+	return &crudv1.GetDatasetSummaryResponse{}, s.err
+}
+
+func (s *stubAnalyticsClient) ListDatasetProfiles(ctx context.Context, req *crudv1.ListDatasetProfilesRequest) (*crudv1.ListDatasetProfilesResponse, error) {
+	return &crudv1.ListDatasetProfilesResponse{}, s.err
+}
+
+func (s *stubAnalyticsClient) CompareDatasetProfiles(ctx context.Context, req *crudv1.CompareDatasetProfilesRequest) (*crudv1.CompareDatasetProfilesResponse, error) {
+	return &crudv1.CompareDatasetProfilesResponse{}, s.err
 }
 
 func (s *stubAnalyticsClient) GenerateData(ctx context.Context, req *crudv1.GenerateDataRequest) (*crudv1.GenerateDataResponse, error) {

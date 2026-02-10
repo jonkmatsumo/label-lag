@@ -86,6 +86,12 @@ service AnalyticsService {
   rpc GetDatasetSummary(GetDatasetSummaryRequest) returns (GetDatasetSummaryResponse);
   rpc ListDatasetProfiles(ListDatasetProfilesRequest) returns (ListDatasetProfilesResponse);
   rpc CompareDatasetProfiles(CompareDatasetProfilesRequest) returns (CompareDatasetProfilesResponse);
+
+  // Training Runs (Phase B)
+  rpc ListTrainingRuns(ListTrainingRunsRequest) returns (ListTrainingRunsResponse);
+  rpc GetTrainingRun(GetTrainingRunRequest) returns (GetTrainingRunResponse);
+  rpc GetMetricSeries(GetMetricSeriesRequest) returns (GetMetricSeriesResponse);
+  rpc ReportTrainingRun(ReportTrainingRunRequest) returns (ReportTrainingRunResponse);
 }
 
 message GetKpisRequest {
@@ -909,4 +915,60 @@ message FeatureDrift {
   string feature_name = 1;
   double psi = 2;
   string drift_severity = 3; // "none", "low", "high"
+}
+
+message TrainingRun {
+  string run_id = 1;
+  string model_name = 2;
+  string status = 3;
+  google.protobuf.Timestamp started_at = 4;
+  google.protobuf.Timestamp ended_at = 5;
+  string metrics_json = 6;
+  string params_json = 7;
+  string dataset_id = 8;
+  string mlflow_run_id = 9;
+}
+
+message ListTrainingRunsRequest {
+  string model_name = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+}
+
+message ListTrainingRunsResponse {
+  repeated TrainingRun runs = 1;
+  int64 total = 2;
+}
+
+message GetTrainingRunRequest {
+  string run_id = 1;
+}
+
+message GetTrainingRunResponse {
+  TrainingRun run = 1;
+}
+
+message MetricPoint {
+  google.protobuf.Timestamp timestamp = 1;
+  double value = 2;
+  string run_id = 3;
+}
+
+message GetMetricSeriesRequest {
+  string model_name = 1;
+  string metric_name = 2;
+  google.protobuf.Timestamp start_date = 3;
+  google.protobuf.Timestamp end_date = 4;
+}
+
+message GetMetricSeriesResponse {
+  repeated MetricPoint points = 1;
+}
+
+message ReportTrainingRunRequest {
+  TrainingRun run = 1;
+}
+
+message ReportTrainingRunResponse {
+  bool success = 1;
 }
