@@ -104,12 +104,17 @@ func InitDB(db *sql.DB) error {
 			completed_at TIMESTAMP
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_generated_records_record_id ON generated_records(record_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_generated_records_user_id ON generated_records(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_generated_records_transaction_timestamp ON generated_records(transaction_timestamp)`,
+		`CREATE INDEX IF NOT EXISTS idx_generated_records_user_id_transaction_timestamp ON generated_records(user_id, transaction_timestamp)`,
 		`CREATE INDEX IF NOT EXISTS idx_evaluation_metadata_record_id ON evaluation_metadata(record_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_feature_snapshots_record_id ON feature_snapshots(record_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_backtest_results_rule_id ON backtest_results(rule_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_backtest_results_completed_at ON backtest_results(completed_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_rules_status ON rules(status)`,
 		`CREATE INDEX IF NOT EXISTS idx_inference_events_ts ON inference_events(ts)`,
+		`CREATE INDEX IF NOT EXISTS idx_rule_impacts_rule_id ON rule_impacts(rule_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_rule_impacts_request_id ON rule_impacts(request_id)`,
 		// Rule Versioning
 		`CREATE TABLE IF NOT EXISTS rule_versions (
 			version_id TEXT PRIMARY KEY,
