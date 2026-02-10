@@ -142,6 +142,7 @@ func (h *Handler) Shutdown(ctx context.Context) error {
 }
 
 func (h *Handler) Register(mux *http.ServeMux) {
+	mux.HandleFunc("/metrics", h.handleMetrics)
 	mux.HandleFunc("/evaluate/signal", h.handleEvaluateSignal)
 	mux.HandleFunc("/evaluate/rules", h.handleEvaluateRules)
 	mux.HandleFunc("/evaluate/rules/diff", h.handleEvaluateRulesDiff)
