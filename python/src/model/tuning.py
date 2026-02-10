@@ -4,9 +4,15 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 import optuna
 import pandas as pd
+
+if TYPE_CHECKING:
+    from training.job_store import JobStore
+
 from optuna.integration import XGBoostPruningCallback
 from optuna.pruners import MedianPruner
 from sklearn.metrics import (
@@ -128,6 +134,65 @@ def get_trial_params(trials_df: pd.DataFrame, trial_number: int) -> dict:
     return params
 
 
+class JobProgressCallback:
+    """Optuna callback to update JobStore with trial results."""
+
+    def __init__(self, job_id: str, job_store: JobStore):
+        self.job_id = job_id
+        self.job_store = job_store
+
+    def __call__(
+        self, study: optuna.study.Study, trial: optuna.trial.FrozenTrial
+    ) -> None:
+        from training.jobs import TrialRecord, TuningJobStatus
+
+        # 1. Update JobStore with trial results
+        def update_fn(job):
+            # Update counts
+            if str(trial.state) == "TrialState.COMPLETE":
+                job.completed_trials += 1
+            elif str(trial.state) == "TrialState.PRUNED":
+                job.pruned_trials += 1
+
+            # Append TrialRecord
+            record = TrialRecord(
+                trial_number=trial.number,
+                state=str(trial.state),
+                value=float(trial.value) if trial.value is not None else None,
+                params={k: str(v) for k, v in trial.params.items()},
+                started_at=trial.datetime_start,
+                ended_at=trial.datetime_complete,
+                duration_ms=(
+                    (trial.datetime_complete - trial.datetime_start).total_seconds()
+                    * 1000
+                    if trial.datetime_complete and trial.datetime_start
+                    else None
+                ),
+            )
+            job.trials.append(record)
+
+            # Cap growth: keep last 500
+            if len(job.trials) > 500:
+                job.trials = job.trials[-500:]
+
+            # Update best value/params
+            if study.best_trial and study.best_trial.number == trial.number:
+                job.best_value = (
+                    float(study.best_value) if study.best_value is not None else None
+                )
+                job.best_params = {k: str(v) for k, v in study.best_params.items()}
+
+            job.updated_at = datetime.now(UTC)
+
+        self.job_store.update(self.job_id, update_fn)
+
+        # 2. Check for cancellation
+        job = self.job_store.get(self.job_id)
+        if job and job.status == TuningJobStatus.CANCELING:
+            logger.info(f"Job {self.job_id} is canceling, stopping study.")
+            study.stop()
+
+
 def run_tuning_study(
     x_train: pd.DataFrame,
     y_train: pd.Series,
@@ -141,6 +206,8 @@ def run_tuning_study(
     direction: str = "maximize",
     strategy: str = "bayesian",
     search_space_overrides: dict[str, str] | None = None,
+    job_id: str | None = None,
+    job_store: JobStore | None = None,
 ) -> tuple[dict, pd.DataFrame]:
     """Run Optuna study and return best params and trial history.
 
@@ -157,6 +224,8 @@ def run_tuning_study(
         direction: "maximize" or "minimize".
         strategy: "bayesian", "random", or "grid".
         search_space_overrides: Optional overrides for search space (JSON strings).
+        job_id: Optional job ID for tracking.
+        job_store: Optional JobStore for tracking.
 
     Returns:
         (best_params, trials_df) where trials_df has columns like
@@ -206,11 +275,17 @@ def run_tuning_study(
 
     pruner = MedianPruner(n_startup_trials=5, n_warmup_steps=10)
     study = optuna.create_study(direction=direction, sampler=sampler, pruner=pruner)
+
+    callbacks = []
+    if job_id and job_store:
+        callbacks.append(JobProgressCallback(job_id, job_store))
+
     study.optimize(
         objective,
         n_trials=n_trials,
         timeout=timeout_seconds,
         show_progress_bar=False,
+        callbacks=callbacks,
     )
     best = study.best_params if study.best_trial else {}
     rows = []
