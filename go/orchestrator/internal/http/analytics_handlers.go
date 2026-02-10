@@ -681,3 +681,65 @@ func (h *Handler) handleGetRuleImpact(w http.ResponseWriter, r *http.Request) {
 
 	writeAnalyticsJSON(w, resp)
 }
+
+func (h *Handler) handleGetKpis(w http.ResponseWriter, r *http.Request) {
+	req := &crudv1.GetKpisRequest{
+		GroupBy: r.URL.Query().Get("group_by"),
+	}
+
+	if startStr := r.URL.Query().Get("start_time"); startStr != "" {
+		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
+			req.StartTime = timestamppb.New(t)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
+			return
+		}
+	}
+	if endStr := r.URL.Query().Get("end_time"); endStr != "" {
+		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
+			req.EndTime = timestamppb.New(t)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
+			return
+		}
+	}
+
+	resp, err := h.analyticsClient.GetKpis(r.Context(), req)
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	writeAnalyticsJSON(w, resp)
+}
+
+func (h *Handler) handleGetVolumeSeries(w http.ResponseWriter, r *http.Request) {
+	req := &crudv1.GetVolumeSeriesRequest{
+		Granularity: r.URL.Query().Get("granularity"),
+	}
+
+	if startStr := r.URL.Query().Get("start_time"); startStr != "" {
+		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
+			req.StartTime = timestamppb.New(t)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
+			return
+		}
+	}
+	if endStr := r.URL.Query().Get("end_time"); endStr != "" {
+		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
+			req.EndTime = timestamppb.New(t)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
+			return
+		}
+	}
+
+	resp, err := h.analyticsClient.GetVolumeSeries(r.Context(), req)
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	writeAnalyticsJSON(w, resp)
+}

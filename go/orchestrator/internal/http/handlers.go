@@ -62,6 +62,7 @@ type Handler struct {
 	mlflowURL          string
 	maxBodyBytes       int64
 	enableDecisionAPIs bool
+	enableKpiAPIs      bool
 	logQueue           chan inferenceLogEvent
 	logWg              sync.WaitGroup
 	droppedLogs        atomic.Int64
@@ -74,7 +75,7 @@ type inferenceLogEvent struct {
 	requestID   string
 }
 
-func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient AnalyticsClient, trainingClient TrainingClient, forecastClient ForecastClient, provider rules.Provider, maxBodyBytes int64, pythonURL, mlflowURL string, enableDecisionAPIs bool) *Handler {
+func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient AnalyticsClient, trainingClient TrainingClient, forecastClient ForecastClient, provider rules.Provider, maxBodyBytes int64, pythonURL, mlflowURL string, enableDecisionAPIs bool, enableKpiAPIs bool) *Handler {
 	if maxBodyBytes <= 0 {
 		maxBodyBytes = 1 << 20
 	}
@@ -89,6 +90,7 @@ func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient Ana
 		pythonURL:          pythonURL,
 		mlflowURL:          mlflowURL,
 		enableDecisionAPIs: enableDecisionAPIs,
+		enableKpiAPIs:      enableKpiAPIs,
 		logQueue:           make(chan inferenceLogEvent, 100),
 	}
 	h.startWorkers()
@@ -170,6 +172,11 @@ func (h *Handler) Register(mux *http.ServeMux) {
 		mux.HandleFunc("GET /decisions/{request_id}/trace", h.handleGetDecisionTrace)
 		// Rule Impact: fetch metrics for a specific rule over time
 		mux.HandleFunc("GET /analytics/rules/{rule_id}/impact", h.handleGetRuleImpact)
+	}
+
+	if h.enableKpiAPIs {
+		mux.HandleFunc("GET /kpis", h.handleGetKpis)
+		mux.HandleFunc("GET /volume", h.handleGetVolumeSeries)
 	}
 
 	mux.HandleFunc("/data/clear", h.handleDatasetClear)
