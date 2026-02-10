@@ -537,6 +537,9 @@ func mapTableFingerprint(fingerprint *crudv1.TableFingerprint) tableFingerprintR
 	}
 }
 
+// handleListDecisions lists and filters decision events.
+// Query params: limit (1-250), offset, user_id, decision (APPROVE|REVIEW|REJECT),
+// min_score, max_score, start_date (RFC3339), end_date (RFC3339).
 func (h *Handler) handleListDecisions(w http.ResponseWriter, r *http.Request) {
 	limit, err := parseIntQuery(r, "limit", 50, 1, 250)
 	if err != nil {
@@ -635,6 +638,8 @@ func (h *Handler) handleGetDecisionTrace(w http.ResponseWriter, r *http.Request)
 	writeAnalyticsJSON(w, resp)
 }
 
+// handleGetRuleImpact returns impact metrics for a specific rule.
+// Query params: start_date (RFC3339), end_date (RFC3339).
 func (h *Handler) handleGetRuleImpact(w http.ResponseWriter, r *http.Request) {
 	ruleID := r.PathValue("rule_id")
 	if ruleID == "" {

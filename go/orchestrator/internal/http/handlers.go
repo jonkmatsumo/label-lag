@@ -162,9 +162,13 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/analytics/transactions/search", h.handleSearchTransactions)
 
 	if h.enableDecisionAPIs {
+		// Decision Explorer: list and search inference events
 		mux.HandleFunc("GET /decisions", h.handleListDecisions)
+		// Decision Detail: fetch full event with inputs
 		mux.HandleFunc("GET /decisions/{request_id}", h.handleGetDecision)
+		// Decision Trace: fetch rule execution steps
 		mux.HandleFunc("GET /decisions/{request_id}/trace", h.handleGetDecisionTrace)
+		// Rule Impact: fetch metrics for a specific rule over time
 		mux.HandleFunc("GET /analytics/rules/{rule_id}/impact", h.handleGetRuleImpact)
 	}
 
