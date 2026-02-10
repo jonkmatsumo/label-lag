@@ -549,6 +549,48 @@ func (s *SQLStore) LogInferenceEvent(ctx context.Context, event *pb.InferenceEve
 		return db.MapDBError(fmt.Errorf("failed to insert inference event: %w", err))
 	}
 
+	// Increment aggregates
+	isAlert := event.Decision == DecisionReview || event.Decision == DecisionReject
+	alertIncr := 0
+	if isAlert {
+		alertIncr = 1
+	}
+	rulesFired := len(event.RuleImpacts)
+	ts := time.Now()
+	if event.Timestamp != nil {
+		ts = event.Timestamp.AsTime()
+	}
+	hour := ts.Truncate(time.Hour)
+	date := ts.Truncate(24 * time.Hour)
+
+	queryDaily := `
+		INSERT INTO aggregates_daily (tenant_id, date, total_decisions, total_alerts, sum_score, rules_fired_total)
+		VALUES ('', $1, 1, $2, $3, $4)
+		ON CONFLICT (tenant_id, date) DO UPDATE SET
+			total_decisions = aggregates_daily.total_decisions + 1,
+			total_alerts = aggregates_daily.total_alerts + $2,
+			sum_score = aggregates_daily.sum_score + $3,
+			rules_fired_total = aggregates_daily.rules_fired_total + $4
+	`
+	_, err = tx.ExecContext(queryCtx, queryDaily, date, alertIncr, event.FinalScore, rulesFired)
+	if err != nil {
+		return db.MapDBError(fmt.Errorf("failed to update daily aggregates: %w", err))
+	}
+
+	queryHourly := `
+		INSERT INTO aggregates_hourly (tenant_id, hour, total_decisions, total_alerts, sum_score, rules_fired_total)
+		VALUES ('', $1, 1, $2, $3, $4)
+		ON CONFLICT (tenant_id, hour) DO UPDATE SET
+			total_decisions = aggregates_hourly.total_decisions + 1,
+			total_alerts = aggregates_hourly.total_alerts + $2,
+			sum_score = aggregates_hourly.sum_score + $3,
+			rules_fired_total = aggregates_hourly.rules_fired_total + $4
+	`
+	_, err = tx.ExecContext(queryCtx, queryHourly, hour, alertIncr, event.FinalScore, rulesFired)
+	if err != nil {
+		return db.MapDBError(fmt.Errorf("failed to update hourly aggregates: %w", err))
+	}
+
 	// Insert rule impacts
 	queryImpact := `
 		INSERT INTO rule_impacts (

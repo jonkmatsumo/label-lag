@@ -46,16 +46,10 @@ const (
 	maxRuleImpactDays    = 90
 )
 
-const (
-	DecisionApprove = "APPROVE"
-	DecisionReview  = "REVIEW"
-	DecisionReject  = "REJECT"
-)
-
 var allowedDecisions = map[string]bool{
-	DecisionApprove: true,
-	DecisionReview:  true,
-	DecisionReject:  true,
+	store.DecisionApprove: true,
+	store.DecisionReview:  true,
+	store.DecisionReject:  true,
 }
 
 func (s *Service) GetDailyStats(ctx context.Context, req *pb.GetDailyStatsRequest) (*pb.GetDailyStatsResponse, error) {

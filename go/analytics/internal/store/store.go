@@ -86,6 +86,12 @@ type SQLStore struct {
 
 const defaultQueryTimeout = 30 * time.Second
 
+const (
+	DecisionApprove = "APPROVE"
+	DecisionReview  = "REVIEW"
+	DecisionReject  = "REJECT"
+)
+
 // NewSQLStore creates a new SQLStore.
 func NewSQLStore(db *sql.DB) *SQLStore {
 	return &SQLStore{db: db}
