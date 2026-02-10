@@ -316,3 +316,11 @@ func (m *MockStore) GetDecisionTrace(ctx context.Context, requestID string) ([]*
 	}
 	return args.Get(0).([]*pb.RuleImpact), args.Error(1)
 }
+
+func (m *MockStore) GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactRequest) (*pb.GetRuleImpactResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.GetRuleImpactResponse), args.Error(1)
+}

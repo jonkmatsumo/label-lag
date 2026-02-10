@@ -521,12 +521,18 @@ func (s *SQLStore) LogInferenceEvent(ctx context.Context, event *pb.InferenceEve
 	}
 	defer tx.Rollback()
 
+	// Convert rule impacts to JSON for the de-normalized column
+	impactsJSON, err := json.Marshal(event.RuleImpacts)
+	if err != nil {
+		return fmt.Errorf("failed to marshal rule impacts: %w", err)
+	}
+
 	// Insert into inference_events
 	queryEvent := `
 		INSERT INTO inference_events (
-			request_id, timestamp, model_version, rules_version,
-			model_score, final_score
-		) VALUES ($1, $2, $3, $4, $5, $6)
+			request_id, ts, model_version, rules_version,
+			model_score, final_score, rule_impacts, user_id, decision
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 	_, err = tx.ExecContext(queryCtx, queryEvent,
 		event.RequestId,
@@ -535,6 +541,9 @@ func (s *SQLStore) LogInferenceEvent(ctx context.Context, event *pb.InferenceEve
 		event.RulesVersion,
 		event.ModelScore,
 		event.FinalScore,
+		impactsJSON,
+		event.UserId,
+		event.Decision,
 	)
 	if err != nil {
 		return db.MapDBError(fmt.Errorf("failed to insert inference event: %w", err))

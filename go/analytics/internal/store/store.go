@@ -34,6 +34,7 @@ type Store interface {
 	ListDecisions(ctx context.Context, req *pb.ListDecisionsRequest) ([]*pb.DecisionSummary, int64, error)
 	GetDecision(ctx context.Context, requestID string) (*pb.InferenceEvent, error)
 	GetDecisionTrace(ctx context.Context, requestID string) ([]*pb.RuleImpact, error)
+	GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactRequest) (*pb.GetRuleImpactResponse, error)
 
 	// Feature Hydration
 	GetLatestUserFeatures(ctx context.Context, userID string) (*pb.UserFeatures, bool, error)

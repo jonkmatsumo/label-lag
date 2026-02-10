@@ -1034,3 +1034,64 @@ func (s *SQLStore) GetDecisionTrace(ctx context.Context, requestID string) ([]*p
 	}
 	return trace, nil
 }
+
+func (s *SQLStore) GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactRequest) (*pb.GetRuleImpactResponse, error) {
+	resp := &pb.GetRuleImpactResponse{
+		RuleId: req.RuleId,
+	}
+
+	baseWhere := "WHERE ri.rule_id = $1"
+	args := []interface{}{req.RuleId}
+
+	if req.StartDate != nil {
+		args = append(args, req.StartDate.AsTime())
+		baseWhere += fmt.Sprintf(" AND ie.ts >= $%d", len(args))
+	}
+	if req.EndDate != nil {
+		args = append(args, req.EndDate.AsTime())
+		baseWhere += fmt.Sprintf(" AND ie.ts <= $%d", len(args))
+	}
+
+	summaryQuery := fmt.Sprintf(`
+		SELECT COUNT(*), COALESCE(AVG(ri.score_delta), 0)
+		FROM rule_impacts ri
+		INNER JOIN inference_events ie ON ri.request_id = ie.request_id
+		%s
+	`, baseWhere)
+
+	err := s.db.QueryRowContext(ctx, summaryQuery, args...).Scan(&resp.TotalTriggers, &resp.AvgScoreDelta)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, db.MapDBError(err)
+	}
+
+	bucketsQuery := fmt.Sprintf(`
+		SELECT
+			DATE(ie.ts) as date,
+			COUNT(*),
+			COALESCE(AVG(ri.score_delta), 0),
+			SUM(CASE WHEN (ie.final_score >= 100 AND (ie.final_score - ri.score_delta) < 100) OR (ie.final_score >= 50 AND (ie.final_score - ri.score_delta) < 50) THEN 1 ELSE 0 END) as changes
+		FROM rule_impacts ri
+		INNER JOIN inference_events ie ON ri.request_id = ie.request_id
+		%s
+		GROUP BY date
+		ORDER BY date DESC
+	`, baseWhere)
+
+	rows, err := s.db.QueryContext(ctx, bucketsQuery, args...)
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var b pb.RuleImpactBucket
+		var date time.Time
+		if err := rows.Scan(&date, &b.TriggerCount, &b.AvgScoreDelta, &b.DecisionsChangedCount); err != nil {
+			return nil, fmt.Errorf("failed to scan bucket: %v", err)
+		}
+		b.Date = date.Format("2006-01-02")
+		resp.DailyBuckets = append(resp.DailyBuckets, &b)
+	}
+
+	return resp, nil
+}
