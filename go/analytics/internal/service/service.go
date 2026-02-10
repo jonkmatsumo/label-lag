@@ -765,8 +765,20 @@ func (s *Service) GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.GetK
 		return nil, status.Error(codes.InvalidArgument, "group_by must be 'day' or 'hour'")
 	}
 
-	if req.StartTime != nil && req.EndTime != nil && req.StartTime.AsTime().After(req.EndTime.AsTime()) {
-		return nil, status.Error(codes.InvalidArgument, "start_time must be <= end_time")
+	if req.StartTime != nil && req.EndTime != nil {
+		start := req.StartTime.AsTime()
+		end := req.EndTime.AsTime()
+		if start.After(end) {
+			return nil, status.Error(codes.InvalidArgument, "start_time must be <= end_time")
+		}
+
+		duration := end.Sub(start)
+		if req.GroupBy == "hour" && duration > 7*24*time.Hour {
+			return nil, status.Error(codes.InvalidArgument, "hourly KPI range exceeds maximum of 7 days")
+		}
+		if (req.GroupBy == "day" || req.GroupBy == "") && duration > 90*24*time.Hour {
+			return nil, status.Error(codes.InvalidArgument, "daily KPI range exceeds maximum of 90 days")
+		}
 	}
 
 	return s.store.GetKpis(ctx, req)
@@ -778,7 +790,6 @@ func (s *Service) GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesRe
 	}
 
 	if req.Granularity != "day" && req.Granularity != "hour" {
-		// Default to day if not specified? Or error?
 		if req.Granularity == "" {
 			req.Granularity = "day"
 		} else {
@@ -786,8 +797,20 @@ func (s *Service) GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesRe
 		}
 	}
 
-	if req.StartTime != nil && req.EndTime != nil && req.StartTime.AsTime().After(req.EndTime.AsTime()) {
-		return nil, status.Error(codes.InvalidArgument, "start_time must be <= end_time")
+	if req.StartTime != nil && req.EndTime != nil {
+		start := req.StartTime.AsTime()
+		end := req.EndTime.AsTime()
+		if start.After(end) {
+			return nil, status.Error(codes.InvalidArgument, "start_time must be <= end_time")
+		}
+
+		duration := end.Sub(start)
+		if req.Granularity == "hour" && duration > 7*24*time.Hour {
+			return nil, status.Error(codes.InvalidArgument, "hourly volume range exceeds maximum of 7 days")
+		}
+		if req.Granularity == "day" && duration > 90*24*time.Hour {
+			return nil, status.Error(codes.InvalidArgument, "daily volume range exceeds maximum of 90 days")
+		}
 	}
 
 	return s.store.GetVolumeSeries(ctx, req)
