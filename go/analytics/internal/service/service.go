@@ -680,6 +680,10 @@ func (s *Service) ListDecisions(ctx context.Context, req *pb.ListDecisionsReques
 		return nil, status.Error(codes.InvalidArgument, "min_score must be <= max_score")
 	}
 
+	if req.StartDate != nil && req.EndDate != nil && req.StartDate.AsTime().After(req.EndDate.AsTime()) {
+		return nil, status.Error(codes.InvalidArgument, "start_date must be <= end_date")
+	}
+
 	decisions, total, err := s.store.ListDecisions(ctx, req)
 	if err != nil {
 		return nil, err
@@ -729,6 +733,10 @@ func (s *Service) GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactReques
 	if req.StartDate == nil {
 		cutoff := time.Now().AddDate(0, 0, -int(defaultRuleImpactDays))
 		req.StartDate = timestamppb.New(cutoff)
+	}
+
+	if req.EndDate != nil && req.StartDate.AsTime().After(req.EndDate.AsTime()) {
+		return nil, status.Error(codes.InvalidArgument, "start_date must be <= end_date")
 	}
 
 	return s.store.GetRuleImpact(ctx, req)

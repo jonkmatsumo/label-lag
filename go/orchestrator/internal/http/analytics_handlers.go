@@ -589,6 +589,11 @@ func (h *Handler) handleListDecisions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if req.StartDate != nil && req.EndDate != nil && req.StartDate.AsTime().After(req.EndDate.AsTime()) {
+		writeJSONError(w, http.StatusBadRequest, "start_date must be <= end_date")
+		return
+	}
+
 	resp, err := h.analyticsClient.ListDecisions(r.Context(), req)
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -656,6 +661,11 @@ func (h *Handler) handleGetRuleImpact(w http.ResponseWriter, r *http.Request) {
 			writeJSONError(w, http.StatusBadRequest, "invalid end_date format (RFC3339 required)")
 			return
 		}
+	}
+
+	if req.StartDate != nil && req.EndDate != nil && req.StartDate.AsTime().After(req.EndDate.AsTime()) {
+		writeJSONError(w, http.StatusBadRequest, "start_date must be <= end_date")
+		return
 	}
 
 	resp, err := h.analyticsClient.GetRuleImpact(r.Context(), req)
