@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/jonkmatsumo/label-lag/go/analytics/internal/generator"
@@ -44,6 +45,18 @@ const (
 	defaultRuleImpactDays = 7
 	maxRuleImpactDays    = 90
 )
+
+const (
+	DecisionApprove = "APPROVE"
+	DecisionReview  = "REVIEW"
+	DecisionReject  = "REJECT"
+)
+
+var allowedDecisions = map[string]bool{
+	DecisionApprove: true,
+	DecisionReview:  true,
+	DecisionReject:  true,
+}
 
 func (s *Service) GetDailyStats(ctx context.Context, req *pb.GetDailyStatsRequest) (*pb.GetDailyStatsResponse, error) {
 	days, err := normalizeDays(req.Days, defaultDailyStatsDay, 365)
@@ -675,6 +688,13 @@ func (s *Service) ListDecisions(ctx context.Context, req *pb.ListDecisionsReques
 	}
 	req.Limit = limit
 	req.Offset = offset
+
+	if req.Decision != "" {
+		req.Decision = strings.ToUpper(strings.TrimSpace(req.Decision))
+		if !allowedDecisions[req.Decision] {
+			return nil, status.Errorf(codes.InvalidArgument, "invalid decision: %s", req.Decision)
+		}
+	}
 
 	if req.MinScore > 0 && req.MaxScore > 0 && req.MinScore > req.MaxScore {
 		return nil, status.Error(codes.InvalidArgument, "min_score must be <= max_score")
