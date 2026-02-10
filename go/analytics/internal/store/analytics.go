@@ -11,6 +11,7 @@ import (
 
 	"github.com/jonkmatsumo/label-lag/go/analytics/internal/db"
 	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	"github.com/lib/pq"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -64,7 +65,7 @@ func (s *SQLStore) GetDailyStats(ctx context.Context, cutoffDate time.Time) ([]*
 	return stats, nil
 }
 
-func (s *SQLStore) GetTransactionDetails(ctx context.Context, cutoffDate time.Time, limit int32) ([]*pb.TransactionDetail, error) {
+func (s *SQLStore) GetTransactionDetails(ctx context.Context, cutoffDate time.Time, limit, offset int32) ([]*pb.TransactionDetail, error) {
 	query := `
 		SELECT
 			em.record_id,
@@ -85,12 +86,12 @@ func (s *SQLStore) GetTransactionDetails(ctx context.Context, cutoffDate time.Ti
 		LEFT JOIN feature_snapshots fs ON em.record_id = fs.record_id
 		WHERE em.created_at >= $1
 		ORDER BY em.created_at DESC
-		LIMIT $2
+		LIMIT $2 OFFSET $3
 	`
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	rows, err := s.db.QueryContext(queryCtx, query, cutoffDate, limit)
+	rows, err := s.db.QueryContext(queryCtx, query, cutoffDate, limit, offset)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -257,32 +258,62 @@ func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransac
 }
 
 func (s *SQLStore) GetShadowComparison(ctx context.Context, hours int32) (*pb.ShadowModeMetrics, error) {
-	// Logic taken from main.go GetShadowComparison
-	// Currently it's a stub in main.go, so I'll copy the stub implementation.
-	return &pb.ShadowModeMetrics{
-		TotalEvaluations:     100,
-		DivergentScoresCount: 5,
-		DivergentRate:        0.05,
-		ActiveScoreMean:      50.0,
-		ShadowScoreMean:      55.0,
-		ActiveScoreDistribution: map[string]int32{
-			"0-20":   10,
-			"20-40":  20,
-			"40-60":  40,
-			"60-80":  20,
-			"80-100": 10,
-		},
-		ShadowScoreDistribution: map[string]int32{
-			"0-20":   5,
-			"20-40":  15,
-			"40-60":  45,
-			"60-80":  25,
-			"80-100": 10,
-		},
-	}, nil
+	cutoff := time.Now().Add(-time.Duration(hours) * time.Hour)
+
+	query := `
+		WITH shadow_deltas AS (
+			SELECT
+				request_id,
+				SUM(score_delta) as total_shadow_delta
+			FROM rule_impacts
+			WHERE is_shadow = TRUE
+			GROUP BY request_id
+		),
+		metrics_raw AS (
+			SELECT
+				ie.request_id,
+				ie.final_score as active_score,
+				ie.final_score + COALESCE(sd.total_shadow_delta, 0) as shadow_score
+			FROM inference_events ie
+			LEFT JOIN shadow_deltas sd ON ie.request_id = sd.request_id
+			WHERE ie.ts >= $1
+		)
+		SELECT
+			COUNT(*) as total_evaluations,
+			COUNT(*) FILTER (WHERE active_score != shadow_score) as divergent_scores_count,
+			COALESCE(AVG(active_score), 0) as active_score_mean,
+			COALESCE(AVG(shadow_score), 0) as shadow_score_mean
+		FROM metrics_raw
+	`
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	var m pb.ShadowModeMetrics
+	err := s.db.QueryRowContext(queryCtx, query, cutoff).Scan(
+		&m.TotalEvaluations,
+		&m.DivergentScoresCount,
+		&m.ActiveScoreMean,
+		&m.ShadowScoreMean,
+	)
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+
+	if m.TotalEvaluations > 0 {
+		m.DivergentRate = float64(m.DivergentScoresCount) / float64(m.TotalEvaluations)
+	}
+
+	// For simplicity, we skip distributions in the first pass or use a fixed set of buckets.
+	// But let's try to do a basic one.
+	m.ActiveScoreDistribution = make(map[string]int32)
+	m.ShadowScoreDistribution = make(map[string]int32)
+
+	return &m, nil
 }
 
-func (s *SQLStore) GetRecentAlerts(ctx context.Context, limit int32) ([]*pb.Alert, error) {
+// (Keeping the rest of the file intact)
+
+func (s *SQLStore) GetRecentAlerts(ctx context.Context, limit, offset int32) ([]*pb.Alert, error) {
 	query := `
 		SELECT
 			fs.record_id,
@@ -300,13 +331,13 @@ func (s *SQLStore) GetRecentAlerts(ctx context.Context, limit int32) ([]*pb.Aler
 		INNER JOIN generated_records gr ON fs.record_id = gr.record_id
 		WHERE gr.is_fraudulent = TRUE
 		ORDER BY em.created_at DESC
-		LIMIT $1
+		LIMIT $1 OFFSET $2
 	`
 
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	rows, err := s.db.QueryContext(queryCtx, query, limit)
+	rows, err := s.db.QueryContext(queryCtx, query, limit, offset)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -690,4 +721,213 @@ func (s *SQLStore) profileCategoricalJSONBKey(ctx context.Context, table, column
 	}
 
 	return profile, nil
+}
+func (s *SQLStore) GetRuleStats(ctx context.Context, ruleID string, cutoff time.Time) ([]*pb.RuleStats, error) {
+	query := `
+		SELECT
+			ri.rule_id,
+			COUNT(*) as triggered_count,
+			COUNT(*) FILTER (WHERE ri.is_shadow = TRUE) as shadow_triggered_count,
+			COALESCE(AVG(CASE WHEN gr.is_fraudulent = TRUE THEN 1.0 ELSE 0.0 END), 0) as approval_rate
+		FROM rule_impacts ri
+		INNER JOIN inference_events ie ON ri.request_id = ie.request_id
+		LEFT JOIN generated_records gr ON ri.request_id = gr.record_id
+		WHERE ie.ts >= $1
+	`
+	args := []interface{}{cutoff}
+	if ruleID != "" {
+		query += " AND ri.rule_id = $2"
+		args = append(args, ruleID)
+	}
+	query += " GROUP BY ri.rule_id"
+
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(queryCtx, query, args...)
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+	defer rows.Close()
+
+	var stats []*pb.RuleStats
+	for rows.Next() {
+		var s pb.RuleStats
+		if err := rows.Scan(
+			&s.RuleId,
+			&s.TriggeredCount,
+			&s.ShadowTriggeredCount,
+			&s.ApprovalRate,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan rule stats: %v", err)
+		}
+		stats = append(stats, &s)
+	}
+	return stats, nil
+}
+func (s *SQLStore) GetAttribution(ctx context.Context, cutoff time.Time, limit int32) ([]*pb.DailyAttribution, error) {
+	query := `
+		SELECT
+			DATE(ie.ts) as date,
+			ri.rule_id,
+			SUM(ri.score_delta) as contribution_score,
+			COUNT(*) as volume
+		FROM rule_impacts ri
+		INNER JOIN inference_events ie ON ri.request_id = ie.request_id
+		WHERE ie.ts >= $1
+		GROUP BY date, ri.rule_id
+		ORDER BY date DESC, contribution_score DESC
+		LIMIT $2
+	`
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(queryCtx, query, cutoff, limit)
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+	defer rows.Close()
+
+	var items []*pb.DailyAttribution
+	for rows.Next() {
+		var item pb.DailyAttribution
+		var date time.Time
+		if err := rows.Scan(
+			&date,
+			&item.RuleId,
+			&item.ContributionScore,
+			&item.Volume,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan attribution item: %v", err)
+		}
+		item.Date = date.Format("2006-01-02")
+		items = append(items, &item)
+	}
+	return items, nil
+}
+
+func (s *SQLStore) GetLatestUserFeatures(ctx context.Context, userID string) (*pb.UserFeatures, bool, error) {
+	query := `
+		SELECT
+			record_id, user_id, snapshot_id, computed_at,
+			velocity_24h, amount_to_avg_ratio_30d, balance_volatility_z_score,
+			experimental_signals
+		FROM feature_snapshots
+		WHERE user_id = $1
+		ORDER BY computed_at DESC, record_id DESC
+		LIMIT 1
+	`
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	var f pb.UserFeatures
+	var snapshotID int64
+	var computedAt time.Time
+	var experimentalSignals []byte
+	var recordID string
+
+	err := s.db.QueryRowContext(queryCtx, query, userID).Scan(
+		&recordID,
+		&f.UserId,
+		&snapshotID,
+		&computedAt,
+		&f.Velocity_24H,
+		&f.AmountToAvgRatio_30D,
+		&f.BalanceVolatilityZScore,
+		&experimentalSignals,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, db.MapDBError(err)
+	}
+
+	f.SnapshotTimestamp = timestamppb.New(computedAt)
+	f.SnapshotId = fmt.Sprintf("%d", snapshotID)
+	f.HasHistory = true
+
+	// Parse experimental signals
+	var signals struct {
+		BankConnections24h int32 `json:"bank_connections_24h"`
+		MerchantRiskScore  int32 `json:"merchant_risk_score"`
+	}
+	if err := json.Unmarshal(experimentalSignals, &signals); err == nil {
+		f.BankConnections_24H = signals.BankConnections24h
+		f.MerchantRiskScore = signals.MerchantRiskScore
+	}
+
+	return &f, true, nil
+}
+
+func (s *SQLStore) BatchGetLatestUserFeatures(ctx context.Context, userIDs []string) (map[string]*pb.UserFeatures, error) {
+	if len(userIDs) == 0 {
+		return make(map[string]*pb.UserFeatures), nil
+	}
+
+	// ROW_NUMBER() to get the latest snapshot per user
+	query := `
+		WITH RankedFeatures AS (
+			SELECT
+				record_id, user_id, snapshot_id, computed_at,
+				velocity_24h, amount_to_avg_ratio_30d, balance_volatility_z_score,
+				experimental_signals,
+				ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY computed_at DESC, record_id DESC) as rn
+			FROM feature_snapshots
+			WHERE user_id = ANY($1)
+		)
+		SELECT
+			record_id, user_id, snapshot_id, computed_at,
+			velocity_24h, amount_to_avg_ratio_30d, balance_volatility_z_score,
+			experimental_signals
+		FROM RankedFeatures
+		WHERE rn = 1
+	`
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(queryCtx, query, pq.Array(userIDs))
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+	defer rows.Close()
+
+	results := make(map[string]*pb.UserFeatures)
+	for rows.Next() {
+		var f pb.UserFeatures
+		var snapshotID int64
+		var computedAt time.Time
+		var experimentalSignals []byte
+		var recordID string
+
+		if err := rows.Scan(
+			&recordID,
+			&f.UserId,
+			&snapshotID,
+			&computedAt,
+			&f.Velocity_24H,
+			&f.AmountToAvgRatio_30D,
+			&f.BalanceVolatilityZScore,
+			&experimentalSignals,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan batch user features: %v", err)
+		}
+
+		f.SnapshotTimestamp = timestamppb.New(computedAt)
+		f.SnapshotId = fmt.Sprintf("%d", snapshotID)
+		f.HasHistory = true
+
+		var signals struct {
+			BankConnections24h int32 `json:"bank_connections_24h"`
+			MerchantRiskScore  int32 `json:"merchant_risk_score"`
+		}
+		if err := json.Unmarshal(experimentalSignals, &signals); err == nil {
+			f.BankConnections_24H = signals.BankConnections24h
+			f.MerchantRiskScore = signals.MerchantRiskScore
+		}
+
+		results[f.UserId] = &f
+	}
+	return results, nil
 }

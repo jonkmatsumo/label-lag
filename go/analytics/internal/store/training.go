@@ -202,7 +202,7 @@ func (s *SQLStore) SaveBacktestResult(ctx context.Context, res *pb.BacktestResul
 	return nil
 }
 
-func (s *SQLStore) ListBacktestResults(ctx context.Context, ruleID string, start, end *time.Time) ([]*pb.BacktestResult, error) {
+func (s *SQLStore) ListBacktestResults(ctx context.Context, ruleID string, start, end *time.Time, limit, offset int32) ([]*pb.BacktestResult, error) {
 	query := `
 		SELECT
 			job_id, rule_id, ruleset_version, start_date, end_date,
@@ -225,7 +225,7 @@ func (s *SQLStore) ListBacktestResults(ctx context.Context, ruleID string, start
 		query += fmt.Sprintf(" AND completed_at <= $%d", len(args))
 	}
 
-	query += " ORDER BY completed_at DESC LIMIT 100"
+	query += fmt.Sprintf(" ORDER BY completed_at DESC LIMIT %d OFFSET %d", limit, offset)
 
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()

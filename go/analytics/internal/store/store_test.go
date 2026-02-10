@@ -7,6 +7,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -181,4 +182,112 @@ func TestDiscoverJSONBKeys_DeterministicOrder(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"alpha", "beta", "zeta"}, keys)
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+func TestGetRuleStats(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+
+	cutoff := time.Now().AddDate(0, 0, -30)
+	rows := sqlmock.NewRows([]string{"rule_id", "triggered_count", "shadow_triggered_count", "approval_rate"}).
+		AddRow("rule-1", 100, 10, 0.85)
+
+	mock.ExpectQuery("SELECT").WithArgs(cutoff).WillReturnRows(rows)
+
+	stats, err := s.GetRuleStats(context.Background(), "", cutoff)
+	require.NoError(t, err)
+	require.Len(t, stats, 1)
+	assert.Equal(t, "rule-1", stats[0].RuleId)
+	assert.Equal(t, int64(100), stats[0].TriggeredCount)
+	assert.Equal(t, int64(10), stats[0].ShadowTriggeredCount)
+	assert.Equal(t, 0.85, stats[0].ApprovalRate)
+}
+func TestGetAttribution(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+
+	cutoff := time.Now().AddDate(0, 0, -7)
+	rows := sqlmock.NewRows([]string{"date", "rule_id", "contribution_score", "volume"}).
+		AddRow(time.Now(), "rule-2", 500, 50)
+
+	mock.ExpectQuery("SELECT").WithArgs(cutoff, int32(20)).WillReturnRows(rows)
+
+	items, err := s.GetAttribution(context.Background(), cutoff, 20)
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, "rule-2", items[0].RuleId)
+	assert.Equal(t, int64(500), items[0].ContributionScore)
+}
+
+func TestGetShadowComparison(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+
+	rows := sqlmock.NewRows([]string{"total_evaluations", "divergent_scores_count", "active_score_mean", "shadow_score_mean"}).
+		AddRow(100, 10, 50.0, 60.0)
+
+	mock.ExpectQuery("SELECT").WillReturnRows(rows)
+
+	m, err := s.GetShadowComparison(context.Background(), 24)
+	require.NoError(t, err)
+	assert.Equal(t, int64(100), m.TotalEvaluations)
+	assert.Equal(t, int64(10), m.DivergentScoresCount)
+	assert.Equal(t, 0.1, m.DivergentRate)
+}
+func TestGetLatestUserFeatures(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+
+	rows := sqlmock.NewRows([]string{
+		"record_id", "user_id", "snapshot_id", "computed_at",
+		"velocity_24h", "amount_to_avg_ratio_30d", "balance_volatility_z_score",
+		"experimental_signals",
+	}).AddRow("rec-1", "user-1", 101, time.Now(), 5, 1.2, 0.5, []byte(`{"bank_connections_24h": 2, "merchant_risk_score": 10}`))
+
+	mock.ExpectQuery("SELECT").WithArgs("user-1").WillReturnRows(rows)
+
+	f, found, err := s.GetLatestUserFeatures(context.Background(), "user-1")
+	require.NoError(t, err)
+	assert.True(t, found)
+	assert.Equal(t, "user-1", f.UserId)
+	assert.Equal(t, "101", f.SnapshotId)
+	assert.Equal(t, int32(5), f.Velocity_24H)
+	assert.Equal(t, int32(2), f.BankConnections_24H)
+}
+
+func TestBatchGetLatestUserFeatures(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+
+	userIDs := []string{"user-1", "user-2"}
+	rows := sqlmock.NewRows([]string{
+		"record_id", "user_id", "snapshot_id", "computed_at",
+		"velocity_24h", "amount_to_avg_ratio_30d", "balance_volatility_z_score",
+		"experimental_signals",
+	}).
+		AddRow("rec-1", "user-1", 101, time.Now(), 5, 1.2, 0.5, []byte(`{"bank_connections_24h": 2}`)).
+		AddRow("rec-2", "user-2", 102, time.Now(), 10, 0.8, -0.3, []byte(`{"bank_connections_24h": 0}`))
+
+	mock.ExpectQuery("SELECT").WithArgs(pq.Array(userIDs)).WillReturnRows(rows)
+
+	results, err := s.BatchGetLatestUserFeatures(context.Background(), userIDs)
+	require.NoError(t, err)
+	assert.Len(t, results, 2)
+	assert.Contains(t, results, "user-1")
+	assert.Contains(t, results, "user-2")
+	assert.Equal(t, int32(5), results["user-1"].Velocity_24H)
 }

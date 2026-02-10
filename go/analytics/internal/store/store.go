@@ -17,9 +17,9 @@ import (
 type Store interface {
 	// Analytics
 	GetDailyStats(ctx context.Context, cutoffDate time.Time) ([]*pb.DailyStat, error)
-	GetTransactionDetails(ctx context.Context, cutoffDate time.Time, limit int32) ([]*pb.TransactionDetail, error)
+	GetTransactionDetails(ctx context.Context, cutoffDate time.Time, limit, offset int32) ([]*pb.TransactionDetail, error)
 	SearchTransactions(ctx context.Context, req *pb.SearchTransactionsRequest, limit, offset int32) ([]*pb.TransactionDetail, int64, error)
-	GetRecentAlerts(ctx context.Context, limit int32) ([]*pb.Alert, error)
+	GetRecentAlerts(ctx context.Context, limit, offset int32) ([]*pb.Alert, error)
 	GetOverviewMetrics(ctx context.Context) (*pb.GetOverviewMetricsResponse, error)
 
 	GetDatasetFingerprint(ctx context.Context) (*pb.GetDatasetFingerprintResponse, error)
@@ -27,6 +27,12 @@ type Store interface {
 
 	// Analytics
 	GetShadowComparison(ctx context.Context, hours int32) (*pb.ShadowModeMetrics, error)
+	GetRuleStats(ctx context.Context, ruleID string, cutoff time.Time) ([]*pb.RuleStats, error)
+	GetAttribution(ctx context.Context, cutoff time.Time, limit int32) ([]*pb.DailyAttribution, error)
+
+	// Feature Hydration
+	GetLatestUserFeatures(ctx context.Context, userID string) (*pb.UserFeatures, bool, error)
+	BatchGetLatestUserFeatures(ctx context.Context, userIDs []string) (map[string]*pb.UserFeatures, error)
 
 	// Training
 	GetTrainingData(ctx context.Context, cutoff time.Time) (train []*pb.TransactionDetail, test []*pb.TransactionDetail, err error)
@@ -45,7 +51,7 @@ type Store interface {
 	// Backtest
 	GetBacktestFeatures(ctx context.Context, start, end time.Time) ([]*pb.BacktestFeatureVector, error)
 	SaveBacktestResult(ctx context.Context, res *pb.BacktestResult) error
-	ListBacktestResults(ctx context.Context, ruleID string, start, end *time.Time) ([]*pb.BacktestResult, error)
+	ListBacktestResults(ctx context.Context, ruleID string, start, end *time.Time, limit, offset int32) ([]*pb.BacktestResult, error)
 	GetBacktestResult(ctx context.Context, jobID string) (*pb.BacktestResult, error)
 
 	// Data Management

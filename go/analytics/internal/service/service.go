@@ -68,9 +68,13 @@ func (s *Service) GetTransactionDetails(ctx context.Context, req *pb.GetTransact
 	if err != nil {
 		return nil, err
 	}
+	offset, err := normalizeOffset(req.Offset)
+	if err != nil {
+		return nil, err
+	}
 	cutoffDate := time.Now().AddDate(0, 0, -int(days))
 
-	details, err := s.store.GetTransactionDetails(ctx, cutoffDate, limit)
+	details, err := s.store.GetTransactionDetails(ctx, cutoffDate, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -110,8 +114,12 @@ func (s *Service) GetRecentAlerts(ctx context.Context, req *pb.GetRecentAlertsRe
 	if err != nil {
 		return nil, err
 	}
+	offset, err := normalizeOffset(req.Offset)
+	if err != nil {
+		return nil, err
+	}
 
-	alerts, err := s.store.GetRecentAlerts(ctx, limit)
+	alerts, err := s.store.GetRecentAlerts(ctx, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +196,16 @@ func (s *Service) ListBacktestResults(ctx context.Context, req *pb.ListBacktestR
 		end = &t
 	}
 
-	results, err := s.store.ListBacktestResults(ctx, req.RuleId, start, end)
+	limit, err := normalizeLimit(req.Limit, 20, 100, "limit")
+	if err != nil {
+		return nil, err
+	}
+	offset, err := normalizeOffset(req.Offset)
+	if err != nil {
+		return nil, err
+	}
+
+	results, err := s.store.ListBacktestResults(ctx, req.RuleId, start, end, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -571,23 +588,76 @@ func (s *Service) GetRuleReadiness(ctx context.Context, req *pb.GetRuleReadiness
 }
 
 func (s *Service) GetRuleStats(ctx context.Context, req *pb.GetRuleStatsRequest) (*pb.GetRuleStatsResponse, error) {
-	// Stub implementation from main.go
+	days, err := normalizeDays(req.Days, 30, 365)
+	if err != nil {
+		return nil, err
+	}
+	cutoff := time.Now().AddDate(0, 0, -int(days))
+
+	stats, err := s.store.GetRuleStats(ctx, req.RuleId, cutoff)
+	if err != nil {
+		return nil, err
+	}
+
 	return &pb.GetRuleStatsResponse{
-		Stats: []*pb.RuleStats{
-			{
-				RuleId:               req.RuleId,
-				TriggeredCount:       0,
-				ShadowTriggeredCount: 0,
-				ApprovalRate:         0.0,
-			},
-		},
+		Stats: stats,
 	}, nil
 }
 
 func (s *Service) GetAttribution(ctx context.Context, req *pb.GetAttributionRequest) (*pb.GetAttributionResponse, error) {
-	// Stub implementation from main.go
+	days, err := normalizeDays(req.Days, 7, 90)
+	if err != nil {
+		return nil, err
+	}
+	limit, err := normalizeLimit(req.Limit, 100, 1000, "limit")
+	if err != nil {
+		return nil, err
+	}
+	cutoff := time.Now().AddDate(0, 0, -int(days))
+
+	items, err := s.store.GetAttribution(ctx, cutoff, limit)
+	if err != nil {
+		return nil, err
+	}
+
 	return &pb.GetAttributionResponse{
-		Items: []*pb.DailyAttribution{},
+		Items: items,
+	}, nil
+}
+
+func (s *Service) GetLatestUserFeatures(ctx context.Context, req *pb.GetLatestUserFeaturesRequest) (*pb.GetLatestUserFeaturesResponse, error) {
+	if req.UserId == "" {
+		return nil, status.Error(codes.InvalidArgument, "user_id is required")
+	}
+
+	features, found, err := s.store.GetLatestUserFeatures(ctx, req.UserId)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, status.Errorf(codes.NotFound, "no features found for user %s", req.UserId)
+	}
+
+	return &pb.GetLatestUserFeaturesResponse{
+		Features: features,
+	}, nil
+}
+
+func (s *Service) BatchGetLatestUserFeatures(ctx context.Context, req *pb.BatchGetLatestUserFeaturesRequest) (*pb.BatchGetLatestUserFeaturesResponse, error) {
+	if len(req.UserIds) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "at least one user_id is required")
+	}
+	if len(req.UserIds) > 500 {
+		return nil, status.Error(codes.InvalidArgument, "batch size cannot exceed 500")
+	}
+
+	results, err := s.store.BatchGetLatestUserFeatures(ctx, req.UserIds)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.BatchGetLatestUserFeaturesResponse{
+		Features: results,
 	}, nil
 }
 
