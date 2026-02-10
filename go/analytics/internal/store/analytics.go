@@ -933,46 +933,47 @@ func (s *SQLStore) BatchGetLatestUserFeatures(ctx context.Context, userIDs []str
 }
 
 func (s *SQLStore) ListDecisions(ctx context.Context, req *pb.ListDecisionsRequest) ([]*pb.DecisionSummary, int64, error) {
-	query := "SELECT request_id, user_id, ts, final_score, decision FROM inference_events WHERE 1=1"
+	whereClauses := []string{"1=1"}
 	args := []interface{}{}
 
 	if req.UserId != "" {
 		args = append(args, req.UserId)
-		query += fmt.Sprintf(" AND user_id = $%d", len(args))
+		whereClauses = append(whereClauses, fmt.Sprintf("user_id = $%d", len(args)))
 	}
 	if req.Decision != "" {
 		args = append(args, req.Decision)
-		query += fmt.Sprintf(" AND decision = $%d", len(args))
+		whereClauses = append(whereClauses, fmt.Sprintf("decision = $%d", len(args)))
 	}
 	if req.MinScore > 0 {
 		args = append(args, req.MinScore)
-		query += fmt.Sprintf(" AND final_score >= $%d", len(args))
+		whereClauses = append(whereClauses, fmt.Sprintf("final_score >= $%d", len(args)))
 	}
 	if req.MaxScore > 0 {
 		args = append(args, req.MaxScore)
-		query += fmt.Sprintf(" AND final_score <= $%d", len(args))
+		whereClauses = append(whereClauses, fmt.Sprintf("final_score <= $%d", len(args)))
 	}
 	if req.StartDate != nil {
 		args = append(args, req.StartDate.AsTime())
-		query += fmt.Sprintf(" AND ts >= $%d", len(args))
+		whereClauses = append(whereClauses, fmt.Sprintf("ts >= $%d", len(args)))
 	}
 	if req.EndDate != nil {
 		args = append(args, req.EndDate.AsTime())
-		query += fmt.Sprintf(" AND ts <= $%d", len(args))
+		whereClauses = append(whereClauses, fmt.Sprintf("ts <= $%d", len(args)))
 	}
 
-	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM (%s) as total", query)
+	whereStmt := strings.Join(whereClauses, " AND ")
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM inference_events WHERE %s", whereStmt)
 	var total int64
 	err := s.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
 	if err != nil {
 		return nil, 0, db.MapDBError(err)
 	}
 
-	query += " ORDER BY ts DESC"
-	args = append(args, req.Limit)
-	query += fmt.Sprintf(" LIMIT $%d", len(args))
-	args = append(args, req.Offset)
-	query += fmt.Sprintf(" OFFSET $%d", len(args))
+	query := fmt.Sprintf("SELECT request_id, user_id, ts, final_score, decision FROM inference_events WHERE %s ORDER BY ts DESC LIMIT $%d OFFSET $%d",
+		whereStmt, len(args)+1, len(args)+2)
+
+	args = append(args, req.Limit, req.Offset)
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
