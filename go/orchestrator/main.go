@@ -119,9 +119,13 @@ func main() {
 		}
 	}
 
+	enableDecisionAPIs := getEnv("ENABLE_DECISION_APIS", "false") == "true"
+	enableKpiAPIs := getEnv("ENABLE_KPI_APIS", "false") == "true"
 	handler := httpserver.NewHandler(logger, inferenceClient, analyticsClient, trainingClient, forecastClient, rulesProvider, maxBodyBytes,
 		getEnv("PYTHON_API_URL", "http://api:8000"),
 		getEnv("MLFLOW_TRACKING_URI", "http://mlflow:5000"),
+		enableDecisionAPIs,
+		enableKpiAPIs,
 	)
 	readTimeout := parseDurationEnv(logger, "INFERENCE_GATEWAY_READ_TIMEOUT", 10*time.Second)
 	writeTimeout := parseDurationEnv(logger, "INFERENCE_GATEWAY_WRITE_TIMEOUT", 30*time.Second)

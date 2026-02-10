@@ -536,3 +536,281 @@ func mapTableFingerprint(fingerprint *crudv1.TableFingerprint) tableFingerprintR
 		MaxID:        fingerprint.GetMaxId(),
 	}
 }
+
+// handleListDecisions lists and filters decision events.
+// Query params: limit (1-250), offset, user_id, decision (APPROVE|REVIEW|REJECT),
+// min_score, max_score, start_date (RFC3339), end_date (RFC3339).
+func (h *Handler) handleListDecisions(w http.ResponseWriter, r *http.Request) {
+	limit, err := parseIntQuery(r, "limit", 50, 1, 250)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	offset, err := parseIntQuery(r, "offset", 0, 0, 10000)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	req := &crudv1.ListDecisionsRequest{
+		Limit:    limit,
+		Offset:   offset,
+		UserId:   r.URL.Query().Get("user_id"),
+		Decision: r.URL.Query().Get("decision"),
+	}
+
+	if minScoreStr := r.URL.Query().Get("min_score"); minScoreStr != "" {
+		if val, err := strconv.Atoi(minScoreStr); err == nil {
+			req.MinScore = int32(val)
+		}
+	}
+	if maxScoreStr := r.URL.Query().Get("max_score"); maxScoreStr != "" {
+		if val, err := strconv.Atoi(maxScoreStr); err == nil {
+			req.MaxScore = int32(val)
+		}
+	}
+
+	if req.MinScore > 0 && req.MaxScore > 0 && req.MinScore > req.MaxScore {
+		writeJSONError(w, http.StatusBadRequest, "min_score must be <= max_score")
+		return
+	}
+
+	if startStr := r.URL.Query().Get("start_date"); startStr != "" {
+		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
+			req.StartDate = timestamppb.New(t)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid start_date format (RFC3339 required)")
+			return
+		}
+	}
+	if endStr := r.URL.Query().Get("end_date"); endStr != "" {
+		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
+			req.EndDate = timestamppb.New(t)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid end_date format (RFC3339 required)")
+			return
+		}
+	}
+
+	if req.StartDate != nil && req.EndDate != nil && req.StartDate.AsTime().After(req.EndDate.AsTime()) {
+		writeJSONError(w, http.StatusBadRequest, "start_date must be <= end_date")
+		return
+	}
+
+	resp, err := h.analyticsClient.ListDecisions(r.Context(), req)
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	writeAnalyticsJSON(w, resp)
+}
+
+func (h *Handler) handleGetDecision(w http.ResponseWriter, r *http.Request) {
+	requestID := r.PathValue("request_id")
+	if requestID == "" {
+		writeJSONError(w, http.StatusBadRequest, "request_id required")
+		return
+	}
+
+	resp, err := h.analyticsClient.GetDecision(r.Context(), &crudv1.GetDecisionRequest{RequestId: requestID})
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	writeAnalyticsJSON(w, resp)
+}
+
+func (h *Handler) handleGetDecisionTrace(w http.ResponseWriter, r *http.Request) {
+	requestID := r.PathValue("request_id")
+	if requestID == "" {
+		writeJSONError(w, http.StatusBadRequest, "request_id required")
+		return
+	}
+
+	resp, err := h.analyticsClient.GetDecisionTrace(r.Context(), &crudv1.GetDecisionTraceRequest{RequestId: requestID})
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	writeAnalyticsJSON(w, resp)
+}
+
+// handleGetRuleImpact returns impact metrics for a specific rule.
+// Query params: start_date (RFC3339), end_date (RFC3339).
+func (h *Handler) handleGetRuleImpact(w http.ResponseWriter, r *http.Request) {
+	ruleID := r.PathValue("rule_id")
+	if ruleID == "" {
+		writeJSONError(w, http.StatusBadRequest, "rule_id required")
+		return
+	}
+
+	req := &crudv1.GetRuleImpactRequest{
+		RuleId: ruleID,
+	}
+
+	if startStr := r.URL.Query().Get("start_date"); startStr != "" {
+		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
+			req.StartDate = timestamppb.New(t)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid start_date format (RFC3339 required)")
+			return
+		}
+	}
+	if endStr := r.URL.Query().Get("end_date"); endStr != "" {
+		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
+			req.EndDate = timestamppb.New(t)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid end_date format (RFC3339 required)")
+			return
+		}
+	}
+
+	if req.StartDate != nil && req.EndDate != nil && req.StartDate.AsTime().After(req.EndDate.AsTime()) {
+		writeJSONError(w, http.StatusBadRequest, "start_date must be <= end_date")
+		return
+	}
+
+	resp, err := h.analyticsClient.GetRuleImpact(r.Context(), req)
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	writeAnalyticsJSON(w, resp)
+}
+
+// handleGetKpis returns dashboard-level KPIs.
+// Query params: start_time (RFC3339), end_time (RFC3339), group_by (day|hour).
+func (h *Handler) handleGetKpis(w http.ResponseWriter, r *http.Request) {
+	req := &crudv1.GetKpisRequest{
+		GroupBy: r.URL.Query().Get("group_by"),
+	}
+
+	if startStr := r.URL.Query().Get("start_time"); startStr != "" {
+		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
+			req.StartTime = timestamppb.New(t)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
+			return
+		}
+	}
+	if endStr := r.URL.Query().Get("end_time"); endStr != "" {
+		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
+			req.EndTime = timestamppb.New(t)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
+			return
+		}
+	}
+
+	if req.GroupBy != "" && req.GroupBy != "day" && req.GroupBy != "hour" {
+		writeJSONError(w, http.StatusBadRequest, "invalid group_by (day|hour required)")
+		return
+	}
+
+	if req.StartTime != nil && req.EndTime != nil && req.StartTime.AsTime().After(req.EndTime.AsTime()) {
+		writeJSONError(w, http.StatusBadRequest, "start_time must be <= end_time")
+		return
+	}
+
+	resp, err := h.analyticsClient.GetKpis(r.Context(), req)
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	writeAnalyticsJSON(w, resp)
+}
+
+// handleGetVolumeSeries returns timeseries volume data.
+// Query params: start_time (RFC3339), end_time (RFC3339), granularity (day|hour).
+func (h *Handler) handleGetVolumeSeries(w http.ResponseWriter, r *http.Request) {
+	req := &crudv1.GetVolumeSeriesRequest{
+		Granularity: r.URL.Query().Get("granularity"),
+	}
+
+	if startStr := r.URL.Query().Get("start_time"); startStr != "" {
+		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
+			req.StartTime = timestamppb.New(t)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
+			return
+		}
+	}
+	if endStr := r.URL.Query().Get("end_time"); endStr != "" {
+		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
+			req.EndTime = timestamppb.New(t)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
+			return
+		}
+	}
+
+	if req.Granularity != "" && req.Granularity != "day" && req.Granularity != "hour" {
+		writeJSONError(w, http.StatusBadRequest, "invalid granularity (day|hour required)")
+		return
+	}
+
+	if req.StartTime != nil && req.EndTime != nil && req.StartTime.AsTime().After(req.EndTime.AsTime()) {
+		writeJSONError(w, http.StatusBadRequest, "start_time must be <= end_time")
+		return
+	}
+
+	resp, err := h.analyticsClient.GetVolumeSeries(r.Context(), req)
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	writeAnalyticsJSON(w, resp)
+}
+
+// handleGetConfusionMatrix returns model performance metrics.
+// Query params: start_time (RFC3339), end_time (RFC3339), model_version, threshold.
+func (h *Handler) handleGetConfusionMatrix(w http.ResponseWriter, r *http.Request) {
+	req := &crudv1.GetConfusionMatrixRequest{
+		ModelVersion: r.URL.Query().Get("model_version"),
+	}
+
+	if startStr := r.URL.Query().Get("start_time"); startStr != "" {
+		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
+			req.StartTime = timestamppb.New(t)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
+			return
+		}
+	}
+	if endStr := r.URL.Query().Get("end_time"); endStr != "" {
+		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
+			req.EndTime = timestamppb.New(t)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
+			return
+		}
+	}
+
+	if threshStr := r.URL.Query().Get("threshold"); threshStr != "" {
+		if val, err := strconv.Atoi(threshStr); err == nil {
+			req.Threshold = int32(val)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid threshold (integer required)")
+			return
+		}
+	}
+
+	if req.StartTime != nil && req.EndTime != nil && req.StartTime.AsTime().After(req.EndTime.AsTime()) {
+		writeJSONError(w, http.StatusBadRequest, "start_time must be <= end_time")
+		return
+	}
+
+	resp, err := h.analyticsClient.GetConfusionMatrix(r.Context(), req)
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	writeAnalyticsJSON(w, resp)
+}

@@ -30,6 +30,17 @@ type Store interface {
 	GetRuleStats(ctx context.Context, ruleID string, cutoff time.Time) ([]*pb.RuleStats, error)
 	GetAttribution(ctx context.Context, cutoff time.Time, limit int32) ([]*pb.DailyAttribution, error)
 
+	// Decisions (Phase 2)
+	ListDecisions(ctx context.Context, req *pb.ListDecisionsRequest) ([]*pb.DecisionSummary, int64, error)
+	GetDecision(ctx context.Context, requestID string) (*pb.InferenceEvent, error)
+	GetDecisionTrace(ctx context.Context, requestID string) ([]*pb.RuleImpact, error)
+	GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactRequest) (*pb.GetRuleImpactResponse, error)
+
+	// Dashboard Aggregates (Phase 3)
+	GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.GetKpisResponse, error)
+	GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesRequest) (*pb.GetVolumeSeriesResponse, error)
+	GetConfusionMatrix(ctx context.Context, req *pb.GetConfusionMatrixRequest) (*pb.GetConfusionMatrixResponse, error)
+
 	// Feature Hydration
 	GetLatestUserFeatures(ctx context.Context, userID string) (*pb.UserFeatures, bool, error)
 	BatchGetLatestUserFeatures(ctx context.Context, userIDs []string) (map[string]*pb.UserFeatures, error)
@@ -79,6 +90,12 @@ type SQLStore struct {
 }
 
 const defaultQueryTimeout = 30 * time.Second
+
+const (
+	DecisionApprove = "APPROVE"
+	DecisionReview  = "REVIEW"
+	DecisionReject  = "REJECT"
+)
 
 // NewSQLStore creates a new SQLStore.
 func NewSQLStore(db *sql.DB) *SQLStore {

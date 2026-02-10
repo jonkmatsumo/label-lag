@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/jonkmatsumo/label-lag/go/analytics/internal/generator"
@@ -14,6 +15,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type Service struct {
@@ -40,7 +42,15 @@ const (
 	maxAlertLimit        = 100
 	defaultSampleSize    = 1000
 	maxSampleSizeLimit   = 10000
+	defaultRuleImpactDays = 7
+	maxRuleImpactDays    = 90
 )
+
+var allowedDecisions = map[string]bool{
+	store.DecisionApprove: true,
+	store.DecisionReview:  true,
+	store.DecisionReject:  true,
+}
 
 func (s *Service) GetDailyStats(ctx context.Context, req *pb.GetDailyStatsRequest) (*pb.GetDailyStatsResponse, error) {
 	days, err := normalizeDays(req.Days, defaultDailyStatsDay, 365)
@@ -659,6 +669,163 @@ func (s *Service) BatchGetLatestUserFeatures(ctx context.Context, req *pb.BatchG
 	return &pb.BatchGetLatestUserFeaturesResponse{
 		Features: results,
 	}, nil
+}
+
+func (s *Service) ListDecisions(ctx context.Context, req *pb.ListDecisionsRequest) (*pb.ListDecisionsResponse, error) {
+	limit, err := normalizeLimit(req.Limit, 50, 250, "limit")
+	if err != nil {
+		return nil, err
+	}
+	offset, err := normalizeOffset(req.Offset)
+	if err != nil {
+		return nil, err
+	}
+	req.Limit = limit
+	req.Offset = offset
+
+	if req.Decision != "" {
+		req.Decision = strings.ToUpper(strings.TrimSpace(req.Decision))
+		if !allowedDecisions[req.Decision] {
+			return nil, status.Errorf(codes.InvalidArgument, "invalid decision: %s", req.Decision)
+		}
+	}
+
+	if req.MinScore > 0 && req.MaxScore > 0 && req.MinScore > req.MaxScore {
+		return nil, status.Error(codes.InvalidArgument, "min_score must be <= max_score")
+	}
+
+	if req.StartDate != nil && req.EndDate != nil && req.StartDate.AsTime().After(req.EndDate.AsTime()) {
+		return nil, status.Error(codes.InvalidArgument, "start_date must be <= end_date")
+	}
+
+	decisions, total, err := s.store.ListDecisions(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.ListDecisionsResponse{
+		Decisions: decisions,
+		Total:     total,
+	}, nil
+}
+
+func (s *Service) GetDecision(ctx context.Context, req *pb.GetDecisionRequest) (*pb.GetDecisionResponse, error) {
+	if req.RequestId == "" {
+		return nil, status.Error(codes.InvalidArgument, "request_id required")
+	}
+
+	decision, err := s.store.GetDecision(ctx, req.RequestId)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.GetDecisionResponse{
+		Decision: decision,
+	}, nil
+}
+
+func (s *Service) GetDecisionTrace(ctx context.Context, req *pb.GetDecisionTraceRequest) (*pb.GetDecisionTraceResponse, error) {
+	if req.RequestId == "" {
+		return nil, status.Error(codes.InvalidArgument, "request_id required")
+	}
+
+	trace, err := s.store.GetDecisionTrace(ctx, req.RequestId)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.GetDecisionTraceResponse{
+		Trace: trace,
+	}, nil
+}
+
+func (s *Service) GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactRequest) (*pb.GetRuleImpactResponse, error) {
+	if req.RuleId == "" {
+		return nil, status.Error(codes.InvalidArgument, "rule_id required")
+	}
+
+	if req.StartDate == nil {
+		cutoff := time.Now().AddDate(0, 0, -int(defaultRuleImpactDays))
+		req.StartDate = timestamppb.New(cutoff)
+	}
+
+	if req.EndDate != nil && req.StartDate.AsTime().After(req.EndDate.AsTime()) {
+		return nil, status.Error(codes.InvalidArgument, "start_date must be <= end_date")
+	}
+
+	return s.store.GetRuleImpact(ctx, req)
+}
+
+func (s *Service) GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.GetKpisResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "request required")
+	}
+
+	if req.GroupBy != "" && req.GroupBy != "day" && req.GroupBy != "hour" {
+		return nil, status.Error(codes.InvalidArgument, "group_by must be 'day' or 'hour'")
+	}
+
+	if req.StartTime != nil && req.EndTime != nil {
+		start := req.StartTime.AsTime()
+		end := req.EndTime.AsTime()
+		if start.After(end) {
+			return nil, status.Error(codes.InvalidArgument, "start_time must be <= end_time")
+		}
+
+		duration := end.Sub(start)
+		if req.GroupBy == "hour" && duration > 7*24*time.Hour {
+			return nil, status.Error(codes.InvalidArgument, "hourly KPI range exceeds maximum of 7 days")
+		}
+		if (req.GroupBy == "day" || req.GroupBy == "") && duration > 90*24*time.Hour {
+			return nil, status.Error(codes.InvalidArgument, "daily KPI range exceeds maximum of 90 days")
+		}
+	}
+
+	return s.store.GetKpis(ctx, req)
+}
+
+func (s *Service) GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesRequest) (*pb.GetVolumeSeriesResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "request required")
+	}
+
+	if req.Granularity != "day" && req.Granularity != "hour" {
+		if req.Granularity == "" {
+			req.Granularity = "day"
+		} else {
+			return nil, status.Error(codes.InvalidArgument, "granularity must be 'day' or 'hour'")
+		}
+	}
+
+	if req.StartTime != nil && req.EndTime != nil {
+		start := req.StartTime.AsTime()
+		end := req.EndTime.AsTime()
+		if start.After(end) {
+			return nil, status.Error(codes.InvalidArgument, "start_time must be <= end_time")
+		}
+
+		duration := end.Sub(start)
+		if req.Granularity == "hour" && duration > 7*24*time.Hour {
+			return nil, status.Error(codes.InvalidArgument, "hourly volume range exceeds maximum of 7 days")
+		}
+		if req.Granularity == "day" && duration > 90*24*time.Hour {
+			return nil, status.Error(codes.InvalidArgument, "daily volume range exceeds maximum of 90 days")
+		}
+	}
+
+	return s.store.GetVolumeSeries(ctx, req)
+}
+
+func (s *Service) GetConfusionMatrix(ctx context.Context, req *pb.GetConfusionMatrixRequest) (*pb.GetConfusionMatrixResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "request required")
+	}
+
+	if req.StartTime != nil && req.EndTime != nil && req.StartTime.AsTime().After(req.EndTime.AsTime()) {
+		return nil, status.Error(codes.InvalidArgument, "start_time must be <= end_time")
+	}
+
+	return s.store.GetConfusionMatrix(ctx, req)
 }
 
 func (s *Service) StoreGeneratedData(ctx context.Context, req *pb.StoreGeneratedDataRequest) (*pb.StoreGeneratedDataResponse, error) {

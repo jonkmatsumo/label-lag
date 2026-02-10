@@ -52,18 +52,20 @@ type ForecastClient interface {
 }
 
 type Handler struct {
-	logger          *slog.Logger
-	inferenceClient InferenceClient
-	analyticsClient AnalyticsClient
-	trainingClient  TrainingClient
-	forecastClient  ForecastClient
-	rulesProvider   rules.Provider
-	pythonURL       string
-	mlflowURL       string
-	maxBodyBytes    int64
-	logQueue        chan inferenceLogEvent
-	logWg           sync.WaitGroup
-	droppedLogs     atomic.Int64
+	logger             *slog.Logger
+	inferenceClient    InferenceClient
+	analyticsClient    AnalyticsClient
+	trainingClient     TrainingClient
+	forecastClient     ForecastClient
+	rulesProvider      rules.Provider
+	pythonURL          string
+	mlflowURL          string
+	maxBodyBytes       int64
+	enableDecisionAPIs bool
+	enableKpiAPIs      bool
+	logQueue           chan inferenceLogEvent
+	logWg              sync.WaitGroup
+	droppedLogs        atomic.Int64
 }
 
 type inferenceLogEvent struct {
@@ -73,21 +75,23 @@ type inferenceLogEvent struct {
 	requestID   string
 }
 
-func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient AnalyticsClient, trainingClient TrainingClient, forecastClient ForecastClient, provider rules.Provider, maxBodyBytes int64, pythonURL, mlflowURL string) *Handler {
+func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient AnalyticsClient, trainingClient TrainingClient, forecastClient ForecastClient, provider rules.Provider, maxBodyBytes int64, pythonURL, mlflowURL string, enableDecisionAPIs bool, enableKpiAPIs bool) *Handler {
 	if maxBodyBytes <= 0 {
 		maxBodyBytes = 1 << 20
 	}
 	h := &Handler{
-		logger:          logger,
-		inferenceClient: client,
-		analyticsClient: analyticsClient,
-		trainingClient:  trainingClient,
-		forecastClient:  forecastClient,
-		rulesProvider:   provider,
-		maxBodyBytes:    maxBodyBytes,
-		pythonURL:       pythonURL,
-		mlflowURL:       mlflowURL,
-		logQueue:        make(chan inferenceLogEvent, 100),
+		logger:             logger,
+		inferenceClient:    client,
+		analyticsClient:    analyticsClient,
+		trainingClient:     trainingClient,
+		forecastClient:     forecastClient,
+		rulesProvider:      provider,
+		maxBodyBytes:       maxBodyBytes,
+		pythonURL:          pythonURL,
+		mlflowURL:          mlflowURL,
+		enableDecisionAPIs: enableDecisionAPIs,
+		enableKpiAPIs:      enableKpiAPIs,
+		logQueue:           make(chan inferenceLogEvent, 100),
 	}
 	h.startWorkers()
 	return h
@@ -158,6 +162,24 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/analytics/schema", h.handleAnalyticsSchema)
 	mux.HandleFunc("GET /analytics/rules/{rule_id}", h.handleAnalyticsRuleStats)
 	mux.HandleFunc("/analytics/transactions/search", h.handleSearchTransactions)
+
+	if h.enableDecisionAPIs {
+		// Decision Explorer: list and search inference events
+		mux.HandleFunc("GET /decisions", h.handleListDecisions)
+		// Decision Detail: fetch full event with inputs
+		mux.HandleFunc("GET /decisions/{request_id}", h.handleGetDecision)
+		// Decision Trace: fetch rule execution steps
+		mux.HandleFunc("GET /decisions/{request_id}/trace", h.handleGetDecisionTrace)
+		// Rule Impact: fetch metrics for a specific rule over time
+		mux.HandleFunc("GET /analytics/rules/{rule_id}/impact", h.handleGetRuleImpact)
+	}
+
+	if h.enableKpiAPIs {
+		mux.HandleFunc("GET /kpis", h.handleGetKpis)
+		mux.HandleFunc("GET /volume", h.handleGetVolumeSeries)
+		mux.HandleFunc("GET /analytics/confusion-matrix", h.handleGetConfusionMatrix)
+	}
+
 	mux.HandleFunc("/data/clear", h.handleDatasetClear)
 	mux.HandleFunc("POST /data/generate", h.handleDatasetGenerate)
 	mux.HandleFunc("/monitoring/drift", h.handleMonitoringDrift)

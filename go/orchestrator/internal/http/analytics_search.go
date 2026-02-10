@@ -39,6 +39,18 @@ type AnalyticsClient interface {
 	LogInferenceEvent(ctx context.Context, req *crudv1.LogInferenceEventRequest) (*crudv1.LogInferenceEventResponse, error)
 	CompareBacktests(ctx context.Context, req *crudv1.CompareBacktestsRequest) (*crudv1.CompareBacktestsResponse, error)
 	GenerateData(ctx context.Context, req *crudv1.GenerateDataRequest) (*crudv1.GenerateDataResponse, error)
+
+	// Decision Explorer (Phase 2)
+	ListDecisions(ctx context.Context, req *crudv1.ListDecisionsRequest) (*crudv1.ListDecisionsResponse, error)
+	GetDecision(ctx context.Context, req *crudv1.GetDecisionRequest) (*crudv1.GetDecisionResponse, error)
+	GetDecisionTrace(ctx context.Context, req *crudv1.GetDecisionTraceRequest) (*crudv1.GetDecisionTraceResponse, error)
+	GetRuleImpact(ctx context.Context, req *crudv1.GetRuleImpactRequest) (*crudv1.GetRuleImpactResponse, error)
+
+	// Dashboard Aggregates (Phase 3)
+	GetKpis(ctx context.Context, req *crudv1.GetKpisRequest) (*crudv1.GetKpisResponse, error)
+	GetVolumeSeries(ctx context.Context, req *crudv1.GetVolumeSeriesRequest) (*crudv1.GetVolumeSeriesResponse, error)
+	GetConfusionMatrix(ctx context.Context, req *crudv1.GetConfusionMatrixRequest) (*crudv1.GetConfusionMatrixResponse, error)
+
 	// Shadow Comparison (Phase 9)
 	GetShadowComparison(ctx context.Context, req *crudv1.GetShadowComparisonRequest) (*crudv1.GetShadowComparisonResponse, error)
 }
@@ -169,6 +181,8 @@ func writeAnalyticsRPCError(w http.ResponseWriter, err error) {
 		switch rpcErr.Code {
 		case codes.InvalidArgument:
 			writeJSONError(w, http.StatusBadRequest, rpcErr.Message)
+		case codes.NotFound:
+			writeJSONError(w, http.StatusNotFound, rpcErr.Message)
 		case codes.DeadlineExceeded, codes.Unavailable:
 			writeJSONError(w, http.StatusServiceUnavailable, "analytics backend timeout")
 		default:

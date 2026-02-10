@@ -61,6 +61,77 @@ service AnalyticsService {
 
   // Dataset Profiling (Proposal B)
   rpc GetDatasetProfile(GetDatasetProfileRequest) returns (GetDatasetProfileResponse);
+
+  // Decision Explorer (Phase 2)
+  rpc ListDecisions(ListDecisionsRequest) returns (ListDecisionsResponse);
+  rpc GetDecision(GetDecisionRequest) returns (GetDecisionResponse);
+  rpc GetDecisionTrace(GetDecisionTraceRequest) returns (GetDecisionTraceResponse);
+
+  // Rule Impact (Phase 2)
+  rpc GetRuleImpact(GetRuleImpactRequest) returns (GetRuleImpactResponse);
+
+  // Dashboard Aggregates (Phase 3)
+  rpc GetKpis(GetKpisRequest) returns (GetKpisResponse);
+  rpc GetVolumeSeries(GetVolumeSeriesRequest) returns (GetVolumeSeriesResponse);
+
+  // Model Performance (Phase 3 Fast-follow)
+  rpc GetConfusionMatrix(GetConfusionMatrixRequest) returns (GetConfusionMatrixResponse);
+}
+
+message GetKpisRequest {
+  google.protobuf.Timestamp start_time = 1;
+  google.protobuf.Timestamp end_time = 2;
+  string group_by = 3; // "hour" | "day"
+}
+
+message KpiBucket {
+  google.protobuf.Timestamp timestamp = 1;
+  int64 total_decisions = 2;
+  int64 total_alerts = 3;
+  double avg_score = 4;
+}
+
+message GetKpisResponse {
+  int64 total_decisions = 1;
+  int64 total_alerts = 2;
+  double alert_rate = 3;
+  double avg_score = 4;
+  int64 rules_fired_total = 5;
+  repeated KpiBucket buckets = 6;
+}
+
+message GetVolumeSeriesRequest {
+  google.protobuf.Timestamp start_time = 1;
+  google.protobuf.Timestamp end_time = 2;
+  string granularity = 3; // "hour" | "day"
+}
+
+message VolumePoint {
+  google.protobuf.Timestamp timestamp = 1;
+  int64 count = 2;
+  int64 alerts = 3;
+}
+
+message GetVolumeSeriesResponse {
+  repeated VolumePoint points = 1;
+}
+
+message GetConfusionMatrixRequest {
+  google.protobuf.Timestamp start_time = 1;
+  google.protobuf.Timestamp end_time = 2;
+  string model_version = 3;
+  int32 threshold = 4; // Optional: custom score threshold
+}
+
+message GetConfusionMatrixResponse {
+  int64 true_positives = 1;
+  int64 false_positives = 2;
+  int64 true_negatives = 3;
+  int64 false_negatives = 4;
+  double precision = 5;
+  double recall = 6;
+  double f1_score = 7;
+  bool insufficient_labels = 8;
 }
 
 message GetDatasetProfileRequest {
@@ -491,6 +562,8 @@ message InferenceEvent {
   int32 model_score = 5;
   int32 final_score = 6;
   repeated RuleImpact rule_impacts = 7;
+  string user_id = 8;
+  string decision = 9;
 }
 
 message LogInferenceEventRequest {
@@ -597,6 +670,66 @@ message DailyAttribution {
   string rule_id = 2;
   int64 contribution_score = 3; // Total score contributed
   int64 volume = 4;
+}
+
+message ListDecisionsRequest {
+  string user_id = 1;
+  string decision = 2;
+  int32 min_score = 3;
+  int32 max_score = 4;
+  google.protobuf.Timestamp start_date = 5;
+  google.protobuf.Timestamp end_date = 6;
+  int32 limit = 7;
+  int32 offset = 8;
+}
+
+message ListDecisionsResponse {
+  repeated DecisionSummary decisions = 1;
+  int64 total = 2;
+}
+
+message DecisionSummary {
+  string request_id = 1;
+  string user_id = 2;
+  google.protobuf.Timestamp created_at = 3;
+  int32 final_score = 4;
+  string decision = 5;
+}
+
+message GetDecisionRequest {
+  string request_id = 1;
+}
+
+message GetDecisionResponse {
+  InferenceEvent decision = 1;
+}
+
+message GetDecisionTraceRequest {
+  string request_id = 1;
+}
+
+message GetDecisionTraceResponse {
+  repeated RuleImpact trace = 1;
+}
+
+message GetRuleImpactRequest {
+  string rule_id = 1;
+  google.protobuf.Timestamp start_date = 2;
+  google.protobuf.Timestamp end_date = 3;
+}
+
+message RuleImpactBucket {
+  string date = 1;
+  int64 trigger_count = 2;
+  double avg_score_delta = 3;
+  int64 decisions_changed_count = 4;
+}
+
+message GetRuleImpactResponse {
+  string rule_id = 1;
+  int64 total_triggers = 2;
+  double avg_score_delta = 3;
+  repeated RuleImpactBucket daily_buckets = 4;
 }
 
 message GetAttributionResponse {

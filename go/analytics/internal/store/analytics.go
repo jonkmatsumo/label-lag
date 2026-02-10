@@ -931,3 +931,401 @@ func (s *SQLStore) BatchGetLatestUserFeatures(ctx context.Context, userIDs []str
 	}
 	return results, nil
 }
+
+func (s *SQLStore) ListDecisions(ctx context.Context, req *pb.ListDecisionsRequest) ([]*pb.DecisionSummary, int64, error) {
+	whereClauses := []string{"1=1"}
+	args := []interface{}{}
+
+	if req.UserId != "" {
+		args = append(args, req.UserId)
+		whereClauses = append(whereClauses, fmt.Sprintf("user_id = $%d", len(args)))
+	}
+	if req.Decision != "" {
+		args = append(args, req.Decision)
+		whereClauses = append(whereClauses, fmt.Sprintf("decision = $%d", len(args)))
+	}
+	if req.MinScore > 0 {
+		args = append(args, req.MinScore)
+		whereClauses = append(whereClauses, fmt.Sprintf("final_score >= $%d", len(args)))
+	}
+	if req.MaxScore > 0 {
+		args = append(args, req.MaxScore)
+		whereClauses = append(whereClauses, fmt.Sprintf("final_score <= $%d", len(args)))
+	}
+	if req.StartDate != nil {
+		args = append(args, req.StartDate.AsTime())
+		whereClauses = append(whereClauses, fmt.Sprintf("ts >= $%d", len(args)))
+	}
+	if req.EndDate != nil {
+		args = append(args, req.EndDate.AsTime())
+		whereClauses = append(whereClauses, fmt.Sprintf("ts <= $%d", len(args)))
+	}
+
+	whereStmt := strings.Join(whereClauses, " AND ")
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM inference_events WHERE %s", whereStmt)
+	var total int64
+	err := s.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, db.MapDBError(err)
+	}
+
+	query := fmt.Sprintf("SELECT request_id, user_id, ts, final_score, decision FROM inference_events WHERE %s ORDER BY ts DESC, request_id DESC LIMIT $%d OFFSET $%d",
+		whereStmt, len(args)+1, len(args)+2)
+
+	args = append(args, req.Limit, req.Offset)
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, 0, db.MapDBError(err)
+	}
+	defer rows.Close()
+
+	var decisions []*pb.DecisionSummary
+	for rows.Next() {
+		var d pb.DecisionSummary
+		var ts time.Time
+		if err := rows.Scan(&d.RequestId, &d.UserId, &ts, &d.FinalScore, &d.Decision); err != nil {
+			return nil, 0, fmt.Errorf("failed to scan decision summary: %v", err)
+		}
+		d.CreatedAt = timestamppb.New(ts)
+		decisions = append(decisions, &d)
+	}
+	return decisions, total, nil
+}
+
+func (s *SQLStore) GetDecision(ctx context.Context, requestID string) (*pb.InferenceEvent, error) {
+	query := "SELECT request_id, ts, model_version, rules_version, model_score, final_score, rule_impacts, user_id, decision FROM inference_events WHERE request_id = $1"
+	var ie pb.InferenceEvent
+	var ts time.Time
+	var ruleImpactsJSON []byte
+	err := s.db.QueryRowContext(ctx, query, requestID).Scan(
+		&ie.RequestId, &ts, &ie.ModelVersion, &ie.RulesVersion,
+		&ie.ModelScore, &ie.FinalScore, &ruleImpactsJSON,
+		&ie.UserId, &ie.Decision,
+	)
+	if err == sql.ErrNoRows {
+		return nil, status.Errorf(codes.NotFound, "decision not found for request %s", requestID)
+	}
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+	ie.Timestamp = timestamppb.New(ts)
+	if err := json.Unmarshal(ruleImpactsJSON, &ie.RuleImpacts); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal rule impacts: %v", err)
+	}
+	return &ie, nil
+}
+
+func (s *SQLStore) GetDecisionTrace(ctx context.Context, requestID string) ([]*pb.RuleImpact, error) {
+	// First check if the event exists
+	var exists bool
+	err := s.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM inference_events WHERE request_id = $1)", requestID).Scan(&exists)
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+	if !exists {
+		return nil, status.Errorf(codes.NotFound, "decision not found for request %s", requestID)
+	}
+
+	query := "SELECT rule_id, is_shadow, score_delta FROM rule_impacts WHERE request_id = $1 ORDER BY score_delta DESC, rule_id ASC"
+	rows, err := s.db.QueryContext(ctx, query, requestID)
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+	defer rows.Close()
+
+	var trace []*pb.RuleImpact
+	for rows.Next() {
+		var ri pb.RuleImpact
+		if err := rows.Scan(&ri.RuleId, &ri.IsShadow, &ri.ScoreDelta); err != nil {
+			return nil, fmt.Errorf("failed to scan rule impact: %v", err)
+		}
+		trace = append(trace, &ri)
+	}
+	return trace, nil
+}
+
+func (s *SQLStore) GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactRequest) (*pb.GetRuleImpactResponse, error) {
+	// Check if rule exists
+	var exists bool
+	err := s.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM rules WHERE rule_id = $1)", req.RuleId).Scan(&exists)
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+	if !exists {
+		return nil, status.Errorf(codes.NotFound, "rule not found: %s", req.RuleId)
+	}
+
+	resp := &pb.GetRuleImpactResponse{
+		RuleId: req.RuleId,
+	}
+
+	baseWhere := "WHERE ri.rule_id = $1"
+	args := []interface{}{req.RuleId}
+
+	if req.StartDate != nil {
+		args = append(args, req.StartDate.AsTime())
+		baseWhere += fmt.Sprintf(" AND ie.ts >= $%d", len(args))
+	}
+	if req.EndDate != nil {
+		args = append(args, req.EndDate.AsTime())
+		baseWhere += fmt.Sprintf(" AND ie.ts <= $%d", len(args))
+	}
+
+	summaryQuery := fmt.Sprintf(`
+		SELECT COUNT(*), COALESCE(AVG(ri.score_delta), 0)
+		FROM rule_impacts ri
+		INNER JOIN inference_events ie ON ri.request_id = ie.request_id
+		%s
+	`, baseWhere)
+
+	err = s.db.QueryRowContext(ctx, summaryQuery, args...).Scan(&resp.TotalTriggers, &resp.AvgScoreDelta)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, db.MapDBError(err)
+	}
+
+	bucketsQuery := fmt.Sprintf(`
+		SELECT
+			DATE(ie.ts) as date,
+			COUNT(*),
+			COALESCE(AVG(ri.score_delta), 0),
+			SUM(CASE WHEN (ie.final_score >= 100 AND (ie.final_score - ri.score_delta) < 100) OR (ie.final_score >= 50 AND (ie.final_score - ri.score_delta) < 50) THEN 1 ELSE 0 END) as changes
+		FROM rule_impacts ri
+		INNER JOIN inference_events ie ON ri.request_id = ie.request_id
+		%s
+		GROUP BY date
+		ORDER BY date DESC
+	`, baseWhere)
+
+	rows, err := s.db.QueryContext(ctx, bucketsQuery, args...)
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var b pb.RuleImpactBucket
+		var date time.Time
+		if err := rows.Scan(&date, &b.TriggerCount, &b.AvgScoreDelta, &b.DecisionsChangedCount); err != nil {
+			return nil, fmt.Errorf("failed to scan bucket: %v", err)
+		}
+		b.Date = date.Format("2006-01-02")
+		resp.DailyBuckets = append(resp.DailyBuckets, &b)
+	}
+
+	return resp, nil
+}
+
+func (s *SQLStore) GetConfusionMatrix(ctx context.Context, req *pb.GetConfusionMatrixRequest) (*pb.GetConfusionMatrixResponse, error) {
+	threshold := req.Threshold
+	if threshold <= 0 {
+		threshold = 50 // Default
+	}
+
+	whereClauses := []string{"1=1"}
+	args := []interface{}{}
+
+	if req.StartTime != nil {
+		args = append(args, req.StartTime.AsTime())
+		whereClauses = append(whereClauses, fmt.Sprintf("ie.ts >= $%d", len(args)))
+	}
+	if req.EndTime != nil {
+		args = append(args, req.EndTime.AsTime())
+		whereClauses = append(whereClauses, fmt.Sprintf("ie.ts <= $%d", len(args)))
+	}
+	if req.ModelVersion != "" {
+		args = append(args, req.ModelVersion)
+		whereClauses = append(whereClauses, fmt.Sprintf("ie.model_version = $%d", len(args)))
+	}
+
+	whereStmt := strings.Join(whereClauses, " AND ")
+
+	query := fmt.Sprintf(`
+		SELECT
+			COUNT(*) FILTER (WHERE ie.final_score >= %d AND gr.is_fraudulent = TRUE) as tp,
+			COUNT(*) FILTER (WHERE ie.final_score >= %d AND gr.is_fraudulent = FALSE) as fp,
+			COUNT(*) FILTER (WHERE ie.final_score < %d AND gr.is_fraudulent = FALSE) as tn,
+			COUNT(*) FILTER (WHERE ie.final_score < %d AND gr.is_fraudulent = TRUE) as fn,
+			COUNT(*) FILTER (WHERE gr.is_fraudulent IS NULL) as missing_labels
+		FROM inference_events ie
+		INNER JOIN generated_records gr ON ie.request_id = gr.record_id
+		WHERE %s
+	`, threshold, threshold, threshold, threshold, whereStmt)
+
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	var tp, fp, tn, fn, missing int64
+	err := s.db.QueryRowContext(queryCtx, query, args...).Scan(&tp, &fp, &tn, &fn, &missing)
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+
+	resp := &pb.GetConfusionMatrixResponse{
+		TruePositives:  tp,
+		FalsePositives: fp,
+		TrueNegatives:  tn,
+		FalseNegatives: fn,
+	}
+
+	totalLabels := tp + fp + tn + fn
+	if totalLabels == 0 {
+		resp.InsufficientLabels = true
+		return resp, nil
+	}
+
+	if tp+fp > 0 {
+		resp.Precision = float64(tp) / float64(tp+fp)
+	}
+	if tp+fn > 0 {
+		resp.Recall = float64(tp) / float64(tp+fn)
+	}
+	if resp.Precision+resp.Recall > 0 {
+		resp.F1Score = 2 * (resp.Precision * resp.Recall) / (resp.Precision + resp.Recall)
+	}
+
+	if missing > 0 && totalLabels < (missing/2) {
+		resp.InsufficientLabels = true
+	}
+
+	return resp, nil
+}
+
+func (s *SQLStore) GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.GetKpisResponse, error) {
+	tableName := "aggregates_daily"
+	timeCol := "date"
+	if req.GroupBy == "hour" {
+		tableName = "aggregates_hourly"
+		timeCol = "hour"
+	}
+
+	whereClauses := []string{"1=1"}
+	args := []interface{}{}
+
+	if req.StartTime != nil {
+		args = append(args, req.StartTime.AsTime())
+		whereClauses = append(whereClauses, fmt.Sprintf("%s >= $%d", timeCol, len(args)))
+	}
+	if req.EndTime != nil {
+		args = append(args, req.EndTime.AsTime())
+		whereClauses = append(whereClauses, fmt.Sprintf("%s <= $%d", timeCol, len(args)))
+	}
+
+	whereStmt := strings.Join(whereClauses, " AND ")
+
+	// Summary query
+	summaryQuery := fmt.Sprintf(`
+		SELECT
+			COALESCE(SUM(total_decisions), 0),
+			COALESCE(SUM(total_alerts), 0),
+			COALESCE(SUM(sum_score), 0),
+			COALESCE(SUM(rules_fired_total), 0)
+		FROM %s
+		WHERE %s
+	`, tableName, whereStmt)
+
+	resp := &pb.GetKpisResponse{}
+	var sumScore int64
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	err := s.db.QueryRowContext(queryCtx, summaryQuery, args...).Scan(
+		&resp.TotalDecisions,
+		&resp.TotalAlerts,
+		&sumScore,
+		&resp.RulesFiredTotal,
+	)
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+
+	if resp.TotalDecisions > 0 {
+		resp.AlertRate = float64(resp.TotalAlerts) / float64(resp.TotalDecisions)
+		resp.AvgScore = float64(sumScore) / float64(resp.TotalDecisions)
+	}
+
+	// Buckets query if group_by is set
+	if req.GroupBy != "" {
+		bucketsQuery := fmt.Sprintf(`
+			SELECT
+				%s,
+				total_decisions,
+				total_alerts,
+				CASE WHEN total_decisions > 0 THEN sum_score::float / total_decisions ELSE 0 END
+			FROM %s
+			WHERE %s
+			ORDER BY %s ASC
+		`, timeCol, tableName, whereStmt, timeCol)
+
+		rows, err := s.db.QueryContext(queryCtx, bucketsQuery, args...)
+		if err != nil {
+			return nil, db.MapDBError(err)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var b pb.KpiBucket
+			var ts time.Time
+			if err := rows.Scan(&ts, &b.TotalDecisions, &b.TotalAlerts, &b.AvgScore); err != nil {
+				return nil, fmt.Errorf("failed to scan kpi bucket: %v", err)
+			}
+			b.Timestamp = timestamppb.New(ts)
+			resp.Buckets = append(resp.Buckets, &b)
+		}
+	}
+
+	return resp, nil
+}
+
+func (s *SQLStore) GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesRequest) (*pb.GetVolumeSeriesResponse, error) {
+	tableName := "aggregates_daily"
+	timeCol := "date"
+	if req.Granularity == "hour" {
+		tableName = "aggregates_hourly"
+		timeCol = "hour"
+	}
+
+	whereClauses := []string{"1=1"}
+	args := []interface{}{}
+
+	if req.StartTime != nil {
+		args = append(args, req.StartTime.AsTime())
+		whereClauses = append(whereClauses, fmt.Sprintf("%s >= $%d", timeCol, len(args)))
+	}
+	if req.EndTime != nil {
+		args = append(args, req.EndTime.AsTime())
+		whereClauses = append(whereClauses, fmt.Sprintf("%s <= $%d", timeCol, len(args)))
+	}
+
+	whereStmt := strings.Join(whereClauses, " AND ")
+
+	query := fmt.Sprintf(`
+		SELECT %s, total_decisions, total_alerts
+		FROM %s
+		WHERE %s
+		ORDER BY %s ASC
+	`, timeCol, tableName, whereStmt, timeCol)
+
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(queryCtx, query, args...)
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+	defer rows.Close()
+
+	resp := &pb.GetVolumeSeriesResponse{}
+	for rows.Next() {
+		var p pb.VolumePoint
+		var ts time.Time
+		if err := rows.Scan(&ts, &p.Count, &p.Alerts); err != nil {
+			return nil, fmt.Errorf("failed to scan volume point: %v", err)
+		}
+		p.Timestamp = timestamppb.New(ts)
+		resp.Points = append(resp.Points, &p)
+	}
+
+	return resp, nil
+}

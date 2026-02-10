@@ -84,7 +84,9 @@ func InitDB(db *sql.DB) error {
 			rules_version TEXT NOT NULL,
 			model_score INTEGER NOT NULL,
 			final_score INTEGER NOT NULL,
-			rule_impacts JSONB NOT NULL
+			rule_impacts JSONB NOT NULL,
+			user_id TEXT,
+			decision TEXT
 		)`,
 		`CREATE TABLE IF NOT EXISTS rule_impacts (
 			id SERIAL PRIMARY KEY,
@@ -132,6 +134,31 @@ func InitDB(db *sql.DB) error {
 		// Dynamic features support (redundant if tables created above but good for safety)
 		`ALTER TABLE generated_records ADD COLUMN IF NOT EXISTS numerical_features JSONB`,
 		`ALTER TABLE generated_records ADD COLUMN IF NOT EXISTS categorical_features JSONB`,
+		// Phase 2: Decision Explorer
+		`ALTER TABLE inference_events ADD COLUMN IF NOT EXISTS user_id TEXT`,
+		`ALTER TABLE inference_events ADD COLUMN IF NOT EXISTS decision TEXT`,
+		`CREATE INDEX IF NOT EXISTS idx_inference_events_user_id ON inference_events(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_inference_events_decision ON inference_events(decision)`,
+		`CREATE INDEX IF NOT EXISTS idx_inference_events_ts_request_id ON inference_events(ts DESC, request_id DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_rule_impacts_created_at ON rule_impacts(id DESC)`, // For recent lookups if needed, but inference_events.ts is primary
+		`CREATE TABLE IF NOT EXISTS aggregates_daily (
+			tenant_id TEXT DEFAULT '',
+			date DATE NOT NULL,
+			total_decisions BIGINT DEFAULT 0,
+			total_alerts BIGINT DEFAULT 0,
+			sum_score BIGINT DEFAULT 0,
+			rules_fired_total BIGINT DEFAULT 0,
+			PRIMARY KEY (tenant_id, date)
+		)`,
+		`CREATE TABLE IF NOT EXISTS aggregates_hourly (
+			tenant_id TEXT DEFAULT '',
+			hour TIMESTAMP WITH TIME ZONE NOT NULL,
+			total_decisions BIGINT DEFAULT 0,
+			total_alerts BIGINT DEFAULT 0,
+			sum_score BIGINT DEFAULT 0,
+			rules_fired_total BIGINT DEFAULT 0,
+			PRIMARY KEY (tenant_id, hour)
+		)`,
 	}
 
 	for _, q := range queries {
