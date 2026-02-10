@@ -180,7 +180,7 @@ func (s *SQLStore) GetJob(ctx context.Context, jobID string) (*pb.Job, error) {
 	return &j, nil
 }
 
-func (s *SQLStore) GetJobEvents(ctx context.Context, jobID string) ([]*pb.JobEvent, error) {
+func (s *SQLStore) GetJobEvents(ctx context.Context, jobID string, limit, offset int32) ([]*pb.JobEvent, error) {
 	query := `
 		SELECT
 			event_id,
@@ -191,11 +191,12 @@ func (s *SQLStore) GetJobEvents(ctx context.Context, jobID string) ([]*pb.JobEve
 		FROM job_events
 		WHERE job_id = $1
 		ORDER BY timestamp ASC
+		LIMIT $2 OFFSET $3
 	`
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	rows, err := s.db.QueryContext(queryCtx, query, jobID)
+	rows, err := s.db.QueryContext(queryCtx, query, jobID, limit, offset)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}

@@ -365,8 +365,8 @@ func (m *MockStore) GetJob(ctx context.Context, jobID string) (*pb.Job, error) {
 	return args.Get(0).(*pb.Job), args.Error(1)
 }
 
-func (m *MockStore) GetJobEvents(ctx context.Context, jobID string) ([]*pb.JobEvent, error) {
-	args := m.Called(ctx, jobID)
+func (m *MockStore) GetJobEvents(ctx context.Context, jobID string, limit, offset int32) ([]*pb.JobEvent, error) {
+	args := m.Called(ctx, jobID, limit, offset)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -399,8 +399,8 @@ func (m *MockStore) SaveTrainingRun(ctx context.Context, run *pb.TrainingRun) er
 	return args.Error(0)
 }
 
-func (m *MockStore) ListTrainingRuns(ctx context.Context, modelName string, limit, offset int32) ([]*pb.TrainingRun, int64, error) {
-	args := m.Called(ctx, modelName, limit, offset)
+func (m *MockStore) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRunsRequest) ([]*pb.TrainingRun, int64, error) {
+	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
 		return nil, 0, args.Error(2)
 	}

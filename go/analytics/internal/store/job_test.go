@@ -73,12 +73,12 @@ func TestGetJobEvents(t *testing.T) {
 
 	ts := time.Now()
 	mock.ExpectQuery("SELECT event_id").
-		WithArgs("job-1").
+		WithArgs("job-1", 10, 0).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"event_id", "job_id", "event_type", "timestamp", "details",
 		}).AddRow(1, "job-1", "started", ts, []byte(`{"foo":"bar"}`)))
 
-	events, err := s.GetJobEvents(context.Background(), "job-1")
+	events, err := s.GetJobEvents(context.Background(), "job-1", 10, 0)
 	require.NoError(t, err)
 	assert.Len(t, events, 1)
 	assert.Equal(t, "started", events[0].EventType)

@@ -44,7 +44,7 @@ type Store interface {
 	// Jobs (Phase A1)
 	ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb.Job, int64, error)
 	GetJob(ctx context.Context, jobID string) (*pb.Job, error)
-	GetJobEvents(ctx context.Context, jobID string) ([]*pb.JobEvent, error)
+	GetJobEvents(ctx context.Context, jobID string, limit, offset int32) ([]*pb.JobEvent, error)
 
 	// Dataset Profiles (Phase A2)
 	SaveDatasetProfile(ctx context.Context, profile *pb.DatasetProfile) error
@@ -53,7 +53,7 @@ type Store interface {
 
 	// Training Runs (Phase B)
 	SaveTrainingRun(ctx context.Context, run *pb.TrainingRun) error
-	ListTrainingRuns(ctx context.Context, modelName string, limit, offset int32) ([]*pb.TrainingRun, int64, error)
+	ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRunsRequest) ([]*pb.TrainingRun, int64, error)
 	GetTrainingRun(ctx context.Context, runID string) (*pb.TrainingRun, error)
 	GetMetricSeries(ctx context.Context, modelName, metricName string, start, end time.Time) ([]*pb.MetricPoint, error)
 

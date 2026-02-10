@@ -55,15 +55,18 @@ func (s *SQLStore) SaveTrainingRun(ctx context.Context, run *pb.TrainingRun) err
 	return nil
 }
 
-func (s *SQLStore) ListTrainingRuns(ctx context.Context, modelName string, limit, offset int32) ([]*pb.TrainingRun, int64, error) {
+func (s *SQLStore) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRunsRequest) ([]*pb.TrainingRun, int64, error) {
 	queryBuilder := db.NewQueryBuilder(`
 		SELECT
 			run_id, model_name, status, started_at, ended_at, metrics, params, dataset_id, mlflow_run_id
 		FROM training_runs
 	`)
 
-	if modelName != "" {
-		queryBuilder.AddCondition("model_name = ?", modelName)
+	if req.ModelName != "" {
+		queryBuilder.AddCondition("model_name = ?", req.ModelName)
+	}
+	if req.Status != "" {
+		queryBuilder.AddCondition("status = ?", req.Status)
 	}
 
 	// Count
@@ -79,8 +82,8 @@ func (s *SQLStore) ListTrainingRuns(ctx context.Context, modelName string, limit
 
 	// List
 	queryBuilder.AddOrderBy("started_at DESC")
-	queryBuilder.SetLimit(limit)
-	queryBuilder.SetOffset(offset)
+	queryBuilder.SetLimit(req.Limit)
+	queryBuilder.SetOffset(req.Offset)
 	selectQuery, selectArgs := queryBuilder.BuildSelect()
 
 	rows, err := s.db.QueryContext(queryCtx, selectQuery, selectArgs...)

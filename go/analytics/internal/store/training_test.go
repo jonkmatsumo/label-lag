@@ -43,17 +43,24 @@ func TestListTrainingRuns(t *testing.T) {
 
 	s := NewSQLStore(db)
 
+	req := &pb.ListTrainingRunsRequest{
+		ModelName: "model-1",
+		Status:    "COMPLETED",
+		Limit:     10,
+		Offset:    0,
+	}
+
 	mock.ExpectQuery("SELECT COUNT").
-		WithArgs("model-1").
+		WithArgs("model-1", "COMPLETED").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 
 	mock.ExpectQuery("SELECT run_id").
-		WithArgs("model-1").
+		WithArgs("model-1", "COMPLETED").
 		WillReturnRows(sqlmock.NewRows([]string{
 			"run_id", "model_name", "status", "started_at", "ended_at", "metrics", "params", "dataset_id", "mlflow_run_id",
 		}).AddRow("run-1", "model-1", "COMPLETED", time.Now(), nil, nil, nil, nil, nil))
 
-	runs, total, err := s.ListTrainingRuns(context.Background(), "model-1", 10, 0)
+	runs, total, err := s.ListTrainingRuns(context.Background(), req)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), total)
 	assert.Len(t, runs, 1)
