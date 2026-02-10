@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 
 
@@ -22,6 +22,10 @@ class TuningJobStatus(Enum):
         )
 
 
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
 @dataclass
 class TrialRecord:
     trial_number: int
@@ -38,9 +42,9 @@ class TuningJob:
     job_id: str
     config: dict
     status: TuningJobStatus = TuningJobStatus.PENDING
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=_utc_now)
     started_at: datetime | None = None
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=_utc_now)
     ended_at: datetime | None = None
     mlflow_run_id: str | None = None
     requested_by: str | None = None

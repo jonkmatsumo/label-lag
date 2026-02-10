@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 import grpc
 import mlflow
@@ -683,7 +683,7 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
 
         def set_canceling(j):
             j.status = TuningJobStatus.CANCELING
-            j.updated_at = datetime.utcnow()
+            j.updated_at = datetime.now(UTC)
 
         updated_job = self.job_store.update(request.job_id, set_canceling)
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import optuna
@@ -182,7 +182,7 @@ class JobProgressCallback:
                 )
                 job.best_params = {k: str(v) for k, v in study.best_params.items()}
 
-            job.updated_at = datetime.utcnow()
+            job.updated_at = datetime.now(UTC)
 
         self.job_store.update(self.job_id, update_fn)
 
