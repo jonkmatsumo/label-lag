@@ -191,6 +191,20 @@ func InitDB(db *sql.DB) error {
 			feature_profiles JSONB NOT NULL
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_dataset_profiles_computed_at ON dataset_profiles(computed_at DESC)`,
+		// B: Training Runs
+		`CREATE TABLE IF NOT EXISTS training_runs (
+			run_id TEXT PRIMARY KEY,
+			model_name TEXT NOT NULL,
+			status TEXT NOT NULL,
+			started_at TIMESTAMP NOT NULL DEFAULT NOW(),
+			ended_at TIMESTAMP,
+			metrics JSONB,
+			params JSONB,
+			dataset_id TEXT,
+			mlflow_run_id TEXT
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_training_runs_model_name ON training_runs(model_name)`,
+		`CREATE INDEX IF NOT EXISTS idx_training_runs_started_at ON training_runs(started_at DESC)`,
 	}
 
 	for _, q := range queries {
