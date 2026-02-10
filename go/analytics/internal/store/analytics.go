@@ -1018,6 +1018,16 @@ func (s *SQLStore) GetDecision(ctx context.Context, requestID string) (*pb.Infer
 }
 
 func (s *SQLStore) GetDecisionTrace(ctx context.Context, requestID string) ([]*pb.RuleImpact, error) {
+	// First check if the event exists
+	var exists bool
+	err := s.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM inference_events WHERE request_id = $1)", requestID).Scan(&exists)
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+	if !exists {
+		return nil, status.Errorf(codes.NotFound, "decision not found for request %s", requestID)
+	}
+
 	query := "SELECT rule_id, is_shadow, score_delta FROM rule_impacts WHERE request_id = $1 ORDER BY score_delta DESC, rule_id ASC"
 	rows, err := s.db.QueryContext(ctx, query, requestID)
 	if err != nil {
@@ -1037,6 +1047,16 @@ func (s *SQLStore) GetDecisionTrace(ctx context.Context, requestID string) ([]*p
 }
 
 func (s *SQLStore) GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactRequest) (*pb.GetRuleImpactResponse, error) {
+	// Check if rule exists
+	var exists bool
+	err := s.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM rules WHERE rule_id = $1)", req.RuleId).Scan(&exists)
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+	if !exists {
+		return nil, status.Errorf(codes.NotFound, "rule not found: %s", req.RuleId)
+	}
+
 	resp := &pb.GetRuleImpactResponse{
 		RuleId: req.RuleId,
 	}

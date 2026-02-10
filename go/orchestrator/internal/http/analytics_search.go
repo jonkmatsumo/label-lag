@@ -176,6 +176,8 @@ func writeAnalyticsRPCError(w http.ResponseWriter, err error) {
 		switch rpcErr.Code {
 		case codes.InvalidArgument:
 			writeJSONError(w, http.StatusBadRequest, rpcErr.Message)
+		case codes.NotFound:
+			writeJSONError(w, http.StatusNotFound, rpcErr.Message)
 		case codes.DeadlineExceeded, codes.Unavailable:
 			writeJSONError(w, http.StatusServiceUnavailable, "analytics backend timeout")
 		default:
