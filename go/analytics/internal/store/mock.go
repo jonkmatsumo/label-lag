@@ -372,3 +372,24 @@ func (m *MockStore) GetJobEvents(ctx context.Context, jobID string) ([]*pb.JobEv
 	}
 	return args.Get(0).([]*pb.JobEvent), args.Error(1)
 }
+
+func (m *MockStore) SaveDatasetProfile(ctx context.Context, profile *pb.DatasetProfile) error {
+	args := m.Called(ctx, profile)
+	return args.Error(0)
+}
+
+func (m *MockStore) GetDatasetProfileCached(ctx context.Context, profileID string) (*pb.DatasetProfile, error) {
+	args := m.Called(ctx, profileID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.DatasetProfile), args.Error(1)
+}
+
+func (m *MockStore) ListDatasetProfiles(ctx context.Context, limit, offset int32) ([]*pb.DatasetProfile, int64, error) {
+	args := m.Called(ctx, limit, offset)
+	if args.Get(0) == nil {
+		return nil, 0, args.Error(2)
+	}
+	return args.Get(0).([]*pb.DatasetProfile), args.Get(1).(int64), args.Error(2)
+}

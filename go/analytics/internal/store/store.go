@@ -46,6 +46,11 @@ type Store interface {
 	GetJob(ctx context.Context, jobID string) (*pb.Job, error)
 	GetJobEvents(ctx context.Context, jobID string) ([]*pb.JobEvent, error)
 
+	// Dataset Profiles (Phase A2)
+	SaveDatasetProfile(ctx context.Context, profile *pb.DatasetProfile) error
+	GetDatasetProfileCached(ctx context.Context, profileID string) (*pb.DatasetProfile, error)
+	ListDatasetProfiles(ctx context.Context, limit, offset int32) ([]*pb.DatasetProfile, int64, error)
+
 	// Feature Hydration
 	GetLatestUserFeatures(ctx context.Context, userID string) (*pb.UserFeatures, bool, error)
 	BatchGetLatestUserFeatures(ctx context.Context, userIDs []string) (map[string]*pb.UserFeatures, error)
