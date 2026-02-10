@@ -538,7 +538,7 @@ func mapTableFingerprint(fingerprint *crudv1.TableFingerprint) tableFingerprintR
 }
 
 func (h *Handler) handleListDecisions(w http.ResponseWriter, r *http.Request) {
-	limit, err := parseIntQuery(r, "limit", 50, 1, 1000)
+	limit, err := parseIntQuery(r, "limit", 50, 1, 250)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -564,6 +564,28 @@ func (h *Handler) handleListDecisions(w http.ResponseWriter, r *http.Request) {
 	if maxScoreStr := r.URL.Query().Get("max_score"); maxScoreStr != "" {
 		if val, err := strconv.Atoi(maxScoreStr); err == nil {
 			req.MaxScore = int32(val)
+		}
+	}
+
+	if req.MinScore > 0 && req.MaxScore > 0 && req.MinScore > req.MaxScore {
+		writeJSONError(w, http.StatusBadRequest, "min_score must be <= max_score")
+		return
+	}
+
+	if startStr := r.URL.Query().Get("start_date"); startStr != "" {
+		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
+			req.StartDate = timestamppb.New(t)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid start_date format (RFC3339 required)")
+			return
+		}
+	}
+	if endStr := r.URL.Query().Get("end_date"); endStr != "" {
+		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
+			req.EndDate = timestamppb.New(t)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid end_date format (RFC3339 required)")
+			return
 		}
 	}
 
@@ -617,6 +639,23 @@ func (h *Handler) handleGetRuleImpact(w http.ResponseWriter, r *http.Request) {
 
 	req := &crudv1.GetRuleImpactRequest{
 		RuleId: ruleID,
+	}
+
+	if startStr := r.URL.Query().Get("start_date"); startStr != "" {
+		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
+			req.StartDate = timestamppb.New(t)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid start_date format (RFC3339 required)")
+			return
+		}
+	}
+	if endStr := r.URL.Query().Get("end_date"); endStr != "" {
+		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
+			req.EndDate = timestamppb.New(t)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid end_date format (RFC3339 required)")
+			return
+		}
 	}
 
 	resp, err := h.analyticsClient.GetRuleImpact(r.Context(), req)
