@@ -257,30 +257,60 @@ func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransac
 }
 
 func (s *SQLStore) GetShadowComparison(ctx context.Context, hours int32) (*pb.ShadowModeMetrics, error) {
-	// Logic taken from main.go GetShadowComparison
-	// Currently it's a stub in main.go, so I'll copy the stub implementation.
-	return &pb.ShadowModeMetrics{
-		TotalEvaluations:     100,
-		DivergentScoresCount: 5,
-		DivergentRate:        0.05,
-		ActiveScoreMean:      50.0,
-		ShadowScoreMean:      55.0,
-		ActiveScoreDistribution: map[string]int32{
-			"0-20":   10,
-			"20-40":  20,
-			"40-60":  40,
-			"60-80":  20,
-			"80-100": 10,
-		},
-		ShadowScoreDistribution: map[string]int32{
-			"0-20":   5,
-			"20-40":  15,
-			"40-60":  45,
-			"60-80":  25,
-			"80-100": 10,
-		},
-	}, nil
+	cutoff := time.Now().Add(-time.Duration(hours) * time.Hour)
+
+	query := `
+		WITH shadow_deltas AS (
+			SELECT
+				request_id,
+				SUM(score_delta) as total_shadow_delta
+			FROM rule_impacts
+			WHERE is_shadow = TRUE
+			GROUP BY request_id
+		),
+		metrics_raw AS (
+			SELECT
+				ie.request_id,
+				ie.final_score as active_score,
+				ie.final_score + COALESCE(sd.total_shadow_delta, 0) as shadow_score
+			FROM inference_events ie
+			LEFT JOIN shadow_deltas sd ON ie.request_id = sd.request_id
+			WHERE ie.ts >= $1
+		)
+		SELECT
+			COUNT(*) as total_evaluations,
+			COUNT(*) FILTER (WHERE active_score != shadow_score) as divergent_scores_count,
+			COALESCE(AVG(active_score), 0) as active_score_mean,
+			COALESCE(AVG(shadow_score), 0) as shadow_score_mean
+		FROM metrics_raw
+	`
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	var m pb.ShadowModeMetrics
+	err := s.db.QueryRowContext(queryCtx, query, cutoff).Scan(
+		&m.TotalEvaluations,
+		&m.DivergentScoresCount,
+		&m.ActiveScoreMean,
+		&m.ShadowScoreMean,
+	)
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+
+	if m.TotalEvaluations > 0 {
+		m.DivergentRate = float64(m.DivergentScoresCount) / float64(m.TotalEvaluations)
+	}
+
+	// For simplicity, we skip distributions in the first pass or use a fixed set of buckets.
+	// But let's try to do a basic one.
+	m.ActiveScoreDistribution = make(map[string]int32)
+	m.ShadowScoreDistribution = make(map[string]int32)
+
+	return &m, nil
 }
+
+// (Keeping the rest of the file intact)
 
 func (s *SQLStore) GetRecentAlerts(ctx context.Context, limit int32) ([]*pb.Alert, error) {
 	query := `
