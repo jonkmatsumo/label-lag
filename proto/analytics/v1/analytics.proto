@@ -73,6 +73,9 @@ service AnalyticsService {
   // Dashboard Aggregates (Phase 3)
   rpc GetKpis(GetKpisRequest) returns (GetKpisResponse);
   rpc GetVolumeSeries(GetVolumeSeriesRequest) returns (GetVolumeSeriesResponse);
+
+  // Model Performance (Phase 3 Fast-follow)
+  rpc GetConfusionMatrix(GetConfusionMatrixRequest) returns (GetConfusionMatrixResponse);
 }
 
 message GetKpisRequest {
@@ -111,6 +114,24 @@ message VolumePoint {
 
 message GetVolumeSeriesResponse {
   repeated VolumePoint points = 1;
+}
+
+message GetConfusionMatrixRequest {
+  google.protobuf.Timestamp start_time = 1;
+  google.protobuf.Timestamp end_time = 2;
+  string model_version = 3;
+  int32 threshold = 4; // Optional: custom score threshold
+}
+
+message GetConfusionMatrixResponse {
+  int64 true_positives = 1;
+  int64 false_positives = 2;
+  int64 true_negatives = 3;
+  int64 false_negatives = 4;
+  double precision = 5;
+  double recall = 6;
+  double f1_score = 7;
+  bool insufficient_labels = 8;
 }
 
 message GetDatasetProfileRequest {

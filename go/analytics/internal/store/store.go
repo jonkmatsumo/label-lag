@@ -39,6 +39,7 @@ type Store interface {
 	// Dashboard Aggregates (Phase 3)
 	GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.GetKpisResponse, error)
 	GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesRequest) (*pb.GetVolumeSeriesResponse, error)
+	GetConfusionMatrix(ctx context.Context, req *pb.GetConfusionMatrixRequest) (*pb.GetConfusionMatrixResponse, error)
 
 	// Feature Hydration
 	GetLatestUserFeatures(ctx context.Context, userID string) (*pb.UserFeatures, bool, error)

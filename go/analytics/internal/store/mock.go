@@ -340,3 +340,11 @@ func (m *MockStore) GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeries
 	}
 	return args.Get(0).(*pb.GetVolumeSeriesResponse), args.Error(1)
 }
+
+func (m *MockStore) GetConfusionMatrix(ctx context.Context, req *pb.GetConfusionMatrixRequest) (*pb.GetConfusionMatrixResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.GetConfusionMatrixResponse), args.Error(1)
+}

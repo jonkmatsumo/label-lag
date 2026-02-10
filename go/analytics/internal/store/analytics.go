@@ -1117,6 +1117,81 @@ func (s *SQLStore) GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactReque
 	return resp, nil
 }
 
+func (s *SQLStore) GetConfusionMatrix(ctx context.Context, req *pb.GetConfusionMatrixRequest) (*pb.GetConfusionMatrixResponse, error) {
+	threshold := req.Threshold
+	if threshold <= 0 {
+		threshold = 50 // Default
+	}
+
+	whereClauses := []string{"1=1"}
+	args := []interface{}{}
+
+	if req.StartTime != nil {
+		args = append(args, req.StartTime.AsTime())
+		whereClauses = append(whereClauses, fmt.Sprintf("ie.ts >= $%d", len(args)))
+	}
+	if req.EndTime != nil {
+		args = append(args, req.EndTime.AsTime())
+		whereClauses = append(whereClauses, fmt.Sprintf("ie.ts <= $%d", len(args)))
+	}
+	if req.ModelVersion != "" {
+		args = append(args, req.ModelVersion)
+		whereClauses = append(whereClauses, fmt.Sprintf("ie.model_version = $%d", len(args)))
+	}
+
+	whereStmt := strings.Join(whereClauses, " AND ")
+
+	query := fmt.Sprintf(`
+		SELECT
+			COUNT(*) FILTER (WHERE ie.final_score >= %d AND gr.is_fraudulent = TRUE) as tp,
+			COUNT(*) FILTER (WHERE ie.final_score >= %d AND gr.is_fraudulent = FALSE) as fp,
+			COUNT(*) FILTER (WHERE ie.final_score < %d AND gr.is_fraudulent = FALSE) as tn,
+			COUNT(*) FILTER (WHERE ie.final_score < %d AND gr.is_fraudulent = TRUE) as fn,
+			COUNT(*) FILTER (WHERE gr.is_fraudulent IS NULL) as missing_labels
+		FROM inference_events ie
+		INNER JOIN generated_records gr ON ie.request_id = gr.record_id
+		WHERE %s
+	`, threshold, threshold, threshold, threshold, whereStmt)
+
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	var tp, fp, tn, fn, missing int64
+	err := s.db.QueryRowContext(queryCtx, query, args...).Scan(&tp, &fp, &tn, &fn, &missing)
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+
+	resp := &pb.GetConfusionMatrixResponse{
+		TruePositives:  tp,
+		FalsePositives: fp,
+		TrueNegatives:  tn,
+		FalseNegatives: fn,
+	}
+
+	totalLabels := tp + fp + tn + fn
+	if totalLabels == 0 {
+		resp.InsufficientLabels = true
+		return resp, nil
+	}
+
+	if tp+fp > 0 {
+		resp.Precision = float64(tp) / float64(tp+fp)
+	}
+	if tp+fn > 0 {
+		resp.Recall = float64(tp) / float64(tp+fn)
+	}
+	if resp.Precision+resp.Recall > 0 {
+		resp.F1Score = 2 * (resp.Precision * resp.Recall) / (resp.Precision + resp.Recall)
+	}
+
+	if missing > 0 && totalLabels < (missing/2) {
+		resp.InsufficientLabels = true
+	}
+
+	return resp, nil
+}
+
 func (s *SQLStore) GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.GetKpisResponse, error) {
 	tableName := "aggregates_daily"
 	timeCol := "date"

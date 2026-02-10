@@ -816,6 +816,18 @@ func (s *Service) GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesRe
 	return s.store.GetVolumeSeries(ctx, req)
 }
 
+func (s *Service) GetConfusionMatrix(ctx context.Context, req *pb.GetConfusionMatrixRequest) (*pb.GetConfusionMatrixResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "request required")
+	}
+
+	if req.StartTime != nil && req.EndTime != nil && req.StartTime.AsTime().After(req.EndTime.AsTime()) {
+		return nil, status.Error(codes.InvalidArgument, "start_time must be <= end_time")
+	}
+
+	return s.store.GetConfusionMatrix(ctx, req)
+}
+
 func (s *Service) StoreGeneratedData(ctx context.Context, req *pb.StoreGeneratedDataRequest) (*pb.StoreGeneratedDataResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request required")
