@@ -140,6 +140,24 @@ func InitDB(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_inference_events_user_id ON inference_events(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_inference_events_decision ON inference_events(decision)`,
 		`CREATE INDEX IF NOT EXISTS idx_rule_impacts_created_at ON rule_impacts(id DESC)`, // For recent lookups if needed, but inference_events.ts is primary
+		`CREATE TABLE IF NOT EXISTS aggregates_daily (
+			tenant_id TEXT DEFAULT '',
+			date DATE NOT NULL,
+			total_decisions BIGINT DEFAULT 0,
+			total_alerts BIGINT DEFAULT 0,
+			sum_score BIGINT DEFAULT 0,
+			rules_fired_total BIGINT DEFAULT 0,
+			PRIMARY KEY (tenant_id, date)
+		)`,
+		`CREATE TABLE IF NOT EXISTS aggregates_hourly (
+			tenant_id TEXT DEFAULT '',
+			hour TIMESTAMP WITH TIME ZONE NOT NULL,
+			total_decisions BIGINT DEFAULT 0,
+			total_alerts BIGINT DEFAULT 0,
+			sum_score BIGINT DEFAULT 0,
+			rules_fired_total BIGINT DEFAULT 0,
+			PRIMARY KEY (tenant_id, hour)
+		)`,
 	}
 
 	for _, q := range queries {
