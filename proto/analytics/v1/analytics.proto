@@ -312,6 +312,8 @@ message ListBacktestResultsRequest {
   string rule_id = 1;
   google.protobuf.Timestamp start_date = 2;
   google.protobuf.Timestamp end_date = 3;
+  int32 limit = 4;
+  int32 offset = 5;
 }
 
 message ListBacktestResultsResponse {
