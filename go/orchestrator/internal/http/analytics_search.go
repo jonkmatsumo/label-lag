@@ -46,6 +46,10 @@ type AnalyticsClient interface {
 	GetDecisionTrace(ctx context.Context, req *crudv1.GetDecisionTraceRequest) (*crudv1.GetDecisionTraceResponse, error)
 	GetRuleImpact(ctx context.Context, req *crudv1.GetRuleImpactRequest) (*crudv1.GetRuleImpactResponse, error)
 
+	// Dashboard Aggregates (Phase 3)
+	GetKpis(ctx context.Context, req *crudv1.GetKpisRequest) (*crudv1.GetKpisResponse, error)
+	GetVolumeSeries(ctx context.Context, req *crudv1.GetVolumeSeriesRequest) (*crudv1.GetVolumeSeriesResponse, error)
+
 	// Shadow Comparison (Phase 9)
 	GetShadowComparison(ctx context.Context, req *crudv1.GetShadowComparisonRequest) (*crudv1.GetShadowComparisonResponse, error)
 }

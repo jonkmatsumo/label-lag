@@ -803,6 +803,14 @@ func (s *stubAnalyticsClient) GetRuleImpact(ctx context.Context, req *crudv1.Get
 	return &crudv1.GetRuleImpactResponse{}, s.err
 }
 
+func (s *stubAnalyticsClient) GetKpis(ctx context.Context, req *crudv1.GetKpisRequest) (*crudv1.GetKpisResponse, error) {
+	return &crudv1.GetKpisResponse{}, s.err
+}
+
+func (s *stubAnalyticsClient) GetVolumeSeries(ctx context.Context, req *crudv1.GetVolumeSeriesRequest) (*crudv1.GetVolumeSeriesResponse, error) {
+	return &crudv1.GetVolumeSeriesResponse{}, s.err
+}
+
 func (s *stubAnalyticsClient) GenerateData(ctx context.Context, req *crudv1.GenerateDataRequest) (*crudv1.GenerateDataResponse, error) {
 	return s.generateDataResp, s.err
 }
