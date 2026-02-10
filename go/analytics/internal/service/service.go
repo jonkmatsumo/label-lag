@@ -608,6 +608,42 @@ func (s *Service) GetAttribution(ctx context.Context, req *pb.GetAttributionRequ
 	}, nil
 }
 
+func (s *Service) GetLatestUserFeatures(ctx context.Context, req *pb.GetLatestUserFeaturesRequest) (*pb.GetLatestUserFeaturesResponse, error) {
+	if req.UserId == "" {
+		return nil, status.Error(codes.InvalidArgument, "user_id is required")
+	}
+
+	features, found, err := s.store.GetLatestUserFeatures(ctx, req.UserId)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, status.Errorf(codes.NotFound, "no features found for user %s", req.UserId)
+	}
+
+	return &pb.GetLatestUserFeaturesResponse{
+		Features: features,
+	}, nil
+}
+
+func (s *Service) BatchGetLatestUserFeatures(ctx context.Context, req *pb.BatchGetLatestUserFeaturesRequest) (*pb.BatchGetLatestUserFeaturesResponse, error) {
+	if len(req.UserIds) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "at least one user_id is required")
+	}
+	if len(req.UserIds) > 500 {
+		return nil, status.Error(codes.InvalidArgument, "batch size cannot exceed 500")
+	}
+
+	results, err := s.store.BatchGetLatestUserFeatures(ctx, req.UserIds)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.BatchGetLatestUserFeaturesResponse{
+		Results: results,
+	}, nil
+}
+
 func (s *Service) StoreGeneratedData(ctx context.Context, req *pb.StoreGeneratedDataRequest) (*pb.StoreGeneratedDataResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request required")

@@ -11,6 +11,7 @@ import (
 
 	"github.com/jonkmatsumo/label-lag/go/analytics/internal/db"
 	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	"github.com/lib/pq"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -803,4 +804,130 @@ func (s *SQLStore) GetAttribution(ctx context.Context, cutoff time.Time, limit i
 		items = append(items, &item)
 	}
 	return items, nil
+}
+
+func (s *SQLStore) GetLatestUserFeatures(ctx context.Context, userID string) (*pb.UserFeatures, bool, error) {
+	query := `
+		SELECT
+			record_id, user_id, snapshot_id, computed_at,
+			velocity_24h, amount_to_avg_ratio_30d, balance_volatility_z_score,
+			experimental_signals
+		FROM feature_snapshots
+		WHERE user_id = $1
+		ORDER BY computed_at DESC, record_id DESC
+		LIMIT 1
+	`
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	var f pb.UserFeatures
+	var snapshotID int64
+	var computedAt time.Time
+	var experimentalSignals []byte
+	var recordID string
+
+	err := s.db.QueryRowContext(queryCtx, query, userID).Scan(
+		&recordID,
+		&f.UserId,
+		&snapshotID,
+		&computedAt,
+		&f.Velocity_24H,
+		&f.AmountToAvgRatio_30D,
+		&f.BalanceVolatilityZScore,
+		&experimentalSignals,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, db.MapDBError(err)
+	}
+
+	f.SnapshotTimestamp = timestamppb.New(computedAt)
+	f.SnapshotId = fmt.Sprintf("%d", snapshotID)
+	f.HasHistory = true
+
+	// Parse experimental signals
+	var signals struct {
+		BankConnections24h int32 `json:"bank_connections_24h"`
+		MerchantRiskScore  int32 `json:"merchant_risk_score"`
+	}
+	if err := json.Unmarshal(experimentalSignals, &signals); err == nil {
+		f.BankConnections_24H = signals.BankConnections24h
+		f.MerchantRiskScore = signals.MerchantRiskScore
+	}
+
+	return &f, true, nil
+}
+
+func (s *SQLStore) BatchGetLatestUserFeatures(ctx context.Context, userIDs []string) (map[string]*pb.UserFeatures, error) {
+	if len(userIDs) == 0 {
+		return make(map[string]*pb.UserFeatures), nil
+	}
+
+	// ROW_NUMBER() to get the latest snapshot per user
+	query := `
+		WITH RankedFeatures AS (
+			SELECT
+				record_id, user_id, snapshot_id, computed_at,
+				velocity_24h, amount_to_avg_ratio_30d, balance_volatility_z_score,
+				experimental_signals,
+				ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY computed_at DESC, record_id DESC) as rn
+			FROM feature_snapshots
+			WHERE user_id = ANY($1)
+		)
+		SELECT
+			record_id, user_id, snapshot_id, computed_at,
+			velocity_24h, amount_to_avg_ratio_30d, balance_volatility_z_score,
+			experimental_signals
+		FROM RankedFeatures
+		WHERE rn = 1
+	`
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(queryCtx, query, pq.Array(userIDs))
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+	defer rows.Close()
+
+	results := make(map[string]*pb.UserFeatures)
+	for rows.Next() {
+		var f pb.UserFeatures
+		var snapshotID int64
+		var computedAt time.Time
+		var experimentalSignals []byte
+		var recordID string
+
+		if err := rows.Scan(
+			&recordID,
+			&f.UserId,
+			&snapshotID,
+			&computedAt,
+			&f.Velocity_24H,
+			&f.AmountToAvgRatio_30D,
+			&f.BalanceVolatilityZScore,
+			&experimentalSignals,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan batch user features: %v", err)
+		}
+
+		f.SnapshotTimestamp = timestamppb.New(computedAt)
+		f.SnapshotId = fmt.Sprintf("%d", snapshotID)
+		f.HasHistory = true
+
+		var signals struct {
+			BankConnections24h int32 `json:"bank_connections_24h"`
+			MerchantRiskScore  int32 `json:"merchant_risk_score"`
+		}
+		if err := json.Unmarshal(experimentalSignals, &signals); err == nil {
+			f.BankConnections_24H = signals.BankConnections24h
+			f.MerchantRiskScore = signals.MerchantRiskScore
+		}
+
+		results[f.UserId] = &f
+	}
+	return results, nil
 }
