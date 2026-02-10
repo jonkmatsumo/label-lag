@@ -76,6 +76,11 @@ service AnalyticsService {
 
   // Model Performance (Phase 3 Fast-follow)
   rpc GetConfusionMatrix(GetConfusionMatrixRequest) returns (GetConfusionMatrixResponse);
+
+  // Jobs & Job Events (Phase A1)
+  rpc ListJobs(ListJobsRequest) returns (ListJobsResponse);
+  rpc GetJob(GetJobRequest) returns (GetJobResponse);
+  rpc GetJobEvents(GetJobEventsRequest) returns (GetJobEventsResponse);
 }
 
 message GetKpisRequest {
@@ -805,4 +810,55 @@ message ShadowModeMetrics {
 
 message GetShadowComparisonResponse {
     ShadowModeMetrics metrics = 1;
+}
+
+message Job {
+  string job_id = 1;
+  string job_type = 2;
+  string status = 3;
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp started_at = 5;
+  google.protobuf.Timestamp ended_at = 6;
+  string error_code = 7;
+  string error_message = 8;
+  string params_json = 9;
+  string metrics_json = 10;
+}
+
+message JobEvent {
+  int64 event_id = 1;
+  string job_id = 2;
+  string event_type = 3;
+  google.protobuf.Timestamp timestamp = 4;
+  string details_json = 5;
+}
+
+message ListJobsRequest {
+  string job_type = 1;
+  string status = 2;
+  google.protobuf.Timestamp start_date = 3;
+  google.protobuf.Timestamp end_date = 4;
+  int32 limit = 5;
+  int32 offset = 6;
+}
+
+message ListJobsResponse {
+  repeated Job jobs = 1;
+  int64 total = 2;
+}
+
+message GetJobRequest {
+  string job_id = 1;
+}
+
+message GetJobResponse {
+  Job job = 1;
+}
+
+message GetJobEventsRequest {
+  string job_id = 1;
+}
+
+message GetJobEventsResponse {
+  repeated JobEvent events = 1;
 }
