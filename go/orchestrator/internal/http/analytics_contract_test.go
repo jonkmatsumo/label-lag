@@ -158,33 +158,6 @@ func TestAnalyticsRecentAlertsContract(t *testing.T) {
 	}
 }
 
-func TestAnalyticsFingerprintContract(t *testing.T) {
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	stub := &stubAnalyticsClient{
-		fingerprintResp: &crudv1.GetDatasetFingerprintResponse{
-			GeneratedRecords: &crudv1.TableFingerprint{Count: 10},
-			FeatureSnapshots: &crudv1.TableFingerprint{Count: 5},
-		},
-	}
-	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
-
-	req := httptest.NewRequest(http.MethodGet, "/analytics/fingerprint", nil)
-	rec := httptest.NewRecorder()
-
-	handler.handleAnalyticsFingerprint(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-	var payload map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	if payload["generated_records"] == nil || payload["feature_snapshots"] == nil {
-		t.Fatalf("expected fingerprint sections to be present")
-	}
-}
-
 func TestAnalyticsFeatureSampleContract(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	stub := &stubAnalyticsClient{
@@ -216,41 +189,6 @@ func TestAnalyticsFeatureSampleContract(t *testing.T) {
 	}
 }
 
-func TestAnalyticsSchemaContract(t *testing.T) {
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	stub := &stubAnalyticsClient{
-		schemaSummaryResp: &crudv1.GetSchemaSummaryResponse{
-			Columns: []*crudv1.ColumnInfo{
-				{
-					TableName:       "generated_records",
-					ColumnName:      "record_id",
-					DataType:        "text",
-					IsNullable:      "NO",
-					OrdinalPosition: 1,
-				},
-			},
-		},
-	}
-	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
-
-	req := httptest.NewRequest(http.MethodGet, "/analytics/schema", nil)
-	rec := httptest.NewRecorder()
-
-	handler.handleAnalyticsSchema(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-	var payload map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	columns := payload["columns"].([]any)
-	if len(columns) != 1 {
-		t.Fatalf("expected 1 column, got %v", payload["columns"])
-	}
-}
-
 func TestAnalyticsHandlersMapDownstreamErrors(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	paths := []struct {
@@ -262,9 +200,7 @@ func TestAnalyticsHandlersMapDownstreamErrors(t *testing.T) {
 		{"daily-stats", "/analytics/daily-stats", (*Handler).handleAnalyticsDailyStats},
 		{"transactions", "/analytics/transactions", (*Handler).handleAnalyticsTransactions},
 		{"recent-alerts", "/analytics/recent-alerts", (*Handler).handleAnalyticsRecentAlerts},
-		{"fingerprint", "/analytics/fingerprint", (*Handler).handleAnalyticsFingerprint},
 		{"feature-sample", "/analytics/feature-sample", (*Handler).handleAnalyticsFeatureSample},
-		{"schema", "/analytics/schema", (*Handler).handleAnalyticsSchema},
 	}
 
 	for _, tc := range paths {
@@ -292,9 +228,7 @@ func TestAnalyticsHandlersPreserveRequestIDHeader(t *testing.T) {
 		dailyStatsResp:         &crudv1.GetDailyStatsResponse{},
 		transactionDetailsResp: &crudv1.GetTransactionDetailsResponse{},
 		recentAlertsResp:       &crudv1.GetRecentAlertsResponse{},
-		fingerprintResp:        &crudv1.GetDatasetFingerprintResponse{},
 		featureSampleResp:      &crudv1.GetFeatureSampleResponse{},
-		schemaSummaryResp:      &crudv1.GetSchemaSummaryResponse{},
 	}, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
 	mux := http.NewServeMux()
@@ -306,9 +240,7 @@ func TestAnalyticsHandlersPreserveRequestIDHeader(t *testing.T) {
 		"/analytics/daily-stats",
 		"/analytics/transactions",
 		"/analytics/recent-alerts",
-		"/analytics/fingerprint",
 		"/analytics/feature-sample",
-		"/analytics/schema",
 	}
 
 	for _, path := range paths {

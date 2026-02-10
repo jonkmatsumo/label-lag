@@ -22,6 +22,7 @@ func (h *Handler) handleListTrainingRuns(w http.ResponseWriter, r *http.Request)
 
 	req := &crudv1.ListTrainingRunsRequest{
 		ModelName: r.URL.Query().Get("model_name"),
+		Status:    r.URL.Query().Get("status"),
 		Limit:     limit,
 		Offset:    offset,
 	}

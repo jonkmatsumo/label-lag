@@ -55,13 +55,22 @@ func (s *Service) GetJobEvents(ctx context.Context, req *pb.GetJobEventsRequest)
 		return nil, status.Error(codes.InvalidArgument, "job_id required")
 	}
 
-	// Verify job exists first
-	_, err := s.store.GetJob(ctx, req.JobId)
+	limit, err := normalizeLimit(req.Limit, 100, 500, "limit")
+	if err != nil {
+		return nil, err
+	}
+	offset, err := normalizeOffset(req.Offset)
 	if err != nil {
 		return nil, err
 	}
 
-	events, err := s.store.GetJobEvents(ctx, req.JobId)
+	// Verify job exists first
+	_, err = s.store.GetJob(ctx, req.JobId)
+	if err != nil {
+		return nil, err
+	}
+
+	events, err := s.store.GetJobEvents(ctx, req.JobId, limit, offset)
 	if err != nil {
 		return nil, err
 	}

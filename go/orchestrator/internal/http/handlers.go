@@ -152,10 +152,10 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/analytics/daily-stats", h.handleAnalyticsDailyStats)
 	mux.HandleFunc("/analytics/transactions", h.handleAnalyticsTransactions)
 	mux.HandleFunc("/analytics/recent-alerts", h.handleAnalyticsRecentAlerts)
-	mux.HandleFunc("/analytics/fingerprint", h.handleAnalyticsFingerprint)
+
 	mux.HandleFunc("GET /analytics/attribution", h.handleAnalyticsAttribution)
 	mux.HandleFunc("/analytics/feature-sample", h.handleAnalyticsFeatureSample)
-	mux.HandleFunc("/analytics/schema", h.handleAnalyticsSchema)
+
 	mux.HandleFunc("GET /analytics/rules/{rule_id}", h.handleAnalyticsRuleStats)
 	mux.HandleFunc("/analytics/transactions/search", h.handleSearchTransactions)
 
@@ -176,8 +176,9 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /jobs/{id}", h.handleGetJob)
 	mux.HandleFunc("GET /jobs/{id}/events", h.handleGetJobEvents)
 
-	mux.HandleFunc("GET /dataset/summary", h.handleGetDatasetSummary)
+	mux.HandleFunc("GET /dataset/summary", h.handleGetDatasetProfile) // Alias for latest/default
 	mux.HandleFunc("GET /dataset/profiles", h.handleListDatasetProfiles)
+	mux.HandleFunc("GET /dataset/profiles/{id}", h.handleGetDatasetProfile)
 	mux.HandleFunc("GET /dataset/profiles/compare", h.handleCompareDatasetProfiles)
 
 	mux.HandleFunc("GET /training-runs", h.handleListTrainingRuns)

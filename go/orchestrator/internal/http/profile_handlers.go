@@ -6,9 +6,15 @@ import (
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
 )
 
-func (h *Handler) handleGetDatasetSummary(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleGetDatasetProfile(w http.ResponseWriter, r *http.Request) {
+	profileID := r.PathValue("id")
+	if profileID == "" {
+		writeJSONError(w, http.StatusBadRequest, "profile_id required")
+		return
+	}
+
 	req := &crudv1.GetDatasetSummaryRequest{
-		ProfileId: r.URL.Query().Get("profile_id"),
+		ProfileId: profileID,
 	}
 
 	resp, err := h.analyticsClient.GetDatasetSummary(r.Context(), req)

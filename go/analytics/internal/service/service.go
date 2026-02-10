@@ -32,18 +32,18 @@ func NewService(store store.Store, registry *generator.GeneratorRegistry) *Servi
 }
 
 const (
-	defaultDailyStatsDay = 30
-	defaultTxnDays       = 30
-	defaultTxnLimit      = 100
-	maxTransactionLimit  = 1000
-	defaultSearchLimit   = 50
-	maxSearchLimit       = 500
-	defaultAlertLimit    = 20
-	maxAlertLimit        = 100
-	defaultSampleSize    = 1000
-	maxSampleSizeLimit   = 10000
+	defaultDailyStatsDay  = 30
+	defaultTxnDays        = 30
+	defaultTxnLimit       = 100
+	maxTransactionLimit   = 1000
+	defaultSearchLimit    = 50
+	maxSearchLimit        = 500
+	defaultAlertLimit     = 20
+	maxAlertLimit         = 100
+	defaultSampleSize     = 1000
+	maxSampleSizeLimit    = 10000
 	defaultRuleImpactDays = 7
-	maxRuleImpactDays    = 90
+	maxRuleImpactDays     = 90
 )
 
 var allowedDecisions = map[string]bool{
@@ -141,14 +141,6 @@ func (s *Service) GetRecentAlerts(ctx context.Context, req *pb.GetRecentAlertsRe
 
 func (s *Service) GetOverviewMetrics(ctx context.Context, req *pb.GetOverviewMetricsRequest) (*pb.GetOverviewMetricsResponse, error) {
 	return s.store.GetOverviewMetrics(ctx)
-}
-
-func (s *Service) GetDatasetFingerprint(ctx context.Context, req *pb.GetDatasetFingerprintRequest) (*pb.GetDatasetFingerprintResponse, error) {
-	return s.store.GetDatasetFingerprint(ctx)
-}
-
-func (s *Service) GetSchemaSummary(ctx context.Context, req *pb.GetSchemaSummaryRequest) (*pb.GetSchemaSummaryResponse, error) {
-	return s.store.GetSchemaSummary(ctx)
 }
 
 func (s *Service) GetTrainingData(ctx context.Context, req *pb.GetTrainingDataRequest) (*pb.GetTrainingDataResponse, error) {

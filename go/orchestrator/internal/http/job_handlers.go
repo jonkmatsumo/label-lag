@@ -83,7 +83,22 @@ func (h *Handler) handleGetJobEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := h.analyticsClient.GetJobEvents(r.Context(), &crudv1.GetJobEventsRequest{JobId: jobID})
+	limit, err := parseIntQuery(r, "limit", 100, 1, 1000)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	offset, err := parseIntQuery(r, "offset", 0, 0, 10000)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	resp, err := h.analyticsClient.GetJobEvents(r.Context(), &crudv1.GetJobEventsRequest{
+		JobId:  jobID,
+		Limit:  limit,
+		Offset: offset,
+	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
 		return

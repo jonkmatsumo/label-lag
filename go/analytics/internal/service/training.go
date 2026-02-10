@@ -17,8 +17,10 @@ func (s *Service) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRuns
 	if err != nil {
 		return nil, err
 	}
+	req.Limit = limit
+	req.Offset = offset
 
-	runs, total, err := s.store.ListTrainingRuns(ctx, req.ModelName, limit, offset)
+	runs, total, err := s.store.ListTrainingRuns(ctx, req)
 	if err != nil {
 		return nil, err
 	}

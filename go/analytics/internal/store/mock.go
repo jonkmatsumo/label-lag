@@ -55,22 +55,6 @@ func (m *MockStore) GetOverviewMetrics(ctx context.Context) (*pb.GetOverviewMetr
 	return args.Get(0).(*pb.GetOverviewMetricsResponse), args.Error(1)
 }
 
-func (m *MockStore) GetDatasetFingerprint(ctx context.Context) (*pb.GetDatasetFingerprintResponse, error) {
-	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*pb.GetDatasetFingerprintResponse), args.Error(1)
-}
-
-func (m *MockStore) GetSchemaSummary(ctx context.Context) (*pb.GetSchemaSummaryResponse, error) {
-	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*pb.GetSchemaSummaryResponse), args.Error(1)
-}
-
 func (m *MockStore) GetShadowComparison(ctx context.Context, hours int32) (*pb.ShadowModeMetrics, error) {
 	args := m.Called(ctx, hours)
 	if args.Get(0) == nil {

@@ -22,9 +22,6 @@ type Store interface {
 	GetRecentAlerts(ctx context.Context, limit, offset int32) ([]*pb.Alert, error)
 	GetOverviewMetrics(ctx context.Context) (*pb.GetOverviewMetricsResponse, error)
 
-	GetDatasetFingerprint(ctx context.Context) (*pb.GetDatasetFingerprintResponse, error)
-	GetSchemaSummary(ctx context.Context) (*pb.GetSchemaSummaryResponse, error)
-
 	// Analytics
 	GetShadowComparison(ctx context.Context, hours int32) (*pb.ShadowModeMetrics, error)
 	GetRuleStats(ctx context.Context, ruleID string, cutoff time.Time) ([]*pb.RuleStats, error)

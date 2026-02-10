@@ -11,14 +11,6 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// TODO(phase4): Map core analytics read routes.
-// - GET /analytics/overview
-// - GET /analytics/daily-stats
-// - GET /analytics/transactions
-// - GET /analytics/recent-alerts
-// - GET /analytics/fingerprint
-// - GET /analytics/feature-sample
-// - GET /analytics/schema
 // - GET /analytics/attribution (if supported upstream)
 
 func (h *Handler) handleAnalyticsOverview(w http.ResponseWriter, r *http.Request) {
@@ -197,31 +189,6 @@ func (h *Handler) handleAnalyticsRecentAlerts(w http.ResponseWriter, r *http.Req
 	writeAnalyticsJSON(w, recentAlertsResponse{Alerts: alerts})
 }
 
-func (h *Handler) handleAnalyticsFingerprint(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	if h.analyticsClient == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "analytics backend unavailable")
-		return
-	}
-
-	resp, err := h.analyticsClient.GetDatasetFingerprint(r.Context(), &crudv1.GetDatasetFingerprintRequest{})
-	if err != nil {
-		writeAnalyticsRPCError(w, err)
-		return
-	}
-
-	response := datasetFingerprintResponse{
-		GeneratedRecords: mapTableFingerprint(resp.GetGeneratedRecords()),
-		FeatureSnapshots: mapTableFingerprint(resp.GetFeatureSnapshots()),
-	}
-
-	writeAnalyticsJSON(w, response)
-}
-
 func (h *Handler) handleAnalyticsFeatureSample(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -266,40 +233,6 @@ func (h *Handler) handleAnalyticsFeatureSample(w http.ResponseWriter, r *http.Re
 	}
 
 	writeAnalyticsJSON(w, featureSampleEnvelope{Samples: samples})
-}
-
-func (h *Handler) handleAnalyticsSchema(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	if h.analyticsClient == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "analytics backend unavailable")
-		return
-	}
-
-	tableNames := r.URL.Query()["table_names"]
-	resp, err := h.analyticsClient.GetSchemaSummary(r.Context(), &crudv1.GetSchemaSummaryRequest{
-		TableNames: tableNames,
-	})
-	if err != nil {
-		writeAnalyticsRPCError(w, err)
-		return
-	}
-
-	columns := make([]columnInfoResponse, 0, len(resp.GetColumns()))
-	for _, column := range resp.GetColumns() {
-		columns = append(columns, columnInfoResponse{
-			TableName:       column.GetTableName(),
-			ColumnName:      column.GetColumnName(),
-			DataType:        column.GetDataType(),
-			IsNullable:      column.GetIsNullable(),
-			OrdinalPosition: column.GetOrdinalPosition(),
-		})
-	}
-
-	writeAnalyticsJSON(w, schemaSummaryResponse{Columns: columns})
 }
 
 func (h *Handler) handleDatasetClear(w http.ResponseWriter, r *http.Request) {
@@ -483,18 +416,6 @@ type recentAlertsResponse struct {
 	Alerts []alertResponse `json:"alerts"`
 }
 
-type tableFingerprintResponse struct {
-	Count        int64  `json:"count"`
-	MaxCreatedAt string `json:"max_created_at"`
-	MaxTimestamp string `json:"max_timestamp"`
-	MaxID        int64  `json:"max_id"`
-}
-
-type datasetFingerprintResponse struct {
-	GeneratedRecords tableFingerprintResponse `json:"generated_records"`
-	FeatureSnapshots tableFingerprintResponse `json:"feature_snapshots"`
-}
-
 type featureSampleResponse struct {
 	RecordID                string  `json:"record_id"`
 	IsFraudulent            bool    `json:"is_fraudulent"`
@@ -507,34 +428,10 @@ type featureSampleEnvelope struct {
 	Samples []featureSampleResponse `json:"samples"`
 }
 
-type columnInfoResponse struct {
-	TableName       string `json:"table_name"`
-	ColumnName      string `json:"column_name"`
-	DataType        string `json:"data_type"`
-	IsNullable      string `json:"is_nullable"`
-	OrdinalPosition int32  `json:"ordinal_position"`
-}
-
-type schemaSummaryResponse struct {
-	Columns []columnInfoResponse `json:"columns"`
-}
-
 type clearDataResponse struct {
 	Success       bool     `json:"success"`
 	TablesCleared []string `json:"tables_cleared"`
 	Error         *string  `json:"error,omitempty"`
-}
-
-func mapTableFingerprint(fingerprint *crudv1.TableFingerprint) tableFingerprintResponse {
-	if fingerprint == nil {
-		return tableFingerprintResponse{}
-	}
-	return tableFingerprintResponse{
-		Count:        fingerprint.GetCount(),
-		MaxCreatedAt: formatTimestamp(fingerprint.GetMaxCreatedAt()),
-		MaxTimestamp: formatTimestamp(fingerprint.GetMaxTimestamp()),
-		MaxID:        fingerprint.GetMaxId(),
-	}
 }
 
 // handleListDecisions lists and filters decision events.

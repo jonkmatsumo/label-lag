@@ -346,44 +346,6 @@ func TestHandleAnalyticsRecentAlerts(t *testing.T) {
 	}
 }
 
-func TestHandleAnalyticsFingerprint(t *testing.T) {
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	stub := &stubAnalyticsClient{
-		fingerprintResp: &crudv1.GetDatasetFingerprintResponse{
-			GeneratedRecords: &crudv1.TableFingerprint{
-				Count:        10,
-				MaxCreatedAt: timestamppb.New(time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)),
-				MaxTimestamp: timestamppb.New(time.Date(2025, 2, 1, 1, 0, 0, 0, time.UTC)),
-				MaxId:        99,
-			},
-			FeatureSnapshots: &crudv1.TableFingerprint{
-				Count:        5,
-				MaxCreatedAt: timestamppb.New(time.Date(2025, 2, 2, 0, 0, 0, 0, time.UTC)),
-				MaxTimestamp: timestamppb.New(time.Date(2025, 2, 2, 1, 0, 0, 0, time.UTC)),
-				MaxId:        42,
-			},
-		},
-	}
-	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
-
-	req := httptest.NewRequest(http.MethodGet, "/analytics/fingerprint", nil)
-	rec := httptest.NewRecorder()
-
-	handler.handleAnalyticsFingerprint(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-	var payload map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	generated := payload["generated_records"].(map[string]any)
-	if generated["count"] != float64(10) {
-		t.Fatalf("expected generated_records count 10, got %v", generated["count"])
-	}
-}
-
 func TestHandleAnalyticsFeatureSample(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	stub := &stubAnalyticsClient{
@@ -419,36 +381,6 @@ func TestHandleAnalyticsFeatureSample(t *testing.T) {
 	samples := payload["samples"].([]any)
 	if len(samples) != 1 {
 		t.Fatalf("expected 1 sample, got %v", payload["samples"])
-	}
-}
-
-func TestHandleAnalyticsSchema(t *testing.T) {
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	stub := &stubAnalyticsClient{
-		schemaSummaryResp: &crudv1.GetSchemaSummaryResponse{
-			Columns: []*crudv1.ColumnInfo{
-				{
-					TableName:       "generated_records",
-					ColumnName:      "record_id",
-					DataType:        "text",
-					IsNullable:      "NO",
-					OrdinalPosition: 1,
-				},
-			},
-		},
-	}
-	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
-
-	req := httptest.NewRequest(http.MethodGet, "/analytics/schema?table_names=generated_records&table_names=feature_snapshots", nil)
-	rec := httptest.NewRecorder()
-
-	handler.handleAnalyticsSchema(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-	if stub.lastSchemaSummaryReq == nil || len(stub.lastSchemaSummaryReq.GetTableNames()) != 2 {
-		t.Fatalf("expected 2 table_names, got %v", stub.lastSchemaSummaryReq)
 	}
 }
 
@@ -644,15 +576,14 @@ func (s stubTrainingClient) ClearData(ctx context.Context, req *trainingv1.Clear
 }
 
 type stubAnalyticsClient struct {
-	resp                      *crudv1.SearchTransactionsResponse
-	dailyStatsResp            *crudv1.GetDailyStatsResponse
-	overviewResp              *crudv1.GetOverviewMetricsResponse
-	transactionDetailsResp    *crudv1.GetTransactionDetailsResponse
-	recentAlertsResp          *crudv1.GetRecentAlertsResponse
-	generateDataResp          *crudv1.GenerateDataResponse
-	fingerprintResp           *crudv1.GetDatasetFingerprintResponse
-	featureSampleResp         *crudv1.GetFeatureSampleResponse
-	schemaSummaryResp         *crudv1.GetSchemaSummaryResponse
+	resp                   *crudv1.SearchTransactionsResponse
+	dailyStatsResp         *crudv1.GetDailyStatsResponse
+	overviewResp           *crudv1.GetOverviewMetricsResponse
+	transactionDetailsResp *crudv1.GetTransactionDetailsResponse
+	recentAlertsResp       *crudv1.GetRecentAlertsResponse
+	featureSampleResp      *crudv1.GetFeatureSampleResponse
+	generateDataResp       *crudv1.GenerateDataResponse
+
 	backtestResultsResp       *crudv1.ListBacktestResultsResponse
 	err                       error
 	lastReq                   *crudv1.SearchTransactionsRequest
@@ -660,9 +591,7 @@ type stubAnalyticsClient struct {
 	lastOverviewReq           *crudv1.GetOverviewMetricsRequest
 	lastTransactionDetailsReq *crudv1.GetTransactionDetailsRequest
 	lastRecentAlertsReq       *crudv1.GetRecentAlertsRequest
-	lastFingerprintReq        *crudv1.GetDatasetFingerprintRequest
 	lastFeatureSampleReq      *crudv1.GetFeatureSampleRequest
-	lastSchemaSummaryReq      *crudv1.GetSchemaSummaryRequest
 	lastBacktestResultsReq    *crudv1.ListBacktestResultsRequest
 	lastClearAllDataReq       *crudv1.ClearAllDataRequest
 	shadowComparisonResp      *crudv1.GetShadowComparisonResponse
@@ -693,19 +622,9 @@ func (s *stubAnalyticsClient) GetRecentAlerts(ctx context.Context, req *crudv1.G
 	return s.recentAlertsResp, s.err
 }
 
-func (s *stubAnalyticsClient) GetDatasetFingerprint(ctx context.Context, req *crudv1.GetDatasetFingerprintRequest) (*crudv1.GetDatasetFingerprintResponse, error) {
-	s.lastFingerprintReq = req
-	return s.fingerprintResp, s.err
-}
-
 func (s *stubAnalyticsClient) GetFeatureSample(ctx context.Context, req *crudv1.GetFeatureSampleRequest) (*crudv1.GetFeatureSampleResponse, error) {
 	s.lastFeatureSampleReq = req
 	return s.featureSampleResp, s.err
-}
-
-func (s *stubAnalyticsClient) GetSchemaSummary(ctx context.Context, req *crudv1.GetSchemaSummaryRequest) (*crudv1.GetSchemaSummaryResponse, error) {
-	s.lastSchemaSummaryReq = req
-	return s.schemaSummaryResp, s.err
 }
 
 func (s *stubAnalyticsClient) ListBacktestResults(ctx context.Context, req *crudv1.ListBacktestResultsRequest) (*crudv1.ListBacktestResultsResponse, error) {
