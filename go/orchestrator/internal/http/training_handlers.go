@@ -1,7 +1,6 @@
 package httpserver
 
 import (
-	"encoding/json"
 	"net/http"
 	"time"
 
