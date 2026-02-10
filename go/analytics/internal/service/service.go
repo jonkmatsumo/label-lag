@@ -40,6 +40,8 @@ const (
 	maxAlertLimit        = 100
 	defaultSampleSize    = 1000
 	maxSampleSizeLimit   = 10000
+	defaultRuleImpactDays = 7
+	maxRuleImpactDays    = 90
 )
 
 func (s *Service) GetDailyStats(ctx context.Context, req *pb.GetDailyStatsRequest) (*pb.GetDailyStatsResponse, error) {
@@ -673,6 +675,10 @@ func (s *Service) ListDecisions(ctx context.Context, req *pb.ListDecisionsReques
 	req.Limit = limit
 	req.Offset = offset
 
+	if req.MinScore > 0 && req.MaxScore > 0 && req.MinScore > req.MaxScore {
+		return nil, status.Error(codes.InvalidArgument, "min_score must be <= max_score")
+	}
+
 	decisions, total, err := s.store.ListDecisions(ctx, req)
 	if err != nil {
 		return nil, err
@@ -717,6 +723,11 @@ func (s *Service) GetDecisionTrace(ctx context.Context, req *pb.GetDecisionTrace
 func (s *Service) GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactRequest) (*pb.GetRuleImpactResponse, error) {
 	if req.RuleId == "" {
 		return nil, status.Error(codes.InvalidArgument, "rule_id required")
+	}
+
+	if req.StartDate == nil {
+		cutoff := time.Now().AddDate(0, 0, -int(defaultRuleImpactDays))
+		req.StartDate = timestamppb.New(cutoff)
 	}
 
 	return s.store.GetRuleImpact(ctx, req)
