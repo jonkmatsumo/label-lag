@@ -30,6 +30,11 @@ type Store interface {
 	GetRuleStats(ctx context.Context, ruleID string, cutoff time.Time) ([]*pb.RuleStats, error)
 	GetAttribution(ctx context.Context, cutoff time.Time, limit int32) ([]*pb.DailyAttribution, error)
 
+	// Decisions (Phase 2)
+	ListDecisions(ctx context.Context, req *pb.ListDecisionsRequest) ([]*pb.DecisionSummary, int64, error)
+	GetDecision(ctx context.Context, requestID string) (*pb.InferenceEvent, error)
+	GetDecisionTrace(ctx context.Context, requestID string) ([]*pb.RuleImpact, error)
+
 	// Feature Hydration
 	GetLatestUserFeatures(ctx context.Context, userID string) (*pb.UserFeatures, bool, error)
 	BatchGetLatestUserFeatures(ctx context.Context, userIDs []string) (map[string]*pb.UserFeatures, error)

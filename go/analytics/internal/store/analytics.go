@@ -931,3 +931,106 @@ func (s *SQLStore) BatchGetLatestUserFeatures(ctx context.Context, userIDs []str
 	}
 	return results, nil
 }
+
+func (s *SQLStore) ListDecisions(ctx context.Context, req *pb.ListDecisionsRequest) ([]*pb.DecisionSummary, int64, error) {
+	query := "SELECT request_id, user_id, ts, final_score, decision FROM inference_events WHERE 1=1"
+	args := []interface{}{}
+
+	if req.UserId != "" {
+		args = append(args, req.UserId)
+		query += fmt.Sprintf(" AND user_id = $%d", len(args))
+	}
+	if req.Decision != "" {
+		args = append(args, req.Decision)
+		query += fmt.Sprintf(" AND decision = $%d", len(args))
+	}
+	if req.MinScore > 0 {
+		args = append(args, req.MinScore)
+		query += fmt.Sprintf(" AND final_score >= $%d", len(args))
+	}
+	if req.MaxScore > 0 {
+		args = append(args, req.MaxScore)
+		query += fmt.Sprintf(" AND final_score <= $%d", len(args))
+	}
+	if req.StartDate != nil {
+		args = append(args, req.StartDate.AsTime())
+		query += fmt.Sprintf(" AND ts >= $%d", len(args))
+	}
+	if req.EndDate != nil {
+		args = append(args, req.EndDate.AsTime())
+		query += fmt.Sprintf(" AND ts <= $%d", len(args))
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM (%s) as total", query)
+	var total int64
+	err := s.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, db.MapDBError(err)
+	}
+
+	query += " ORDER BY ts DESC"
+	args = append(args, req.Limit)
+	query += fmt.Sprintf(" LIMIT $%d", len(args))
+	args = append(args, req.Offset)
+	query += fmt.Sprintf(" OFFSET $%d", len(args))
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, 0, db.MapDBError(err)
+	}
+	defer rows.Close()
+
+	var decisions []*pb.DecisionSummary
+	for rows.Next() {
+		var d pb.DecisionSummary
+		var ts time.Time
+		if err := rows.Scan(&d.RequestId, &d.UserId, &ts, &d.FinalScore, &d.Decision); err != nil {
+			return nil, 0, fmt.Errorf("failed to scan decision summary: %v", err)
+		}
+		d.CreatedAt = timestamppb.New(ts)
+		decisions = append(decisions, &d)
+	}
+	return decisions, total, nil
+}
+
+func (s *SQLStore) GetDecision(ctx context.Context, requestID string) (*pb.InferenceEvent, error) {
+	query := "SELECT request_id, ts, model_version, rules_version, model_score, final_score, rule_impacts, user_id, decision FROM inference_events WHERE request_id = $1"
+	var ie pb.InferenceEvent
+	var ts time.Time
+	var ruleImpactsJSON []byte
+	err := s.db.QueryRowContext(ctx, query, requestID).Scan(
+		&ie.RequestId, &ts, &ie.ModelVersion, &ie.RulesVersion,
+		&ie.ModelScore, &ie.FinalScore, &ruleImpactsJSON,
+		&ie.UserId, &ie.Decision,
+	)
+	if err == sql.ErrNoRows {
+		return nil, status.Errorf(codes.NotFound, "decision not found for request %s", requestID)
+	}
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+	ie.Timestamp = timestamppb.New(ts)
+	if err := json.Unmarshal(ruleImpactsJSON, &ie.RuleImpacts); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal rule impacts: %v", err)
+	}
+	return &ie, nil
+}
+
+func (s *SQLStore) GetDecisionTrace(ctx context.Context, requestID string) ([]*pb.RuleImpact, error) {
+	query := "SELECT rule_id, is_shadow, score_delta FROM rule_impacts WHERE request_id = $1 ORDER BY id ASC"
+	rows, err := s.db.QueryContext(ctx, query, requestID)
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+	defer rows.Close()
+
+	var trace []*pb.RuleImpact
+	for rows.Next() {
+		var ri pb.RuleImpact
+		if err := rows.Scan(&ri.RuleId, &ri.IsShadow, &ri.ScoreDelta); err != nil {
+			return nil, fmt.Errorf("failed to scan rule impact: %v", err)
+		}
+		trace = append(trace, &ri)
+	}
+	return trace, nil
+}

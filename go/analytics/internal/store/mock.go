@@ -292,3 +292,27 @@ func (m *MockStore) BatchGetLatestUserFeatures(ctx context.Context, userIDs []st
 	}
 	return args.Get(0).(map[string]*pb.UserFeatures), args.Error(1)
 }
+
+func (m *MockStore) ListDecisions(ctx context.Context, req *pb.ListDecisionsRequest) ([]*pb.DecisionSummary, int64, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, 0, args.Error(2)
+	}
+	return args.Get(0).([]*pb.DecisionSummary), args.Get(1).(int64), args.Error(2)
+}
+
+func (m *MockStore) GetDecision(ctx context.Context, requestID string) (*pb.InferenceEvent, error) {
+	args := m.Called(ctx, requestID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.InferenceEvent), args.Error(1)
+}
+
+func (m *MockStore) GetDecisionTrace(ctx context.Context, requestID string) ([]*pb.RuleImpact, error) {
+	args := m.Called(ctx, requestID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*pb.RuleImpact), args.Error(1)
+}
