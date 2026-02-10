@@ -65,6 +65,7 @@ type Handler struct {
 	enableKpiAPIs      bool
 	enableJobAPIs      bool
 	enableProfileAPIs  bool
+	enableTrainingAPIs bool
 	logQueue           chan inferenceLogEvent
 	logWg              sync.WaitGroup
 	droppedLogs        atomic.Int64
@@ -77,7 +78,7 @@ type inferenceLogEvent struct {
 	requestID   string
 }
 
-func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient AnalyticsClient, trainingClient TrainingClient, forecastClient ForecastClient, provider rules.Provider, maxBodyBytes int64, pythonURL, mlflowURL string, enableDecisionAPIs bool, enableKpiAPIs bool, enableJobAPIs bool, enableProfileAPIs bool) *Handler {
+func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient AnalyticsClient, trainingClient TrainingClient, forecastClient ForecastClient, provider rules.Provider, maxBodyBytes int64, pythonURL, mlflowURL string, enableDecisionAPIs bool, enableKpiAPIs bool, enableJobAPIs bool, enableProfileAPIs bool, enableTrainingAPIs bool) *Handler {
 	if maxBodyBytes <= 0 {
 		maxBodyBytes = 1 << 20
 	}
@@ -95,6 +96,7 @@ func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient Ana
 		enableKpiAPIs:      enableKpiAPIs,
 		enableJobAPIs:      enableJobAPIs,
 		enableProfileAPIs:  enableProfileAPIs,
+		enableTrainingAPIs: enableTrainingAPIs,
 		logQueue:           make(chan inferenceLogEvent, 100),
 	}
 	h.startWorkers()
@@ -194,6 +196,12 @@ func (h *Handler) Register(mux *http.ServeMux) {
 		mux.HandleFunc("GET /dataset/summary", h.handleGetDatasetSummary)
 		mux.HandleFunc("GET /dataset/profiles", h.handleListDatasetProfiles)
 		mux.HandleFunc("GET /dataset/profiles/compare", h.handleCompareDatasetProfiles)
+	}
+
+	if h.enableTrainingAPIs {
+		mux.HandleFunc("GET /training-runs", h.handleListTrainingRuns)
+		mux.HandleFunc("GET /training-runs/{id}", h.handleGetTrainingRun)
+		mux.HandleFunc("GET /metrics/series", h.handleGetMetricSeries)
 	}
 
 	mux.HandleFunc("/data/clear", h.handleDatasetClear)
