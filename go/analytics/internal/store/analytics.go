@@ -1116,3 +1116,141 @@ func (s *SQLStore) GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactReque
 
 	return resp, nil
 }
+
+func (s *SQLStore) GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.GetKpisResponse, error) {
+	tableName := "aggregates_daily"
+	timeCol := "date"
+	if req.GroupBy == "hour" {
+		tableName = "aggregates_hourly"
+		timeCol = "hour"
+	}
+
+	whereClauses := []string{"1=1"}
+	args := []interface{}{}
+
+	if req.StartTime != nil {
+		args = append(args, req.StartTime.AsTime())
+		whereClauses = append(whereClauses, fmt.Sprintf("%s >= $%d", timeCol, len(args)))
+	}
+	if req.EndTime != nil {
+		args = append(args, req.EndTime.AsTime())
+		whereClauses = append(whereClauses, fmt.Sprintf("%s <= $%d", timeCol, len(args)))
+	}
+
+	whereStmt := strings.Join(whereClauses, " AND ")
+
+	// Summary query
+	summaryQuery := fmt.Sprintf(`
+		SELECT
+			COALESCE(SUM(total_decisions), 0),
+			COALESCE(SUM(total_alerts), 0),
+			COALESCE(SUM(sum_score), 0),
+			COALESCE(SUM(rules_fired_total), 0)
+		FROM %s
+		WHERE %s
+	`, tableName, whereStmt)
+
+	resp := &pb.GetKpisResponse{}
+	var sumScore int64
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	err := s.db.QueryRowContext(queryCtx, summaryQuery, args...).Scan(
+		&resp.TotalDecisions,
+		&resp.TotalAlerts,
+		&sumScore,
+		&resp.RulesFiredTotal,
+	)
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+
+	if resp.TotalDecisions > 0 {
+		resp.AlertRate = float64(resp.TotalAlerts) / float64(resp.TotalDecisions)
+		resp.AvgScore = float64(sumScore) / float64(resp.TotalDecisions)
+	}
+
+	// Buckets query if group_by is set
+	if req.GroupBy != "" {
+		bucketsQuery := fmt.Sprintf(`
+			SELECT
+				%s,
+				total_decisions,
+				total_alerts,
+				CASE WHEN total_decisions > 0 THEN sum_score::float / total_decisions ELSE 0 END
+			FROM %s
+			WHERE %s
+			ORDER BY %s ASC
+		`, timeCol, tableName, whereStmt, timeCol)
+
+		rows, err := s.db.QueryContext(queryCtx, bucketsQuery, args...)
+		if err != nil {
+			return nil, db.MapDBError(err)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var b pb.KpiBucket
+			var ts time.Time
+			if err := rows.Scan(&ts, &b.TotalDecisions, &b.TotalAlerts, &b.AvgScore); err != nil {
+				return nil, fmt.Errorf("failed to scan kpi bucket: %v", err)
+			}
+			b.Timestamp = timestamppb.New(ts)
+			resp.Buckets = append(resp.Buckets, &b)
+		}
+	}
+
+	return resp, nil
+}
+
+func (s *SQLStore) GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesRequest) (*pb.GetVolumeSeriesResponse, error) {
+	tableName := "aggregates_daily"
+	timeCol := "date"
+	if req.Granularity == "hour" {
+		tableName = "aggregates_hourly"
+		timeCol = "hour"
+	}
+
+	whereClauses := []string{"1=1"}
+	args := []interface{}{}
+
+	if req.StartTime != nil {
+		args = append(args, req.StartTime.AsTime())
+		whereClauses = append(whereClauses, fmt.Sprintf("%s >= $%d", timeCol, len(args)))
+	}
+	if req.EndTime != nil {
+		args = append(args, req.EndTime.AsTime())
+		whereClauses = append(whereClauses, fmt.Sprintf("%s <= $%d", timeCol, len(args)))
+	}
+
+	whereStmt := strings.Join(whereClauses, " AND ")
+
+	query := fmt.Sprintf(`
+		SELECT %s, total_decisions, total_alerts
+		FROM %s
+		WHERE %s
+		ORDER BY %s ASC
+	`, timeCol, tableName, whereStmt, timeCol)
+
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(queryCtx, query, args...)
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+	defer rows.Close()
+
+	resp := &pb.GetVolumeSeriesResponse{}
+	for rows.Next() {
+		var p pb.VolumePoint
+		var ts time.Time
+		if err := rows.Scan(&ts, &p.Count, &p.Alerts); err != nil {
+			return nil, fmt.Errorf("failed to scan volume point: %v", err)
+		}
+		p.Timestamp = timestamppb.New(ts)
+		resp.Points = append(resp.Points, &p)
+	}
+
+	return resp, nil
+}

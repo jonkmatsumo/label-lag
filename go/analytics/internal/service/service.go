@@ -756,6 +756,43 @@ func (s *Service) GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactReques
 	return s.store.GetRuleImpact(ctx, req)
 }
 
+func (s *Service) GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.GetKpisResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "request required")
+	}
+
+	if req.GroupBy != "" && req.GroupBy != "day" && req.GroupBy != "hour" {
+		return nil, status.Error(codes.InvalidArgument, "group_by must be 'day' or 'hour'")
+	}
+
+	if req.StartTime != nil && req.EndTime != nil && req.StartTime.AsTime().After(req.EndTime.AsTime()) {
+		return nil, status.Error(codes.InvalidArgument, "start_time must be <= end_time")
+	}
+
+	return s.store.GetKpis(ctx, req)
+}
+
+func (s *Service) GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesRequest) (*pb.GetVolumeSeriesResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "request required")
+	}
+
+	if req.Granularity != "day" && req.Granularity != "hour" {
+		// Default to day if not specified? Or error?
+		if req.Granularity == "" {
+			req.Granularity = "day"
+		} else {
+			return nil, status.Error(codes.InvalidArgument, "granularity must be 'day' or 'hour'")
+		}
+	}
+
+	if req.StartTime != nil && req.EndTime != nil && req.StartTime.AsTime().After(req.EndTime.AsTime()) {
+		return nil, status.Error(codes.InvalidArgument, "start_time must be <= end_time")
+	}
+
+	return s.store.GetVolumeSeries(ctx, req)
+}
+
 func (s *Service) StoreGeneratedData(ctx context.Context, req *pb.StoreGeneratedDataRequest) (*pb.StoreGeneratedDataResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request required")

@@ -324,3 +324,19 @@ func (m *MockStore) GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactRequ
 	}
 	return args.Get(0).(*pb.GetRuleImpactResponse), args.Error(1)
 }
+
+func (m *MockStore) GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.GetKpisResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.GetKpisResponse), args.Error(1)
+}
+
+func (m *MockStore) GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesRequest) (*pb.GetVolumeSeriesResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.GetVolumeSeriesResponse), args.Error(1)
+}

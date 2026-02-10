@@ -36,6 +36,10 @@ type Store interface {
 	GetDecisionTrace(ctx context.Context, requestID string) ([]*pb.RuleImpact, error)
 	GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactRequest) (*pb.GetRuleImpactResponse, error)
 
+	// Dashboard Aggregates (Phase 3)
+	GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.GetKpisResponse, error)
+	GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesRequest) (*pb.GetVolumeSeriesResponse, error)
+
 	// Feature Hydration
 	GetLatestUserFeatures(ctx context.Context, userID string) (*pb.UserFeatures, bool, error)
 	BatchGetLatestUserFeatures(ctx context.Context, userIDs []string) (map[string]*pb.UserFeatures, error)
