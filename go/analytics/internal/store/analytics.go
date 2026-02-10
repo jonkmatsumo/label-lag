@@ -1018,7 +1018,7 @@ func (s *SQLStore) GetDecision(ctx context.Context, requestID string) (*pb.Infer
 }
 
 func (s *SQLStore) GetDecisionTrace(ctx context.Context, requestID string) ([]*pb.RuleImpact, error) {
-	query := "SELECT rule_id, is_shadow, score_delta FROM rule_impacts WHERE request_id = $1 ORDER BY id ASC"
+	query := "SELECT rule_id, is_shadow, score_delta FROM rule_impacts WHERE request_id = $1 ORDER BY score_delta DESC, rule_id ASC"
 	rows, err := s.db.QueryContext(ctx, query, requestID)
 	if err != nil {
 		return nil, db.MapDBError(err)
