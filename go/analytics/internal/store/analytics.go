@@ -970,7 +970,7 @@ func (s *SQLStore) ListDecisions(ctx context.Context, req *pb.ListDecisionsReque
 		return nil, 0, db.MapDBError(err)
 	}
 
-	query := fmt.Sprintf("SELECT request_id, user_id, ts, final_score, decision FROM inference_events WHERE %s ORDER BY ts DESC LIMIT $%d OFFSET $%d",
+	query := fmt.Sprintf("SELECT request_id, user_id, ts, final_score, decision FROM inference_events WHERE %s ORDER BY ts DESC, request_id DESC LIMIT $%d OFFSET $%d",
 		whereStmt, len(args)+1, len(args)+2)
 
 	args = append(args, req.Limit, req.Offset)
