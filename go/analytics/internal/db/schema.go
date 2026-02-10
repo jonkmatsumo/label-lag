@@ -139,6 +139,7 @@ func InitDB(db *sql.DB) error {
 		`ALTER TABLE inference_events ADD COLUMN IF NOT EXISTS decision TEXT`,
 		`CREATE INDEX IF NOT EXISTS idx_inference_events_user_id ON inference_events(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_inference_events_decision ON inference_events(decision)`,
+		`CREATE INDEX IF NOT EXISTS idx_inference_events_ts_request_id ON inference_events(ts DESC, request_id DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_rule_impacts_created_at ON rule_impacts(id DESC)`, // For recent lookups if needed, but inference_events.ts is primary
 		`CREATE TABLE IF NOT EXISTS aggregates_daily (
 			tenant_id TEXT DEFAULT '',
