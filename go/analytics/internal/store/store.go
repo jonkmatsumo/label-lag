@@ -41,6 +41,11 @@ type Store interface {
 	GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesRequest) (*pb.GetVolumeSeriesResponse, error)
 	GetConfusionMatrix(ctx context.Context, req *pb.GetConfusionMatrixRequest) (*pb.GetConfusionMatrixResponse, error)
 
+	// Jobs (Phase A1)
+	ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb.Job, int64, error)
+	GetJob(ctx context.Context, jobID string) (*pb.Job, error)
+	GetJobEvents(ctx context.Context, jobID string) ([]*pb.JobEvent, error)
+
 	// Feature Hydration
 	GetLatestUserFeatures(ctx context.Context, userID string) (*pb.UserFeatures, bool, error)
 	BatchGetLatestUserFeatures(ctx context.Context, userIDs []string) (map[string]*pb.UserFeatures, error)
