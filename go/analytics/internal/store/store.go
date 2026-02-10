@@ -41,6 +41,22 @@ type Store interface {
 	GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesRequest) (*pb.GetVolumeSeriesResponse, error)
 	GetConfusionMatrix(ctx context.Context, req *pb.GetConfusionMatrixRequest) (*pb.GetConfusionMatrixResponse, error)
 
+	// Jobs (Phase A1)
+	ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb.Job, int64, error)
+	GetJob(ctx context.Context, jobID string) (*pb.Job, error)
+	GetJobEvents(ctx context.Context, jobID string) ([]*pb.JobEvent, error)
+
+	// Dataset Profiles (Phase A2)
+	SaveDatasetProfile(ctx context.Context, profile *pb.DatasetProfile) error
+	GetDatasetProfileCached(ctx context.Context, profileID string) (*pb.DatasetProfile, error)
+	ListDatasetProfiles(ctx context.Context, limit, offset int32) ([]*pb.DatasetProfile, int64, error)
+
+	// Training Runs (Phase B)
+	SaveTrainingRun(ctx context.Context, run *pb.TrainingRun) error
+	ListTrainingRuns(ctx context.Context, modelName string, limit, offset int32) ([]*pb.TrainingRun, int64, error)
+	GetTrainingRun(ctx context.Context, runID string) (*pb.TrainingRun, error)
+	GetMetricSeries(ctx context.Context, modelName, metricName string, start, end time.Time) ([]*pb.MetricPoint, error)
+
 	// Feature Hydration
 	GetLatestUserFeatures(ctx context.Context, userID string) (*pb.UserFeatures, bool, error)
 	BatchGetLatestUserFeatures(ctx context.Context, userIDs []string) (map[string]*pb.UserFeatures, error)

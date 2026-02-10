@@ -348,3 +348,77 @@ func (m *MockStore) GetConfusionMatrix(ctx context.Context, req *pb.GetConfusion
 	}
 	return args.Get(0).(*pb.GetConfusionMatrixResponse), args.Error(1)
 }
+
+func (m *MockStore) ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb.Job, int64, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, 0, args.Error(2)
+	}
+	return args.Get(0).([]*pb.Job), args.Get(1).(int64), args.Error(2)
+}
+
+func (m *MockStore) GetJob(ctx context.Context, jobID string) (*pb.Job, error) {
+	args := m.Called(ctx, jobID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.Job), args.Error(1)
+}
+
+func (m *MockStore) GetJobEvents(ctx context.Context, jobID string) ([]*pb.JobEvent, error) {
+	args := m.Called(ctx, jobID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*pb.JobEvent), args.Error(1)
+}
+
+func (m *MockStore) SaveDatasetProfile(ctx context.Context, profile *pb.DatasetProfile) error {
+	args := m.Called(ctx, profile)
+	return args.Error(0)
+}
+
+func (m *MockStore) GetDatasetProfileCached(ctx context.Context, profileID string) (*pb.DatasetProfile, error) {
+	args := m.Called(ctx, profileID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.DatasetProfile), args.Error(1)
+}
+
+func (m *MockStore) ListDatasetProfiles(ctx context.Context, limit, offset int32) ([]*pb.DatasetProfile, int64, error) {
+	args := m.Called(ctx, limit, offset)
+	if args.Get(0) == nil {
+		return nil, 0, args.Error(2)
+	}
+	return args.Get(0).([]*pb.DatasetProfile), args.Get(1).(int64), args.Error(2)
+}
+
+func (m *MockStore) SaveTrainingRun(ctx context.Context, run *pb.TrainingRun) error {
+	args := m.Called(ctx, run)
+	return args.Error(0)
+}
+
+func (m *MockStore) ListTrainingRuns(ctx context.Context, modelName string, limit, offset int32) ([]*pb.TrainingRun, int64, error) {
+	args := m.Called(ctx, modelName, limit, offset)
+	if args.Get(0) == nil {
+		return nil, 0, args.Error(2)
+	}
+	return args.Get(0).([]*pb.TrainingRun), args.Get(1).(int64), args.Error(2)
+}
+
+func (m *MockStore) GetTrainingRun(ctx context.Context, runID string) (*pb.TrainingRun, error) {
+	args := m.Called(ctx, runID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.TrainingRun), args.Error(1)
+}
+
+func (m *MockStore) GetMetricSeries(ctx context.Context, modelName, metricName string, start, end time.Time) ([]*pb.MetricPoint, error) {
+	args := m.Called(ctx, modelName, metricName, start, end)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*pb.MetricPoint), args.Error(1)
+}

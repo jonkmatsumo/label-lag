@@ -51,6 +51,21 @@ type AnalyticsClient interface {
 	GetVolumeSeries(ctx context.Context, req *crudv1.GetVolumeSeriesRequest) (*crudv1.GetVolumeSeriesResponse, error)
 	GetConfusionMatrix(ctx context.Context, req *crudv1.GetConfusionMatrixRequest) (*crudv1.GetConfusionMatrixResponse, error)
 
+	// Jobs (Phase A1)
+	ListJobs(ctx context.Context, req *crudv1.ListJobsRequest) (*crudv1.ListJobsResponse, error)
+	GetJob(ctx context.Context, req *crudv1.GetJobRequest) (*crudv1.GetJobResponse, error)
+	GetJobEvents(ctx context.Context, req *crudv1.GetJobEventsRequest) (*crudv1.GetJobEventsResponse, error)
+
+	// Dataset Profiles (Phase A2)
+	GetDatasetSummary(ctx context.Context, req *crudv1.GetDatasetSummaryRequest) (*crudv1.GetDatasetSummaryResponse, error)
+	ListDatasetProfiles(ctx context.Context, req *crudv1.ListDatasetProfilesRequest) (*crudv1.ListDatasetProfilesResponse, error)
+	CompareDatasetProfiles(ctx context.Context, req *crudv1.CompareDatasetProfilesRequest) (*crudv1.CompareDatasetProfilesResponse, error)
+
+	// Training Runs (Phase B)
+	ListTrainingRuns(ctx context.Context, req *crudv1.ListTrainingRunsRequest) (*crudv1.ListTrainingRunsResponse, error)
+	GetTrainingRun(ctx context.Context, req *crudv1.GetTrainingRunRequest) (*crudv1.GetTrainingRunResponse, error)
+	GetMetricSeries(ctx context.Context, req *crudv1.GetMetricSeriesRequest) (*crudv1.GetMetricSeriesResponse, error)
+
 	// Shadow Comparison (Phase 9)
 	GetShadowComparison(ctx context.Context, req *crudv1.GetShadowComparisonRequest) (*crudv1.GetShadowComparisonResponse, error)
 }

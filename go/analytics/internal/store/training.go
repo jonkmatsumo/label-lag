@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -14,293 +13,217 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (s *SQLStore) GetTrainingData(ctx context.Context, cutoff time.Time) ([]*pb.TransactionDetail, []*pb.TransactionDetail, error) {
-	trainQuery := `
-		SELECT
-			fs.record_id,
-			fs.user_id,
-			em.created_at,
-			em.is_train_eligible,
-			em.is_pre_fraud,
-			gr.amount,
-			gr.is_off_hours_txn,
-			gr.merchant_risk_score,
-			fs.velocity_24h,
-			fs.amount_to_avg_ratio_30d,
-			fs.balance_volatility_z_score,
-			CASE
-				WHEN gr.is_fraudulent = TRUE
-					 AND em.fraud_confirmed_at IS NOT NULL
-					 AND em.fraud_confirmed_at <= $1
-				THEN TRUE
-				ELSE FALSE
-			END AS is_fraudulent,
-			COALESCE(gr.fraud_type, ''),
-			gr.numerical_features,
-			gr.categorical_features
-		FROM feature_snapshots fs
-		INNER JOIN evaluation_metadata em ON fs.record_id = em.record_id
-		INNER JOIN generated_records gr ON fs.record_id = gr.record_id
-		WHERE gr.transaction_timestamp < $1
-		  AND em.is_train_eligible = TRUE
-		ORDER BY gr.transaction_timestamp
-	`
-
-	testQuery := `
-		SELECT
-			fs.record_id,
-			fs.user_id,
-			em.created_at,
-			em.is_train_eligible,
-			em.is_pre_fraud,
-			gr.amount,
-			gr.is_off_hours_txn,
-			gr.merchant_risk_score,
-			fs.velocity_24h,
-			fs.amount_to_avg_ratio_30d,
-			fs.balance_volatility_z_score,
-			gr.is_fraudulent,
-			COALESCE(gr.fraud_type, ''),
-			gr.numerical_features,
-			gr.categorical_features
-		FROM feature_snapshots fs
-		INNER JOIN evaluation_metadata em ON fs.record_id = em.record_id
-		INNER JOIN generated_records gr ON fs.record_id = gr.record_id
-		WHERE gr.transaction_timestamp >= $1
-		ORDER BY gr.transaction_timestamp
-	`
-	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
-	defer cancel()
-
-	trainRecords, err := s.queryTrainingRecords(queryCtx, trainQuery, cutoff)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	testRecords, err := s.queryTrainingRecords(queryCtx, testQuery, cutoff)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return trainRecords, testRecords, nil
-}
-
-func (s *SQLStore) queryTrainingRecords(ctx context.Context, query string, cutoff time.Time) ([]*pb.TransactionDetail, error) {
-	rows, err := s.db.QueryContext(ctx, query, cutoff)
-	if err != nil {
-		return nil, db.MapDBError(err)
-	}
-	defer rows.Close()
-
-	var records []*pb.TransactionDetail
-	for rows.Next() {
-		var tx pb.TransactionDetail
-		var createdAt time.Time
-		var numFeaturesJSON, catFeaturesJSON []byte
-		err := rows.Scan(
-			&tx.RecordId,
-			&tx.UserId,
-			&createdAt,
-			&tx.IsTrainEligible,
-			&tx.IsPreFraud,
-			&tx.Amount,
-			&tx.IsOffHoursTxn,
-			&tx.MerchantRiskScore,
-			&tx.Velocity_24H,
-			&tx.AmountToAvgRatio_30D,
-			&tx.BalanceVolatilityZScore,
-			&tx.IsFraudulent,
-			&tx.FraudType,
-			&numFeaturesJSON,
-			&catFeaturesJSON,
+func (s *SQLStore) SaveTrainingRun(ctx context.Context, run *pb.TrainingRun) error {
+	query := `
+		INSERT INTO training_runs (
+			run_id, model_name, status, started_at, ended_at, metrics, params, dataset_id, mlflow_run_id
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, $7, $8, $9
 		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan training record: %v", err)
-		}
-		tx.CreatedAt = timestamppb.New(createdAt)
-
-		if len(numFeaturesJSON) > 0 {
-			if err := json.Unmarshal(numFeaturesJSON, &tx.NumericalFeatures); err != nil {
-				return nil, status.Errorf(codes.Internal, "invalid json payload: %v", err)
-			}
-		}
-		if len(catFeaturesJSON) > 0 {
-			if err := json.Unmarshal(catFeaturesJSON, &tx.CategoricalFeatures); err != nil {
-				return nil, status.Errorf(codes.Internal, "invalid json payload: %v", err)
-			}
-		}
-
-		records = append(records, &tx)
-	}
-	return records, nil
-}
-
-func (s *SQLStore) GetBacktestFeatures(ctx context.Context, start, end time.Time) ([]*pb.BacktestFeatureVector, error) {
-	query := `
-		SELECT
-			record_id,
-			velocity_24h,
-			amount_to_avg_ratio_30d,
-			balance_volatility_z_score,
-			COALESCE(experimental_signals::text, '{}') as experimental_signals_json
-		FROM feature_snapshots
-		WHERE computed_at >= $1 AND computed_at <= $2
-		ORDER BY computed_at
-	`
-	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
-	defer cancel()
-
-	rows, err := s.db.QueryContext(queryCtx, query, start, end)
-	if err != nil {
-		return nil, db.MapDBError(err)
-	}
-	defer rows.Close()
-
-	var features []*pb.BacktestFeatureVector
-	for rows.Next() {
-		var f pb.BacktestFeatureVector
-		if err := rows.Scan(
-			&f.RecordId,
-			&f.Velocity_24H,
-			&f.AmountToAvgRatio_30D,
-			&f.BalanceVolatilityZScore,
-			&f.ExperimentalSignalsJson,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan backtest feature: %v", err)
-		}
-		features = append(features, &f)
-	}
-
-	return features, nil
-}
-
-func (s *SQLStore) SaveBacktestResult(ctx context.Context, res *pb.BacktestResult) error {
-	metricsJSON, _ := json.Marshal(res.Metrics)
-
-	query := `
-		INSERT INTO backtest_results (
-			job_id, rule_id, ruleset_version, start_date, end_date,
-			metrics, completed_at, error
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		ON CONFLICT (job_id) DO UPDATE SET
+		ON CONFLICT (run_id) DO UPDATE SET
+			status = EXCLUDED.status,
+			ended_at = EXCLUDED.ended_at,
 			metrics = EXCLUDED.metrics,
-			completed_at = EXCLUDED.completed_at,
-			error = EXCLUDED.error
+			params = EXCLUDED.params,
+			mlflow_run_id = EXCLUDED.mlflow_run_id
 	`
+
+	startedAt := run.StartedAt.AsTime()
+	var endedAt sql.NullTime
+	if run.EndedAt != nil {
+		endedAt = sql.NullTime{Time: run.EndedAt.AsTime(), Valid: true}
+	}
+
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
 	_, err := s.db.ExecContext(queryCtx, query,
-		res.JobId, res.RuleId, res.RulesetVersion,
-		res.StartDate.AsTime(), res.EndDate.AsTime(),
-		metricsJSON, res.CompletedAt.AsTime(), res.Error,
+		run.RunId,
+		run.ModelName,
+		run.Status,
+		startedAt,
+		endedAt,
+		[]byte(run.MetricsJson),
+		[]byte(run.ParamsJson),
+		run.DatasetId,
+		run.MlflowRunId,
 	)
-
 	if err != nil {
 		return db.MapDBError(err)
 	}
+
 	return nil
 }
 
-func (s *SQLStore) ListBacktestResults(ctx context.Context, ruleID string, start, end *time.Time, limit, offset int32) ([]*pb.BacktestResult, error) {
+func (s *SQLStore) ListTrainingRuns(ctx context.Context, modelName string, limit, offset int32) ([]*pb.TrainingRun, int64, error) {
+	queryBuilder := db.NewQueryBuilder(`
+		SELECT
+			run_id, model_name, status, started_at, ended_at, metrics, params, dataset_id, mlflow_run_id
+		FROM training_runs
+	`)
+
+	if modelName != "" {
+		queryBuilder.AddCondition("model_name = ?", modelName)
+	}
+
+	// Count
+	countQuery, countArgs := queryBuilder.BuildCount()
+	var total int64
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	err := s.db.QueryRowContext(queryCtx, countQuery, countArgs...).Scan(&total)
+	if err != nil {
+		return nil, 0, db.MapDBError(err)
+	}
+
+	// List
+	queryBuilder.AddOrderBy("started_at DESC")
+	queryBuilder.SetLimit(limit)
+	queryBuilder.SetOffset(offset)
+	selectQuery, selectArgs := queryBuilder.BuildSelect()
+
+	rows, err := s.db.QueryContext(queryCtx, selectQuery, selectArgs...)
+	if err != nil {
+		return nil, 0, db.MapDBError(err)
+	}
+	defer rows.Close()
+
+	var runs []*pb.TrainingRun
+	for rows.Next() {
+		var r pb.TrainingRun
+		var startedAt time.Time
+		var endedAt sql.NullTime
+		var metricsJSON, paramsJSON []byte
+		var datasetID, mlflowID sql.NullString
+
+		if err := rows.Scan(
+			&r.RunId,
+			&r.ModelName,
+			&r.Status,
+			&startedAt,
+			&endedAt,
+			&metricsJSON,
+			&paramsJSON,
+			&datasetID,
+			&mlflowID,
+		); err != nil {
+			return nil, 0, fmt.Errorf("failed to scan run: %v", err)
+		}
+
+		r.StartedAt = timestamppb.New(startedAt)
+		if endedAt.Valid {
+			r.EndedAt = timestamppb.New(endedAt.Time)
+		}
+		if metricsJSON != nil {
+			r.MetricsJson = string(metricsJSON)
+		}
+		if paramsJSON != nil {
+			r.ParamsJson = string(paramsJSON)
+		}
+		if datasetID.Valid {
+			r.DatasetId = datasetID.String
+		}
+		if mlflowID.Valid {
+			r.MlflowRunId = mlflowID.String
+		}
+
+		runs = append(runs, &r)
+	}
+
+	return runs, total, nil
+}
+
+func (s *SQLStore) GetTrainingRun(ctx context.Context, runID string) (*pb.TrainingRun, error) {
 	query := `
 		SELECT
-			job_id, rule_id, ruleset_version, start_date, end_date,
-			metrics, completed_at, error
-		FROM backtest_results
-		WHERE 1=1
+			run_id, model_name, status, started_at, ended_at, metrics, params, dataset_id, mlflow_run_id
+		FROM training_runs
+		WHERE run_id = $1
 	`
-	args := []interface{}{}
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
 
-	if ruleID != "" {
-		args = append(args, ruleID)
-		query += fmt.Sprintf(" AND rule_id = $%d", len(args))
+	var r pb.TrainingRun
+	var startedAt time.Time
+	var endedAt sql.NullTime
+	var metricsJSON, paramsJSON []byte
+	var datasetID, mlflowID sql.NullString
+
+	err := s.db.QueryRowContext(queryCtx, query, runID).Scan(
+		&r.RunId,
+		&r.ModelName,
+		&r.Status,
+		&startedAt,
+		&endedAt,
+		&metricsJSON,
+		&paramsJSON,
+		&datasetID,
+		&mlflowID,
+	)
+	if err == sql.ErrNoRows {
+		return nil, status.Errorf(codes.NotFound, "run not found: %s", runID)
 	}
-	if start != nil {
-		args = append(args, *start)
-		query += fmt.Sprintf(" AND completed_at >= $%d", len(args))
-	}
-	if end != nil {
-		args = append(args, *end)
-		query += fmt.Sprintf(" AND completed_at <= $%d", len(args))
+	if err != nil {
+		return nil, db.MapDBError(err)
 	}
 
-	query += fmt.Sprintf(" ORDER BY completed_at DESC LIMIT %d OFFSET %d", limit, offset)
+	r.StartedAt = timestamppb.New(startedAt)
+	if endedAt.Valid {
+		r.EndedAt = timestamppb.New(endedAt.Time)
+	}
+	if metricsJSON != nil {
+		r.MetricsJson = string(metricsJSON)
+	}
+	if paramsJSON != nil {
+		r.ParamsJson = string(paramsJSON)
+	}
+	if datasetID.Valid {
+		r.DatasetId = datasetID.String
+	}
+	if mlflowID.Valid {
+		r.MlflowRunId = mlflowID.String
+	}
+
+	return &r, nil
+}
+
+func (s *SQLStore) GetMetricSeries(ctx context.Context, modelName, metricName string, start, end time.Time) ([]*pb.MetricPoint, error) {
+	// Extract metric from JSONB
+	// Assumes metrics is a flat object
+	query := fmt.Sprintf(`
+		SELECT
+			started_at,
+			(metrics->>'%s')::FLOAT,
+			run_id
+		FROM training_runs
+		WHERE model_name = $1
+		  AND started_at >= $2
+		  AND started_at <= $3
+		  AND metrics ? $4
+		ORDER BY started_at ASC
+	`, metricName)
 
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	rows, err := s.db.QueryContext(queryCtx, query, args...)
+	rows, err := s.db.QueryContext(queryCtx, query, modelName, start, end, metricName)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
 	defer rows.Close()
 
-	var results []*pb.BacktestResult
+	var points []*pb.MetricPoint
 	for rows.Next() {
-		var res pb.BacktestResult
-		var start, end, completed time.Time
-		var metricsJSON []byte
-		var rID sql.NullString
-
-		if err := rows.Scan(
-			&res.JobId, &rID, &res.RulesetVersion, &start, &end,
-			&metricsJSON, &completed, &res.Error,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan backtest result: %v", err)
+		var p pb.MetricPoint
+		var ts time.Time
+		if err := rows.Scan(&ts, &p.Value, &p.RunId); err != nil {
+			// Skip malformed? or fail
+			continue
 		}
-
-		res.RuleId = rID.String
-		res.StartDate = timestamppb.New(start)
-		res.EndDate = timestamppb.New(end)
-		res.CompletedAt = timestamppb.New(completed)
-
-		var metrics pb.BacktestMetrics
-		if err := json.Unmarshal(metricsJSON, &metrics); err != nil {
-			return nil, status.Errorf(codes.Internal, "invalid json payload: %v", err)
-		}
-		res.Metrics = &metrics
-		results = append(results, &res)
-	}
-	return results, nil
-}
-
-func (s *SQLStore) GetBacktestResult(ctx context.Context, jobID string) (*pb.BacktestResult, error) {
-	query := `
-		SELECT
-			job_id, rule_id, ruleset_version, start_date, end_date,
-			metrics, completed_at, error
-		FROM backtest_results
-		WHERE job_id = $1
-	`
-
-	var res pb.BacktestResult
-	var start, end, completed time.Time
-	var metricsJSON []byte
-	var rID sql.NullString
-
-	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
-	defer cancel()
-
-	err := s.db.QueryRowContext(queryCtx, query, jobID).Scan(
-		&res.JobId, &rID, &res.RulesetVersion, &start, &end,
-		&metricsJSON, &completed, &res.Error,
-	)
-
-	if err != nil {
-		return nil, db.MapDBError(err)
+		p.Timestamp = timestamppb.New(ts)
+		points = append(points, &p)
 	}
 
-	res.RuleId = rID.String
-	res.StartDate = timestamppb.New(start)
-	res.EndDate = timestamppb.New(end)
-	res.CompletedAt = timestamppb.New(completed)
-
-	var metrics pb.BacktestMetrics
-	if err := json.Unmarshal(metricsJSON, &metrics); err != nil {
-		return nil, status.Errorf(codes.Internal, "invalid json payload: %v", err)
-	}
-	res.Metrics = &metrics
-
-	return &res, nil
+	return points, nil
 }

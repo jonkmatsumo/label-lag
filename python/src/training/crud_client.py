@@ -239,6 +239,15 @@ class AnalyticsCRUDClient:
             metadata=self._get_metadata(request_id),
         )
 
+    def report_training_run(self, run, request_id: str | None = None):
+        """Report training run status to Analytics service."""
+        request = analytics_pb2.ReportTrainingRunRequest(run=run)
+        return self.stub.ReportTrainingRun(
+            request,
+            timeout=self.timeout_seconds,
+            metadata=self._get_metadata(request_id),
+        )
+
 
 _client = None
 

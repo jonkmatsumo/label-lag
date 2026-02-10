@@ -60,7 +60,7 @@ func TestDecisionAPIGating(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := NewHandler(logger, nil, stub, nil, nil, rules.NewEmptyProvider(), 1024, "", "", tt.enableDecisions, false)
+			handler := NewHandler(logger, nil, stub, nil, nil, rules.NewEmptyProvider(), 1024, "", "", tt.enableDecisions, false, false, false, false)
 			mux := http.NewServeMux()
 			handler.Register(mux)
 

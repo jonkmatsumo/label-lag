@@ -159,6 +159,52 @@ func InitDB(db *sql.DB) error {
 			rules_fired_total BIGINT DEFAULT 0,
 			PRIMARY KEY (tenant_id, hour)
 		)`,
+		// A1: Jobs & Job Events
+		`CREATE TABLE IF NOT EXISTS jobs (
+			job_id TEXT PRIMARY KEY,
+			job_type TEXT NOT NULL,
+			status TEXT NOT NULL,
+			created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+			started_at TIMESTAMP,
+			ended_at TIMESTAMP,
+			error_code TEXT,
+			error_message TEXT,
+			params JSONB,
+			metrics JSONB
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_jobs_type_status ON jobs(job_type, status)`,
+		`CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at DESC)`,
+		`CREATE TABLE IF NOT EXISTS job_events (
+			event_id SERIAL PRIMARY KEY,
+			job_id TEXT NOT NULL,
+			event_type TEXT NOT NULL,
+			timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
+			details JSONB
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_job_events_job_id ON job_events(job_id)`,
+		// A2: Dataset Profiles
+		`CREATE TABLE IF NOT EXISTS dataset_profiles (
+			profile_id TEXT PRIMARY KEY,
+			tenant_id TEXT DEFAULT '',
+			computed_at TIMESTAMP NOT NULL DEFAULT NOW(),
+			record_count BIGINT NOT NULL,
+			feature_profiles JSONB NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_dataset_profiles_computed_at ON dataset_profiles(computed_at DESC)`,
+		// B: Training Runs
+		`CREATE TABLE IF NOT EXISTS training_runs (
+			run_id TEXT PRIMARY KEY,
+			model_name TEXT NOT NULL,
+			status TEXT NOT NULL,
+			started_at TIMESTAMP NOT NULL DEFAULT NOW(),
+			ended_at TIMESTAMP,
+			metrics JSONB,
+			params JSONB,
+			dataset_id TEXT,
+			mlflow_run_id TEXT
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_training_runs_model_name ON training_runs(model_name)`,
+		`CREATE INDEX IF NOT EXISTS idx_training_runs_started_at ON training_runs(started_at DESC)`,
 	}
 
 	for _, q := range queries {
