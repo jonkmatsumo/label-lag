@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -535,11 +536,10 @@ func (s *SQLStore) discoverJSONBKeys(ctx context.Context, table, column string, 
 	for rows.Next() {
 		var key string
 		if err := rows.Scan(&key); err == nil {
-			keys = append(keys)
 			keys = append(keys, key)
 		}
 	}
-	// Deduplicate just in case, though SQL does it
+	sort.Strings(keys)
 	return keys, nil
 }
 
