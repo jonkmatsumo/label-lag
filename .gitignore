@@ -113,3 +113,6 @@ python/src/analytics/v1/__init__.py
 python/src/forecast/v1/__init__.py
 python/src/inference/v1/__init__.py
 python/src/training/v1/__init__.py
+
+# Internal documents
+docs/

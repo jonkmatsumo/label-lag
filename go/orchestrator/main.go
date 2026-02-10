@@ -187,6 +187,7 @@ func initTracer(ctx context.Context) (*sdktrace.TracerProvider, error) {
 	if endpoint == "" {
 		return nil, nil
 	}
+	ratio := parseTraceSamplerRatio()
 
 	res, err := resource.New(ctx,
 		resource.WithAttributes(
@@ -208,7 +209,7 @@ func initTracer(ctx context.Context) (*sdktrace.TracerProvider, error) {
 
 	bsp := sdktrace.NewBatchSpanProcessor(traceExporter)
 	tracerProvider := sdktrace.NewTracerProvider(
-		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(ratio))),
 		sdktrace.WithResource(res),
 		sdktrace.WithSpanProcessor(bsp),
 	)
@@ -217,6 +218,33 @@ func initTracer(ctx context.Context) (*sdktrace.TracerProvider, error) {
 	otel.SetTracerProvider(tracerProvider)
 
 	return tracerProvider, nil
+}
+
+func parseTraceSamplerRatio() float64 {
+	const (
+		ratioEnv     = "OTEL_TRACES_SAMPLER_RATIO"
+		defaultRatio = 0.1
+	)
+
+	value := os.Getenv(ratioEnv)
+	if value == "" {
+		return defaultRatio
+	}
+
+	ratio, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		slog.Warn("invalid trace sampler ratio, using default", "key", ratioEnv, "value", value, "default", defaultRatio)
+		return defaultRatio
+	}
+	if ratio < 0 {
+		slog.Warn("trace sampler ratio below 0.0, clamping", "key", ratioEnv, "value", value)
+		return 0.0
+	}
+	if ratio > 1 {
+		slog.Warn("trace sampler ratio above 1.0, clamping", "key", ratioEnv, "value", value)
+		return 1.0
+	}
+	return ratio
 }
 
 func parseDurationEnv(logger *slog.Logger, key string, fallback time.Duration) time.Duration {

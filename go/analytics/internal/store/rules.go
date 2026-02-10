@@ -43,7 +43,7 @@ func (s *SQLStore) ListRuleVersions(ctx context.Context, ruleID string, limit, o
 
 		var r pb.Rule
 		if err := json.Unmarshal(ruleJSON, &r); err != nil {
-			continue
+			return nil, 0, status.Errorf(codes.Internal, "invalid json payload: %v", err)
 		}
 		if statusStr.Valid {
 			r.Status = statusStr.String
@@ -227,7 +227,9 @@ func (s *SQLStore) DiffRuleVersions(ctx context.Context, ruleID, vA, vB string) 
 			return nil, err
 		}
 		var r pb.Rule
-		json.Unmarshal(rJSON, &r)
+		if err := json.Unmarshal(rJSON, &r); err != nil {
+			return nil, status.Errorf(codes.Internal, "invalid json payload: %v", err)
+		}
 		return &r, nil
 	}
 

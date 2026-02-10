@@ -3,7 +3,9 @@ package obs
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
+	"strconv"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -11,6 +13,11 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
+)
+
+const (
+	traceSamplerRatioEnv     = "OTEL_TRACES_SAMPLER_RATIO"
+	defaultTraceSamplerRatio = 0.1
 )
 
 // InitTracer initializes an OTLP exporter, and configures the corresponding trace provider.
@@ -42,9 +49,10 @@ func InitTracer(ctx context.Context) (*sdktrace.TracerProvider, error) {
 
 	// Register the trace exporter with a TracerProvider, using a batch
 	// span processor to aggregate spans before export.
+	ratio := parseTraceSamplerRatio()
 	bsp := sdktrace.NewBatchSpanProcessor(traceExporter)
 	tracerProvider := sdktrace.NewTracerProvider(
-		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(ratio))),
 		sdktrace.WithResource(res),
 		sdktrace.WithSpanProcessor(bsp),
 	)
@@ -54,4 +62,26 @@ func InitTracer(ctx context.Context) (*sdktrace.TracerProvider, error) {
 	otel.SetTracerProvider(tracerProvider)
 
 	return tracerProvider, nil
+}
+
+func parseTraceSamplerRatio() float64 {
+	value := os.Getenv(traceSamplerRatioEnv)
+	if value == "" {
+		return defaultTraceSamplerRatio
+	}
+
+	ratio, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		slog.Warn("invalid trace sampler ratio, using default", "key", traceSamplerRatioEnv, "value", value, "default", defaultTraceSamplerRatio)
+		return defaultTraceSamplerRatio
+	}
+	if ratio < 0 {
+		slog.Warn("trace sampler ratio below 0.0, clamping", "key", traceSamplerRatioEnv, "value", value)
+		return 0.0
+	}
+	if ratio > 1 {
+		slog.Warn("trace sampler ratio above 1.0, clamping", "key", traceSamplerRatioEnv, "value", value)
+		return 1.0
+	}
+	return ratio
 }

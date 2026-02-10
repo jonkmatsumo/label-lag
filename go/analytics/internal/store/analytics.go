@@ -5,11 +5,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/jonkmatsumo/label-lag/go/analytics/internal/db"
 	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -118,10 +121,14 @@ func (s *SQLStore) GetTransactionDetails(ctx context.Context, cutoffDate time.Ti
 		d.CreatedAt = timestamppb.New(createdAt)
 
 		if len(numFeaturesJSON) > 0 {
-			json.Unmarshal(numFeaturesJSON, &d.NumericalFeatures)
+			if err := json.Unmarshal(numFeaturesJSON, &d.NumericalFeatures); err != nil {
+				return nil, status.Errorf(codes.Internal, "invalid json payload: %v", err)
+			}
 		}
 		if len(catFeaturesJSON) > 0 {
-			json.Unmarshal(catFeaturesJSON, &d.CategoricalFeatures)
+			if err := json.Unmarshal(catFeaturesJSON, &d.CategoricalFeatures); err != nil {
+				return nil, status.Errorf(codes.Internal, "invalid json payload: %v", err)
+			}
 		}
 
 		details = append(details, &d)
@@ -234,10 +241,14 @@ func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransac
 		d.CreatedAt = timestamppb.New(createdAt)
 
 		if len(numFeaturesJSON) > 0 {
-			json.Unmarshal(numFeaturesJSON, &d.NumericalFeatures)
+			if err := json.Unmarshal(numFeaturesJSON, &d.NumericalFeatures); err != nil {
+				return nil, 0, status.Errorf(codes.Internal, "invalid json payload: %v", err)
+			}
 		}
 		if len(catFeaturesJSON) > 0 {
-			json.Unmarshal(catFeaturesJSON, &d.CategoricalFeatures)
+			if err := json.Unmarshal(catFeaturesJSON, &d.CategoricalFeatures); err != nil {
+				return nil, 0, status.Errorf(codes.Internal, "invalid json payload: %v", err)
+			}
 		}
 
 		details = append(details, &d)
@@ -535,11 +546,10 @@ func (s *SQLStore) discoverJSONBKeys(ctx context.Context, table, column string, 
 	for rows.Next() {
 		var key string
 		if err := rows.Scan(&key); err == nil {
-			keys = append(keys)
 			keys = append(keys, key)
 		}
 	}
-	// Deduplicate just in case, though SQL does it
+	sort.Strings(keys)
 	return keys, nil
 }
 

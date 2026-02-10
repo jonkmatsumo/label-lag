@@ -162,3 +162,23 @@ func TestGetDatasetProfile(t *testing.T) {
 	assert.NotEmpty(t, resp.FeatureProfiles)
 	assert.Equal(t, "amount", resp.FeatureProfiles[0].Name)
 }
+
+func TestDiscoverJSONBKeys_DeterministicOrder(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+	mock.ExpectQuery("SELECT DISTINCT key").
+		WillReturnRows(
+			sqlmock.NewRows([]string{"key"}).
+				AddRow("zeta").
+				AddRow("alpha").
+				AddRow("beta"),
+		)
+
+	keys, err := s.discoverJSONBKeys(context.Background(), "generated_records", "categorical_features", 10)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"alpha", "beta", "zeta"}, keys)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
