@@ -120,7 +120,7 @@ jobs:
 
       - name: Run Go tests
         working-directory: ${{ matrix.module }}
-        run: go test ./...
+        run: go test -race ./...
 
   generate-integration:
     runs-on: ubuntu-latest
