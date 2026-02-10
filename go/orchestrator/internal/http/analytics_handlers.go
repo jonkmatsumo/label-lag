@@ -682,6 +682,8 @@ func (h *Handler) handleGetRuleImpact(w http.ResponseWriter, r *http.Request) {
 	writeAnalyticsJSON(w, resp)
 }
 
+// handleGetKpis returns dashboard-level KPIs.
+// Query params: start_time (RFC3339), end_time (RFC3339), group_by (day|hour).
 func (h *Handler) handleGetKpis(w http.ResponseWriter, r *http.Request) {
 	req := &crudv1.GetKpisRequest{
 		GroupBy: r.URL.Query().Get("group_by"),
@@ -704,6 +706,16 @@ func (h *Handler) handleGetKpis(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if req.GroupBy != "" && req.GroupBy != "day" && req.GroupBy != "hour" {
+		writeJSONError(w, http.StatusBadRequest, "invalid group_by (day|hour required)")
+		return
+	}
+
+	if req.StartTime != nil && req.EndTime != nil && req.StartTime.AsTime().After(req.EndTime.AsTime()) {
+		writeJSONError(w, http.StatusBadRequest, "start_time must be <= end_time")
+		return
+	}
+
 	resp, err := h.analyticsClient.GetKpis(r.Context(), req)
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -713,6 +725,8 @@ func (h *Handler) handleGetKpis(w http.ResponseWriter, r *http.Request) {
 	writeAnalyticsJSON(w, resp)
 }
 
+// handleGetVolumeSeries returns timeseries volume data.
+// Query params: start_time (RFC3339), end_time (RFC3339), granularity (day|hour).
 func (h *Handler) handleGetVolumeSeries(w http.ResponseWriter, r *http.Request) {
 	req := &crudv1.GetVolumeSeriesRequest{
 		Granularity: r.URL.Query().Get("granularity"),
@@ -735,7 +749,64 @@ func (h *Handler) handleGetVolumeSeries(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
+	if req.Granularity != "" && req.Granularity != "day" && req.Granularity != "hour" {
+		writeJSONError(w, http.StatusBadRequest, "invalid granularity (day|hour required)")
+		return
+	}
+
+	if req.StartTime != nil && req.EndTime != nil && req.StartTime.AsTime().After(req.EndTime.AsTime()) {
+		writeJSONError(w, http.StatusBadRequest, "start_time must be <= end_time")
+		return
+	}
+
 	resp, err := h.analyticsClient.GetVolumeSeries(r.Context(), req)
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	writeAnalyticsJSON(w, resp)
+}
+
+// handleGetConfusionMatrix returns model performance metrics.
+// Query params: start_time (RFC3339), end_time (RFC3339), model_version, threshold.
+func (h *Handler) handleGetConfusionMatrix(w http.ResponseWriter, r *http.Request) {
+	req := &crudv1.GetConfusionMatrixRequest{
+		ModelVersion: r.URL.Query().Get("model_version"),
+	}
+
+	if startStr := r.URL.Query().Get("start_time"); startStr != "" {
+		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
+			req.StartTime = timestamppb.New(t)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
+			return
+		}
+	}
+	if endStr := r.URL.Query().Get("end_time"); endStr != "" {
+		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
+			req.EndTime = timestamppb.New(t)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
+			return
+		}
+	}
+
+	if threshStr := r.URL.Query().Get("threshold"); threshStr != "" {
+		if val, err := strconv.Atoi(threshStr); err == nil {
+			req.Threshold = int32(val)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid threshold (integer required)")
+			return
+		}
+	}
+
+	if req.StartTime != nil && req.EndTime != nil && req.StartTime.AsTime().After(req.EndTime.AsTime()) {
+		writeJSONError(w, http.StatusBadRequest, "start_time must be <= end_time")
+		return
+	}
+
+	resp, err := h.analyticsClient.GetConfusionMatrix(r.Context(), req)
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
 		return

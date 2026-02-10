@@ -49,6 +49,7 @@ type AnalyticsClient interface {
 	// Dashboard Aggregates (Phase 3)
 	GetKpis(ctx context.Context, req *crudv1.GetKpisRequest) (*crudv1.GetKpisResponse, error)
 	GetVolumeSeries(ctx context.Context, req *crudv1.GetVolumeSeriesRequest) (*crudv1.GetVolumeSeriesResponse, error)
+	GetConfusionMatrix(ctx context.Context, req *crudv1.GetConfusionMatrixRequest) (*crudv1.GetConfusionMatrixResponse, error)
 
 	// Shadow Comparison (Phase 9)
 	GetShadowComparison(ctx context.Context, req *crudv1.GetShadowComparisonRequest) (*crudv1.GetShadowComparisonResponse, error)

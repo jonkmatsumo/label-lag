@@ -177,6 +177,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	if h.enableKpiAPIs {
 		mux.HandleFunc("GET /kpis", h.handleGetKpis)
 		mux.HandleFunc("GET /volume", h.handleGetVolumeSeries)
+		mux.HandleFunc("GET /analytics/confusion-matrix", h.handleGetConfusionMatrix)
 	}
 
 	mux.HandleFunc("/data/clear", h.handleDatasetClear)

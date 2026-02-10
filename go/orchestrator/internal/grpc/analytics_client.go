@@ -1139,3 +1139,37 @@ func (c *AnalyticsClient) GetVolumeSeries(ctx context.Context, req *crudv1.GetVo
 	}
 	return resp, nil
 }
+
+func (c *AnalyticsClient) GetConfusionMatrix(ctx context.Context, req *crudv1.GetConfusionMatrixRequest) (*crudv1.GetConfusionMatrixResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	span := trace.SpanFromContext(ctx)
+	if err := c.breaker.Allow(); err != nil {
+		span.SetAttributes(
+			attribute.String("analytics.breaker_state", c.breaker.State().String()),
+			attribute.String("analytics.breaker_open_reason", "cooldown"),
+		)
+		return nil, mapRPCError(err)
+	}
+
+	callCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	resp, err := c.stub.GetConfusionMatrix(c.withMetadata(callCtx), req)
+	c.breaker.RecordResult(err)
+
+	span.SetAttributes(
+		attribute.String("analytics.breaker_state", c.breaker.State().String()),
+	)
+
+	if err != nil {
+		return nil, mapRPCError(err)
+	}
+	return resp, nil
+}

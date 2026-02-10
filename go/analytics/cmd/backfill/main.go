@@ -6,6 +6,7 @@ import (
 	"flag"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/jonkmatsumo/label-lag/go/analytics/internal/config"
 	_ "github.com/lib/pq"

@@ -33,6 +33,12 @@ func TestKpiAPIGating(t *testing.T) {
 			expectedStatus: http.StatusNotFound,
 		},
 		{
+			name:           "confusion matrix disabled",
+			enableKpis:     false,
+			path:           "/analytics/confusion-matrix",
+			expectedStatus: http.StatusNotFound,
+		},
+		{
 			name:           "kpis enabled",
 			enableKpis:     true,
 			path:           "/kpis",
@@ -42,6 +48,12 @@ func TestKpiAPIGating(t *testing.T) {
 			name:           "volume enabled",
 			enableKpis:     true,
 			path:           "/volume",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "confusion matrix enabled",
+			enableKpis:     true,
+			path:           "/analytics/confusion-matrix",
 			expectedStatus: http.StatusOK,
 		},
 	}

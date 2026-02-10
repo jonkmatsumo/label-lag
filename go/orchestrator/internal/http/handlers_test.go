@@ -811,6 +811,10 @@ func (s *stubAnalyticsClient) GetVolumeSeries(ctx context.Context, req *crudv1.G
 	return &crudv1.GetVolumeSeriesResponse{}, s.err
 }
 
+func (s *stubAnalyticsClient) GetConfusionMatrix(ctx context.Context, req *crudv1.GetConfusionMatrixRequest) (*crudv1.GetConfusionMatrixResponse, error) {
+	return &crudv1.GetConfusionMatrixResponse{}, s.err
+}
+
 func (s *stubAnalyticsClient) GenerateData(ctx context.Context, req *crudv1.GenerateDataRequest) (*crudv1.GenerateDataResponse, error) {
 	return s.generateDataResp, s.err
 }
