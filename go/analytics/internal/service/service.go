@@ -657,7 +657,7 @@ func (s *Service) BatchGetLatestUserFeatures(ctx context.Context, req *pb.BatchG
 	}
 
 	return &pb.BatchGetLatestUserFeaturesResponse{
-		Results: results,
+		Features: results,
 	}, nil
 }
 
