@@ -661,6 +661,67 @@ func (s *Service) BatchGetLatestUserFeatures(ctx context.Context, req *pb.BatchG
 	}, nil
 }
 
+func (s *Service) ListDecisions(ctx context.Context, req *pb.ListDecisionsRequest) (*pb.ListDecisionsResponse, error) {
+	limit, err := normalizeLimit(req.Limit, 50, 250, "limit")
+	if err != nil {
+		return nil, err
+	}
+	offset, err := normalizeOffset(req.Offset)
+	if err != nil {
+		return nil, err
+	}
+	req.Limit = limit
+	req.Offset = offset
+
+	decisions, total, err := s.store.ListDecisions(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.ListDecisionsResponse{
+		Decisions: decisions,
+		Total:     total,
+	}, nil
+}
+
+func (s *Service) GetDecision(ctx context.Context, req *pb.GetDecisionRequest) (*pb.GetDecisionResponse, error) {
+	if req.RequestId == "" {
+		return nil, status.Error(codes.InvalidArgument, "request_id required")
+	}
+
+	decision, err := s.store.GetDecision(ctx, req.RequestId)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.GetDecisionResponse{
+		Decision: decision,
+	}, nil
+}
+
+func (s *Service) GetDecisionTrace(ctx context.Context, req *pb.GetDecisionTraceRequest) (*pb.GetDecisionTraceResponse, error) {
+	if req.RequestId == "" {
+		return nil, status.Error(codes.InvalidArgument, "request_id required")
+	}
+
+	trace, err := s.store.GetDecisionTrace(ctx, req.RequestId)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.GetDecisionTraceResponse{
+		Trace: trace,
+	}, nil
+}
+
+func (s *Service) GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactRequest) (*pb.GetRuleImpactResponse, error) {
+	if req.RuleId == "" {
+		return nil, status.Error(codes.InvalidArgument, "rule_id required")
+	}
+
+	return s.store.GetRuleImpact(ctx, req)
+}
+
 func (s *Service) StoreGeneratedData(ctx context.Context, req *pb.StoreGeneratedDataRequest) (*pb.StoreGeneratedDataResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request required")
