@@ -39,6 +39,13 @@ type AnalyticsClient interface {
 	LogInferenceEvent(ctx context.Context, req *crudv1.LogInferenceEventRequest) (*crudv1.LogInferenceEventResponse, error)
 	CompareBacktests(ctx context.Context, req *crudv1.CompareBacktestsRequest) (*crudv1.CompareBacktestsResponse, error)
 	GenerateData(ctx context.Context, req *crudv1.GenerateDataRequest) (*crudv1.GenerateDataResponse, error)
+
+	// Decision Explorer (Phase 2)
+	ListDecisions(ctx context.Context, req *crudv1.ListDecisionsRequest) (*crudv1.ListDecisionsResponse, error)
+	GetDecision(ctx context.Context, req *crudv1.GetDecisionRequest) (*crudv1.GetDecisionResponse, error)
+	GetDecisionTrace(ctx context.Context, req *crudv1.GetDecisionTraceRequest) (*crudv1.GetDecisionTraceResponse, error)
+	GetRuleImpact(ctx context.Context, req *crudv1.GetRuleImpactRequest) (*crudv1.GetRuleImpactResponse, error)
+
 	// Shadow Comparison (Phase 9)
 	GetShadowComparison(ctx context.Context, req *crudv1.GetShadowComparisonRequest) (*crudv1.GetShadowComparisonResponse, error)
 }

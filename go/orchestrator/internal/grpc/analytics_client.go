@@ -935,3 +935,139 @@ func (c *AnalyticsClient) GetShadowComparison(ctx context.Context, req *crudv1.G
 	}
 	return resp, nil
 }
+
+func (c *AnalyticsClient) ListDecisions(ctx context.Context, req *crudv1.ListDecisionsRequest) (*crudv1.ListDecisionsResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	span := trace.SpanFromContext(ctx)
+	if err := c.breaker.Allow(); err != nil {
+		span.SetAttributes(
+			attribute.String("analytics.breaker_state", c.breaker.State().String()),
+			attribute.String("analytics.breaker_open_reason", "cooldown"),
+		)
+		return nil, mapRPCError(err)
+	}
+
+	callCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	resp, err := c.stub.ListDecisions(c.withMetadata(callCtx), req)
+	c.breaker.RecordResult(err)
+
+	span.SetAttributes(
+		attribute.String("analytics.breaker_state", c.breaker.State().String()),
+	)
+
+	if err != nil {
+		return nil, mapRPCError(err)
+	}
+	return resp, nil
+}
+
+func (c *AnalyticsClient) GetDecision(ctx context.Context, req *crudv1.GetDecisionRequest) (*crudv1.GetDecisionResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	span := trace.SpanFromContext(ctx)
+	if err := c.breaker.Allow(); err != nil {
+		span.SetAttributes(
+			attribute.String("analytics.breaker_state", c.breaker.State().String()),
+			attribute.String("analytics.breaker_open_reason", "cooldown"),
+		)
+		return nil, mapRPCError(err)
+	}
+
+	callCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	resp, err := c.stub.GetDecision(c.withMetadata(callCtx), req)
+	c.breaker.RecordResult(err)
+
+	span.SetAttributes(
+		attribute.String("analytics.breaker_state", c.breaker.State().String()),
+	)
+
+	if err != nil {
+		return nil, mapRPCError(err)
+	}
+	return resp, nil
+}
+
+func (c *AnalyticsClient) GetDecisionTrace(ctx context.Context, req *crudv1.GetDecisionTraceRequest) (*crudv1.GetDecisionTraceResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	span := trace.SpanFromContext(ctx)
+	if err := c.breaker.Allow(); err != nil {
+		span.SetAttributes(
+			attribute.String("analytics.breaker_state", c.breaker.State().String()),
+			attribute.String("analytics.breaker_open_reason", "cooldown"),
+		)
+		return nil, mapRPCError(err)
+	}
+
+	callCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	resp, err := c.stub.GetDecisionTrace(c.withMetadata(callCtx), req)
+	c.breaker.RecordResult(err)
+
+	span.SetAttributes(
+		attribute.String("analytics.breaker_state", c.breaker.State().String()),
+	)
+
+	if err != nil {
+		return nil, mapRPCError(err)
+	}
+	return resp, nil
+}
+
+func (c *AnalyticsClient) GetRuleImpact(ctx context.Context, req *crudv1.GetRuleImpactRequest) (*crudv1.GetRuleImpactResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	span := trace.SpanFromContext(ctx)
+	if err := c.breaker.Allow(); err != nil {
+		span.SetAttributes(
+			attribute.String("analytics.breaker_state", c.breaker.State().String()),
+			attribute.String("analytics.breaker_open_reason", "cooldown"),
+		)
+		return nil, mapRPCError(err)
+	}
+
+	callCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	resp, err := c.stub.GetRuleImpact(c.withMetadata(callCtx), req)
+	c.breaker.RecordResult(err)
+
+	span.SetAttributes(
+		attribute.String("analytics.breaker_state", c.breaker.State().String()),
+	)
+
+	if err != nil {
+		return nil, mapRPCError(err)
+	}
+	return resp, nil
+}

@@ -536,3 +536,94 @@ func mapTableFingerprint(fingerprint *crudv1.TableFingerprint) tableFingerprintR
 		MaxID:        fingerprint.GetMaxId(),
 	}
 }
+
+func (h *Handler) handleListDecisions(w http.ResponseWriter, r *http.Request) {
+	limit, err := parseIntQuery(r, "limit", 50, 1, 1000)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	offset, err := parseIntQuery(r, "offset", 0, 0, 10000)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	req := &crudv1.ListDecisionsRequest{
+		Limit:    limit,
+		Offset:   offset,
+		UserId:   r.URL.Query().Get("user_id"),
+		Decision: r.URL.Query().Get("decision"),
+	}
+
+	if minScoreStr := r.URL.Query().Get("min_score"); minScoreStr != "" {
+		if val, err := strconv.Atoi(minScoreStr); err == nil {
+			req.MinScore = int32(val)
+		}
+	}
+	if maxScoreStr := r.URL.Query().Get("max_score"); maxScoreStr != "" {
+		if val, err := strconv.Atoi(maxScoreStr); err == nil {
+			req.MaxScore = int32(val)
+		}
+	}
+
+	resp, err := h.analyticsClient.ListDecisions(r.Context(), req)
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	writeAnalyticsJSON(w, resp)
+}
+
+func (h *Handler) handleGetDecision(w http.ResponseWriter, r *http.Request) {
+	requestID := r.PathValue("request_id")
+	if requestID == "" {
+		writeJSONError(w, http.StatusBadRequest, "request_id required")
+		return
+	}
+
+	resp, err := h.analyticsClient.GetDecision(r.Context(), &crudv1.GetDecisionRequest{RequestId: requestID})
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	writeAnalyticsJSON(w, resp)
+}
+
+func (h *Handler) handleGetDecisionTrace(w http.ResponseWriter, r *http.Request) {
+	requestID := r.PathValue("request_id")
+	if requestID == "" {
+		writeJSONError(w, http.StatusBadRequest, "request_id required")
+		return
+	}
+
+	resp, err := h.analyticsClient.GetDecisionTrace(r.Context(), &crudv1.GetDecisionTraceRequest{RequestId: requestID})
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	writeAnalyticsJSON(w, resp)
+}
+
+func (h *Handler) handleGetRuleImpact(w http.ResponseWriter, r *http.Request) {
+	ruleID := r.PathValue("rule_id")
+	if ruleID == "" {
+		writeJSONError(w, http.StatusBadRequest, "rule_id required")
+		return
+	}
+
+	req := &crudv1.GetRuleImpactRequest{
+		RuleId: ruleID,
+	}
+
+	resp, err := h.analyticsClient.GetRuleImpact(r.Context(), req)
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	writeAnalyticsJSON(w, resp)
+}
