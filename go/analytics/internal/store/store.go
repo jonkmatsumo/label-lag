@@ -27,6 +27,12 @@ type Store interface {
 
 	// Analytics
 	GetShadowComparison(ctx context.Context, hours int32) (*pb.ShadowModeMetrics, error)
+	GetRuleStats(ctx context.Context, ruleID string, cutoff time.Time) ([]*pb.RuleStats, error)
+	GetAttribution(ctx context.Context, cutoff time.Time, limit int32) ([]*pb.DailyAttribution, error)
+
+	// Feature Hydration
+	GetLatestUserFeatures(ctx context.Context, userID string) (*pb.UserFeatures, bool, error)
+	BatchGetLatestUserFeatures(ctx context.Context, userIDs []string) (map[string]*pb.UserFeatures, error)
 
 	// Training
 	GetTrainingData(ctx context.Context, cutoff time.Time) (train []*pb.TransactionDetail, test []*pb.TransactionDetail, err error)

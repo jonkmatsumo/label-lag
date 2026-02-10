@@ -182,3 +182,24 @@ func TestDiscoverJSONBKeys_DeterministicOrder(t *testing.T) {
 	assert.Equal(t, []string{"alpha", "beta", "zeta"}, keys)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+func TestGetRuleStats(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+
+	cutoff := time.Now().AddDate(0, 0, -30)
+	rows := sqlmock.NewRows([]string{"rule_id", "triggered_count", "shadow_triggered_count", "approval_rate"}).
+		AddRow("rule-1", 100, 10, 0.85)
+
+	mock.ExpectQuery("SELECT").WithArgs(cutoff).WillReturnRows(rows)
+
+	stats, err := s.GetRuleStats(context.Background(), "", cutoff)
+	require.NoError(t, err)
+	require.Len(t, stats, 1)
+	assert.Equal(t, "rule-1", stats[0].RuleId)
+	assert.Equal(t, int64(100), stats[0].TriggeredCount)
+	assert.Equal(t, int64(10), stats[0].ShadowTriggeredCount)
+	assert.Equal(t, 0.85, stats[0].ApprovalRate)
+}

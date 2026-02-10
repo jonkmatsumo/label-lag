@@ -691,3 +691,46 @@ func (s *SQLStore) profileCategoricalJSONBKey(ctx context.Context, table, column
 
 	return profile, nil
 }
+func (s *SQLStore) GetRuleStats(ctx context.Context, ruleID string, cutoff time.Time) ([]*pb.RuleStats, error) {
+	query := `
+		SELECT
+			ri.rule_id,
+			COUNT(*) as triggered_count,
+			COUNT(*) FILTER (WHERE ri.is_shadow = TRUE) as shadow_triggered_count,
+			COALESCE(AVG(CASE WHEN gr.is_fraudulent = TRUE THEN 1.0 ELSE 0.0 END), 0) as approval_rate
+		FROM rule_impacts ri
+		INNER JOIN inference_events ie ON ri.request_id = ie.request_id
+		LEFT JOIN generated_records gr ON ri.request_id = gr.record_id
+		WHERE ie.ts >= $1
+	`
+	args := []interface{}{cutoff}
+	if ruleID != "" {
+		query += " AND ri.rule_id = $2"
+		args = append(args, ruleID)
+	}
+	query += " GROUP BY ri.rule_id"
+
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(queryCtx, query, args...)
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+	defer rows.Close()
+
+	var stats []*pb.RuleStats
+	for rows.Next() {
+		var s pb.RuleStats
+		if err := rows.Scan(
+			&s.RuleId,
+			&s.TriggeredCount,
+			&s.ShadowTriggeredCount,
+			&s.ApprovalRate,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan rule stats: %v", err)
+		}
+		stats = append(stats, &s)
+	}
+	return stats, nil
+}

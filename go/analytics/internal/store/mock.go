@@ -261,3 +261,34 @@ func (m *MockStore) GetDatasetProfile(ctx context.Context, datasetID string, lim
 	}
 	return args.Get(0).(*pb.GetDatasetProfileResponse), args.Error(1)
 }
+func (m *MockStore) GetRuleStats(ctx context.Context, ruleID string, cutoff time.Time) ([]*pb.RuleStats, error) {
+	args := m.Called(ctx, ruleID, cutoff)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*pb.RuleStats), args.Error(1)
+}
+
+func (m *MockStore) GetAttribution(ctx context.Context, cutoff time.Time, limit int32) ([]*pb.DailyAttribution, error) {
+	args := m.Called(ctx, cutoff, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*pb.DailyAttribution), args.Error(1)
+}
+
+func (m *MockStore) GetLatestUserFeatures(ctx context.Context, userID string) (*pb.UserFeatures, bool, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Bool(1), args.Error(2)
+	}
+	return args.Get(0).(*pb.UserFeatures), args.Bool(1), args.Error(2)
+}
+
+func (m *MockStore) BatchGetLatestUserFeatures(ctx context.Context, userIDs []string) (map[string]*pb.UserFeatures, error) {
+	args := m.Called(ctx, userIDs)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(map[string]*pb.UserFeatures), args.Error(1)
+}

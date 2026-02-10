@@ -571,16 +571,19 @@ func (s *Service) GetRuleReadiness(ctx context.Context, req *pb.GetRuleReadiness
 }
 
 func (s *Service) GetRuleStats(ctx context.Context, req *pb.GetRuleStatsRequest) (*pb.GetRuleStatsResponse, error) {
-	// Stub implementation from main.go
+	days, err := normalizeDays(req.Days, 30, 365)
+	if err != nil {
+		return nil, err
+	}
+	cutoff := time.Now().AddDate(0, 0, -int(days))
+
+	stats, err := s.store.GetRuleStats(ctx, req.RuleId, cutoff)
+	if err != nil {
+		return nil, err
+	}
+
 	return &pb.GetRuleStatsResponse{
-		Stats: []*pb.RuleStats{
-			{
-				RuleId:               req.RuleId,
-				TriggeredCount:       0,
-				ShadowTriggeredCount: 0,
-				ApprovalRate:         0.0,
-			},
-		},
+		Stats: stats,
 	}, nil
 }
 
