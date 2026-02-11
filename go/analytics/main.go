@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -24,6 +25,8 @@ import (
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // loggingInterceptor logs the details of each gRPC request and response.
@@ -95,6 +98,7 @@ func main() {
 	opts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(
 			obs.RequestIDInterceptor,
+			obs.MetricsInterceptor,
 			obs.LoggingInterceptor,
 		),
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
@@ -127,6 +131,16 @@ func main() {
 	reflection.Register(s)
 
 	slog.Info("server listening", "address", lis.Addr())
+
+	// Start metrics server
+	go func() {
+		mux := http.NewServeMux()
+		mux.Handle("/metrics", promhttp.Handler())
+		slog.Info("metrics server listening", "address", ":9090")
+		if err := http.ListenAndServe(":9090", mux); err != nil {
+			slog.Error("metrics server failed", "error", err)
+		}
+	}()
 
 	// Handle graceful shutdown
 	stop := make(chan os.Signal, 1)
