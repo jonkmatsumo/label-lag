@@ -68,6 +68,12 @@ func (s *SQLStore) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRun
 	if req.Status != "" {
 		queryBuilder.AddCondition("status = ?", req.Status)
 	}
+	if req.StartDate != nil {
+		queryBuilder.AddCondition("started_at >= ?", req.StartDate.AsTime())
+	}
+	if req.EndDate != nil {
+		queryBuilder.AddCondition("started_at <= ?", req.EndDate.AsTime())
+	}
 
 	// Count
 	countQuery, countArgs := queryBuilder.BuildCount()
@@ -81,7 +87,7 @@ func (s *SQLStore) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRun
 	}
 
 	// List
-	queryBuilder.AddOrderBy("started_at DESC")
+	queryBuilder.AddOrderBy("started_at DESC, run_id DESC")
 	queryBuilder.SetLimit(req.Limit)
 	queryBuilder.SetOffset(req.Offset)
 	selectQuery, selectArgs := queryBuilder.BuildSelect()
@@ -116,7 +122,8 @@ func (s *SQLStore) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRun
 
 		r.StartedAt = timestamppb.New(startedAt)
 		if endedAt.Valid {
-			r.EndedAt = timestamppb.New(endedAt.Time)
+			jts := endedAt.Time // Use temporary variable for clarity
+			r.EndedAt = timestamppb.New(jts)
 		}
 		if metricsJSON != nil {
 			r.MetricsJson = string(metricsJSON)
@@ -135,6 +142,16 @@ func (s *SQLStore) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRun
 	}
 
 	return runs, total, nil
+}
+
+func (s *SQLStore) ListModelVersions(ctx context.Context, req *pb.ListModelVersionsRequest) ([]*pb.TrainingRun, int64, error) {
+	// For now, versions are just completed training runs for a model
+	return s.ListTrainingRuns(ctx, &pb.ListTrainingRunsRequest{
+		ModelName: req.ModelName,
+		Status:    "completed",
+		Limit:     req.Limit,
+		Offset:    req.Offset,
+	})
 }
 
 func (s *SQLStore) GetTrainingRun(ctx context.Context, runID string) (*pb.TrainingRun, error) {

@@ -370,12 +370,28 @@ func (m *MockStore) GetDatasetProfileCached(ctx context.Context, profileID strin
 	return args.Get(0).(*pb.DatasetProfile), args.Error(1)
 }
 
-func (m *MockStore) ListDatasetProfiles(ctx context.Context, limit, offset int32) ([]*pb.DatasetProfile, int64, error) {
-	args := m.Called(ctx, limit, offset)
+func (m *MockStore) ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetProfilesRequest) ([]*pb.DatasetProfile, int64, error) {
+	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
 		return nil, 0, args.Error(2)
 	}
 	return args.Get(0).([]*pb.DatasetProfile), args.Get(1).(int64), args.Error(2)
+}
+
+func (m *MockStore) GetLatestDatasetProfile(ctx context.Context) (*pb.GetLatestDatasetProfileResponse, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.GetLatestDatasetProfileResponse), args.Error(1)
+}
+
+func (m *MockStore) GetJobSummary(ctx context.Context, req *pb.GetJobSummaryRequest) ([]*pb.JobSummaryBucket, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*pb.JobSummaryBucket), args.Error(1)
 }
 
 func (m *MockStore) SaveTrainingRun(ctx context.Context, run *pb.TrainingRun) error {
@@ -384,6 +400,14 @@ func (m *MockStore) SaveTrainingRun(ctx context.Context, run *pb.TrainingRun) er
 }
 
 func (m *MockStore) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRunsRequest) ([]*pb.TrainingRun, int64, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, 0, args.Error(2)
+	}
+	return args.Get(0).([]*pb.TrainingRun), args.Get(1).(int64), args.Error(2)
+}
+
+func (m *MockStore) ListModelVersions(ctx context.Context, req *pb.ListModelVersionsRequest) ([]*pb.TrainingRun, int64, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
 		return nil, 0, args.Error(2)

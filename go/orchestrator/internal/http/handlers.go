@@ -174,15 +174,18 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /analytics/confusion-matrix", h.handleGetConfusionMatrix)
 
 	mux.HandleFunc("GET /jobs", h.handleListJobs)
+	mux.HandleFunc("GET /jobs/summary", h.handleGetJobSummary)
 	mux.HandleFunc("GET /jobs/{id}", h.handleGetJob)
 	mux.HandleFunc("GET /jobs/{id}/events", h.handleGetJobEvents)
 
 	mux.HandleFunc("GET /dataset/summary", h.handleGetDatasetProfile) // Alias for latest/default
+	mux.HandleFunc("GET /dataset/latest", h.handleGetLatestDatasetProfile)
 	mux.HandleFunc("GET /dataset/profiles", h.handleListDatasetProfiles)
 	mux.HandleFunc("GET /dataset/profiles/{id}", h.handleGetDatasetProfile)
 	mux.HandleFunc("GET /dataset/profiles/compare", h.handleCompareDatasetProfiles)
 
 	mux.HandleFunc("GET /training-runs", h.handleListTrainingRuns)
+	mux.HandleFunc("GET /models/versions", h.handleListModelVersions)
 	mux.HandleFunc("GET /training-runs/{id}", h.handleGetTrainingRun)
 	mux.HandleFunc("GET /metrics/series", h.handleGetMetricSeries)
 

@@ -106,3 +106,32 @@ func (h *Handler) handleGetJobEvents(w http.ResponseWriter, r *http.Request) {
 
 	writeAnalyticsJSON(w, resp)
 }
+
+func (h *Handler) handleGetJobSummary(w http.ResponseWriter, r *http.Request) {
+	req := &crudv1.GetJobSummaryRequest{}
+
+	if startStr := r.URL.Query().Get("start_time"); startStr != "" {
+		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
+			req.StartTime = timestamppb.New(t)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
+			return
+		}
+	}
+	if endStr := r.URL.Query().Get("end_time"); endStr != "" {
+		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
+			req.EndTime = timestamppb.New(t)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
+			return
+		}
+	}
+
+	resp, err := h.analyticsClient.GetJobSummary(r.Context(), req)
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	writeAnalyticsJSON(w, resp)
+}

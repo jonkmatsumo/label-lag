@@ -584,7 +584,21 @@ type stubAnalyticsClient struct {
 	featureSampleResp      *crudv1.GetFeatureSampleResponse
 	generateDataResp       *crudv1.GenerateDataResponse
 
-	backtestResultsResp       *crudv1.ListBacktestResultsResponse
+	backtestResultsResp         *crudv1.ListBacktestResultsResponse
+	listDecisionsResp           *crudv1.ListDecisionsResponse
+	getDecisionResp             *crudv1.GetDecisionResponse
+	listJobsResp                *crudv1.ListJobsResponse
+	getJobResp                  *crudv1.GetJobResponse
+	getJobEventsResp            *crudv1.GetJobEventsResponse
+	getJobSummaryResp           *crudv1.GetJobSummaryResponse
+	listTrainingRunsResp        *crudv1.ListTrainingRunsResponse
+	getTrainingRunResp          *crudv1.GetTrainingRunResponse
+	listModelVersionsResp       *crudv1.ListModelVersionsResponse
+	getMetricSeriesResp         *crudv1.GetMetricSeriesResponse
+	listDatasetProfilesResp     *crudv1.ListDatasetProfilesResponse
+	getLatestDatasetProfileResp *crudv1.GetLatestDatasetProfileResponse
+	compareDatasetProfilesResp  *crudv1.CompareDatasetProfilesResponse
+
 	err                       error
 	lastReq                   *crudv1.SearchTransactionsRequest
 	lastDailyStatsReq         *crudv1.GetDailyStatsRequest
@@ -707,10 +721,16 @@ func (s *stubAnalyticsClient) GetShadowComparison(ctx context.Context, req *crud
 }
 
 func (s *stubAnalyticsClient) ListDecisions(ctx context.Context, req *crudv1.ListDecisionsRequest) (*crudv1.ListDecisionsResponse, error) {
+	if s.listDecisionsResp != nil {
+		return s.listDecisionsResp, s.err
+	}
 	return &crudv1.ListDecisionsResponse{}, s.err
 }
 
 func (s *stubAnalyticsClient) GetDecision(ctx context.Context, req *crudv1.GetDecisionRequest) (*crudv1.GetDecisionResponse, error) {
+	if s.getDecisionResp != nil {
+		return s.getDecisionResp, s.err
+	}
 	return &crudv1.GetDecisionResponse{}, s.err
 }
 
@@ -735,14 +755,23 @@ func (s *stubAnalyticsClient) GetConfusionMatrix(ctx context.Context, req *crudv
 }
 
 func (s *stubAnalyticsClient) ListJobs(ctx context.Context, req *crudv1.ListJobsRequest) (*crudv1.ListJobsResponse, error) {
+	if s.listJobsResp != nil {
+		return s.listJobsResp, s.err
+	}
 	return &crudv1.ListJobsResponse{}, s.err
 }
 
 func (s *stubAnalyticsClient) GetJob(ctx context.Context, req *crudv1.GetJobRequest) (*crudv1.GetJobResponse, error) {
+	if s.getJobResp != nil {
+		return s.getJobResp, s.err
+	}
 	return &crudv1.GetJobResponse{}, s.err
 }
 
 func (s *stubAnalyticsClient) GetJobEvents(ctx context.Context, req *crudv1.GetJobEventsRequest) (*crudv1.GetJobEventsResponse, error) {
+	if s.getJobEventsResp != nil {
+		return s.getJobEventsResp, s.err
+	}
 	return &crudv1.GetJobEventsResponse{}, s.err
 }
 
@@ -751,23 +780,59 @@ func (s *stubAnalyticsClient) GetDatasetSummary(ctx context.Context, req *crudv1
 }
 
 func (s *stubAnalyticsClient) ListDatasetProfiles(ctx context.Context, req *crudv1.ListDatasetProfilesRequest) (*crudv1.ListDatasetProfilesResponse, error) {
+	if s.listDatasetProfilesResp != nil {
+		return s.listDatasetProfilesResp, s.err
+	}
 	return &crudv1.ListDatasetProfilesResponse{}, s.err
 }
 
 func (s *stubAnalyticsClient) CompareDatasetProfiles(ctx context.Context, req *crudv1.CompareDatasetProfilesRequest) (*crudv1.CompareDatasetProfilesResponse, error) {
+	if s.compareDatasetProfilesResp != nil {
+		return s.compareDatasetProfilesResp, s.err
+	}
 	return &crudv1.CompareDatasetProfilesResponse{}, s.err
 }
 
 func (s *stubAnalyticsClient) ListTrainingRuns(ctx context.Context, req *crudv1.ListTrainingRunsRequest) (*crudv1.ListTrainingRunsResponse, error) {
+	if s.listTrainingRunsResp != nil {
+		return s.listTrainingRunsResp, s.err
+	}
 	return &crudv1.ListTrainingRunsResponse{}, s.err
 }
 
 func (s *stubAnalyticsClient) GetTrainingRun(ctx context.Context, req *crudv1.GetTrainingRunRequest) (*crudv1.GetTrainingRunResponse, error) {
+	if s.getTrainingRunResp != nil {
+		return s.getTrainingRunResp, s.err
+	}
 	return &crudv1.GetTrainingRunResponse{}, s.err
 }
 
 func (s *stubAnalyticsClient) GetMetricSeries(ctx context.Context, req *crudv1.GetMetricSeriesRequest) (*crudv1.GetMetricSeriesResponse, error) {
+	if s.getMetricSeriesResp != nil {
+		return s.getMetricSeriesResp, s.err
+	}
 	return &crudv1.GetMetricSeriesResponse{}, s.err
+}
+
+func (s *stubAnalyticsClient) GetJobSummary(ctx context.Context, req *crudv1.GetJobSummaryRequest) (*crudv1.GetJobSummaryResponse, error) {
+	if s.getJobSummaryResp != nil {
+		return s.getJobSummaryResp, s.err
+	}
+	return &crudv1.GetJobSummaryResponse{}, s.err
+}
+
+func (s *stubAnalyticsClient) ListModelVersions(ctx context.Context, req *crudv1.ListModelVersionsRequest) (*crudv1.ListModelVersionsResponse, error) {
+	if s.listModelVersionsResp != nil {
+		return s.listModelVersionsResp, s.err
+	}
+	return &crudv1.ListModelVersionsResponse{}, s.err
+}
+
+func (s *stubAnalyticsClient) GetLatestDatasetProfile(ctx context.Context, req *crudv1.GetLatestDatasetProfileRequest) (*crudv1.GetLatestDatasetProfileResponse, error) {
+	if s.getLatestDatasetProfileResp != nil {
+		return s.getLatestDatasetProfileResp, s.err
+	}
+	return &crudv1.GetLatestDatasetProfileResponse{}, s.err
 }
 
 func (s *stubAnalyticsClient) ReportTrainingRun(ctx context.Context, req *crudv1.ReportTrainingRunRequest) (*crudv1.ReportTrainingRunResponse, error) {

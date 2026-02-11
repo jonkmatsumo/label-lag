@@ -40,16 +40,19 @@ type Store interface {
 	ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb.Job, int64, error)
 	GetJob(ctx context.Context, jobID string) (*pb.Job, error)
 	GetJobEvents(ctx context.Context, jobID string, limit, offset int32) ([]*pb.JobEvent, error)
+	GetJobSummary(ctx context.Context, req *pb.GetJobSummaryRequest) ([]*pb.JobSummaryBucket, error)
 
 	// Dataset Profiles (Phase A2)
 	SaveDatasetProfile(ctx context.Context, profile *pb.DatasetProfile) error
 	GetDatasetProfileCached(ctx context.Context, profileID string) (*pb.DatasetProfile, error)
-	ListDatasetProfiles(ctx context.Context, limit, offset int32) ([]*pb.DatasetProfile, int64, error)
+	ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetProfilesRequest) ([]*pb.DatasetProfile, int64, error)
+	GetLatestDatasetProfile(ctx context.Context) (*pb.GetLatestDatasetProfileResponse, error)
 
 	// Training Runs (Phase B)
 	SaveTrainingRun(ctx context.Context, run *pb.TrainingRun) error
 	ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRunsRequest) ([]*pb.TrainingRun, int64, error)
 	GetTrainingRun(ctx context.Context, runID string) (*pb.TrainingRun, error)
+	ListModelVersions(ctx context.Context, req *pb.ListModelVersionsRequest) ([]*pb.TrainingRun, int64, error)
 	GetMetricSeries(ctx context.Context, modelName, metricName string, start, end time.Time) ([]*pb.MetricPoint, error)
 
 	// Feature Hydration

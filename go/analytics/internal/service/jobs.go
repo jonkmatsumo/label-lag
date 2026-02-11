@@ -79,3 +79,18 @@ func (s *Service) GetJobEvents(ctx context.Context, req *pb.GetJobEventsRequest)
 		Events: events,
 	}, nil
 }
+
+func (s *Service) GetJobSummary(ctx context.Context, req *pb.GetJobSummaryRequest) (*pb.GetJobSummaryResponse, error) {
+	if req.StartTime != nil && req.EndTime != nil && req.StartTime.AsTime().After(req.EndTime.AsTime()) {
+		return nil, status.Error(codes.InvalidArgument, "start_time must be <= end_time")
+	}
+
+	summaries, err := s.store.GetJobSummary(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.GetJobSummaryResponse{
+		Summaries: summaries,
+	}, nil
+}

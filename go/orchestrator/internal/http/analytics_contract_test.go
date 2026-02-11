@@ -256,3 +256,236 @@ func TestAnalyticsHandlersPreserveRequestIDHeader(t *testing.T) {
 		}
 	}
 }
+
+func TestAnalyticsDecisionsContract(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	stub := &stubAnalyticsClient{
+		listDecisionsResp: &crudv1.ListDecisionsResponse{
+			Decisions: []*crudv1.DecisionSummary{
+				{
+					RequestId:      "req-1",
+					UserId:         "user-1",
+					FinalScore:     45,
+					Decision:       "APPROVE",
+					DecisionReason: "score_below_threshold",
+					Thresholds: &crudv1.DecisionThresholds{
+						ApproveMax: 50,
+						ReviewMax:  80,
+					},
+					CreatedAt: timestamppb.Now(),
+				},
+			},
+			Total: 1,
+		},
+		getDecisionResp: &crudv1.GetDecisionResponse{
+			Decision: &crudv1.InferenceEvent{
+				RequestId:      "req-1",
+				FinalScore:     45,
+				Decision:       "APPROVE",
+				DecisionReason: "score_below_threshold",
+				Thresholds: &crudv1.DecisionThresholds{
+					ApproveMax: 50,
+					ReviewMax:  80,
+				},
+				Timestamp: timestamppb.Now(),
+			},
+		},
+	}
+	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
+
+	t.Run("list_decisions", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/decisions?limit=10", nil)
+		rec := httptest.NewRecorder()
+		handler.handleListDecisions(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+		}
+		var payload map[string]any
+		err := json.Unmarshal(rec.Body.Bytes(), &payload)
+		if err != nil {
+			t.Fatalf("failed to unmarshal: %v", err)
+		}
+		decisions := payload["decisions"].([]any)
+		d := decisions[0].(map[string]any)
+		if d["decision_reason"] != "score_below_threshold" {
+			t.Fatalf("expected decision_reason score_below_threshold, got %v", d["decision_reason"])
+		}
+		thresholds := d["thresholds"].(map[string]any)
+		if thresholds["approve_max"] != float64(50) {
+			t.Fatalf("expected approve_max 50, got %v", thresholds["approve_max"])
+		}
+	})
+
+	t.Run("get_decision", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/decisions/req-1", nil)
+		// No req.SetPathValue in standard net/http/httptest, we depend on manual setting if using standard mux?
+		// Handler uses r.PathValue("request_id")
+		req.SetPathValue("request_id", "req-1")
+		rec := httptest.NewRecorder()
+		handler.handleGetDecision(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+		}
+		var payload map[string]any
+		err := json.Unmarshal(rec.Body.Bytes(), &payload)
+		if err != nil {
+			t.Fatalf("failed to unmarshal: %v", err)
+		}
+		decision := payload["decision"].(map[string]any)
+		if decision["decision_reason"] != "score_below_threshold" {
+			t.Fatalf("expected decision_reason score_below_threshold, got %v", decision["decision_reason"])
+		}
+	})
+}
+
+func TestAnalyticsJobsContract(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	stub := &stubAnalyticsClient{
+		listJobsResp: &crudv1.ListJobsResponse{
+			Jobs: []*crudv1.Job{
+				{JobId: "job-1", JobType: "training", Status: "completed"},
+			},
+			Total: 1,
+		},
+		getJobSummaryResp: &crudv1.GetJobSummaryResponse{
+			Summaries: []*crudv1.JobSummaryBucket{
+				{BucketTime: timestamppb.Now(), TotalJobs: 5, CompletedJobs: 4, FailedJobs: 1},
+			},
+		},
+	}
+	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
+
+	t.Run("list_jobs", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/jobs", nil)
+		rec := httptest.NewRecorder()
+		handler.handleListJobs(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+		}
+		var payload map[string]any
+		json.Unmarshal(rec.Body.Bytes(), &payload)
+		jobs := payload["jobs"].([]any)
+		if len(jobs) != 1 {
+			t.Fatalf("expected 1 job, got %v", len(jobs))
+		}
+	})
+
+	t.Run("get_job_summary", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/jobs/summary", nil)
+		rec := httptest.NewRecorder()
+		handler.handleGetJobSummary(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+		}
+		var payload map[string]any
+		json.Unmarshal(rec.Body.Bytes(), &payload)
+		summaries := payload["summaries"].([]any)
+		if len(summaries) != 1 {
+			t.Fatalf("expected 1 summary, got %v", len(summaries))
+		}
+	})
+}
+
+func TestAnalyticsTrainingRunsContract(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	stub := &stubAnalyticsClient{
+		listTrainingRunsResp: &crudv1.ListTrainingRunsResponse{
+			Runs: []*crudv1.TrainingRun{
+				{RunId: "run-1", ModelName: "xgboost", Status: "completed"},
+			},
+			Total: 1,
+		},
+		listModelVersionsResp: &crudv1.ListModelVersionsResponse{
+			Versions: []*crudv1.TrainingRun{
+				{RunId: "run-1", ModelName: "xgboost", Status: "completed"},
+			},
+			Total: 1,
+		},
+	}
+	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
+
+	t.Run("list_training_runs", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/training-runs", nil)
+		rec := httptest.NewRecorder()
+		handler.handleListTrainingRuns(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+		}
+		var payload map[string]any
+		json.Unmarshal(rec.Body.Bytes(), &payload)
+		runs := payload["runs"].([]any)
+		if len(runs) != 1 {
+			t.Fatalf("expected 1 run, got %v", len(runs))
+		}
+	})
+
+	t.Run("list_model_versions", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/models/versions?model_name=xgboost", nil)
+		rec := httptest.NewRecorder()
+		handler.handleListModelVersions(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+		}
+		var payload map[string]any
+		json.Unmarshal(rec.Body.Bytes(), &payload)
+		versions := payload["versions"].([]any)
+		if len(versions) != 1 {
+			t.Fatalf("expected 1 version, got %v", len(versions))
+		}
+	})
+}
+
+func TestAnalyticsDatasetProfilesContract(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	stub := &stubAnalyticsClient{
+		listDatasetProfilesResp: &crudv1.ListDatasetProfilesResponse{
+			Profiles: []*crudv1.DatasetProfile{
+				{ProfileId: "prof-1", RecordCount: 1000},
+			},
+			Total: 1,
+		},
+		getLatestDatasetProfileResp: &crudv1.GetLatestDatasetProfileResponse{
+			ProfileId:   "prof-1",
+			RecordCount: 1000,
+			ComputedAt:  timestamppb.Now(),
+		},
+	}
+	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
+
+	t.Run("list_dataset_profiles", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/dataset/profiles", nil)
+		rec := httptest.NewRecorder()
+		handler.handleListDatasetProfiles(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+		}
+		var payload map[string]any
+		json.Unmarshal(rec.Body.Bytes(), &payload)
+		profiles := payload["profiles"].([]any)
+		if len(profiles) != 1 {
+			t.Fatalf("expected 1 profile, got %v", len(profiles))
+		}
+	})
+
+	t.Run("get_latest_dataset_profile", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/dataset/latest", nil)
+		rec := httptest.NewRecorder()
+		handler.handleGetLatestDatasetProfile(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+		}
+		var payload map[string]any
+		json.Unmarshal(rec.Body.Bytes(), &payload)
+		if payload["profile_id"] != "prof-1" {
+			t.Fatalf("expected profile_id prof-1, got %v", payload["profile_id"])
+		}
+	})
+}

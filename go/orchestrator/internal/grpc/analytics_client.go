@@ -243,40 +243,6 @@ func (c *AnalyticsClient) GetRecentAlerts(ctx context.Context, req *crudv1.GetRe
 	return resp, nil
 }
 
-func (c *AnalyticsClient) GetDatasetFingerprint(ctx context.Context, req *crudv1.GetDatasetFingerprintRequest) (*crudv1.GetDatasetFingerprintResponse, error) {
-	if req == nil {
-		return nil, fmt.Errorf("nil request")
-	}
-
-	span := trace.SpanFromContext(ctx)
-	if err := c.breaker.Allow(); err != nil {
-		span.SetAttributes(
-			attribute.String("analytics.breaker_state", c.breaker.State().String()),
-			attribute.String("analytics.breaker_open_reason", "cooldown"),
-		)
-		return nil, mapRPCError(err)
-	}
-
-	callCtx := ctx
-	if _, ok := ctx.Deadline(); !ok {
-		var cancel context.CancelFunc
-		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
-		defer cancel()
-	}
-
-	resp, err := c.stub.GetDatasetFingerprint(c.withMetadata(callCtx), req)
-	c.breaker.RecordResult(err)
-
-	span.SetAttributes(
-		attribute.String("analytics.breaker_state", c.breaker.State().String()),
-	)
-
-	if err != nil {
-		return nil, mapRPCError(err)
-	}
-	return resp, nil
-}
-
 func (c *AnalyticsClient) GetFeatureSample(ctx context.Context, req *crudv1.GetFeatureSampleRequest) (*crudv1.GetFeatureSampleResponse, error) {
 	if req == nil {
 		return nil, fmt.Errorf("nil request")
@@ -299,40 +265,6 @@ func (c *AnalyticsClient) GetFeatureSample(ctx context.Context, req *crudv1.GetF
 	}
 
 	resp, err := c.stub.GetFeatureSample(c.withMetadata(callCtx), req)
-	c.breaker.RecordResult(err)
-
-	span.SetAttributes(
-		attribute.String("analytics.breaker_state", c.breaker.State().String()),
-	)
-
-	if err != nil {
-		return nil, mapRPCError(err)
-	}
-	return resp, nil
-}
-
-func (c *AnalyticsClient) GetSchemaSummary(ctx context.Context, req *crudv1.GetSchemaSummaryRequest) (*crudv1.GetSchemaSummaryResponse, error) {
-	if req == nil {
-		return nil, fmt.Errorf("nil request")
-	}
-
-	span := trace.SpanFromContext(ctx)
-	if err := c.breaker.Allow(); err != nil {
-		span.SetAttributes(
-			attribute.String("analytics.breaker_state", c.breaker.State().String()),
-			attribute.String("analytics.breaker_open_reason", "cooldown"),
-		)
-		return nil, mapRPCError(err)
-	}
-
-	callCtx := ctx
-	if _, ok := ctx.Deadline(); !ok {
-		var cancel context.CancelFunc
-		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
-		defer cancel()
-	}
-
-	resp, err := c.stub.GetSchemaSummary(c.withMetadata(callCtx), req)
 	c.breaker.RecordResult(err)
 
 	span.SetAttributes(
@@ -1468,6 +1400,108 @@ func (c *AnalyticsClient) GetMetricSeries(ctx context.Context, req *crudv1.GetMe
 	}
 
 	resp, err := c.stub.GetMetricSeries(c.withMetadata(callCtx), req)
+	c.breaker.RecordResult(err)
+
+	span.SetAttributes(
+		attribute.String("analytics.breaker_state", c.breaker.State().String()),
+	)
+
+	if err != nil {
+		return nil, mapRPCError(err)
+	}
+	return resp, nil
+}
+
+func (c *AnalyticsClient) GetJobSummary(ctx context.Context, req *crudv1.GetJobSummaryRequest) (*crudv1.GetJobSummaryResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	span := trace.SpanFromContext(ctx)
+	if err := c.breaker.Allow(); err != nil {
+		span.SetAttributes(
+			attribute.String("analytics.breaker_state", c.breaker.State().String()),
+			attribute.String("analytics.breaker_open_reason", "cooldown"),
+		)
+		return nil, mapRPCError(err)
+	}
+
+	callCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	resp, err := c.stub.GetJobSummary(c.withMetadata(callCtx), req)
+	c.breaker.RecordResult(err)
+
+	span.SetAttributes(
+		attribute.String("analytics.breaker_state", c.breaker.State().String()),
+	)
+
+	if err != nil {
+		return nil, mapRPCError(err)
+	}
+	return resp, nil
+}
+
+func (c *AnalyticsClient) ListModelVersions(ctx context.Context, req *crudv1.ListModelVersionsRequest) (*crudv1.ListModelVersionsResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	span := trace.SpanFromContext(ctx)
+	if err := c.breaker.Allow(); err != nil {
+		span.SetAttributes(
+			attribute.String("analytics.breaker_state", c.breaker.State().String()),
+			attribute.String("analytics.breaker_open_reason", "cooldown"),
+		)
+		return nil, mapRPCError(err)
+	}
+
+	callCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	resp, err := c.stub.ListModelVersions(c.withMetadata(callCtx), req)
+	c.breaker.RecordResult(err)
+
+	span.SetAttributes(
+		attribute.String("analytics.breaker_state", c.breaker.State().String()),
+	)
+
+	if err != nil {
+		return nil, mapRPCError(err)
+	}
+	return resp, nil
+}
+
+func (c *AnalyticsClient) GetLatestDatasetProfile(ctx context.Context, req *crudv1.GetLatestDatasetProfileRequest) (*crudv1.GetLatestDatasetProfileResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	span := trace.SpanFromContext(ctx)
+	if err := c.breaker.Allow(); err != nil {
+		span.SetAttributes(
+			attribute.String("analytics.breaker_state", c.breaker.State().String()),
+			attribute.String("analytics.breaker_open_reason", "cooldown"),
+		)
+		return nil, mapRPCError(err)
+	}
+
+	callCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	resp, err := c.stub.GetLatestDatasetProfile(c.withMetadata(callCtx), req)
 	c.breaker.RecordResult(err)
 
 	span.SetAttributes(

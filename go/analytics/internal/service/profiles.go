@@ -61,8 +61,14 @@ func (s *Service) ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetPr
 	if err != nil {
 		return nil, err
 	}
+	req.Limit = limit
+	req.Offset = offset
 
-	profiles, total, err := s.store.ListDatasetProfiles(ctx, limit, offset)
+	if req.StartDate != nil && req.EndDate != nil && req.StartDate.AsTime().After(req.EndDate.AsTime()) {
+		return nil, status.Error(codes.InvalidArgument, "start_date must be <= end_date")
+	}
+
+	profiles, total, err := s.store.ListDatasetProfiles(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -71,6 +77,10 @@ func (s *Service) ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetPr
 		Profiles: profiles,
 		Total:    total,
 	}, nil
+}
+
+func (s *Service) GetLatestDatasetProfile(ctx context.Context, req *pb.GetLatestDatasetProfileRequest) (*pb.GetLatestDatasetProfileResponse, error) {
+	return s.store.GetLatestDatasetProfile(ctx)
 }
 
 func (s *Service) CompareDatasetProfiles(ctx context.Context, req *pb.CompareDatasetProfilesRequest) (*pb.CompareDatasetProfilesResponse, error) {

@@ -27,7 +27,55 @@ func (h *Handler) handleListTrainingRuns(w http.ResponseWriter, r *http.Request)
 		Offset:    offset,
 	}
 
+	if startStr := r.URL.Query().Get("start_date"); startStr != "" {
+		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
+			req.StartDate = timestamppb.New(t)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid start_date format (RFC3339 required)")
+			return
+		}
+	}
+	if endStr := r.URL.Query().Get("end_date"); endStr != "" {
+		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
+			req.EndDate = timestamppb.New(t)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid end_date format (RFC3339 required)")
+			return
+		}
+	}
+
 	resp, err := h.analyticsClient.ListTrainingRuns(r.Context(), req)
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	writeAnalyticsJSON(w, resp)
+}
+
+func (h *Handler) handleListModelVersions(w http.ResponseWriter, r *http.Request) {
+	modelName := r.URL.Query().Get("model_name")
+	if modelName == "" {
+		writeJSONError(w, http.StatusBadRequest, "model_name required")
+		return
+	}
+
+	limit, err := parseIntQuery(r, "limit", 50, 1, 100)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	offset, err := parseIntQuery(r, "offset", 0, 0, 10000)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	resp, err := h.analyticsClient.ListModelVersions(r.Context(), &crudv1.ListModelVersionsRequest{
+		ModelName: modelName,
+		Limit:     limit,
+		Offset:    offset,
+	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
 		return
@@ -59,14 +107,20 @@ func (h *Handler) handleGetMetricSeries(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if startStr := r.URL.Query().Get("start_date"); startStr != "" {
-		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
-			req.StartDate = timestamppb.New(t)
+		t, err := time.Parse(time.RFC3339, startStr)
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, "invalid start_date format (RFC3339 required)")
+			return
 		}
+		req.StartDate = timestamppb.New(t)
 	}
 	if endStr := r.URL.Query().Get("end_date"); endStr != "" {
-		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
-			req.EndDate = timestamppb.New(t)
+		t, err := time.Parse(time.RFC3339, endStr)
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, "invalid end_date format (RFC3339 required)")
+			return
 		}
+		req.EndDate = timestamppb.New(t)
 	}
 
 	if req.ModelName == "" || req.MetricName == "" {

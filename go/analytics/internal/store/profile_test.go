@@ -75,13 +75,21 @@ func TestListDatasetProfiles(t *testing.T) {
 	ts := time.Now().UTC()
 	jsonProfiles := `[]`
 
+	start := time.Now().AddDate(0, 0, -30)
+	end := time.Now()
+
 	mock.ExpectQuery("SELECT profile_id").
-		WithArgs(int32(10), int32(0)).
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"profile_id", "tenant_id", "computed_at", "record_count", "feature_profiles",
 		}).AddRow("prof-1", "tenant-1", ts, 100, []byte(jsonProfiles)))
 
-	profiles, total, err := s.ListDatasetProfiles(context.Background(), 10, 0)
+	profiles, total, err := s.ListDatasetProfiles(context.Background(), &pb.ListDatasetProfilesRequest{
+		Limit:     10,
+		Offset:    0,
+		StartDate: timestamppb.New(start),
+		EndDate:   timestamppb.New(end),
+	})
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), total)
 	assert.Len(t, profiles, 1)

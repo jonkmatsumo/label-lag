@@ -9,6 +9,26 @@ import (
 )
 
 func (s *Service) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRunsRequest) (*pb.ListTrainingRunsResponse, error) {
+	if req.StartDate != nil && req.EndDate != nil && req.StartDate.AsTime().After(req.EndDate.AsTime()) {
+		return nil, status.Error(codes.InvalidArgument, "start_date must be <= end_date")
+	}
+
+	runs, total, err := s.store.ListTrainingRuns(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.ListTrainingRunsResponse{
+		Runs:  runs,
+		Total: total,
+	}, nil
+}
+
+func (s *Service) ListModelVersions(ctx context.Context, req *pb.ListModelVersionsRequest) (*pb.ListModelVersionsResponse, error) {
+	if req.ModelName == "" {
+		return nil, status.Error(codes.InvalidArgument, "model_name required")
+	}
+
 	limit, err := normalizeLimit(req.Limit, 50, 250, "limit")
 	if err != nil {
 		return nil, err
@@ -20,14 +40,14 @@ func (s *Service) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRuns
 	req.Limit = limit
 	req.Offset = offset
 
-	runs, total, err := s.store.ListTrainingRuns(ctx, req)
+	versions, total, err := s.store.ListModelVersions(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	return &pb.ListTrainingRunsResponse{
-		Runs:  runs,
-		Total: total,
+	return &pb.ListModelVersionsResponse{
+		Versions: versions,
+		Total:    total,
 	}, nil
 }
 

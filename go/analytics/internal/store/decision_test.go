@@ -30,10 +30,10 @@ func TestListDecisions(t *testing.T) {
 		WithArgs("user-1", "APPROVE").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 
-	mock.ExpectQuery("SELECT request_id, user_id, ts, final_score, decision").
+	mock.ExpectQuery("SELECT request_id, user_id, ts, final_score, decision, rule_impacts").
 		WithArgs("user-1", "APPROVE", int32(10), int32(0)).
-		WillReturnRows(sqlmock.NewRows([]string{"request_id", "user_id", "ts", "final_score", "decision"}).
-			AddRow("req-1", "user-1", time.Now(), 45, "APPROVE"))
+		WillReturnRows(sqlmock.NewRows([]string{"request_id", "user_id", "ts", "final_score", "decision", "rule_impacts"}).
+			AddRow("req-1", "user-1", time.Now(), 45, "APPROVE", []byte("[]")))
 
 	decisions, total, err := s.ListDecisions(context.Background(), req)
 	require.NoError(t, err)
