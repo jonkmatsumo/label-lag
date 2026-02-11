@@ -87,3 +87,21 @@ func TestListDatasetProfiles(t *testing.T) {
 	assert.Len(t, profiles, 1)
 	assert.Equal(t, "prof-1", profiles[0].ProfileId)
 }
+
+func TestPruneDatasetProfiles(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+
+	cutoff := time.Now().Add(-24 * time.Hour)
+
+	mock.ExpectExec("DELETE FROM dataset_profiles").
+		WithArgs(cutoff).
+		WillReturnResult(sqlmock.NewResult(0, 5))
+
+	count, err := s.PruneDatasetProfiles(context.Background(), cutoff)
+	require.NoError(t, err)
+	assert.Equal(t, int64(5), count)
+}

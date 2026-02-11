@@ -569,7 +569,7 @@ func (s *SQLStore) discoverJSONBKeys(ctx context.Context, table, column string, 
 
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
-		return nil, err
+		return nil, db.MapDBError(err)
 	}
 	defer rows.Close()
 
@@ -608,7 +608,7 @@ func (s *SQLStore) profileNumericFeatureExpr(ctx context.Context, table, expr, n
 	var nullCount int64
 	err := s.db.QueryRowContext(ctx, query).Scan(&mean, &stddev, &nullCount, &minVal, &maxVal)
 	if err != nil {
-		return nil, err
+		return nil, db.MapDBError(err)
 	}
 
 	profile := &pb.FeatureProfile{
@@ -676,7 +676,7 @@ func (s *SQLStore) profileCategoricalJSONBKey(ctx context.Context, table, column
 	nullQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s IS NULL", table, expr)
 	err := s.db.QueryRowContext(ctx, nullQuery).Scan(&nullCount)
 	if err != nil {
-		return nil, err
+		return nil, db.MapDBError(err)
 	}
 
 	profile := &pb.FeatureProfile{

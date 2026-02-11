@@ -9,7 +9,7 @@ import (
 )
 
 func (s *Service) ListJobs(ctx context.Context, req *pb.ListJobsRequest) (*pb.ListJobsResponse, error) {
-	limit, err := normalizeLimit(req.Limit, 50, 100, "limit")
+	limit, err := normalizeLimit(req.Limit, 50, 250, "limit")
 	if err != nil {
 		return nil, err
 	}

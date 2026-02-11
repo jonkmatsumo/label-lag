@@ -9,8 +9,6 @@ import (
 	"time"
 
 	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // Store defines the data access methods for the analytics service.
@@ -140,26 +138,6 @@ func parseISODate(dateStr string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-func normalizeLimit(reqLimit, defaultLimit, maxLimit int32, fieldName string) (int32, error) {
-	if reqLimit < 0 {
-		return 0, status.Errorf(codes.InvalidArgument, "%s must be non-negative", fieldName)
-	}
-	if reqLimit == 0 {
-		return defaultLimit, nil
-	}
-	if reqLimit > maxLimit {
-		return maxLimit, nil
-	}
-	return reqLimit, nil
-}
-
-func normalizeOffset(offset int32) (int32, error) {
-	if offset < 0 {
-		return 0, status.Error(codes.InvalidArgument, "offset must be non-negative")
-	}
-	return offset, nil
-}
-
 func getPostgresVersion(ctx context.Context, db *sql.DB) (int, error) {
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
@@ -200,17 +178,4 @@ func getTableStats(ctx context.Context, db *sql.DB, table string) (tableStats, e
 		return stats, err
 	}
 	return stats, nil
-}
-
-func normalizeDays(days, defaultDays, maxDays int32) (int32, error) {
-	if days < 0 {
-		return 0, status.Error(codes.InvalidArgument, "days must be non-negative")
-	}
-	if days == 0 {
-		return defaultDays, nil
-	}
-	if days > maxDays {
-		return maxDays, nil // Cap at max limit
-	}
-	return days, nil
 }

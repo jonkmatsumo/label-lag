@@ -9,7 +9,7 @@ import (
 )
 
 func (s *Service) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRunsRequest) (*pb.ListTrainingRunsResponse, error) {
-	limit, err := normalizeLimit(req.Limit, 20, 100, "limit")
+	limit, err := normalizeLimit(req.Limit, 50, 250, "limit")
 	if err != nil {
 		return nil, err
 	}

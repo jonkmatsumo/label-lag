@@ -53,7 +53,7 @@ func (s *Service) GetDatasetSummary(ctx context.Context, req *pb.GetDatasetSumma
 }
 
 func (s *Service) ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetProfilesRequest) (*pb.ListDatasetProfilesResponse, error) {
-	limit, err := normalizeLimit(req.Limit, 20, 100, "limit")
+	limit, err := normalizeLimit(req.Limit, 50, 250, "limit")
 	if err != nil {
 		return nil, err
 	}

@@ -146,3 +146,22 @@ func (s *SQLStore) ListDatasetProfiles(ctx context.Context, limit, offset int32)
 
 	return profiles, total, nil
 }
+
+func (s *SQLStore) PruneDatasetProfiles(ctx context.Context, olderThan time.Time) (int64, error) {
+	query := `DELETE FROM dataset_profiles WHERE computed_at < $1`
+
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	result, err := s.db.ExecContext(queryCtx, query, olderThan)
+	if err != nil {
+		return 0, db.MapDBError(err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %v", err)
+	}
+
+	return rowsAffected, nil
+}

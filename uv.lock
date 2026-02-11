@@ -3015,6 +3015,7 @@ dependencies = [
     { name = "scikit-learn", version = "1.8.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "sqlalchemy" },
     { name = "structlog" },
+    { name = "tenacity" },
     { name = "typer" },
     { name = "xgboost" },
 ]
@@ -3058,6 +3059,7 @@ requires-dist = [
     { name = "scikit-learn", specifier = ">=1.4.0" },
     { name = "sqlalchemy", specifier = ">=2.0.0" },
     { name = "structlog", specifier = ">=24.0.0" },
+    { name = "tenacity", specifier = ">=9.1.2" },
     { name = "typer", specifier = ">=0.12.0" },
     { name = "xgboost", specifier = ">=2.0.0" },
 ]
