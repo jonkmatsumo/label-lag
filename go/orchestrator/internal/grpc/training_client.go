@@ -106,3 +106,22 @@ func (c *TrainingClient) ClearData(ctx context.Context, req *trainingv1.ClearDat
 	}
 	return resp, nil
 }
+
+func (c *TrainingClient) GetHealth(ctx context.Context, req *trainingv1.GetHealthRequest) (*trainingv1.GetHealthResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	callCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	resp, err := c.stub.GetHealth(c.withMetadata(callCtx), req)
+	if err != nil {
+		return nil, mapRPCError(err)
+	}
+	return resp, nil
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"hash/fnv"
 	"io"
 	"log/slog"
@@ -20,6 +21,7 @@ import (
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/http/proxy"
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/requestid"
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/rules"
+	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/tenant"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -40,6 +42,7 @@ type InferenceClient interface {
 type TrainingClient interface {
 	Train(ctx context.Context, req *trainingv1.TrainRequest) (*trainingv1.TrainResponse, error)
 	ClearData(ctx context.Context, req *trainingv1.ClearDataRequest) (*trainingv1.ClearDataResponse, error)
+	GetHealth(ctx context.Context, req *trainingv1.GetHealthRequest) (*trainingv1.GetHealthResponse, error)
 }
 
 type ForecastClient interface {
@@ -71,6 +74,7 @@ type inferenceLogEvent struct {
 	req         *crudv1.LogInferenceEventRequest
 	spanContext trace.SpanContext
 	requestID   string
+	tenantID    string
 }
 
 func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient AnalyticsClient, trainingClient TrainingClient, forecastClient ForecastClient, provider rules.Provider, maxBodyBytes int64, pythonURL, mlflowURL string) *Handler {
@@ -107,7 +111,10 @@ func (h *Handler) logWorker() {
 		// Create a link to the parent trace
 		opts := []trace.SpanStartOption{
 			trace.WithLinks(trace.Link{SpanContext: event.spanContext}),
-			trace.WithAttributes(attribute.String("request_id", event.requestID)),
+			trace.WithAttributes(
+				attribute.String("request_id", event.requestID),
+				attribute.String("tenant_id", event.tenantID),
+			),
 		}
 
 		// Start a new root span for the async operation, linked to parent
@@ -249,6 +256,19 @@ func (h *Handler) handleReady(w http.ResponseWriter, r *http.Request) {
 		components["inference"] = "ok"
 	}
 
+	if h.trainingClient == nil {
+		components["training"] = "unavailable"
+		ready = false
+	} else if resp, err := h.trainingClient.GetHealth(ctx, &trainingv1.GetHealthRequest{}); err != nil {
+		components["training"] = "error"
+		ready = false
+	} else {
+		components["training"] = "ok"
+		if resp.SpooledReportsCount > 0 {
+			components["training_spool"] = fmt.Sprintf("%d reports pending", resp.SpooledReportsCount)
+		}
+	}
+
 	status := "ready"
 	code := http.StatusOK
 	if !ready {
@@ -308,6 +328,7 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 		Amount:              req.Amount,
 		Currency:            req.Currency,
 		ClientTransactionId: req.ClientTransactionId,
+		TenantId:            tenant.FromContext(r.Context()),
 	})
 	if err != nil {
 		writeRPCError(w, err)
@@ -321,7 +342,7 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 
 	// 1. Try to fetch from Analytics
 	if h.analyticsClient != nil {
-		hydrated, err := h.analyticsClient.GetFeatures(r.Context(), req.UserId)
+		hydrated, err := h.analyticsClient.GetFeatures(r.Context(), req.UserId, tenant.FromContext(r.Context()))
 		if err != nil {
 			h.logger.Warn("failed to hydrate features from analytics", "error", err, "user_id", req.UserId)
 		} else if hydrated != nil {
@@ -406,9 +427,11 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 
+		tenantID := tenant.FromContext(r.Context())
 		evt := inferenceLogEvent{
 			ctx:         context.Background(),
 			requestID:   requestID,
+			tenantID:    tenantID,
 			spanContext: span.SpanContext(),
 			req: &crudv1.LogInferenceEventRequest{
 				Event: &crudv1.InferenceEvent{
@@ -419,6 +442,7 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 					ModelScore:   rawScore,
 					FinalScore:   int32(ruleResult.FinalScore),
 					RuleImpacts:  pbImpacts,
+					TenantId:     tenantID,
 				},
 			},
 		}
@@ -634,6 +658,7 @@ func (h *Handler) handleTrain(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
 		return
 	}
+	req.TenantId = tenant.FromContext(r.Context())
 
 	resp, err := h.trainingClient.Train(r.Context(), &req)
 	if err != nil {
@@ -670,6 +695,7 @@ func (h *Handler) handleDeployModel(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
 		return
 	}
+	req.TenantId = tenant.FromContext(r.Context())
 
 	resp, err := h.forecastClient.DeployModel(r.Context(), &req)
 	if err != nil {
@@ -756,10 +782,11 @@ func (h *Handler) handleDatasetGenerate(w http.ResponseWriter, r *http.Request) 
 	}
 
 	grpcReq := &crudv1.GenerateDataRequest{
-		NumUsers:     req.NumUsers,
-		FraudRate:    req.FraudRate,
-		DropExisting: req.DropExisting,
-		Seed:         req.Seed,
+		NumUsers:      req.NumUsers,
+		FraudRate:     req.FraudRate,
+		DropExisting:  req.DropExisting,
+		Seed:          req.Seed,
+		IdempotencyKey: requestid.FromContext(r.Context()), // Assuming we should add IdempotencyKey based on proto definition or just remove TenantId?
 	}
 
 	// Long timeout context handling should be in client or here?

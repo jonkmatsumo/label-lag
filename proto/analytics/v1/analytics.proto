@@ -101,6 +101,7 @@ message GetKpisRequest {
   google.protobuf.Timestamp start_time = 1;
   google.protobuf.Timestamp end_time = 2;
   string group_by = 3; // "hour" | "day"
+  string tenant_id = 15;
 }
 
 message KpiBucket {
@@ -123,6 +124,7 @@ message GetVolumeSeriesRequest {
   google.protobuf.Timestamp start_time = 1;
   google.protobuf.Timestamp end_time = 2;
   string granularity = 3; // "hour" | "day"
+  string tenant_id = 15;
 }
 
 message VolumePoint {
@@ -140,6 +142,7 @@ message GetConfusionMatrixRequest {
   google.protobuf.Timestamp end_time = 2;
   string model_version = 3;
   int32 threshold = 4; // Optional: custom score threshold
+  string tenant_id = 15;
 }
 
 message GetConfusionMatrixResponse {
@@ -239,15 +242,16 @@ message GetTransactionDetailsResponse {
 message SearchTransactionsRequest {
   string user_id = 1;
   string transaction_id = 2;
-  optional double min_amount = 3;
-  optional double max_amount = 4;
-  string start_date = 5;
-  string end_date = 6;
+  string start_date = 3;
+  string end_date = 4;
+  optional double min_amount = 5;
+  optional double max_amount = 6;
   optional bool is_fraudulent = 7;
   optional int32 min_score = 8;
   optional int32 max_score = 9;
   int32 limit = 10;
   int32 offset = 11;
+  string tenant_id = 15;
 }
 
 message SearchTransactionsResponse {
@@ -298,6 +302,7 @@ message GetOverviewMetricsResponse {
 message GetFeatureSampleRequest {
   int32 sample_size = 1;
   bool stratify = 2;
+  string tenant_id = 15;
 }
 
 message FeatureSample {
@@ -316,6 +321,7 @@ message GetFeatureSampleResponse {
 
 message GetTrainingDataRequest {
   google.protobuf.Timestamp cutoff_date = 1;
+  string tenant_id = 15;
 }
 
 message GetTrainingDataResponse {
@@ -326,6 +332,7 @@ message GetTrainingDataResponse {
 message GetBacktestFeaturesRequest {
   google.protobuf.Timestamp start_date = 1;
   google.protobuf.Timestamp end_date = 2;
+  string tenant_id = 15;
 }
 
 message BacktestFeatureVector {
@@ -378,6 +385,7 @@ message ListBacktestResultsRequest {
   google.protobuf.Timestamp end_date = 3;
   int32 limit = 4;
   int32 offset = 5;
+  string tenant_id = 15;
 }
 
 message ListBacktestResultsResponse {
@@ -394,6 +402,7 @@ message GetBacktestResultResponse {
 
 message GetDriftWindowRequest {
   int32 hours = 1;
+  string tenant_id = 15;
 }
 
 message GetDriftWindowResponse {
@@ -402,6 +411,7 @@ message GetDriftWindowResponse {
 
 message GetInferenceScoresRequest {
   int32 hours = 1;
+  string tenant_id = 15;
 }
 
 message GetInferenceScoresResponse {
@@ -463,7 +473,9 @@ message StoreGeneratedDataResponse {
   int64 records_saved = 2;
 }
 
-message ClearAllDataRequest {}
+message ClearAllDataRequest {
+  string tenant_id = 1;
+}
 message ClearAllDataResponse {
   bool success = 1;
   repeated string tables_cleared = 2;
@@ -510,6 +522,7 @@ message Rule {
 
 message SaveRuleRequest {
   Rule rule = 1;
+  string tenant_id = 2;
 }
 
 message SaveRuleResponse {
@@ -518,6 +531,7 @@ message SaveRuleResponse {
 
 message GetRuleRequest {
   string rule_id = 1;
+  string tenant_id = 2;
 }
 
 message GetRuleResponse {
@@ -527,6 +541,7 @@ message GetRuleResponse {
 message ListRulesRequest {
   string status = 1;
   bool include_archived = 2;
+  string tenant_id = 3;
 }
 
 message ListRulesResponse {
@@ -535,6 +550,7 @@ message ListRulesResponse {
 
 message DeleteRuleRequest {
   string rule_id = 1;
+  string tenant_id = 2;
 }
 
 message DeleteRuleResponse {
@@ -559,6 +575,7 @@ message InferenceEvent {
   string decision = 9;
   string decision_reason = 10;
   DecisionThresholds thresholds = 11;
+  string tenant_id = 12;
 }
 
 message DecisionThresholds {
@@ -578,6 +595,7 @@ message ListRuleVersionsRequest {
   string rule_id = 1;
   int32 limit = 2;
   int32 offset = 3;
+  string tenant_id = 4;
 }
 
 message ListRuleVersionsResponse {
@@ -588,6 +606,7 @@ message ListRuleVersionsResponse {
 message GetRuleVersionRequest {
   string rule_id = 1;
   string version_id = 2; // "latest", "active", or specific version
+  string tenant_id = 3;
 }
 
 message GetRuleVersionResponse {
@@ -601,6 +620,7 @@ message PublishRuleVersionRequest {
   string version_id = 2; // Optional: specific version to promote. If empty, promote draft.
   string actor = 3;
   string reason = 4;
+  string tenant_id = 5;
 }
 
 message PublishRuleVersionResponse {
@@ -610,6 +630,7 @@ message PublishRuleVersionResponse {
 
 message GetRuleReadinessRequest {
   string rule_id = 1;
+  string tenant_id = 2;
 }
 
 message ReadinessCheck {
@@ -628,6 +649,7 @@ message DiffRuleVersionsRequest {
   string rule_id = 1;
   string version_a = 2;
   string version_b = 3;
+  string tenant_id = 4;
 }
 
 message RuleDiffChange {
@@ -647,6 +669,7 @@ message DiffRuleVersionsResponse {
 message GetRuleStatsRequest {
   string rule_id = 1; // Optional, if empty returns all
   int32 days = 2;
+  string tenant_id = 15;
 }
 
 message RuleStats {
@@ -681,6 +704,7 @@ message ListDecisionsRequest {
   google.protobuf.Timestamp end_date = 6;
   int32 limit = 7;
   int32 offset = 8;
+  string tenant_id = 15;
 }
 
 message ListDecisionsResponse {
@@ -700,6 +724,7 @@ message DecisionSummary {
 
 message GetDecisionRequest {
   string request_id = 1;
+  string tenant_id = 2;
 }
 
 message GetDecisionResponse {
@@ -753,6 +778,7 @@ message UserFeatures {
 
 message GetLatestUserFeaturesRequest {
   string user_id = 1;
+  string tenant_id = 2;
 }
 
 message GetLatestUserFeaturesResponse {
@@ -762,6 +788,7 @@ message GetLatestUserFeaturesResponse {
 
 message BatchGetLatestUserFeaturesRequest {
   repeated string user_ids = 1;
+  string tenant_id = 2;
 }
 
 message BatchGetLatestUserFeaturesResponse {
@@ -773,6 +800,7 @@ message BatchGetLatestUserFeaturesResponse {
 message CompareBacktestsRequest {
   string baseline_job_id = 1;
   string candidate_job_id = 2;
+  string tenant_id = 3;
 }
 
 message BacktestMetricsDelta {
@@ -793,6 +821,7 @@ message CompareBacktestsResponse {
 // Shadow Comparison (Phase 9)
 message GetShadowComparisonRequest {
   int32 hours = 1;
+  string tenant_id = 15;
 }
 
 message ShadowModeMetrics {
@@ -846,6 +875,7 @@ message ListJobsResponse {
 
 message GetJobRequest {
   string job_id = 1;
+  string tenant_id = 2;
 }
 
 message GetJobResponse {
@@ -856,6 +886,7 @@ message GetJobEventsRequest {
   string job_id = 1;
   int32 limit = 2;
   int32 offset = 3;
+  string tenant_id = 15;
 }
 
 message GetJobEventsResponse {
@@ -865,6 +896,7 @@ message GetJobEventsResponse {
 message GetJobSummaryRequest {
   google.protobuf.Timestamp start_time = 1;
   google.protobuf.Timestamp end_time = 2;
+  string tenant_id = 15;
 }
 
 message JobSummaryBucket {
@@ -888,6 +920,7 @@ message DatasetProfile {
 
 message GetDatasetSummaryRequest {
   string profile_id = 1; // if empty, get latest?
+  string tenant_id = 2;
 }
 
 message GetDatasetSummaryResponse {
@@ -899,6 +932,7 @@ message ListDatasetProfilesRequest {
   int32 offset = 2;
   google.protobuf.Timestamp start_date = 3;
   google.protobuf.Timestamp end_date = 4;
+  string tenant_id = 15;
 }
 
 message ListDatasetProfilesResponse {
@@ -906,7 +940,9 @@ message ListDatasetProfilesResponse {
   int64 total = 2;
 }
 
-message GetLatestDatasetProfileRequest {}
+message GetLatestDatasetProfileRequest {
+  string tenant_id = 1;
+}
 
 message GetLatestDatasetProfileResponse {
   string profile_id = 1;
@@ -917,6 +953,7 @@ message GetLatestDatasetProfileResponse {
 message CompareDatasetProfilesRequest {
   string baseline_profile_id = 1;
   string candidate_profile_id = 2;
+  string tenant_id = 3;
 }
 
 message CompareDatasetProfilesResponse {
@@ -941,6 +978,7 @@ message TrainingRun {
   string params_json = 7;
   string dataset_id = 8;
   string mlflow_run_id = 9;
+  string tenant_id = 10;
 }
 
 message ListTrainingRunsRequest {
@@ -950,6 +988,7 @@ message ListTrainingRunsRequest {
   string status = 4;
   google.protobuf.Timestamp start_date = 5;
   google.protobuf.Timestamp end_date = 6;
+  string tenant_id = 15;
 }
 
 message ListTrainingRunsResponse {
@@ -961,6 +1000,7 @@ message ListModelVersionsRequest {
   string model_name = 1;
   int32 limit = 2;
   int32 offset = 3;
+  string tenant_id = 15;
 }
 
 message ListModelVersionsResponse {
@@ -970,6 +1010,7 @@ message ListModelVersionsResponse {
 
 message GetTrainingRunRequest {
   string run_id = 1;
+  string tenant_id = 2;
 }
 
 message GetTrainingRunResponse {
@@ -987,6 +1028,7 @@ message GetMetricSeriesRequest {
   string metric_name = 2;
   google.protobuf.Timestamp start_date = 3;
   google.protobuf.Timestamp end_date = 4;
+  string tenant_id = 15;
 }
 
 message GetMetricSeriesResponse {
@@ -995,6 +1037,7 @@ message GetMetricSeriesResponse {
 
 message ReportTrainingRunRequest {
   TrainingRun run = 1;
+  string tenant_id = 2;
 }
 
 message ReportTrainingRunResponse {

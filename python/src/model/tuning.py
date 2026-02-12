@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -23,6 +24,8 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 from xgboost import XGBClassifier
+
+from training.optuna_resume import create_tuning_study
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +48,38 @@ DEFAULT_SEARCH_SPACE = {
     "reg_alpha": (0.0, 1.0),
     "reg_lambda": (0.0, 10.0),
 }
+MAX_BEST_PARAMS_TAG_LENGTH = 2000
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _is_transient_mlflow_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return any(
+        marker in message
+        for marker in (
+            "timeout",
+            "temporarily",
+            "connection",
+            "unavailable",
+            "connection reset",
+            "429",
+            "503",
+        )
+    )
+
+
+def _best_params_tag_value(best_params: dict[str, object]) -> str:
+    serialized = json.dumps(
+        {str(key): str(value) for key, value in best_params.items()},
+        sort_keys=True,
+    )
+    return serialized[:MAX_BEST_PARAMS_TAG_LENGTH]
 
 
 def _create_objective(
@@ -137,43 +172,48 @@ def get_trial_params(trials_df: pd.DataFrame, trial_number: int) -> dict:
 class JobProgressCallback:
     """Optuna callback to update JobStore with trial results."""
 
-    def __init__(self, job_id: str, job_store: JobStore):
+    def __init__(
+        self,
+        job_id: str,
+        job_store: JobStore,
+        nested_mlflow_runs: bool | None = None,
+    ):
         self.job_id = job_id
         self.job_store = job_store
+        # Optional per-trial nested runs. Disabled by default to preserve behavior.
+        self._nested_mlflow_runs = (
+            _env_flag("TUNING_MLFLOW_NESTED_RUNS", default=False)
+            if nested_mlflow_runs is None
+            else nested_mlflow_runs
+        )
 
     def __call__(
         self, study: optuna.study.Study, trial: optuna.trial.FrozenTrial
     ) -> None:
         from training.jobs import TrialRecord, TuningJobStatus
 
-        # 1. Update JobStore with trial results
+        record = TrialRecord(
+            trial_number=trial.number,
+            state=str(trial.state),
+            value=float(trial.value) if trial.value is not None else None,
+            params={k: str(v) for k, v in trial.params.items()},
+            started_at=trial.datetime_start,
+            ended_at=trial.datetime_complete,
+            duration_ms=(
+                (trial.datetime_complete - trial.datetime_start).total_seconds() * 1000
+                if trial.datetime_complete and trial.datetime_start
+                else None
+            ),
+        )
+        self.job_store.append_trial(self.job_id, record)
+
+        # 1. Update JobStore aggregates
         def update_fn(job):
             # Update counts
             if str(trial.state) == "TrialState.COMPLETE":
                 job.completed_trials += 1
             elif str(trial.state) == "TrialState.PRUNED":
                 job.pruned_trials += 1
-
-            # Append TrialRecord
-            record = TrialRecord(
-                trial_number=trial.number,
-                state=str(trial.state),
-                value=float(trial.value) if trial.value is not None else None,
-                params={k: str(v) for k, v in trial.params.items()},
-                started_at=trial.datetime_start,
-                ended_at=trial.datetime_complete,
-                duration_ms=(
-                    (trial.datetime_complete - trial.datetime_start).total_seconds()
-                    * 1000
-                    if trial.datetime_complete and trial.datetime_start
-                    else None
-                ),
-            )
-            job.trials.append(record)
-
-            # Cap growth: keep last 500
-            if len(job.trials) > 500:
-                job.trials = job.trials[-500:]
 
             # Update best value/params
             if study.best_trial and study.best_trial.number == trial.number:
@@ -185,12 +225,54 @@ class JobProgressCallback:
             job.updated_at = datetime.now(UTC)
 
         self.job_store.update(self.job_id, update_fn)
+        self.job_store.set_heartbeat(self.job_id, datetime.now(UTC))
+        self._maybe_log_nested_trial_run(trial)
 
         # 2. Check for cancellation
         job = self.job_store.get(self.job_id)
         if job and job.status == TuningJobStatus.CANCELING:
             logger.info(f"Job {self.job_id} is canceling, stopping study.")
             study.stop()
+
+    def _maybe_log_nested_trial_run(self, trial: optuna.trial.FrozenTrial) -> None:
+        if not self._nested_mlflow_runs:
+            return
+        if str(trial.state) != "TrialState.COMPLETE":
+            return
+
+        for attempt in range(2):
+            try:
+                import mlflow
+
+                with mlflow.start_run(run_name=f"trial_{trial.number}", nested=True):
+                    mlflow.set_tag("job_id", self.job_id)
+                    mlflow.set_tag("tuning_job_id", self.job_id)
+                    mlflow.set_tag("trial_number", str(trial.number))
+                    mlflow.set_tag("state", str(trial.state))
+                    for key, value in trial.params.items():
+                        mlflow.log_param(key, value)
+                    if trial.value is not None:
+                        mlflow.log_metric("objective_value", float(trial.value))
+                return
+            except Exception as exc:
+                if attempt == 0 and _is_transient_mlflow_error(exc):
+                    logger.warning(
+                        (
+                            "Transient MLflow error for nested run job=%s "
+                            "trial=%s; retrying: %s"
+                        ),
+                        self.job_id,
+                        trial.number,
+                        exc,
+                    )
+                    continue
+                logger.warning(
+                    "Failed to log nested MLflow run for job %s trial=%s: %s",
+                    self.job_id,
+                    trial.number,
+                    exc,
+                )
+                return
 
 
 def run_tuning_study(
@@ -208,6 +290,7 @@ def run_tuning_study(
     search_space_overrides: dict[str, str] | None = None,
     job_id: str | None = None,
     job_store: JobStore | None = None,
+    storage_url: str | None = None,
 ) -> tuple[dict, pd.DataFrame]:
     """Run Optuna study and return best params and trial history.
 
@@ -226,6 +309,7 @@ def run_tuning_study(
         search_space_overrides: Optional overrides for search space (JSON strings).
         job_id: Optional job ID for tracking.
         job_store: Optional JobStore for tracking.
+        storage_url: Optional Optuna RDB storage URL override.
 
     Returns:
         (best_params, trials_df) where trials_df has columns like
@@ -274,20 +358,48 @@ def run_tuning_study(
         sampler = optuna.samplers.TPESampler(seed=seed, n_startup_trials=5)
 
     pruner = MedianPruner(n_startup_trials=5, n_warmup_steps=10)
-    study = optuna.create_study(direction=direction, sampler=sampler, pruner=pruner)
+    study = create_tuning_study(
+        direction=direction,
+        sampler=sampler,
+        pruner=pruner,
+        job_id=job_id,
+        storage_url=storage_url,
+    )
+    if job_id:
+        study.set_user_attr("tuning_job_id", job_id)
+
+    existing_trial_count = len(study.trials)
+    remaining_trials = max(0, n_trials - existing_trial_count)
 
     callbacks = []
     if job_id and job_store:
         callbacks.append(JobProgressCallback(job_id, job_store))
 
-    study.optimize(
-        objective,
-        n_trials=n_trials,
-        timeout=timeout_seconds,
-        show_progress_bar=False,
-        callbacks=callbacks,
-    )
-    best = study.best_params if study.best_trial else {}
+    if remaining_trials > 0:
+        study.optimize(
+            objective,
+            n_trials=remaining_trials,
+            timeout=timeout_seconds,
+            show_progress_bar=False,
+            callbacks=callbacks,
+        )
+    best_trial = None
+    best = {}
+    try:
+        best_trial = study.best_trial
+        best = study.best_params if best_trial else {}
+    except Exception:
+        best = {}
+
+    try:
+        import mlflow
+
+        mlflow.set_tag(
+            "best_trial_number", str(best_trial.number) if best_trial else ""
+        )
+        mlflow.set_tag("best_params_json", _best_params_tag_value(best))
+    except Exception as exc:
+        logger.warning("Failed to log best trial metadata tags: %s", exc)
     rows = []
     pruned_count = 0
     completed_count = 0

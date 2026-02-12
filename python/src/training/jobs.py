@@ -26,6 +26,30 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+MAX_ERROR_MESSAGE_LENGTH = 2000
+MAX_PARAMS_ITEMS = 100
+MAX_PARAM_KEY_LENGTH = 128
+MAX_PARAM_VALUE_LENGTH = 512
+
+
+def truncate_error_message(message: str | None) -> str | None:
+    if message is None:
+        return None
+    return message[:MAX_ERROR_MESSAGE_LENGTH]
+
+
+def bound_params(params: dict[str, str] | None) -> dict[str, str]:
+    if not params:
+        return {}
+
+    bounded: dict[str, str] = {}
+    for idx, (key, value) in enumerate(params.items()):
+        if idx >= MAX_PARAMS_ITEMS:
+            break
+        bounded[str(key)[:MAX_PARAM_KEY_LENGTH]] = str(value)[:MAX_PARAM_VALUE_LENGTH]
+    return bounded
+
+
 @dataclass
 class TrialRecord:
     trial_number: int
@@ -44,6 +68,7 @@ class TuningJob:
     status: TuningJobStatus = TuningJobStatus.PENDING
     created_at: datetime = field(default_factory=_utc_now)
     started_at: datetime | None = None
+    heartbeat_at: datetime | None = None
     updated_at: datetime = field(default_factory=_utc_now)
     ended_at: datetime | None = None
     mlflow_run_id: str | None = None

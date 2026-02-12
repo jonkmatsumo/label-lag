@@ -88,10 +88,33 @@ class TestAnalyticsCRUDClientRetry(unittest.TestCase):
 
                 mock_makedirs.assert_called()
                 # Check that open was called with a path ending in
-                # var/training_run_events.log
+                # var/training_run_reports.jsonl
                 args, kwargs = mock_file.call_args
                 path = args[0]
                 self.assertTrue(
-                    path.endswith(os.path.join("var", "training_run_events.log"))
+                    path.endswith(os.path.join("var", "training_run_reports.jsonl"))
                 )
                 self.assertEqual(args[1], "a")
+
+    @patch("training.crud_client.os.path.exists")
+    @patch("builtins.open", new_callable=unittest.mock.mock_open)
+    @patch("training.crud_client.os.remove")
+    def test_replay_spooled_reports_success(self, mock_remove, mock_open, mock_exists):
+        mock_exists.return_value = True
+        payload = {
+            "run_id": "spooled-run",
+            "model_name": "test-model",
+            "status": "COMPLETED",
+            "metrics": "{}",
+            "params": "{}",
+        }
+        mock_open.return_value.readlines.return_value = [json.dumps(payload) + "\n"]
+
+        self.client.stub.ReportTrainingRun = MagicMock(
+            return_value=analytics_pb2.ReportTrainingRunResponse(success=True)
+        )
+
+        self.client.replay_spooled_reports()
+
+        self.assertEqual(self.client.stub.ReportTrainingRun.call_count, 1)
+        mock_remove.assert_called_once()
