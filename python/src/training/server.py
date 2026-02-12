@@ -27,13 +27,13 @@ from forecast.model_manager import get_model_manager  # noqa: E402
 from forecast.service import ForecastService  # noqa: E402
 from training.config import load_config  # noqa: E402
 from training.job_queue import JobQueue  # noqa: E402
-from training.proto.training.v1 import training_pb2_grpc  # noqa: E402
 from training.service import TrainingService  # noqa: E402
 from training.tuning_startup import (  # noqa: E402
     build_tuning_job_store,
     reconcile_stale_jobs,
     reenqueue_pending_jobs,
 )
+from training.v1 import training_pb2_grpc  # noqa: E402
 from training.worker import TuningWorker  # noqa: E402
 
 logger = logging.getLogger(__name__)

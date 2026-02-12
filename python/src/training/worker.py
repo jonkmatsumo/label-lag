@@ -157,6 +157,12 @@ class TuningWorker:
 
             if split.train_size == 0:
                 raise ValueError("No training data available.")
+            max_dataset_rows = int(os.getenv("MAX_TUNING_DATASET_ROWS", "2000000"))
+            if split.train_size > max_dataset_rows:
+                raise ValueError(
+                    "Training data exceeds MAX_TUNING_DATASET_ROWS "
+                    f"({split.train_size} > {max_dataset_rows})"
+                )
 
             # Prepare tuning params
             v_frac = _get(split_cfg_obj, "validation_fraction", 0.2)

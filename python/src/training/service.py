@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import uuid
 from datetime import UTC, datetime
 
@@ -20,8 +21,8 @@ from training.crud_client import get_crud_client
 from training.job_queue import JobQueue
 from training.job_store import JobStore
 from training.jobs import TuningJob, TuningJobStatus
-from training.proto.training.v1 import training_pb2, training_pb2_grpc
 from training.schemas import SplitConfig, TuningConfig
+from training.v1 import training_pb2, training_pb2_grpc
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,13 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
     def __init__(self, job_store: JobStore, job_queue: JobQueue):
         self.job_store = job_store
         self.job_queue = job_queue
+        self.max_tuning_trials = max(1, int(os.getenv("MAX_TUNING_TRIALS", "100")))
+        self.max_tuning_timeout_minutes = max(
+            1, int(os.getenv("MAX_TUNING_TIMEOUT_MINUTES", "120"))
+        )
+        self.max_concurrent_tuning_jobs = max(
+            1, int(os.getenv("MAX_CONCURRENT_TUNING_JOBS", "1"))
+        )
 
     def ClearData(self, request, context):  # noqa: N802
         """Clear all data from the database via Analytics service."""
@@ -617,6 +625,54 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
             ):
                 context.abort(
                     grpc.StatusCode.INVALID_ARGUMENT, "Tuning must be enabled"
+                )
+
+            requested_trials = request.tuning_config.n_trials
+            if requested_trials <= 0:
+                context.abort(
+                    grpc.StatusCode.INVALID_ARGUMENT,
+                    "tuning_config.n_trials must be greater than zero",
+                )
+            if requested_trials > self.max_tuning_trials:
+                context.abort(
+                    grpc.StatusCode.INVALID_ARGUMENT,
+                    (
+                        "tuning_config.n_trials exceeds server limit "
+                        f"({requested_trials} > {self.max_tuning_trials})"
+                    ),
+                )
+
+            requested_timeout_minutes = request.tuning_config.timeout_minutes
+            if requested_timeout_minutes <= 0:
+                context.abort(
+                    grpc.StatusCode.INVALID_ARGUMENT,
+                    "tuning_config.timeout_minutes must be greater than zero",
+                )
+            if requested_timeout_minutes > self.max_tuning_timeout_minutes:
+                context.abort(
+                    grpc.StatusCode.INVALID_ARGUMENT,
+                    (
+                        "tuning_config.timeout_minutes exceeds server limit "
+                        f"({requested_timeout_minutes} > "
+                        f"{self.max_tuning_timeout_minutes})"
+                    ),
+                )
+
+            active_jobs = self.job_store.list_jobs(
+                statuses=[
+                    TuningJobStatus.PENDING,
+                    TuningJobStatus.RUNNING,
+                    TuningJobStatus.CANCELING,
+                ],
+                limit=self.max_concurrent_tuning_jobs + 1,
+            )
+            if len(active_jobs) >= self.max_concurrent_tuning_jobs:
+                context.abort(
+                    grpc.StatusCode.RESOURCE_EXHAUSTED,
+                    (
+                        "Maximum concurrent tuning jobs reached "
+                        f"({self.max_concurrent_tuning_jobs})"
+                    ),
                 )
 
             # Create MLflow parent run
