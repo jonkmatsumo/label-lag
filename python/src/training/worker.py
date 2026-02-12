@@ -119,6 +119,11 @@ class TuningWorker:
             self.job_store.update(job_id, cancel_job)
             self._log_lifecycle_event("canceled", job_id)
             return
+        if job.status == TuningJobStatus.CANCELED:
+            self._log_lifecycle_event("canceled", job_id)
+            return
+        if job.status.is_terminal():
+            return
 
         def start_job(j):
             j.status = TuningJobStatus.RUNNING
@@ -146,6 +151,9 @@ class TuningWorker:
             split_cfg_obj = _coerce_model(config.get("split_config"), SplitConfig)
             tuning_cfg_obj = _coerce_model(config.get("tuning_config"), TuningConfig)
             database_url = config.get("database_url")
+
+            if self._cancel_if_requested(job_id):
+                return
 
             # Load data
             training_cutoff_date = datetime.now(UTC) - timedelta(
@@ -187,6 +195,9 @@ class TuningWorker:
             n_negative = y_is_negative.sum() if hasattr(y_is_negative, "sum") else 0
             n_positive = y_is_positive.sum() if hasattr(y_is_positive, "sum") else 0
             scale_pos_weight = n_negative / n_positive if n_positive > 0 else 1.0
+
+            if self._cancel_if_requested(job_id):
+                return
 
             import mlflow
 
@@ -263,6 +274,23 @@ class TuningWorker:
             job.total_trials,
             job.pruned_trials,
         )
+
+    def _cancel_if_requested(self, job_id: str) -> bool:
+        job = self.job_store.get(job_id)
+        if not job:
+            return True
+        if job.status != TuningJobStatus.CANCELING:
+            return False
+
+        def set_canceled(current_job):
+            current_job.status = TuningJobStatus.CANCELED
+            now = datetime.now(UTC)
+            current_job.updated_at = now
+            current_job.ended_at = now
+
+        self.job_store.update(job_id, set_canceled)
+        self._log_lifecycle_event("canceled", job_id)
+        return True
 
     @property
     def is_busy(self) -> bool:

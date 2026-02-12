@@ -900,37 +900,27 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
 
         if job.status.is_terminal():
             return self.GetTuningStatus(request, context)
+        if job.status == TuningJobStatus.CANCELING:
+            return self.GetTuningStatus(request, context)
+
+        now = datetime.now(UTC)
+        if job.status == TuningJobStatus.PENDING:
+
+            def set_canceled(j):
+                j.status = TuningJobStatus.CANCELED
+                j.updated_at = now
+                j.ended_at = now
+
+            self.job_store.update(request.job_id, set_canceled)
+            self.job_queue.cancel(request.job_id)
+            return self.GetTuningStatus(request, context)
 
         def set_canceling(j):
             j.status = TuningJobStatus.CANCELING
-            j.updated_at = datetime.now(UTC)
+            j.updated_at = now
 
-        updated_job = self.job_store.update(request.job_id, set_canceling)
-
-        return training_pb2.TuningJobStatusResponse(
-            job_id=updated_job.job_id,
-            status=updated_job.status.value,
-            completed_trials=updated_job.completed_trials,
-            total_trials=updated_job.total_trials,
-            pruned_trials=updated_job.pruned_trials,
-            best_value=updated_job.best_value
-            if updated_job.best_value is not None
-            else 0.0,
-            best_params=updated_job.best_params,
-            mlflow_run_id=updated_job.mlflow_run_id or "",
-            error_message=updated_job.error_message or "",
-            created_at=int(updated_job.created_at.timestamp() * 1000),
-            started_at=int(updated_job.started_at.timestamp() * 1000)
-            if updated_job.started_at
-            else 0,
-            updated_at=int(updated_job.updated_at.timestamp() * 1000),
-            ended_at=int(updated_job.ended_at.timestamp() * 1000)
-            if updated_job.ended_at
-            else 0,
-            heartbeat_at=int(updated_job.heartbeat_at.timestamp() * 1000)
-            if updated_job.heartbeat_at
-            else 0,
-        )
+        self.job_store.update(request.job_id, set_canceling)
+        return self.GetTuningStatus(request, context)
 
     def GetHealth(self, request, context):  # noqa: N802
         """Fetch health status including spool information."""
