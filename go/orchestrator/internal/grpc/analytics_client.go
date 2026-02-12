@@ -345,7 +345,7 @@ func (c *AnalyticsClient) ClearAllData(ctx context.Context, req *crudv1.ClearAll
 	return resp, nil
 }
 
-func (c *AnalyticsClient) GetFeatures(ctx context.Context, userID string) (map[string]any, error) {
+func (c *AnalyticsClient) GetFeatures(ctx context.Context, userID string, tenantID string) (map[string]any, error) {
 	span := trace.SpanFromContext(ctx)
 	if err := c.breaker.Allow(); err != nil {
 		span.SetAttributes(
@@ -363,7 +363,8 @@ func (c *AnalyticsClient) GetFeatures(ctx context.Context, userID string) (map[s
 	}
 
 	resp, err := c.stub.GetLatestUserFeatures(c.withMetadata(callCtx), &crudv1.GetLatestUserFeaturesRequest{
-		UserId: userID,
+		UserId:   userID,
+		TenantId: tenantID,
 	})
 	c.breaker.RecordResult(err)
 

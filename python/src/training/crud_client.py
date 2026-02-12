@@ -302,11 +302,9 @@ class AnalyticsCRUDClient:
         try:
             var_dir = os.path.join(os.getcwd(), "var")
             os.makedirs(var_dir, exist_ok=True)
-            log_path = os.path.join(var_dir, "training_run_events.log")
+            log_path = os.path.join(var_dir, "training_run_reports.jsonl")
 
             # Convert proto message to dict for JSON serialization
-            # Using simple dict for now as we don't have MessageToDict here easily
-            # and it's best-effort.
             payload = {
                 "run_id": run.run_id,
                 "model_name": run.model_name,
@@ -317,12 +315,81 @@ class AnalyticsCRUDClient:
                 "timestamp": time.time(),
             }
 
+            # Optional: capture timestamps if they exist
+            if run.HasField("started_at"):
+                payload["started_at"] = run.started_at.ToSeconds()
+            if run.HasField("ended_at"):
+                payload["ended_at"] = run.ended_at.ToSeconds()
+
             with open(log_path, "a") as f:
                 f.write(json.dumps(payload) + "\n")
 
             logger.info("persisted failed report to local fallback", log_path=log_path)
         except Exception as fallback_err:
             logger.error("fallback persistence failed", error=str(fallback_err))
+
+    def replay_spooled_reports(self):
+        """On startup, attempt to replay failed reports from local spool."""
+        var_dir = os.path.join(os.getcwd(), "var")
+        log_path = os.path.join(var_dir, "training_run_reports.jsonl")
+
+        if not os.path.exists(log_path):
+            return
+
+        logger.info("checking for spooled training reports", log_path=log_path)
+
+        try:
+            with open(log_path) as f:
+                lines = f.readlines()
+
+            if not lines:
+                return
+
+            remaining = []
+            replayed_count = 0
+
+            for line in lines:
+                if not line.strip():
+                    continue
+                try:
+                    payload = json.loads(line)
+
+                    run = analytics_pb2.TrainingRun(
+                        run_id=payload["run_id"],
+                        model_name=payload["model_name"],
+                        status=payload["status"],
+                        metrics_json=payload["metrics"],
+                        params_json=payload["params"],
+                    )
+                    if "started_at" in payload:
+                        run.started_at.FromSeconds(int(payload["started_at"]))
+                    if "ended_at" in payload:
+                        run.ended_at.FromSeconds(int(payload["ended_at"]))
+
+                    # Call raw stub to avoid recursion or infinite retries here
+                    self.stub.ReportTrainingRun(
+                        analytics_pb2.ReportTrainingRunRequest(run=run),
+                        timeout=self.timeout_seconds,
+                    )
+                    replayed_count += 1
+                except Exception as e:
+                    logger.warning("failed to replay report line", error=str(e))
+                    remaining.append(line)
+
+            if remaining:
+                with open(log_path, "w") as f:
+                    f.writelines(remaining)
+            else:
+                try:
+                    os.remove(log_path)
+                except OSError:
+                    pass
+
+            if replayed_count > 0:
+                logger.info(f"replayed {replayed_count} spooled reports")
+
+        except Exception as e:
+            logger.error("error during report replay", error=str(e))
 
 
 _client = None

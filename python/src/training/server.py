@@ -48,6 +48,14 @@ def serve():
     else:
         logger.warning("No model loaded - API will use rule-based evaluation only")
 
+    # Replay any failed training reports from local spool
+    try:
+        from training.crud_client import get_crud_client
+
+        get_crud_client().replay_spooled_reports()
+    except Exception as e:
+        logger.warning(f"Failed to replay spooled reports: {e}")
+
     # Initialize Job infrastructure
     job_store = InMemoryJobStore()
     job_queue = JobQueue()

@@ -10,6 +10,7 @@ import (
 
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
 	grpcclient "github.com/jonkmatsumo/label-lag/go/orchestrator/internal/grpc"
+	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/tenant"
 	"google.golang.org/grpc/codes"
 )
 
@@ -23,7 +24,7 @@ type AnalyticsClient interface {
 	GetFeatureSample(ctx context.Context, req *crudv1.GetFeatureSampleRequest) (*crudv1.GetFeatureSampleResponse, error)
 
 	ListBacktestResults(ctx context.Context, req *crudv1.ListBacktestResultsRequest) (*crudv1.ListBacktestResultsResponse, error)
-	GetFeatures(ctx context.Context, userID string) (map[string]any, error)
+	GetFeatures(ctx context.Context, userID string, tenantID string) (map[string]any, error)
 	ClearAllData(ctx context.Context, req *crudv1.ClearAllDataRequest) (*crudv1.ClearAllDataResponse, error)
 	ListRuleVersions(ctx context.Context, req *crudv1.ListRuleVersionsRequest) (*crudv1.ListRuleVersionsResponse, error)
 	GetRuleVersion(ctx context.Context, req *crudv1.GetRuleVersionRequest) (*crudv1.GetRuleVersionResponse, error)
@@ -157,6 +158,7 @@ func (h *Handler) handleSearchTransactions(w http.ResponseWriter, r *http.Reques
 	if req.Offset != nil {
 		grpcReq.Offset = *req.Offset
 	}
+	grpcReq.TenantId = tenant.FromContext(r.Context())
 
 	resp, err := h.analyticsClient.SearchTransactions(r.Context(), grpcReq)
 	if err != nil {

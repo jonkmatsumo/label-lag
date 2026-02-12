@@ -5,6 +5,7 @@ import (
 	"time"
 
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/tenant"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -25,6 +26,7 @@ func (h *Handler) handleListTrainingRuns(w http.ResponseWriter, r *http.Request)
 		Status:    r.URL.Query().Get("status"),
 		Limit:     limit,
 		Offset:    offset,
+		TenantId:  tenant.FromContext(r.Context()),
 	}
 
 	if startStr := r.URL.Query().Get("start_date"); startStr != "" {
@@ -75,6 +77,7 @@ func (h *Handler) handleListModelVersions(w http.ResponseWriter, r *http.Request
 		ModelName: modelName,
 		Limit:     limit,
 		Offset:    offset,
+		TenantId:  tenant.FromContext(r.Context()),
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -91,7 +94,10 @@ func (h *Handler) handleGetTrainingRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := h.analyticsClient.GetTrainingRun(r.Context(), &crudv1.GetTrainingRunRequest{RunId: runID})
+	resp, err := h.analyticsClient.GetTrainingRun(r.Context(), &crudv1.GetTrainingRunRequest{
+		RunId:    runID,
+		TenantId: tenant.FromContext(r.Context()),
+	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
 		return
@@ -104,6 +110,7 @@ func (h *Handler) handleGetMetricSeries(w http.ResponseWriter, r *http.Request) 
 	req := &crudv1.GetMetricSeriesRequest{
 		ModelName:  r.URL.Query().Get("model_name"),
 		MetricName: r.URL.Query().Get("metric_name"),
+		TenantId:   tenant.FromContext(r.Context()),
 	}
 
 	if startStr := r.URL.Query().Get("start_date"); startStr != "" {

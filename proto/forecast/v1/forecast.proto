@@ -38,6 +38,7 @@ message GetDriftMonitoringRequest {
   int32 hours = 1;
   double threshold = 2;
   bool force_refresh = 3;
+  string tenant_id = 15;
 }
 
 message GetDriftMonitoringResponse {
@@ -48,6 +49,7 @@ message GetDriftMonitoringResponse {
 
 message GetScoreDistributionRequest {
   int32 hours = 1;
+  string tenant_id = 15;
 }
 
 message GetScoreDistributionResponse {
@@ -58,7 +60,9 @@ message GetScoreDistributionResponse {
   bool shift_detected = 5;
 }
 
-message ReloadModelRequest {}
+message ReloadModelRequest {
+  string tenant_id = 1;
+}
 
 message ReloadModelResponse {
   bool success = 1;
@@ -70,6 +74,7 @@ message DeployModelRequest {
   string stage = 2; // e.g., "Production", "Staging"
   string actor = 3;
   string reason = 4;
+  string tenant_id = 15;
 }
 
 message DeployModelResponse {
@@ -84,6 +89,7 @@ message PredictSignalRequest {
   double amount = 2;
   string currency = 3;
   string client_transaction_id = 4;
+  string tenant_id = 15;
 }
 
 message PredictSignalResponse {

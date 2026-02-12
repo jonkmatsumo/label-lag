@@ -6,11 +6,27 @@ import (
 	"time"
 
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/requestid"
+	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/tenant"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 )
+
+func tenancyMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tenantID := r.Header.Get("X-Tenant-Id")
+		if tenantID == "" {
+			tenantID = "global"
+		}
+
+		ctx := tenant.WithTenantID(r.Context(), tenantID)
+		span := trace.SpanFromContext(ctx)
+		span.SetAttributes(attribute.String("tenant_id", tenantID))
+
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
 
 func requestIDMiddleware(logger *slog.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/tenant"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -24,7 +25,9 @@ func (h *Handler) handleAnalyticsOverview(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	resp, err := h.analyticsClient.GetOverviewMetrics(r.Context(), &crudv1.GetOverviewMetricsRequest{})
+	resp, err := h.analyticsClient.GetOverviewMetrics(r.Context(), &crudv1.GetOverviewMetricsRequest{
+		TenantId: tenant.FromContext(r.Context()),
+	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
 		return
@@ -63,7 +66,10 @@ func (h *Handler) handleAnalyticsDailyStats(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	resp, err := h.analyticsClient.GetDailyStats(r.Context(), &crudv1.GetDailyStatsRequest{Days: days})
+	resp, err := h.analyticsClient.GetDailyStats(r.Context(), &crudv1.GetDailyStatsRequest{
+		Days:     days,
+		TenantId: tenant.FromContext(r.Context()),
+	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
 		return
@@ -107,9 +113,17 @@ func (h *Handler) handleAnalyticsTransactions(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	offset, err := parseIntQuery(r, "offset", 0, 0, 100000)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	resp, err := h.analyticsClient.GetTransactionDetails(r.Context(), &crudv1.GetTransactionDetailsRequest{
-		Days:  days,
-		Limit: limit,
+		Days:     days,
+		Limit:    limit,
+		Offset:   offset,
+		TenantId: tenant.FromContext(r.Context()),
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -159,7 +173,17 @@ func (h *Handler) handleAnalyticsRecentAlerts(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	resp, err := h.analyticsClient.GetRecentAlerts(r.Context(), &crudv1.GetRecentAlertsRequest{Limit: limit})
+	offset, err := parseIntQuery(r, "offset", 0, 0, 100000)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	resp, err := h.analyticsClient.GetRecentAlerts(r.Context(), &crudv1.GetRecentAlertsRequest{
+		Limit:    limit,
+		Offset:   offset,
+		TenantId: tenant.FromContext(r.Context()),
+	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
 		return
@@ -215,6 +239,7 @@ func (h *Handler) handleAnalyticsFeatureSample(w http.ResponseWriter, r *http.Re
 	resp, err := h.analyticsClient.GetFeatureSample(r.Context(), &crudv1.GetFeatureSampleRequest{
 		SampleSize: sampleSize,
 		Stratify:   stratify,
+		TenantId:   tenant.FromContext(r.Context()),
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -246,7 +271,9 @@ func (h *Handler) handleDatasetClear(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := h.analyticsClient.ClearAllData(r.Context(), &crudv1.ClearAllDataRequest{})
+	resp, err := h.analyticsClient.ClearAllData(r.Context(), &crudv1.ClearAllDataRequest{
+		TenantId: tenant.FromContext(r.Context()),
+	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
 		return
@@ -282,8 +309,9 @@ func (h *Handler) handleAnalyticsRuleStats(w http.ResponseWriter, r *http.Reques
 	}
 
 	resp, err := h.analyticsClient.GetRuleStats(r.Context(), &crudv1.GetRuleStatsRequest{
-		RuleId: ruleID,
-		Days:   days,
+		RuleId:   ruleID,
+		Days:     days,
+		TenantId: tenant.FromContext(r.Context()),
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -317,8 +345,9 @@ func (h *Handler) handleAnalyticsAttribution(w http.ResponseWriter, r *http.Requ
 	}
 
 	resp, err := h.analyticsClient.GetAttribution(r.Context(), &crudv1.GetAttributionRequest{
-		Days:  days,
-		Limit: limit,
+		Days:     days,
+		Limit:    limit,
+		TenantId: tenant.FromContext(r.Context()),
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -454,6 +483,7 @@ func (h *Handler) handleListDecisions(w http.ResponseWriter, r *http.Request) {
 		Offset:   offset,
 		UserId:   r.URL.Query().Get("user_id"),
 		Decision: r.URL.Query().Get("decision"),
+		TenantId: tenant.FromContext(r.Context()),
 	}
 
 	if minScoreStr := r.URL.Query().Get("min_score"); minScoreStr != "" {
@@ -510,7 +540,10 @@ func (h *Handler) handleGetDecision(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := h.analyticsClient.GetDecision(r.Context(), &crudv1.GetDecisionRequest{RequestId: requestID})
+	resp, err := h.analyticsClient.GetDecision(r.Context(), &crudv1.GetDecisionRequest{
+		RequestId: requestID,
+		TenantId:  tenant.FromContext(r.Context()),
+	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
 		return
@@ -526,7 +559,10 @@ func (h *Handler) handleGetDecisionTrace(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	resp, err := h.analyticsClient.GetDecisionTrace(r.Context(), &crudv1.GetDecisionTraceRequest{RequestId: requestID})
+	resp, err := h.analyticsClient.GetDecisionTrace(r.Context(), &crudv1.GetDecisionTraceRequest{
+		RequestId: requestID,
+		TenantId:  tenant.FromContext(r.Context()),
+	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
 		return
@@ -545,7 +581,8 @@ func (h *Handler) handleGetRuleImpact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req := &crudv1.GetRuleImpactRequest{
-		RuleId: ruleID,
+		RuleId:   ruleID,
+		TenantId: tenant.FromContext(r.Context()),
 	}
 
 	if startStr := r.URL.Query().Get("start_date"); startStr != "" {
@@ -583,7 +620,8 @@ func (h *Handler) handleGetRuleImpact(w http.ResponseWriter, r *http.Request) {
 // Query params: start_time (RFC3339), end_time (RFC3339), group_by (day|hour).
 func (h *Handler) handleGetKpis(w http.ResponseWriter, r *http.Request) {
 	req := &crudv1.GetKpisRequest{
-		GroupBy: r.URL.Query().Get("group_by"),
+		GroupBy:  r.URL.Query().Get("group_by"),
+		TenantId: tenant.FromContext(r.Context()),
 	}
 
 	if startStr := r.URL.Query().Get("start_time"); startStr != "" {
@@ -627,6 +665,7 @@ func (h *Handler) handleGetKpis(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetVolumeSeries(w http.ResponseWriter, r *http.Request) {
 	req := &crudv1.GetVolumeSeriesRequest{
 		Granularity: r.URL.Query().Get("granularity"),
+		TenantId:    tenant.FromContext(r.Context()),
 	}
 
 	if startStr := r.URL.Query().Get("start_time"); startStr != "" {
@@ -670,6 +709,7 @@ func (h *Handler) handleGetVolumeSeries(w http.ResponseWriter, r *http.Request) 
 func (h *Handler) handleGetConfusionMatrix(w http.ResponseWriter, r *http.Request) {
 	req := &crudv1.GetConfusionMatrixRequest{
 		ModelVersion: r.URL.Query().Get("model_version"),
+		TenantId:     tenant.FromContext(r.Context()),
 	}
 
 	if startStr := r.URL.Query().Get("start_time"); startStr != "" {

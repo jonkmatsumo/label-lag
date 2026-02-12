@@ -12,6 +12,7 @@ import (
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
 	forecastv1 "github.com/jonkmatsumo/label-lag/go/forecast/proto/forecastv1"
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/requestid"
+	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/tenant"
 )
 
 // TODO(phase4): Map core monitoring read routes.
@@ -41,6 +42,7 @@ func (h *Handler) handleMonitoringDrift(w http.ResponseWriter, r *http.Request) 
 		Hours:        hours,
 		Threshold:    threshold,
 		ForceRefresh: forceRefresh,
+		TenantId:     tenant.FromContext(r.Context()),
 	})
 	if err != nil {
 		writeRPCError(w, err)
@@ -66,7 +68,8 @@ func (h *Handler) handleMetricsShadowComparison(w http.ResponseWriter, r *http.R
 	hours, _ := parseIntQuery(r, "hours", 24, 1, 720)
 
 	resp, err := h.analyticsClient.GetShadowComparison(r.Context(), &crudv1.GetShadowComparisonRequest{
-		Hours: hours,
+		Hours:    hours,
+		TenantId: tenant.FromContext(r.Context()),
 	})
 	if err != nil {
 		writeRPCError(w, err)

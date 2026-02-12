@@ -5,6 +5,7 @@ import (
 	"time"
 
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/tenant"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -23,10 +24,11 @@ func (h *Handler) handleListJobs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req := &crudv1.ListJobsRequest{
-		Limit:   limit,
-		Offset:  offset,
-		JobType: r.URL.Query().Get("job_type"),
-		Status:  r.URL.Query().Get("status"),
+		Limit:    limit,
+		Offset:   offset,
+		JobType:  r.URL.Query().Get("job_type"),
+		Status:   r.URL.Query().Get("status"),
+		TenantId: tenant.FromContext(r.Context()),
 	}
 
 	if startStr := r.URL.Query().Get("start_date"); startStr != "" {
@@ -67,7 +69,10 @@ func (h *Handler) handleGetJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := h.analyticsClient.GetJob(r.Context(), &crudv1.GetJobRequest{JobId: jobID})
+	resp, err := h.analyticsClient.GetJob(r.Context(), &crudv1.GetJobRequest{
+		JobId:    jobID,
+		TenantId: tenant.FromContext(r.Context()),
+	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
 		return
@@ -95,9 +100,10 @@ func (h *Handler) handleGetJobEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp, err := h.analyticsClient.GetJobEvents(r.Context(), &crudv1.GetJobEventsRequest{
-		JobId:  jobID,
-		Limit:  limit,
-		Offset: offset,
+		JobId:    jobID,
+		Limit:    limit,
+		Offset:   offset,
+		TenantId: tenant.FromContext(r.Context()),
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -108,7 +114,9 @@ func (h *Handler) handleGetJobEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleGetJobSummary(w http.ResponseWriter, r *http.Request) {
-	req := &crudv1.GetJobSummaryRequest{}
+	req := &crudv1.GetJobSummaryRequest{
+		TenantId: tenant.FromContext(r.Context()),
+	}
 
 	if startStr := r.URL.Query().Get("start_time"); startStr != "" {
 		if t, err := time.Parse(time.RFC3339, startStr); err == nil {

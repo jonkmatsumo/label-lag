@@ -770,3 +770,25 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
             if updated_job.ended_at
             else 0,
         )
+
+    def GetHealth(self, request, context):  # noqa: N802
+        """Fetch health status including spool information."""
+        try:
+            import os
+
+            var_dir = os.path.join(os.getcwd(), "var")
+            log_path = os.path.join(var_dir, "training_run_reports.jsonl")
+
+            spooled_count = 0
+            if os.path.exists(log_path):
+                with open(log_path) as f:
+                    spooled_count = sum(1 for line in f if line.strip())
+
+            return training_pb2.GetHealthResponse(
+                ready=True,
+                components={"training": "ok"},
+                spooled_reports_count=spooled_count,
+            )
+        except Exception as e:
+            logger.exception("GetHealth failed")
+            context.abort(grpc.StatusCode.INTERNAL, str(e))
