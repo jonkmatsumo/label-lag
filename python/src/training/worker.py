@@ -97,6 +97,7 @@ class TuningWorker:
                     j.ended_at = datetime.now(UTC)
 
                 self.job_store.update(job_id, fail_job)
+                self._log_lifecycle_event("failed", job_id)
             finally:
                 with self._lock:
                     self._current_job_id = None
@@ -116,6 +117,7 @@ class TuningWorker:
                 j.ended_at = datetime.now(UTC)
 
             self.job_store.update(job_id, cancel_job)
+            self._log_lifecycle_event("canceled", job_id)
             return
 
         def start_job(j):
@@ -127,6 +129,7 @@ class TuningWorker:
 
         self.job_store.update(job_id, start_job)
         self._set_heartbeat(job_id)
+        self._log_lifecycle_event("started", job_id)
 
         heartbeat_stop = threading.Event()
         heartbeat_thread = threading.Thread(
@@ -216,6 +219,7 @@ class TuningWorker:
                     j.ended_at = datetime.now(UTC)
 
                 self.job_store.update(job_id, set_canceled)
+                self._log_lifecycle_event("canceled", job_id)
             else:
 
                 def set_completed(j):
@@ -223,6 +227,7 @@ class TuningWorker:
                     j.ended_at = datetime.now(UTC)
 
                 self.job_store.update(job_id, set_completed)
+                self._log_lifecycle_event("completed", job_id)
         finally:
             heartbeat_stop.set()
             heartbeat_thread.join(timeout=1)
@@ -237,6 +242,27 @@ class TuningWorker:
             self.job_store.set_heartbeat(job_id, datetime.now(UTC))
         except Exception:
             logger.exception("Failed to update heartbeat for job %s", job_id)
+
+    def _log_lifecycle_event(self, event: str, job_id: str) -> None:
+        job = self.job_store.get(job_id)
+        if not job:
+            return
+        duration_seconds = None
+        if job.started_at and job.ended_at:
+            duration_seconds = (job.ended_at - job.started_at).total_seconds()
+        elif job.started_at:
+            duration_seconds = (datetime.now(UTC) - job.started_at).total_seconds()
+        logger.info(
+            "tuning_job_lifecycle event=%s job_id=%s status=%s duration_seconds=%.3f "
+            "completed_trials=%s total_trials=%s pruned_trials=%s",
+            event,
+            job_id,
+            job.status.value,
+            duration_seconds or 0.0,
+            job.completed_trials,
+            job.total_trials,
+            job.pruned_trials,
+        )
 
     @property
     def is_busy(self) -> bool:

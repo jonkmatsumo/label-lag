@@ -81,4 +81,9 @@ def reenqueue_pending_jobs(job_store: JobStore, job_queue: JobQueue) -> int:
     pending_jobs = job_store.list_jobs(statuses=[TuningJobStatus.PENDING], limit=10_000)
     for job in sorted(pending_jobs, key=lambda current: current.created_at):
         job_queue.enqueue(job.job_id)
+        logger.info(
+            "tuning_job_reenqueued job_id=%s queue_depth=%s",
+            job.job_id,
+            job_queue.depth(),
+        )
     return len(pending_jobs)

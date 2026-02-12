@@ -721,6 +721,12 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                 mlflow.set_tag("job_id", job.job_id)
                 self.job_store.create(job)
                 self.job_queue.enqueue(job.job_id)
+                logger.info(
+                    "tuning_job_enqueued job_id=%s queue_depth=%s total_trials=%s",
+                    job.job_id,
+                    self.job_queue.depth(),
+                    job.total_trials,
+                )
 
                 return training_pb2.StartTuningJobResponse(
                     job_id=job.job_id,
