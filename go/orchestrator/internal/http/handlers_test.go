@@ -575,6 +575,10 @@ func (s stubTrainingClient) ClearData(ctx context.Context, req *trainingv1.Clear
 	return &trainingv1.ClearDataResponse{Success: true}, s.err
 }
 
+func (s stubTrainingClient) GetHealth(ctx context.Context, req *trainingv1.GetHealthRequest) (*trainingv1.GetHealthResponse, error) {
+	return &trainingv1.GetHealthResponse{Ready: true}, s.err
+}
+
 type stubAnalyticsClient struct {
 	resp                   *crudv1.SearchTransactionsResponse
 	dailyStatsResp         *crudv1.GetDailyStatsResponse
@@ -651,7 +655,7 @@ func (s *stubAnalyticsClient) ClearAllData(ctx context.Context, req *crudv1.Clea
 	return &crudv1.ClearAllDataResponse{Success: true}, s.err
 }
 
-func (s *stubAnalyticsClient) GetFeatures(ctx context.Context, userID string) (map[string]any, error) {
+func (s *stubAnalyticsClient) GetFeatures(ctx context.Context, userID, tenantID string) (map[string]any, error) {
 	if s.err != nil {
 		return nil, s.err
 	}

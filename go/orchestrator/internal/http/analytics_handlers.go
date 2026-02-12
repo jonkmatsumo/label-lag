@@ -25,9 +25,7 @@ func (h *Handler) handleAnalyticsOverview(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	resp, err := h.analyticsClient.GetOverviewMetrics(r.Context(), &crudv1.GetOverviewMetricsRequest{
-		TenantId: tenant.FromContext(r.Context()),
-	})
+	resp, err := h.analyticsClient.GetOverviewMetrics(r.Context(), &crudv1.GetOverviewMetricsRequest{})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
 		return
@@ -67,8 +65,7 @@ func (h *Handler) handleAnalyticsDailyStats(w http.ResponseWriter, r *http.Reque
 	}
 
 	resp, err := h.analyticsClient.GetDailyStats(r.Context(), &crudv1.GetDailyStatsRequest{
-		Days:     days,
-		TenantId: tenant.FromContext(r.Context()),
+		Days: days,
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -120,10 +117,9 @@ func (h *Handler) handleAnalyticsTransactions(w http.ResponseWriter, r *http.Req
 	}
 
 	resp, err := h.analyticsClient.GetTransactionDetails(r.Context(), &crudv1.GetTransactionDetailsRequest{
-		Days:     days,
-		Limit:    limit,
-		Offset:   offset,
-		TenantId: tenant.FromContext(r.Context()),
+		Days:   days,
+		Limit:  limit,
+		Offset: offset,
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -180,9 +176,8 @@ func (h *Handler) handleAnalyticsRecentAlerts(w http.ResponseWriter, r *http.Req
 	}
 
 	resp, err := h.analyticsClient.GetRecentAlerts(r.Context(), &crudv1.GetRecentAlertsRequest{
-		Limit:    limit,
-		Offset:   offset,
-		TenantId: tenant.FromContext(r.Context()),
+		Limit:  limit,
+		Offset: offset,
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -345,9 +340,8 @@ func (h *Handler) handleAnalyticsAttribution(w http.ResponseWriter, r *http.Requ
 	}
 
 	resp, err := h.analyticsClient.GetAttribution(r.Context(), &crudv1.GetAttributionRequest{
-		Days:     days,
-		Limit:    limit,
-		TenantId: tenant.FromContext(r.Context()),
+		Days:  days,
+		Limit: limit,
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -561,7 +555,6 @@ func (h *Handler) handleGetDecisionTrace(w http.ResponseWriter, r *http.Request)
 
 	resp, err := h.analyticsClient.GetDecisionTrace(r.Context(), &crudv1.GetDecisionTraceRequest{
 		RequestId: requestID,
-		TenantId:  tenant.FromContext(r.Context()),
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -581,8 +574,7 @@ func (h *Handler) handleGetRuleImpact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req := &crudv1.GetRuleImpactRequest{
-		RuleId:   ruleID,
-		TenantId: tenant.FromContext(r.Context()),
+		RuleId: ruleID,
 	}
 
 	if startStr := r.URL.Query().Get("start_date"); startStr != "" {

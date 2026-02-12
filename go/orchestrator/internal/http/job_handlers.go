@@ -24,11 +24,10 @@ func (h *Handler) handleListJobs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req := &crudv1.ListJobsRequest{
-		Limit:    limit,
-		Offset:   offset,
-		JobType:  r.URL.Query().Get("job_type"),
-		Status:   r.URL.Query().Get("status"),
-		TenantId: tenant.FromContext(r.Context()),
+		Limit:   limit,
+		Offset:  offset,
+		JobType: r.URL.Query().Get("job_type"),
+		Status:  r.URL.Query().Get("status"),
 	}
 
 	if startStr := r.URL.Query().Get("start_date"); startStr != "" {

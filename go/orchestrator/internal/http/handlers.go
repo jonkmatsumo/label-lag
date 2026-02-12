@@ -264,8 +264,8 @@ func (h *Handler) handleReady(w http.ResponseWriter, r *http.Request) {
 		ready = false
 	} else {
 		components["training"] = "ok"
-		if resp.SpooledReports_Count > 0 {
-			components["training_spool"] = fmt.Sprintf("%d reports pending", resp.SpooledReports_Count)
+		if resp.SpooledReportsCount > 0 {
+			components["training_spool"] = fmt.Sprintf("%d reports pending", resp.SpooledReportsCount)
 		}
 	}
 
@@ -782,11 +782,11 @@ func (h *Handler) handleDatasetGenerate(w http.ResponseWriter, r *http.Request) 
 	}
 
 	grpcReq := &crudv1.GenerateDataRequest{
-		NumUsers:     req.NumUsers,
-		FraudRate:    req.FraudRate,
-		DropExisting: req.DropExisting,
-		Seed:         req.Seed,
-		TenantId:     tenant.FromContext(r.Context()),
+		NumUsers:      req.NumUsers,
+		FraudRate:     req.FraudRate,
+		DropExisting:  req.DropExisting,
+		Seed:          req.Seed,
+		IdempotencyKey: requestid.FromContext(r.Context()), // Assuming we should add IdempotencyKey based on proto definition or just remove TenantId?
 	}
 
 	// Long timeout context handling should be in client or here?
