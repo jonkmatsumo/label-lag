@@ -19,7 +19,7 @@ from model.loader import DataLoader
 from model.train import EXPERIMENT_NAME, train_model
 from training.crud_client import get_crud_client
 from training.job_queue import JobQueue
-from training.job_store import JobStore
+from training.job_store import JobStore, encode_jobs_cursor
 from training.jobs import TuningJob, TuningJobStatus
 from training.schemas import SplitConfig, TuningConfig
 from training.v1 import training_pb2, training_pb2_grpc
@@ -767,7 +767,78 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
 
     def ListTuningJobs(self, request, context):  # noqa: N802
         """Lists tuning jobs for operators."""
-        context.abort(grpc.StatusCode.UNIMPLEMENTED, "ListTuningJobs not implemented")
+        try:
+            sort_statuses = request.statuses if request.statuses else []
+            statuses: list[TuningJobStatus] | None = None
+            if sort_statuses:
+                statuses = []
+                for raw_status in sort_statuses:
+                    try:
+                        statuses.append(TuningJobStatus(raw_status))
+                    except ValueError:
+                        context.abort(
+                            grpc.StatusCode.INVALID_ARGUMENT,
+                            f"Unknown status filter '{raw_status}'",
+                        )
+
+            limit = request.limit or 50
+            limit = max(1, min(limit, 200))
+            cursor = request.cursor if request.cursor else None
+            jobs = self.job_store.list_jobs(
+                statuses=statuses,
+                limit=limit + 1,
+                cursor=cursor,
+            )
+            has_more = len(jobs) > limit
+            page_jobs = jobs[:limit]
+            next_cursor = (
+                encode_jobs_cursor(page_jobs[-1].created_at, page_jobs[-1].job_id)
+                if page_jobs and has_more
+                else ""
+            )
+
+            summaries = []
+            for job in page_jobs:
+                tuning_cfg = (
+                    job.config.get("tuning_config", {})
+                    if isinstance(job.config, dict)
+                    else {}
+                )
+                summary = training_pb2.TuningJobSummary(
+                    job_id=job.job_id,
+                    status=job.status.value,
+                    created_at=int(job.created_at.timestamp() * 1000),
+                    started_at=int(job.started_at.timestamp() * 1000)
+                    if job.started_at
+                    else 0,
+                    updated_at=int(job.updated_at.timestamp() * 1000),
+                    ended_at=int(job.ended_at.timestamp() * 1000)
+                    if job.ended_at
+                    else 0,
+                    mlflow_run_id=job.mlflow_run_id or "",
+                    total_trials=job.total_trials,
+                    completed_trials=job.completed_trials,
+                    pruned_trials=job.pruned_trials,
+                    metric=tuning_cfg.get("metric", ""),
+                    direction=tuning_cfg.get("direction", ""),
+                )
+                if job.best_value is not None:
+                    summary.best_value = job.best_value
+                if job.requested_by:
+                    summary.requested_by = job.requested_by
+                if job.error_message:
+                    summary.error_message = job.error_message
+                summaries.append(summary)
+
+            return training_pb2.ListTuningJobsResponse(
+                jobs=summaries,
+                next_cursor=next_cursor,
+            )
+        except grpc.RpcError:
+            raise
+        except Exception as e:
+            logger.exception("ListTuningJobs failed")
+            context.abort(grpc.StatusCode.INTERNAL, str(e))
 
     def GetQueueDepth(self, request, context):  # noqa: N802
         """Returns tuning queue depth."""

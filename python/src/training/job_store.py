@@ -1,12 +1,31 @@
 from __future__ import annotations
 
+import base64
 import copy
 import threading
 from collections.abc import Callable
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Protocol
 
 from training.jobs import TrialRecord, TuningJob, TuningJobStatus
+
+
+def encode_jobs_cursor(created_at: datetime, job_id: str) -> str:
+    created_at_ms = int(created_at.timestamp() * 1000)
+    payload = f"{created_at_ms}|{job_id}".encode()
+    return base64.urlsafe_b64encode(payload).decode("ascii")
+
+
+def decode_jobs_cursor(cursor: str) -> tuple[datetime, str]:
+    try:
+        raw = base64.urlsafe_b64decode(cursor.encode("ascii")).decode("utf-8")
+        created_at_ms_str, job_id = raw.split("|", 1)
+        created_at_ms = int(created_at_ms_str)
+    except Exception as exc:
+        raise ValueError(f"Invalid jobs cursor: {cursor}") from exc
+
+    created_at = datetime.fromtimestamp(created_at_ms / 1000, tz=UTC)
+    return created_at, job_id
 
 
 class JobStore(Protocol):
@@ -19,7 +38,10 @@ class JobStore(Protocol):
     ) -> TuningJob: ...
 
     def list_jobs(
-        self, statuses: list[TuningJobStatus] | None = None, limit: int = 100
+        self,
+        statuses: list[TuningJobStatus] | None = None,
+        limit: int = 100,
+        cursor: str | None = None,
     ) -> list[TuningJob]: ...
 
     def append_trial(self, job_id: str, trial: TrialRecord) -> None: ...
@@ -62,15 +84,26 @@ class InMemoryJobStore:
             return copy.deepcopy(job)
 
     def list_jobs(
-        self, statuses: list[TuningJobStatus] | None = None, limit: int = 100
+        self,
+        statuses: list[TuningJobStatus] | None = None,
+        limit: int = 100,
+        cursor: str | None = None,
     ) -> list[TuningJob]:
         with self._lock:
             jobs = list(self._jobs.values())
             if statuses:
                 allowed = {status.value for status in statuses}
                 jobs = [j for j in jobs if j.status.value in allowed]
-            # Sort by created_at descending
-            sorted_jobs = sorted(jobs, key=lambda x: x.created_at, reverse=True)
+            sorted_jobs = sorted(
+                jobs, key=lambda x: (x.created_at, x.job_id), reverse=True
+            )
+            if cursor:
+                cursor_created_at, cursor_job_id = decode_jobs_cursor(cursor)
+                sorted_jobs = [
+                    j
+                    for j in sorted_jobs
+                    if (j.created_at, j.job_id) < (cursor_created_at, cursor_job_id)
+                ]
             return [copy.deepcopy(j) for j in sorted_jobs[:limit]]
 
     def append_trial(self, job_id: str, trial: TrialRecord) -> None:

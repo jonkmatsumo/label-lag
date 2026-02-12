@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 import psycopg2
 from psycopg2.extras import Json, RealDictCursor
 
+from training.job_store import decode_jobs_cursor
 from training.jobs import TrialRecord, TuningJob, TuningJobStatus
 
 logger = logging.getLogger(__name__)
@@ -162,30 +163,61 @@ class PostgresJobStore:
             return job
 
     def list_jobs(
-        self, statuses: list[TuningJobStatus] | None = None, limit: int = 100
+        self,
+        statuses: list[TuningJobStatus] | None = None,
+        limit: int = 100,
+        cursor: str | None = None,
     ) -> list[TuningJob]:
         max_limit = max(1, min(limit, 1000))
+        cursor_created_at = None
+        cursor_job_id = None
+        if cursor:
+            cursor_created_at, cursor_job_id = decode_jobs_cursor(cursor)
+
         with self._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
             if statuses:
                 status_values = [status.value for status in statuses]
-                cur.execute(
-                    """
-                    SELECT * FROM tuning_jobs
-                    WHERE status = ANY(%s)
-                    ORDER BY created_at DESC
-                    LIMIT %s
-                    """,
-                    (status_values, max_limit),
-                )
+                if cursor:
+                    cur.execute(
+                        """
+                        SELECT * FROM tuning_jobs
+                        WHERE status = ANY(%s)
+                          AND (created_at, job_id) < (%s, %s)
+                        ORDER BY created_at DESC, job_id DESC
+                        LIMIT %s
+                        """,
+                        (status_values, cursor_created_at, cursor_job_id, max_limit),
+                    )
+                else:
+                    cur.execute(
+                        """
+                        SELECT * FROM tuning_jobs
+                        WHERE status = ANY(%s)
+                        ORDER BY created_at DESC, job_id DESC
+                        LIMIT %s
+                        """,
+                        (status_values, max_limit),
+                    )
             else:
-                cur.execute(
-                    """
-                    SELECT * FROM tuning_jobs
-                    ORDER BY created_at DESC
-                    LIMIT %s
-                    """,
-                    (max_limit,),
-                )
+                if cursor:
+                    cur.execute(
+                        """
+                        SELECT * FROM tuning_jobs
+                        WHERE (created_at, job_id) < (%s, %s)
+                        ORDER BY created_at DESC, job_id DESC
+                        LIMIT %s
+                        """,
+                        (cursor_created_at, cursor_job_id, max_limit),
+                    )
+                else:
+                    cur.execute(
+                        """
+                        SELECT * FROM tuning_jobs
+                        ORDER BY created_at DESC, job_id DESC
+                        LIMIT %s
+                        """,
+                        (max_limit,),
+                    )
             return [self._row_to_job(row) for row in cur.fetchall()]
 
     def append_trial(self, job_id: str, trial: TrialRecord) -> None:
