@@ -26,11 +26,18 @@ from training.jobs import (
     bound_params,
     truncate_error_message,
 )
-from training.optuna_resume import get_optuna_storage_url
+from training.optuna_resume import get_optuna_storage_url, load_existing_tuning_study
 from training.schemas import SplitConfig, TuningConfig
 from training.v1 import training_pb2, training_pb2_grpc
 
 logger = logging.getLogger(__name__)
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
 class TrainingService(training_pb2_grpc.TrainingServiceServicer):
@@ -44,6 +51,8 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
         self.max_concurrent_tuning_jobs = max(
             1, int(os.getenv("MAX_CONCURRENT_TUNING_JOBS", "1"))
         )
+        # ENABLE_TUNING_ADMIN_RPC controls operator-only job repair endpoints.
+        self.enable_tuning_admin_rpc = _env_flag("ENABLE_TUNING_ADMIN_RPC", False)
 
     def _find_trial(self, job_id: str, trial_number: int):
         cursor: str | None = None
@@ -128,6 +137,14 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
             if version.run_id == run_id:
                 return str(version.version)
         return ""
+
+    def _require_admin_rpc_enabled(self, context) -> None:
+        if self.enable_tuning_admin_rpc:
+            return
+        context.abort(
+            grpc.StatusCode.PERMISSION_DENIED,
+            "Admin tuning RPCs are disabled (set ENABLE_TUNING_ADMIN_RPC=true)",
+        )
 
     @staticmethod
     def _build_job_summary(job: TuningJob) -> training_pb2.TuningJobSummary:
@@ -1204,15 +1221,99 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
         return self.GetTuningStatus(request, context)
 
     def RequeueTuningJob(self, request, context):  # noqa: N802
-        context.abort(
-            grpc.StatusCode.UNIMPLEMENTED,
-            "RequeueTuningJob is not implemented",
+        self._require_admin_rpc_enabled(context)
+        if not request.job_id:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "job_id is required")
+
+        job = self.job_store.get(request.job_id)
+        if not job:
+            context.abort(grpc.StatusCode.NOT_FOUND, f"Job {request.job_id} not found")
+        if job.status not in {TuningJobStatus.FAILED, TuningJobStatus.CANCELED}:
+            context.abort(
+                grpc.StatusCode.FAILED_PRECONDITION,
+                "Only FAILED or CANCELED jobs can be requeued",
+            )
+
+        tuning_cfg = (
+            job.config.get("tuning_config", {}) if isinstance(job.config, dict) else {}
+        )
+        storage_url = (
+            job.config.get("optuna_storage_url")
+            if isinstance(job.config, dict)
+            else None
+        ) or get_optuna_storage_url()
+        if not storage_url:
+            context.abort(
+                grpc.StatusCode.FAILED_PRECONDITION,
+                "Resume unavailable: Optuna storage is not configured",
+            )
+        study = load_existing_tuning_study(
+            job_id=job.job_id,
+            direction=tuning_cfg.get("direction", "maximize"),
+            storage_url=storage_url,
+        )
+        if not study:
+            context.abort(
+                grpc.StatusCode.FAILED_PRECONDITION,
+                "Resume unavailable: Optuna study does not exist",
+            )
+
+        now = datetime.now(UTC)
+
+        def mark_pending(current):
+            current.status = TuningJobStatus.PENDING
+            current.updated_at = now
+            current.ended_at = None
+            current.error_message = None
+
+        self.job_store.update(job.job_id, mark_pending)
+        self.job_queue.enqueue(job.job_id)
+        return training_pb2.RequeueTuningJobResponse(
+            job_id=job.job_id,
+            status=TuningJobStatus.PENDING.value,
+            message="job requeued",
         )
 
     def FinalizeTuningJob(self, request, context):  # noqa: N802
-        context.abort(
-            grpc.StatusCode.UNIMPLEMENTED,
-            "FinalizeTuningJob is not implemented",
+        self._require_admin_rpc_enabled(context)
+        if not request.job_id:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "job_id is required")
+        if not request.final_status:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "final_status is required")
+
+        try:
+            target_status = TuningJobStatus(request.final_status)
+        except ValueError:
+            context.abort(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                f"Unsupported final_status '{request.final_status}'",
+            )
+        if not target_status.is_terminal():
+            context.abort(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                "final_status must be a terminal status",
+            )
+
+        job = self.job_store.get(request.job_id)
+        if not job:
+            context.abort(grpc.StatusCode.NOT_FOUND, f"Job {request.job_id} not found")
+
+        now = datetime.now(UTC)
+
+        def finalize(current):
+            current.status = target_status
+            current.updated_at = now
+            current.ended_at = now
+            if request.reason:
+                current.error_message = truncate_error_message(request.reason)
+
+        self.job_store.update(job.job_id, finalize)
+        if target_status == TuningJobStatus.CANCELED:
+            self.job_queue.cancel(job.job_id)
+        return training_pb2.FinalizeTuningJobResponse(
+            job_id=job.job_id,
+            status=target_status.value,
+            error_message=truncate_error_message(request.reason) or "",
         )
 
     def GetHealth(self, request, context):  # noqa: N802
