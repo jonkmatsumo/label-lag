@@ -54,13 +54,18 @@ func (s *SQLStore) SaveDatasetProfile(ctx context.Context, profile *pb.DatasetPr
 	return nil
 }
 
-func (s *SQLStore) GetDatasetProfileCached(ctx context.Context, profileID string) (*pb.DatasetProfile, error) {
+func (s *SQLStore) GetDatasetProfileCached(ctx context.Context, profileID string, tenantID string) (*pb.DatasetProfile, error) {
 	query := `
 		SELECT
 			profile_id, tenant_id, computed_at, record_count, feature_profiles
 		FROM dataset_profiles
 		WHERE profile_id = $1
 	`
+	args := []interface{}{profileID}
+	if tenantID != "" {
+		query += " AND tenant_id = $2"
+		args = append(args, tenantID)
+	}
 
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
@@ -69,7 +74,7 @@ func (s *SQLStore) GetDatasetProfileCached(ctx context.Context, profileID string
 	var computedAt time.Time
 	var profilesJSON []byte
 
-	err := s.db.QueryRowContext(queryCtx, query, profileID).Scan(
+	err := s.db.QueryRowContext(queryCtx, query, args...).Scan(
 		&p.ProfileId,
 		&p.TenantId,
 		&computedAt,
@@ -105,6 +110,9 @@ func (s *SQLStore) ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetP
 	}
 	if req.EndDate != nil {
 		queryBuilder.AddCondition("computed_at <= ?", req.EndDate.AsTime())
+	}
+	if req.TenantId != "" {
+		queryBuilder.AddCondition("tenant_id = ?", req.TenantId)
 	}
 
 	// Count
@@ -158,20 +166,24 @@ func (s *SQLStore) ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetP
 	return profiles, total, nil
 }
 
-func (s *SQLStore) GetLatestDatasetProfile(ctx context.Context) (*pb.GetLatestDatasetProfileResponse, error) {
+func (s *SQLStore) GetLatestDatasetProfile(ctx context.Context, tenantID string) (*pb.GetLatestDatasetProfileResponse, error) {
 	query := `
 		SELECT
 			profile_id, computed_at, record_count
 		FROM dataset_profiles
-		ORDER BY computed_at DESC, profile_id DESC
-		LIMIT 1
 	`
+	args := []interface{}{}
+	if tenantID != "" {
+		query += " WHERE tenant_id = $1"
+		args = append(args, tenantID)
+	}
+	query += " ORDER BY computed_at DESC, profile_id DESC LIMIT 1"
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
 	var resp pb.GetLatestDatasetProfileResponse
 	var computedAt time.Time
-	err := s.db.QueryRowContext(queryCtx, query).Scan(
+	err := s.db.QueryRowContext(queryCtx, query, args...).Scan(
 		&resp.ProfileId,
 		&computedAt,
 		&resp.RecordCount,

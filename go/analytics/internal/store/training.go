@@ -16,9 +16,9 @@ import (
 func (s *SQLStore) SaveTrainingRun(ctx context.Context, run *pb.TrainingRun) error {
 	query := `
 		INSERT INTO training_runs (
-			run_id, model_name, status, started_at, ended_at, metrics, params, dataset_id, mlflow_run_id
+			run_id, model_name, status, started_at, ended_at, metrics, params, dataset_id, mlflow_run_id, tenant_id
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10
 		)
 		ON CONFLICT (run_id) DO UPDATE SET
 			status = EXCLUDED.status,
@@ -47,6 +47,7 @@ func (s *SQLStore) SaveTrainingRun(ctx context.Context, run *pb.TrainingRun) err
 		[]byte(run.ParamsJson),
 		run.DatasetId,
 		run.MlflowRunId,
+		run.TenantId,
 	)
 	if err != nil {
 		return db.MapDBError(err)
@@ -58,7 +59,7 @@ func (s *SQLStore) SaveTrainingRun(ctx context.Context, run *pb.TrainingRun) err
 func (s *SQLStore) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRunsRequest) ([]*pb.TrainingRun, int64, error) {
 	queryBuilder := db.NewQueryBuilder(`
 		SELECT
-			run_id, model_name, status, started_at, ended_at, metrics, params, dataset_id, mlflow_run_id
+			run_id, model_name, status, started_at, ended_at, metrics, params, dataset_id, mlflow_run_id, tenant_id
 		FROM training_runs
 	`)
 
@@ -73,6 +74,9 @@ func (s *SQLStore) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRun
 	}
 	if req.EndDate != nil {
 		queryBuilder.AddCondition("started_at <= ?", req.EndDate.AsTime())
+	}
+	if req.TenantId != "" {
+		queryBuilder.AddCondition("tenant_id = ?", req.TenantId)
 	}
 
 	// Count
@@ -116,13 +120,14 @@ func (s *SQLStore) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRun
 			&paramsJSON,
 			&datasetID,
 			&mlflowID,
+			&r.TenantId,
 		); err != nil {
 			return nil, 0, fmt.Errorf("failed to scan run: %v", err)
 		}
 
 		r.StartedAt = timestamppb.New(startedAt)
 		if endedAt.Valid {
-			jts := endedAt.Time // Use temporary variable for clarity
+			jts := endedAt.Time
 			r.EndedAt = timestamppb.New(jts)
 		}
 		if metricsJSON != nil {
@@ -151,16 +156,22 @@ func (s *SQLStore) ListModelVersions(ctx context.Context, req *pb.ListModelVersi
 		Status:    "completed",
 		Limit:     req.Limit,
 		Offset:    req.Offset,
+		TenantId:  req.TenantId,
 	})
 }
 
-func (s *SQLStore) GetTrainingRun(ctx context.Context, runID string) (*pb.TrainingRun, error) {
+func (s *SQLStore) GetTrainingRun(ctx context.Context, runID string, tenantID string) (*pb.TrainingRun, error) {
 	query := `
 		SELECT
-			run_id, model_name, status, started_at, ended_at, metrics, params, dataset_id, mlflow_run_id
+			run_id, model_name, status, started_at, ended_at, metrics, params, dataset_id, mlflow_run_id, tenant_id
 		FROM training_runs
 		WHERE run_id = $1
 	`
+	args := []interface{}{runID}
+	if tenantID != "" {
+		query += " AND tenant_id = $2"
+		args = append(args, tenantID)
+	}
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
@@ -170,7 +181,7 @@ func (s *SQLStore) GetTrainingRun(ctx context.Context, runID string) (*pb.Traini
 	var metricsJSON, paramsJSON []byte
 	var datasetID, mlflowID sql.NullString
 
-	err := s.db.QueryRowContext(queryCtx, query, runID).Scan(
+	err := s.db.QueryRowContext(queryCtx, query, args...).Scan(
 		&r.RunId,
 		&r.ModelName,
 		&r.Status,
@@ -180,6 +191,7 @@ func (s *SQLStore) GetTrainingRun(ctx context.Context, runID string) (*pb.Traini
 		&paramsJSON,
 		&datasetID,
 		&mlflowID,
+		&r.TenantId,
 	)
 	if err == sql.ErrNoRows {
 		return nil, status.Errorf(codes.NotFound, "run not found: %s", runID)
@@ -208,9 +220,7 @@ func (s *SQLStore) GetTrainingRun(ctx context.Context, runID string) (*pb.Traini
 	return &r, nil
 }
 
-func (s *SQLStore) GetMetricSeries(ctx context.Context, modelName, metricName string, start, end time.Time) ([]*pb.MetricPoint, error) {
-	// Extract metric from JSONB
-	// Assumes metrics is a flat object
+func (s *SQLStore) GetMetricSeries(ctx context.Context, req *pb.GetMetricSeriesRequest) ([]*pb.MetricPoint, error) {
 	query := fmt.Sprintf(`
 		SELECT
 			started_at,
@@ -221,13 +231,19 @@ func (s *SQLStore) GetMetricSeries(ctx context.Context, modelName, metricName st
 		  AND started_at >= $2
 		  AND started_at <= $3
 		  AND metrics ? $4
-		ORDER BY started_at ASC
-	`, metricName)
+	`, req.MetricName)
+
+	args := []interface{}{req.ModelName, req.StartDate.AsTime(), req.EndDate.AsTime(), req.MetricName}
+	if req.TenantId != "" {
+		query += " AND tenant_id = $5"
+		args = append(args, req.TenantId)
+	}
+	query += " ORDER BY started_at ASC"
 
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	rows, err := s.db.QueryContext(queryCtx, query, modelName, start, end, metricName)
+	rows, err := s.db.QueryContext(queryCtx, query, args...)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -238,7 +254,6 @@ func (s *SQLStore) GetMetricSeries(ctx context.Context, modelName, metricName st
 		var p pb.MetricPoint
 		var ts time.Time
 		if err := rows.Scan(&ts, &p.Value, &p.RunId); err != nil {
-			// Skip malformed? or fail
 			continue
 		}
 		p.Timestamp = timestamppb.New(ts)

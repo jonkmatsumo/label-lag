@@ -17,29 +17,34 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (s *SQLStore) GetDailyStats(ctx context.Context, cutoffDate time.Time) ([]*pb.DailyStat, error) {
-	query := `
+func (s *SQLStore) GetDailyStats(ctx context.Context, cutoffDate time.Time, tenantID string) ([]*pb.DailyStat, error) {
+	queryDetail := ""
+	args := []interface{}{cutoffDate}
+	if tenantID != "" {
+		queryDetail = " AND tenant_id = $2"
+		args = append(args, tenantID)
+	}
+
+	query := fmt.Sprintf(`
 		SELECT
-			DATE(em.created_at) as date,
-			COUNT(*) as total_transactions,
-			SUM(CASE WHEN gr.is_fraudulent THEN 1 ELSE 0 END) as fraud_count,
+			date,
+			total_decisions as total_transactions,
+			total_alerts as fraud_count,
 			ROUND(
-				100.0 * SUM(CASE WHEN gr.is_fraudulent THEN 1 ELSE 0 END) / COUNT(*),
+				CASE WHEN total_decisions > 0 THEN 100.0 * total_alerts / total_decisions ELSE 0 END,
 				2
 			) as fraud_rate,
-			COALESCE(SUM(gr.amount), 0) as total_amount,
-			ROUND(AVG(fs.balance_volatility_z_score)::numeric, 2) as avg_z_score
-		FROM evaluation_metadata em
-		LEFT JOIN generated_records gr ON em.record_id = gr.record_id
-		LEFT JOIN feature_snapshots fs ON em.record_id = fs.record_id
-		WHERE em.created_at >= $1
-		GROUP BY DATE(em.created_at)
+			COALESCE(sum_score, 0) as total_amount,
+			ROUND(CASE WHEN total_decisions > 0 THEN sum_score::numeric / total_decisions ELSE 0 END, 2) as avg_z_score
+		FROM aggregates_daily
+		WHERE date >= $1 %s
 		ORDER BY date DESC
-	`
+	`, queryDetail)
+
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	rows, err := s.db.QueryContext(queryCtx, query, cutoffDate)
+	rows, err := s.db.QueryContext(queryCtx, query, args...)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -65,7 +70,10 @@ func (s *SQLStore) GetDailyStats(ctx context.Context, cutoffDate time.Time) ([]*
 	return stats, nil
 }
 
-func (s *SQLStore) GetTransactionDetails(ctx context.Context, cutoffDate time.Time, limit, offset int32) ([]*pb.TransactionDetail, error) {
+func (s *SQLStore) GetTransactionDetails(ctx context.Context, cutoffDate time.Time, limit, offset int32, tenantID string) ([]*pb.TransactionDetail, error) {
+	// Note: evaluation_metadata and generated_records don't have tenant_id yet,
+	// but we should probably use inference_events for this if we want full isolation.
+	// For now, if tenantID is provided, we filter via inference_events join.
 	query := `
 		SELECT
 			em.record_id,
@@ -84,14 +92,19 @@ func (s *SQLStore) GetTransactionDetails(ctx context.Context, cutoffDate time.Ti
 		FROM evaluation_metadata em
 		LEFT JOIN generated_records gr ON em.record_id = gr.record_id
 		LEFT JOIN feature_snapshots fs ON em.record_id = fs.record_id
-		WHERE em.created_at >= $1
-		ORDER BY em.created_at DESC
-		LIMIT $2 OFFSET $3
 	`
+	args := []interface{}{cutoffDate, limit, offset}
+	where := " WHERE em.created_at >= $1"
+	if tenantID != "" {
+		query += " INNER JOIN inference_events ie ON em.record_id = ie.request_id"
+		where += " AND ie.tenant_id = $4"
+		args = append(args, tenantID)
+	}
+	query += where + " ORDER BY em.created_at DESC LIMIT $2 OFFSET $3"
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	rows, err := s.db.QueryContext(queryCtx, query, cutoffDate, limit, offset)
+	rows, err := s.db.QueryContext(queryCtx, query, args...)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -137,8 +150,8 @@ func (s *SQLStore) GetTransactionDetails(ctx context.Context, cutoffDate time.Ti
 	return details, nil
 }
 
-func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransactionsRequest, limit, offset int32) ([]*pb.TransactionDetail, int64, error) {
-	queryBuilder := db.NewQueryBuilder(`
+func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransactionsRequest) ([]*pb.TransactionDetail, int64, error) {
+	baseQuery := `
 		SELECT
 			em.record_id,
 			em.user_id,
@@ -158,7 +171,12 @@ func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransac
 		FROM evaluation_metadata em
 		LEFT JOIN generated_records gr ON em.record_id = gr.record_id
 		LEFT JOIN feature_snapshots fs ON em.record_id = fs.record_id
-	`)
+	`
+	if req.TenantId != "" {
+		baseQuery += " INNER JOIN inference_events ie ON em.record_id = ie.request_id"
+	}
+
+	queryBuilder := db.NewQueryBuilder(baseQuery)
 
 	if req.UserId != "" {
 		queryBuilder.AddCondition("em.user_id = ?", req.UserId)
@@ -191,6 +209,9 @@ func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransac
 	if req.MaxScore != nil {
 		queryBuilder.AddCondition("gr.merchant_risk_score <= ?", *req.MaxScore)
 	}
+	if req.TenantId != "" {
+		queryBuilder.AddCondition("ie.tenant_id = ?", req.TenantId)
+	}
 
 	// Get total count
 	countQuery, countArgs := queryBuilder.BuildCount()
@@ -205,8 +226,8 @@ func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransac
 
 	// Get results
 	queryBuilder.AddOrderBy("em.created_at DESC")
-	queryBuilder.SetLimit(limit)
-	queryBuilder.SetOffset(offset)
+	queryBuilder.SetLimit(req.Limit)
+	queryBuilder.SetOffset(req.Offset)
 	selectQuery, selectArgs := queryBuilder.BuildSelect()
 
 	rows, err := s.db.QueryContext(queryCtx, selectQuery, selectArgs...)
@@ -257,10 +278,16 @@ func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransac
 	return details, total, nil
 }
 
-func (s *SQLStore) GetShadowComparison(ctx context.Context, hours int32) (*pb.ShadowModeMetrics, error) {
+func (s *SQLStore) GetShadowComparison(ctx context.Context, hours int32, tenantID string) (*pb.ShadowModeMetrics, error) {
 	cutoff := time.Now().Add(-time.Duration(hours) * time.Hour)
+	tenantFilter := ""
+	args := []interface{}{cutoff}
+	if tenantID != "" {
+		tenantFilter = " AND ie.tenant_id = $2"
+		args = append(args, tenantID)
+	}
 
-	query := `
+	query := fmt.Sprintf(`
 		WITH shadow_deltas AS (
 			SELECT
 				request_id,
@@ -276,7 +303,7 @@ func (s *SQLStore) GetShadowComparison(ctx context.Context, hours int32) (*pb.Sh
 				ie.final_score + COALESCE(sd.total_shadow_delta, 0) as shadow_score
 			FROM inference_events ie
 			LEFT JOIN shadow_deltas sd ON ie.request_id = sd.request_id
-			WHERE ie.ts >= $1
+			WHERE ie.ts >= $1 %s
 		)
 		SELECT
 			COUNT(*) as total_evaluations,
@@ -284,12 +311,12 @@ func (s *SQLStore) GetShadowComparison(ctx context.Context, hours int32) (*pb.Sh
 			COALESCE(AVG(active_score), 0) as active_score_mean,
 			COALESCE(AVG(shadow_score), 0) as shadow_score_mean
 		FROM metrics_raw
-	`
+	`, tenantFilter)
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
 	var m pb.ShadowModeMetrics
-	err := s.db.QueryRowContext(queryCtx, query, cutoff).Scan(
+	err := s.db.QueryRowContext(queryCtx, query, args...).Scan(
 		&m.TotalEvaluations,
 		&m.DivergentScoresCount,
 		&m.ActiveScoreMean,
@@ -313,31 +340,35 @@ func (s *SQLStore) GetShadowComparison(ctx context.Context, hours int32) (*pb.Sh
 
 // (Keeping the rest of the file intact)
 
-func (s *SQLStore) GetRecentAlerts(ctx context.Context, limit, offset int32) ([]*pb.Alert, error) {
+func (s *SQLStore) GetRecentAlerts(ctx context.Context, limit, offset int32, tenantID string) ([]*pb.Alert, error) {
 	query := `
 		SELECT
-			fs.record_id,
-			fs.user_id,
-			em.created_at,
+			ie.request_id as record_id,
+			ie.user_id,
+			ie.ts as created_at,
 			gr.amount,
-			gr.is_fraudulent,
+			(gr.is_fraudulent OR ie.decision IN ('REVIEW', 'REJECT')) as is_fraudulent,
 			COALESCE(gr.fraud_type, ''),
-			gr.merchant_risk_score,
+			ie.final_score as merchant_risk_score,
 			fs.velocity_24h,
 			fs.amount_to_avg_ratio_30d,
 			fs.balance_volatility_z_score
-		FROM feature_snapshots fs
-		INNER JOIN evaluation_metadata em ON fs.record_id = em.record_id
-		INNER JOIN generated_records gr ON fs.record_id = gr.record_id
-		WHERE gr.is_fraudulent = TRUE
-		ORDER BY em.created_at DESC
-		LIMIT $1 OFFSET $2
+		FROM inference_events ie
+		LEFT JOIN feature_snapshots fs ON ie.request_id = fs.record_id
+		LEFT JOIN generated_records gr ON ie.request_id = gr.record_id
+		WHERE ie.decision IN ('REVIEW', 'REJECT')
 	`
+	args := []interface{}{limit, offset}
+	if tenantID != "" {
+		query += " AND ie.tenant_id = $3"
+		args = append(args, tenantID)
+	}
+	query += " ORDER BY ie.ts DESC LIMIT $1 OFFSET $2"
 
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	rows, err := s.db.QueryContext(queryCtx, query, limit, offset)
+	rows, err := s.db.QueryContext(queryCtx, query, args...)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -371,19 +402,28 @@ func (s *SQLStore) GetRecentAlerts(ctx context.Context, limit, offset int32) ([]
 	return alerts, nil
 }
 
-func (s *SQLStore) GetOverviewMetrics(ctx context.Context) (*pb.GetOverviewMetricsResponse, error) {
-	query := `
+func (s *SQLStore) GetOverviewMetrics(ctx context.Context, tenantID string) (*pb.GetOverviewMetricsResponse, error) {
+	tenantFilter := ""
+	args := []interface{}{}
+	if tenantID != "" {
+		tenantFilter = " WHERE tenant_id = $1"
+		args = append(args, tenantID)
+	}
+
+	query := fmt.Sprintf(`
 		SELECT
-			(SELECT COUNT(*) FROM generated_records) as total_records,
-			(SELECT COUNT(*) FROM generated_records WHERE is_fraudulent = TRUE) as fraud_records,
-			(SELECT COUNT(DISTINCT user_id) FROM generated_records) as unique_users,
-			(SELECT COALESCE(MIN(transaction_timestamp), NOW()) FROM generated_records) as min_txn_ts,
-			(SELECT COALESCE(MAX(transaction_timestamp), NOW()) FROM generated_records) as max_txn_ts,
-			(SELECT COALESCE(MIN(created_at), NOW()) FROM generated_records) as min_created,
-			(SELECT COALESCE(MAX(created_at), NOW()) FROM generated_records) as max_created,
-			(SELECT COALESCE(SUM(amount), 0) FROM generated_records) as total_amount,
-			(SELECT COALESCE(SUM(amount), 0) FROM generated_records WHERE is_fraudulent = TRUE) as fraud_amount
-	`
+			COALESCE(SUM(total_decisions), 0) as total_records,
+			COALESCE(SUM(total_alerts), 0) as fraud_records,
+			(SELECT COUNT(DISTINCT user_id) FROM generated_records %[1]s) as unique_users,
+			(SELECT COALESCE(MIN(transaction_timestamp), NOW()) FROM generated_records %[1]s) as min_txn_ts,
+			(SELECT COALESCE(MAX(transaction_timestamp), NOW()) FROM generated_records %[1]s) as max_txn_ts,
+			(SELECT COALESCE(MIN(ts), NOW()) FROM inference_events %[1]s) as min_created,
+			(SELECT COALESCE(MAX(ts), NOW()) FROM inference_events %[1]s) as max_created,
+			COALESCE(SUM(sum_score), 0) as total_amount,
+			0 as fraud_amount
+		FROM aggregates_daily
+		%[1]s
+	`, tenantFilter)
 
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
@@ -391,7 +431,7 @@ func (s *SQLStore) GetOverviewMetrics(ctx context.Context) (*pb.GetOverviewMetri
 	var resp pb.GetOverviewMetricsResponse
 	var minTxn, maxTxn, minCreated, maxCreated time.Time
 
-	err := s.db.QueryRowContext(queryCtx, query).Scan(
+	err := s.db.QueryRowContext(queryCtx, query, args...).Scan(
 		&resp.TotalRecords,
 		&resp.FraudRecords,
 		&resp.UniqueUsers,
@@ -433,10 +473,16 @@ const (
 	MaxHistogramBuckets        = 50
 )
 
-func (s *SQLStore) GetDatasetProfile(ctx context.Context, datasetID string, limitFeatures, numBuckets int32) (*pb.GetDatasetProfileResponse, error) {
+func (s *SQLStore) GetDatasetProfile(ctx context.Context, datasetID string, limitFeatures, numBuckets int32, tenantID string) (*pb.GetDatasetProfileResponse, error) {
 	// 1. Get total records
 	var totalRecords int64
-	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM generated_records").Scan(&totalRecords)
+	query := "SELECT COUNT(*) FROM generated_records gr"
+	args := []interface{}{}
+	if tenantID != "" {
+		query += " INNER JOIN inference_events ie ON gr.record_id = ie.request_id WHERE ie.tenant_id = $1"
+		args = append(args, tenantID)
+	}
+	err := s.db.QueryRowContext(ctx, query, args...).Scan(&totalRecords)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -676,22 +722,26 @@ func (s *SQLStore) profileCategoricalJSONBKey(ctx context.Context, table, column
 
 	return profile, nil
 }
-func (s *SQLStore) GetRuleStats(ctx context.Context, ruleID string, cutoff time.Time) ([]*pb.RuleStats, error) {
+func (s *SQLStore) GetRuleStats(ctx context.Context, ruleID string, cutoff time.Time, tenantID string) ([]*pb.RuleStats, error) {
 	query := `
 		SELECT
 			ri.rule_id,
 			COUNT(*) as triggered_count,
-			COUNT(*) FILTER (WHERE ri.is_shadow = TRUE) as shadow_triggered_count,
-			COALESCE(AVG(CASE WHEN gr.is_fraudulent = TRUE THEN 1.0 ELSE 0.0 END), 0) as approval_rate
+			COUNT(1) FILTER (WHERE ri.is_shadow = TRUE) as shadow_triggered_count,
+			COALESCE(AVG(CASE WHEN ie.decision IN ('REVIEW', 'REJECT') THEN 1.0 ELSE 0.0 END), 0) as approval_rate
 		FROM rule_impacts ri
 		INNER JOIN inference_events ie ON ri.request_id = ie.request_id
-		LEFT JOIN generated_records gr ON ri.request_id = gr.record_id
 		WHERE ie.ts >= $1
 	`
 	args := []interface{}{cutoff}
 	if ruleID != "" {
 		query += " AND ri.rule_id = $2"
 		args = append(args, ruleID)
+	}
+	if tenantID != "" {
+		idx := len(args) + 1
+		query += fmt.Sprintf(" AND ie.tenant_id = $%d", idx)
+		args = append(args, tenantID)
 	}
 	query += " GROUP BY ri.rule_id"
 
@@ -719,7 +769,7 @@ func (s *SQLStore) GetRuleStats(ctx context.Context, ruleID string, cutoff time.
 	}
 	return stats, nil
 }
-func (s *SQLStore) GetAttribution(ctx context.Context, cutoff time.Time, limit int32) ([]*pb.DailyAttribution, error) {
+func (s *SQLStore) GetAttribution(ctx context.Context, cutoff time.Time, limit int32, tenantID string) ([]*pb.DailyAttribution, error) {
 	query := `
 		SELECT
 			DATE(ie.ts) as date,
@@ -729,6 +779,13 @@ func (s *SQLStore) GetAttribution(ctx context.Context, cutoff time.Time, limit i
 		FROM rule_impacts ri
 		INNER JOIN inference_events ie ON ri.request_id = ie.request_id
 		WHERE ie.ts >= $1
+	`
+	args := []interface{}{cutoff, limit}
+	if tenantID != "" {
+		query += " AND ie.tenant_id = $3"
+		args = append(args, tenantID)
+	}
+	query += `
 		GROUP BY date, ri.rule_id
 		ORDER BY date DESC, contribution_score DESC
 		LIMIT $2
@@ -736,7 +793,7 @@ func (s *SQLStore) GetAttribution(ctx context.Context, cutoff time.Time, limit i
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	rows, err := s.db.QueryContext(queryCtx, query, cutoff, limit)
+	rows, err := s.db.QueryContext(queryCtx, query, args...)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -760,15 +817,23 @@ func (s *SQLStore) GetAttribution(ctx context.Context, cutoff time.Time, limit i
 	return items, nil
 }
 
-func (s *SQLStore) GetLatestUserFeatures(ctx context.Context, userID string) (*pb.UserFeatures, bool, error) {
+func (s *SQLStore) GetLatestUserFeatures(ctx context.Context, userID string, tenantID string) (*pb.UserFeatures, bool, error) {
 	query := `
 		SELECT
-			record_id, user_id, snapshot_id, computed_at,
+			fs.record_id, fs.user_id, fs.snapshot_id, fs.computed_at,
 			velocity_24h, amount_to_avg_ratio_30d, balance_volatility_z_score,
 			experimental_signals
-		FROM feature_snapshots
-		WHERE user_id = $1
-		ORDER BY computed_at DESC, record_id DESC
+		FROM feature_snapshots fs
+	`
+	args := []interface{}{userID}
+	where := " WHERE fs.user_id = $1"
+	if tenantID != "" {
+		query += " INNER JOIN inference_events ie ON fs.record_id = ie.request_id"
+		where += " AND ie.tenant_id = $2"
+		args = append(args, tenantID)
+	}
+	query += where + `
+		ORDER BY fs.computed_at DESC, fs.record_id DESC
 		LIMIT 1
 	`
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
@@ -780,7 +845,7 @@ func (s *SQLStore) GetLatestUserFeatures(ctx context.Context, userID string) (*p
 	var experimentalSignals []byte
 	var recordID string
 
-	err := s.db.QueryRowContext(queryCtx, query, userID).Scan(
+	err := s.db.QueryRowContext(queryCtx, query, args...).Scan(
 		&recordID,
 		&f.UserId,
 		&snapshotID,
@@ -815,7 +880,7 @@ func (s *SQLStore) GetLatestUserFeatures(ctx context.Context, userID string) (*p
 	return &f, true, nil
 }
 
-func (s *SQLStore) BatchGetLatestUserFeatures(ctx context.Context, userIDs []string) (map[string]*pb.UserFeatures, error) {
+func (s *SQLStore) BatchGetLatestUserFeatures(ctx context.Context, userIDs []string, tenantID string) (map[string]*pb.UserFeatures, error) {
 	if len(userIDs) == 0 {
 		return make(map[string]*pb.UserFeatures), nil
 	}
@@ -824,12 +889,20 @@ func (s *SQLStore) BatchGetLatestUserFeatures(ctx context.Context, userIDs []str
 	query := `
 		WITH RankedFeatures AS (
 			SELECT
-				record_id, user_id, snapshot_id, computed_at,
+				fs.record_id, fs.user_id, fs.snapshot_id, fs.computed_at,
 				velocity_24h, amount_to_avg_ratio_30d, balance_volatility_z_score,
 				experimental_signals,
-				ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY computed_at DESC, record_id DESC) as rn
-			FROM feature_snapshots
-			WHERE user_id = ANY($1)
+				ROW_NUMBER() OVER (PARTITION BY fs.user_id ORDER BY fs.computed_at DESC, fs.record_id DESC) as rn
+			FROM feature_snapshots fs
+	`
+	args := []interface{}{pq.Array(userIDs)}
+	where := " WHERE fs.user_id = ANY($1)"
+	if tenantID != "" {
+		query += " INNER JOIN inference_events ie ON fs.record_id = ie.request_id"
+		where += " AND ie.tenant_id = $2"
+		args = append(args, tenantID)
+	}
+	query += where + `
 		)
 		SELECT
 			record_id, user_id, snapshot_id, computed_at,
@@ -841,7 +914,7 @@ func (s *SQLStore) BatchGetLatestUserFeatures(ctx context.Context, userIDs []str
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	rows, err := s.db.QueryContext(queryCtx, query, pq.Array(userIDs))
+	rows, err := s.db.QueryContext(queryCtx, query, args...)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -914,6 +987,10 @@ func (s *SQLStore) ListDecisions(ctx context.Context, req *pb.ListDecisionsReque
 		args = append(args, req.EndDate.AsTime())
 		whereClauses = append(whereClauses, fmt.Sprintf("ts <= $%d", len(args)))
 	}
+	if req.TenantId != "" {
+		args = append(args, req.TenantId)
+		whereClauses = append(whereClauses, fmt.Sprintf("tenant_id = $%d", len(args)))
+	}
 
 	whereStmt := strings.Join(whereClauses, " AND ")
 
@@ -950,12 +1027,18 @@ func (s *SQLStore) ListDecisions(ctx context.Context, req *pb.ListDecisionsReque
 	return decisions, total, nil
 }
 
-func (s *SQLStore) GetDecision(ctx context.Context, requestID string) (*pb.InferenceEvent, error) {
+func (s *SQLStore) GetDecision(ctx context.Context, requestID string, tenantID string) (*pb.InferenceEvent, error) {
 	query := "SELECT request_id, ts, model_version, rules_version, model_score, final_score, rule_impacts, user_id, decision FROM inference_events WHERE request_id = $1"
+	args := []interface{}{requestID}
+	if tenantID != "" {
+		query += " AND tenant_id = $2"
+		args = append(args, tenantID)
+	}
+
 	var ie pb.InferenceEvent
 	var ts time.Time
 	var ruleImpactsJSON []byte
-	err := s.db.QueryRowContext(ctx, query, requestID).Scan(
+	err := s.db.QueryRowContext(ctx, query, args...).Scan(
 		&ie.RequestId, &ts, &ie.ModelVersion, &ie.RulesVersion,
 		&ie.ModelScore, &ie.FinalScore, &ruleImpactsJSON,
 		&ie.UserId, &ie.Decision,
@@ -974,10 +1057,18 @@ func (s *SQLStore) GetDecision(ctx context.Context, requestID string) (*pb.Infer
 	return &ie, nil
 }
 
-func (s *SQLStore) GetDecisionTrace(ctx context.Context, requestID string) ([]*pb.RuleImpact, error) {
+func (s *SQLStore) GetDecisionTrace(ctx context.Context, requestID string, tenantID string) ([]*pb.RuleImpact, error) {
 	// First check if the event exists
+	existsQuery := "SELECT EXISTS(SELECT 1 FROM inference_events WHERE request_id = $1"
+	args := []interface{}{requestID}
+	if tenantID != "" {
+		existsQuery += " AND tenant_id = $2"
+		args = append(args, tenantID)
+	}
+	existsQuery += ")"
+
 	var exists bool
-	err := s.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM inference_events WHERE request_id = $1)", requestID).Scan(&exists)
+	err := s.db.QueryRowContext(ctx, existsQuery, args...).Scan(&exists)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -985,8 +1076,12 @@ func (s *SQLStore) GetDecisionTrace(ctx context.Context, requestID string) ([]*p
 		return nil, status.Errorf(codes.NotFound, "decision not found for request %s", requestID)
 	}
 
-	query := "SELECT rule_id, is_shadow, score_delta FROM rule_impacts WHERE request_id = $1 ORDER BY score_delta DESC, rule_id ASC"
-	rows, err := s.db.QueryContext(ctx, query, requestID)
+	query := "SELECT rule_id, is_shadow, score_delta FROM rule_impacts ri INNER JOIN inference_events ie ON ri.request_id = ie.request_id WHERE ri.request_id = $1"
+	if tenantID != "" {
+		query += " AND ie.tenant_id = $2"
+	}
+	query += " ORDER BY score_delta DESC, rule_id ASC"
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -1020,6 +1115,11 @@ func (s *SQLStore) GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactReque
 
 	baseWhere := "WHERE ri.rule_id = $1"
 	args := []interface{}{req.RuleId}
+
+	if req.TenantId != "" {
+		baseWhere += fmt.Sprintf(" AND ie.tenant_id = $%d", len(args)+1)
+		args = append(args, req.TenantId)
+	}
 
 	if req.StartDate != nil {
 		args = append(args, req.StartDate.AsTime())

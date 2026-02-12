@@ -41,6 +41,9 @@ func (s *SQLStore) ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb
 	if req.EndDate != nil {
 		queryBuilder.AddCondition("created_at <= ?", req.EndDate.AsTime())
 	}
+	if req.TenantId != "" {
+		queryBuilder.AddCondition("tenant_id = ?", req.TenantId)
+	}
 
 	// Get total count
 	countQuery, countArgs := queryBuilder.BuildCount()
@@ -113,7 +116,7 @@ func (s *SQLStore) ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb
 	return jobs, total, nil
 }
 
-func (s *SQLStore) GetJob(ctx context.Context, jobID string) (*pb.Job, error) {
+func (s *SQLStore) GetJob(ctx context.Context, jobID string, tenantID string) (*pb.Job, error) {
 	query := `
 		SELECT
 			job_id,
@@ -129,6 +132,11 @@ func (s *SQLStore) GetJob(ctx context.Context, jobID string) (*pb.Job, error) {
 		FROM jobs
 		WHERE job_id = $1
 	`
+	args := []interface{}{jobID}
+	if tenantID != "" {
+		query += " AND tenant_id = $2"
+		args = append(args, tenantID)
+	}
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
@@ -138,7 +146,7 @@ func (s *SQLStore) GetJob(ctx context.Context, jobID string) (*pb.Job, error) {
 	var errorCode, errorMessage sql.NullString
 	var paramsJSON, metricsJSON []byte
 
-	err := s.db.QueryRowContext(queryCtx, query, jobID).Scan(
+	err := s.db.QueryRowContext(queryCtx, query, args...).Scan(
 		&j.JobId,
 		&j.JobType,
 		&j.Status,
@@ -180,23 +188,28 @@ func (s *SQLStore) GetJob(ctx context.Context, jobID string) (*pb.Job, error) {
 	return &j, nil
 }
 
-func (s *SQLStore) GetJobEvents(ctx context.Context, jobID string, limit, offset int32) ([]*pb.JobEvent, error) {
+func (s *SQLStore) GetJobEvents(ctx context.Context, jobID string, limit, offset int32, tenantID string) ([]*pb.JobEvent, error) {
 	query := `
 		SELECT
 			event_id,
-			job_id,
+			je.job_id,
 			event_type,
 			timestamp,
 			details
-		FROM job_events
-		WHERE job_id = $1
-		ORDER BY timestamp ASC
-		LIMIT $2 OFFSET $3
+		FROM job_events je
+		INNER JOIN jobs j ON je.job_id = j.job_id
+		WHERE je.job_id = $1
 	`
+	args := []interface{}{jobID, limit, offset}
+	if tenantID != "" {
+		query += " AND j.tenant_id = $4"
+		args = append(args, tenantID)
+	}
+	query += " ORDER BY timestamp ASC LIMIT $2 OFFSET $3"
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	rows, err := s.db.QueryContext(queryCtx, query, jobID, limit, offset)
+	rows, err := s.db.QueryContext(queryCtx, query, args...)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -239,11 +252,11 @@ func (s *SQLStore) GetJobSummary(ctx context.Context, req *pb.GetJobSummaryReque
 			COUNT(*) FILTER (WHERE status = 'completed') as completed,
 			COUNT(*) FILTER (WHERE status = 'failed') as failed
 		FROM jobs
-		WHERE created_at >= $1 AND created_at <= $2
+		WHERE created_at >= $1 AND created_at <= $2 %s
 		GROUP BY bucket
 		ORDER BY bucket ASC
 	`
-
+	tenantDetail := ""
 	start := time.Now().AddDate(0, 0, -7)
 	if req.StartTime != nil {
 		start = req.StartTime.AsTime()
@@ -253,7 +266,14 @@ func (s *SQLStore) GetJobSummary(ctx context.Context, req *pb.GetJobSummaryReque
 		end = req.EndTime.AsTime()
 	}
 
-	rows, err := s.db.QueryContext(queryCtx, query, start, end)
+	args := []interface{}{start, end}
+	if req.TenantId != "" {
+		tenantDetail = " AND tenant_id = $3"
+		args = append(args, req.TenantId)
+	}
+	query = fmt.Sprintf(query, tenantDetail)
+
+	rows, err := s.db.QueryContext(queryCtx, query, args...)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}

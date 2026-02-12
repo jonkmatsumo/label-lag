@@ -56,7 +56,7 @@ func (s *Service) GetTrainingRun(ctx context.Context, req *pb.GetTrainingRunRequ
 		return nil, status.Error(codes.InvalidArgument, "run_id required")
 	}
 
-	run, err := s.store.GetTrainingRun(ctx, req.RunId)
+	run, err := s.store.GetTrainingRun(ctx, req.RunId, req.TenantId)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func (s *Service) GetMetricSeries(ctx context.Context, req *pb.GetMetricSeriesRe
 		return nil, status.Error(codes.InvalidArgument, "start_date must be <= end_date")
 	}
 
-	points, err := s.store.GetMetricSeries(ctx, req.ModelName, req.MetricName, start, end)
+	points, err := s.store.GetMetricSeries(ctx, req)
 	if err != nil {
 		return nil, err
 	}

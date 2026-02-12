@@ -23,6 +23,6 @@ func (s *SQLStore) GetBacktestResult(ctx context.Context, jobID string) (*pb.Bac
 	return nil, nil
 }
 
-func (s *SQLStore) GetTrainingData(ctx context.Context, cutoff time.Time) (train []*pb.TransactionDetail, test []*pb.TransactionDetail, err error) {
+func (s *SQLStore) GetTrainingData(ctx context.Context, cutoff time.Time, tenantID string) (train []*pb.TransactionDetail, test []*pb.TransactionDetail, err error) {
 	return nil, nil, nil
 }

@@ -48,12 +48,12 @@ func TestGetDatasetProfileCached(t *testing.T) {
 	jsonProfiles := `[{"name":"f1","type":"numeric"}]`
 
 	mock.ExpectQuery("SELECT profile_id").
-		WithArgs("prof-1").
+		WithArgs("prof-1", "tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{
 			"profile_id", "tenant_id", "computed_at", "record_count", "feature_profiles",
 		}).AddRow("prof-1", "tenant-1", ts, 100, []byte(jsonProfiles)))
 
-	p, err := s.GetDatasetProfileCached(context.Background(), "prof-1")
+	p, err := s.GetDatasetProfileCached(context.Background(), "prof-1", "tenant-1")
 	require.NoError(t, err)
 	assert.Equal(t, "prof-1", p.ProfileId)
 	assert.Equal(t, "tenant-1", p.TenantId)
@@ -70,6 +70,7 @@ func TestListDatasetProfiles(t *testing.T) {
 	s := NewSQLStore(db)
 
 	mock.ExpectQuery("SELECT COUNT").
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), "tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 
 	ts := time.Now().UTC()
@@ -79,7 +80,7 @@ func TestListDatasetProfiles(t *testing.T) {
 	end := time.Now()
 
 	mock.ExpectQuery("SELECT profile_id").
-		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), "tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{
 			"profile_id", "tenant_id", "computed_at", "record_count", "feature_profiles",
 		}).AddRow("prof-1", "tenant-1", ts, 100, []byte(jsonProfiles)))
@@ -89,6 +90,7 @@ func TestListDatasetProfiles(t *testing.T) {
 		Offset:    0,
 		StartDate: timestamppb.New(start),
 		EndDate:   timestamppb.New(end),
+		TenantId:  "tenant-1",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), total)

@@ -15,56 +15,56 @@ type MockStore struct {
 
 var _ Store = (*MockStore)(nil)
 
-func (m *MockStore) GetDailyStats(ctx context.Context, cutoffDate time.Time) ([]*pb.DailyStat, error) {
-	args := m.Called(ctx, cutoffDate)
+func (m *MockStore) GetDailyStats(ctx context.Context, cutoffDate time.Time, tenantID string) ([]*pb.DailyStat, error) {
+	args := m.Called(ctx, cutoffDate, tenantID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*pb.DailyStat), args.Error(1)
 }
 
-func (m *MockStore) GetTransactionDetails(ctx context.Context, cutoffDate time.Time, limit, offset int32) ([]*pb.TransactionDetail, error) {
-	args := m.Called(ctx, cutoffDate, limit, offset)
+func (m *MockStore) GetTransactionDetails(ctx context.Context, cutoffDate time.Time, limit, offset int32, tenantID string) ([]*pb.TransactionDetail, error) {
+	args := m.Called(ctx, cutoffDate, limit, offset, tenantID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*pb.TransactionDetail), args.Error(1)
 }
 
-func (m *MockStore) SearchTransactions(ctx context.Context, req *pb.SearchTransactionsRequest, limit, offset int32) ([]*pb.TransactionDetail, int64, error) {
-	args := m.Called(ctx, req, limit, offset)
+func (m *MockStore) SearchTransactions(ctx context.Context, req *pb.SearchTransactionsRequest) ([]*pb.TransactionDetail, int64, error) {
+	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
 		return nil, 0, args.Error(2)
 	}
 	return args.Get(0).([]*pb.TransactionDetail), args.Get(1).(int64), args.Error(2)
 }
 
-func (m *MockStore) GetRecentAlerts(ctx context.Context, limit, offset int32) ([]*pb.Alert, error) {
-	args := m.Called(ctx, limit, offset)
+func (m *MockStore) GetRecentAlerts(ctx context.Context, limit, offset int32, tenantID string) ([]*pb.Alert, error) {
+	args := m.Called(ctx, limit, offset, tenantID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*pb.Alert), args.Error(1)
 }
 
-func (m *MockStore) GetOverviewMetrics(ctx context.Context) (*pb.GetOverviewMetricsResponse, error) {
-	args := m.Called(ctx)
+func (m *MockStore) GetOverviewMetrics(ctx context.Context, tenantID string) (*pb.GetOverviewMetricsResponse, error) {
+	args := m.Called(ctx, tenantID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*pb.GetOverviewMetricsResponse), args.Error(1)
 }
 
-func (m *MockStore) GetShadowComparison(ctx context.Context, hours int32) (*pb.ShadowModeMetrics, error) {
-	args := m.Called(ctx, hours)
+func (m *MockStore) GetShadowComparison(ctx context.Context, hours int32, tenantID string) (*pb.ShadowModeMetrics, error) {
+	args := m.Called(ctx, hours, tenantID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*pb.ShadowModeMetrics), args.Error(1)
 }
 
-func (m *MockStore) GetTrainingData(ctx context.Context, cutoff time.Time) ([]*pb.TransactionDetail, []*pb.TransactionDetail, error) {
-	args := m.Called(ctx, cutoff)
+func (m *MockStore) GetTrainingData(ctx context.Context, cutoff time.Time, tenantID string) ([]*pb.TransactionDetail, []*pb.TransactionDetail, error) {
+	args := m.Called(ctx, cutoff, tenantID)
 	// Handle nil returns safely
 	var train, test []*pb.TransactionDetail
 	if args.Get(0) != nil {
@@ -76,16 +76,16 @@ func (m *MockStore) GetTrainingData(ctx context.Context, cutoff time.Time) ([]*p
 	return train, test, args.Error(2)
 }
 
-func (m *MockStore) ListRuleVersions(ctx context.Context, ruleID string, limit, offset int32) ([]*pb.Rule, int64, error) {
-	args := m.Called(ctx, ruleID, limit, offset)
+func (m *MockStore) ListRuleVersions(ctx context.Context, ruleID string, limit, offset int32, tenantID string) ([]*pb.Rule, int64, error) {
+	args := m.Called(ctx, ruleID, limit, offset, tenantID)
 	if args.Get(0) == nil {
 		return nil, 0, args.Error(2)
 	}
 	return args.Get(0).([]*pb.Rule), args.Get(1).(int64), args.Error(2)
 }
 
-func (m *MockStore) GetRuleVersion(ctx context.Context, ruleID, versionID string) (*pb.GetRuleVersionResponse, error) {
-	args := m.Called(ctx, ruleID, versionID)
+func (m *MockStore) GetRuleVersion(ctx context.Context, ruleID, versionID string, tenantID string) (*pb.GetRuleVersionResponse, error) {
+	args := m.Called(ctx, ruleID, versionID, tenantID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -97,45 +97,45 @@ func (m *MockStore) PublishRuleVersion(ctx context.Context, req *pb.PublishRuleV
 	return args.String(0), args.Error(1)
 }
 
-func (m *MockStore) GetRuleReadiness(ctx context.Context, ruleID string) (*pb.GetRuleReadinessResponse, error) {
-	args := m.Called(ctx, ruleID)
+func (m *MockStore) GetRuleReadiness(ctx context.Context, ruleID string, tenantID string) (*pb.GetRuleReadinessResponse, error) {
+	args := m.Called(ctx, ruleID, tenantID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*pb.GetRuleReadinessResponse), args.Error(1)
 }
 
-func (m *MockStore) DiffRuleVersions(ctx context.Context, ruleID, vA, vB string) (*pb.DiffRuleVersionsResponse, error) {
-	args := m.Called(ctx, ruleID, vA, vB)
+func (m *MockStore) DiffRuleVersions(ctx context.Context, ruleID, vA, vB string, tenantID string) (*pb.DiffRuleVersionsResponse, error) {
+	args := m.Called(ctx, ruleID, vA, vB, tenantID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*pb.DiffRuleVersionsResponse), args.Error(1)
 }
 
-func (m *MockStore) SaveRule(ctx context.Context, r *pb.Rule) error {
-	args := m.Called(ctx, r)
+func (m *MockStore) SaveRule(ctx context.Context, r *pb.Rule, tenantID string) error {
+	args := m.Called(ctx, r, tenantID)
 	return args.Error(0)
 }
 
-func (m *MockStore) GetRule(ctx context.Context, ruleID string) (*pb.Rule, error) {
-	args := m.Called(ctx, ruleID)
+func (m *MockStore) GetRule(ctx context.Context, ruleID string, tenantID string) (*pb.Rule, error) {
+	args := m.Called(ctx, ruleID, tenantID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*pb.Rule), args.Error(1)
 }
 
-func (m *MockStore) ListRules(ctx context.Context, statusFilter string, includeArchived bool) ([]*pb.Rule, error) {
-	args := m.Called(ctx, statusFilter, includeArchived)
+func (m *MockStore) ListRules(ctx context.Context, statusFilter string, includeArchived bool, tenantID string) ([]*pb.Rule, error) {
+	args := m.Called(ctx, statusFilter, includeArchived, tenantID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*pb.Rule), args.Error(1)
 }
 
-func (m *MockStore) DeleteRule(ctx context.Context, ruleID string) error {
-	args := m.Called(ctx, ruleID)
+func (m *MockStore) DeleteRule(ctx context.Context, ruleID string, tenantID string) error {
+	args := m.Called(ctx, ruleID, tenantID)
 	return args.Error(0)
 }
 
@@ -191,24 +191,24 @@ func (m *MockStore) LogInferenceEvent(ctx context.Context, event *pb.InferenceEv
 	return args.Error(0)
 }
 
-func (m *MockStore) GetFeatureSample(ctx context.Context, sampleSize int32, stratify bool) ([]*pb.FeatureSample, error) {
-	args := m.Called(ctx, sampleSize, stratify)
+func (m *MockStore) GetFeatureSample(ctx context.Context, sampleSize int32, stratify bool, tenantID string) ([]*pb.FeatureSample, error) {
+	args := m.Called(ctx, sampleSize, stratify, tenantID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*pb.FeatureSample), args.Error(1)
 }
 
-func (m *MockStore) GetDriftWindow(ctx context.Context, cutoff time.Time) ([]*pb.TransactionDetail, error) {
-	args := m.Called(ctx, cutoff)
+func (m *MockStore) GetDriftWindow(ctx context.Context, cutoff time.Time, tenantID string) ([]*pb.TransactionDetail, error) {
+	args := m.Called(ctx, cutoff, tenantID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*pb.TransactionDetail), args.Error(1)
 }
 
-func (m *MockStore) GetInferenceScores(ctx context.Context, cutoff time.Time) ([]int32, error) {
-	args := m.Called(ctx, cutoff)
+func (m *MockStore) GetInferenceScores(ctx context.Context, cutoff time.Time, tenantID string) ([]int32, error) {
+	args := m.Called(ctx, cutoff, tenantID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -238,39 +238,39 @@ func (m *MockStore) FailGenerationJob(ctx context.Context, key string, errMsg st
 	return args.Error(0)
 }
 
-func (m *MockStore) GetDatasetProfile(ctx context.Context, datasetID string, limitFeatures, numBuckets int32) (*pb.GetDatasetProfileResponse, error) {
-	args := m.Called(ctx, datasetID, limitFeatures, numBuckets)
+func (m *MockStore) GetDatasetProfile(ctx context.Context, datasetID string, limitFeatures, numBuckets int32, tenantID string) (*pb.GetDatasetProfileResponse, error) {
+	args := m.Called(ctx, datasetID, limitFeatures, numBuckets, tenantID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*pb.GetDatasetProfileResponse), args.Error(1)
 }
-func (m *MockStore) GetRuleStats(ctx context.Context, ruleID string, cutoff time.Time) ([]*pb.RuleStats, error) {
-	args := m.Called(ctx, ruleID, cutoff)
+func (m *MockStore) GetRuleStats(ctx context.Context, ruleID string, cutoff time.Time, tenantID string) ([]*pb.RuleStats, error) {
+	args := m.Called(ctx, ruleID, cutoff, tenantID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*pb.RuleStats), args.Error(1)
 }
 
-func (m *MockStore) GetAttribution(ctx context.Context, cutoff time.Time, limit int32) ([]*pb.DailyAttribution, error) {
-	args := m.Called(ctx, cutoff, limit)
+func (m *MockStore) GetAttribution(ctx context.Context, cutoff time.Time, limit int32, tenantID string) ([]*pb.DailyAttribution, error) {
+	args := m.Called(ctx, cutoff, limit, tenantID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*pb.DailyAttribution), args.Error(1)
 }
 
-func (m *MockStore) GetLatestUserFeatures(ctx context.Context, userID string) (*pb.UserFeatures, bool, error) {
-	args := m.Called(ctx, userID)
+func (m *MockStore) GetLatestUserFeatures(ctx context.Context, userID string, tenantID string) (*pb.UserFeatures, bool, error) {
+	args := m.Called(ctx, userID, tenantID)
 	if args.Get(0) == nil {
 		return nil, args.Bool(1), args.Error(2)
 	}
 	return args.Get(0).(*pb.UserFeatures), args.Bool(1), args.Error(2)
 }
 
-func (m *MockStore) BatchGetLatestUserFeatures(ctx context.Context, userIDs []string) (map[string]*pb.UserFeatures, error) {
-	args := m.Called(ctx, userIDs)
+func (m *MockStore) BatchGetLatestUserFeatures(ctx context.Context, userIDs []string, tenantID string) (map[string]*pb.UserFeatures, error) {
+	args := m.Called(ctx, userIDs, tenantID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -285,16 +285,16 @@ func (m *MockStore) ListDecisions(ctx context.Context, req *pb.ListDecisionsRequ
 	return args.Get(0).([]*pb.DecisionSummary), args.Get(1).(int64), args.Error(2)
 }
 
-func (m *MockStore) GetDecision(ctx context.Context, requestID string) (*pb.InferenceEvent, error) {
-	args := m.Called(ctx, requestID)
+func (m *MockStore) GetDecision(ctx context.Context, requestID string, tenantID string) (*pb.InferenceEvent, error) {
+	args := m.Called(ctx, requestID, tenantID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*pb.InferenceEvent), args.Error(1)
 }
 
-func (m *MockStore) GetDecisionTrace(ctx context.Context, requestID string) ([]*pb.RuleImpact, error) {
-	args := m.Called(ctx, requestID)
+func (m *MockStore) GetDecisionTrace(ctx context.Context, requestID string, tenantID string) ([]*pb.RuleImpact, error) {
+	args := m.Called(ctx, requestID, tenantID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -341,16 +341,16 @@ func (m *MockStore) ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*p
 	return args.Get(0).([]*pb.Job), args.Get(1).(int64), args.Error(2)
 }
 
-func (m *MockStore) GetJob(ctx context.Context, jobID string) (*pb.Job, error) {
-	args := m.Called(ctx, jobID)
+func (m *MockStore) GetJob(ctx context.Context, jobID string, tenantID string) (*pb.Job, error) {
+	args := m.Called(ctx, jobID, tenantID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*pb.Job), args.Error(1)
 }
 
-func (m *MockStore) GetJobEvents(ctx context.Context, jobID string, limit, offset int32) ([]*pb.JobEvent, error) {
-	args := m.Called(ctx, jobID, limit, offset)
+func (m *MockStore) GetJobEvents(ctx context.Context, jobID string, limit, offset int32, tenantID string) ([]*pb.JobEvent, error) {
+	args := m.Called(ctx, jobID, limit, offset, tenantID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -362,8 +362,8 @@ func (m *MockStore) SaveDatasetProfile(ctx context.Context, profile *pb.DatasetP
 	return args.Error(0)
 }
 
-func (m *MockStore) GetDatasetProfileCached(ctx context.Context, profileID string) (*pb.DatasetProfile, error) {
-	args := m.Called(ctx, profileID)
+func (m *MockStore) GetDatasetProfileCached(ctx context.Context, profileID string, tenantID string) (*pb.DatasetProfile, error) {
+	args := m.Called(ctx, profileID, tenantID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -378,8 +378,8 @@ func (m *MockStore) ListDatasetProfiles(ctx context.Context, req *pb.ListDataset
 	return args.Get(0).([]*pb.DatasetProfile), args.Get(1).(int64), args.Error(2)
 }
 
-func (m *MockStore) GetLatestDatasetProfile(ctx context.Context) (*pb.GetLatestDatasetProfileResponse, error) {
-	args := m.Called(ctx)
+func (m *MockStore) GetLatestDatasetProfile(ctx context.Context, tenantID string) (*pb.GetLatestDatasetProfileResponse, error) {
+	args := m.Called(ctx, tenantID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -415,16 +415,16 @@ func (m *MockStore) ListModelVersions(ctx context.Context, req *pb.ListModelVers
 	return args.Get(0).([]*pb.TrainingRun), args.Get(1).(int64), args.Error(2)
 }
 
-func (m *MockStore) GetTrainingRun(ctx context.Context, runID string) (*pb.TrainingRun, error) {
-	args := m.Called(ctx, runID)
+func (m *MockStore) GetTrainingRun(ctx context.Context, runID string, tenantID string) (*pb.TrainingRun, error) {
+	args := m.Called(ctx, runID, tenantID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*pb.TrainingRun), args.Error(1)
 }
 
-func (m *MockStore) GetMetricSeries(ctx context.Context, modelName, metricName string, start, end time.Time) ([]*pb.MetricPoint, error) {
-	args := m.Called(ctx, modelName, metricName, start, end)
+func (m *MockStore) GetMetricSeries(ctx context.Context, req *pb.GetMetricSeriesRequest) ([]*pb.MetricPoint, error) {
+	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

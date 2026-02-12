@@ -14,18 +14,25 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (s *SQLStore) ListRuleVersions(ctx context.Context, ruleID string, limit, offset int32) ([]*pb.Rule, int64, error) {
-	query := `
+func (s *SQLStore) ListRuleVersions(ctx context.Context, ruleID string, limit, offset int32, tenantID string) ([]*pb.Rule, int64, error) {
+	queryDetail := ""
+	args := []interface{}{ruleID, limit, offset}
+	if tenantID != "" {
+		queryDetail = " AND tenant_id = $4"
+		args = append(args, tenantID)
+	}
+
+	query := fmt.Sprintf(`
 		SELECT rule_json, created_at, created_by, status
 		FROM rule_versions
-		WHERE rule_id = $1
+		WHERE rule_id = $1 %s
 		ORDER BY created_at DESC
 		LIMIT $2 OFFSET $3
-	`
+	`, queryDetail)
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	rows, err := s.db.QueryContext(queryCtx, query, ruleID, limit, offset)
+	rows, err := s.db.QueryContext(queryCtx, query, args...)
 	if err != nil {
 		return nil, 0, db.MapDBError(fmt.Errorf("failed to list rule versions: %w", err))
 	}
@@ -54,7 +61,13 @@ func (s *SQLStore) ListRuleVersions(ctx context.Context, ruleID string, limit, o
 	var total int64
 	queryCtxCount, cancelCount := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancelCount()
-	err = s.db.QueryRowContext(queryCtxCount, "SELECT COUNT(*) FROM rule_versions WHERE rule_id = $1", ruleID).Scan(&total)
+	countQuery := "SELECT COUNT(*) FROM rule_versions WHERE rule_id = $1"
+	if tenantID != "" {
+		countQuery += " AND tenant_id = $2"
+		err = s.db.QueryRowContext(queryCtxCount, countQuery, ruleID, tenantID).Scan(&total)
+	} else {
+		err = s.db.QueryRowContext(queryCtxCount, countQuery, ruleID).Scan(&total)
+	}
 	if err != nil {
 		return nil, 0, db.MapDBError(fmt.Errorf("failed to count rule versions: %w", err))
 	}
@@ -62,34 +75,51 @@ func (s *SQLStore) ListRuleVersions(ctx context.Context, ruleID string, limit, o
 	return versions, total, nil
 }
 
-func (s *SQLStore) GetRuleVersion(ctx context.Context, ruleID, versionID string) (*pb.GetRuleVersionResponse, error) {
+func (s *SQLStore) GetRuleVersion(ctx context.Context, ruleID, versionID string, tenantID string) (*pb.GetRuleVersionResponse, error) {
 	var query string
 	var args []interface{}
+	tenantDetail := ""
+
+	if tenantID != "" {
+		tenantDetail = " AND tenant_id = $2"
+		if versionID != "active" && versionID != "" && versionID != "latest" {
+			tenantDetail = " AND tenant_id = $3"
+		}
+	}
 
 	if versionID == "active" || versionID == "" {
-		query = `
+		query = fmt.Sprintf(`
 			SELECT rv.rule_json, rv.version_id, rv.created_at
 			FROM rules r
 			JOIN rule_versions rv ON r.active_version_id = rv.version_id
-			WHERE r.rule_id = $1
-		`
+			WHERE r.rule_id = $1 %s
+		`, tenantDetail)
 		args = []interface{}{ruleID}
+		if tenantID != "" {
+			args = append(args, tenantID)
+		}
 	} else if versionID == "latest" {
-		query = `
+		query = fmt.Sprintf(`
 			SELECT rule_json, version_id, created_at
 			FROM rule_versions
-			WHERE rule_id = $1
+			WHERE rule_id = $1 %s
 			ORDER BY created_at DESC
 			LIMIT 1
-		`
+		`, tenantDetail)
 		args = []interface{}{ruleID}
+		if tenantID != "" {
+			args = append(args, tenantID)
+		}
 	} else {
-		query = `
+		query = fmt.Sprintf(`
 			SELECT rule_json, version_id, created_at
 			FROM rule_versions
-			WHERE rule_id = $1 AND version_id = $2
-		`
+			WHERE rule_id = $1 AND version_id = $2 %s
+		`, tenantDetail)
 		args = []interface{}{ruleID, versionID}
+		if tenantID != "" {
+			args = append(args, tenantID)
+		}
 	}
 
 	var ruleJSON []byte
@@ -129,8 +159,13 @@ func (s *SQLStore) PublishRuleVersion(ctx context.Context, req *pb.PublishRuleVe
 
 	var field, op, value, action, severity, reason, statusStr string
 	var score sql.NullInt32
-	err = tx.QueryRowContext(queryCtx, `SELECT field, op, value, action, score, severity, reason, status FROM rules WHERE rule_id = $1`, req.RuleId).
-		Scan(&field, &op, &value, &action, &score, &severity, &reason, &statusStr)
+	ruleQuery := "SELECT field, op, value, action, score, severity, reason, status FROM rules WHERE rule_id = $1"
+	if req.TenantId != "" {
+		ruleQuery += " AND tenant_id = $2"
+		err = tx.QueryRowContext(queryCtx, ruleQuery, req.RuleId, req.TenantId).Scan(&field, &op, &value, &action, &score, &severity, &reason, &statusStr)
+	} else {
+		err = tx.QueryRowContext(queryCtx, ruleQuery, req.RuleId).Scan(&field, &op, &value, &action, &score, &severity, &reason, &statusStr)
+	}
 
 	if err == sql.ErrNoRows {
 		return "", status.Error(codes.NotFound, "rule not found")
@@ -157,17 +192,21 @@ func (s *SQLStore) PublishRuleVersion(ctx context.Context, req *pb.PublishRuleVe
 	ruleJSON, _ := json.Marshal(r)
 
 	_, err = tx.ExecContext(queryCtx, `
-		INSERT INTO rule_versions (version_id, rule_id, rule_json, created_at, created_by, change_description, status, is_active)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-	`, newVersion, req.RuleId, ruleJSON, time.Now(), req.Actor, req.Reason, "active", true)
+		INSERT INTO rule_versions (version_id, rule_id, rule_json, created_at, created_by, change_description, status, is_active, tenant_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+	`, newVersion, req.RuleId, ruleJSON, time.Now(), req.Actor, req.Reason, "active", true, req.TenantId)
 
 	if err != nil {
 		return "", db.MapDBError(fmt.Errorf("failed to insert rule version: %w", err))
 	}
 
-	_, err = tx.ExecContext(queryCtx, `
-		UPDATE rules SET status = 'active', active_version_id = $1 WHERE rule_id = $2
-	`, newVersion, req.RuleId)
+	updateRule := "UPDATE rules SET status = 'active', active_version_id = $1 WHERE rule_id = $2"
+	if req.TenantId != "" {
+		updateRule += " AND tenant_id = $3"
+		_, err = tx.ExecContext(queryCtx, updateRule, newVersion, req.RuleId, req.TenantId)
+	} else {
+		_, err = tx.ExecContext(queryCtx, updateRule, newVersion, req.RuleId)
+	}
 
 	if err != nil {
 		return "", db.MapDBError(fmt.Errorf("failed to update rule status: %w", err))
@@ -187,11 +226,17 @@ func (s *SQLStore) PublishRuleVersion(ctx context.Context, req *pb.PublishRuleVe
 	return newVersion, nil
 }
 
-func (s *SQLStore) GetRuleReadiness(ctx context.Context, ruleID string) (*pb.GetRuleReadinessResponse, error) {
+func (s *SQLStore) GetRuleReadiness(ctx context.Context, ruleID string, tenantID string) (*pb.GetRuleReadinessResponse, error) {
 	var rID, valueJSON string
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
-	err := s.db.QueryRowContext(queryCtx, "SELECT rule_id, value FROM rules WHERE rule_id = $1", ruleID).Scan(&rID, &valueJSON)
+	query := "SELECT rule_id, value FROM rules WHERE rule_id = $1"
+	args := []interface{}{ruleID}
+	if tenantID != "" {
+		query += " AND tenant_id = $2"
+		args = append(args, tenantID)
+	}
+	err := s.db.QueryRowContext(queryCtx, query, args...).Scan(&rID, &valueJSON)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -216,12 +261,18 @@ func (s *SQLStore) GetRuleReadiness(ctx context.Context, ruleID string) (*pb.Get
 	}, nil
 }
 
-func (s *SQLStore) DiffRuleVersions(ctx context.Context, ruleID, vA, vB string) (*pb.DiffRuleVersionsResponse, error) {
+func (s *SQLStore) DiffRuleVersions(ctx context.Context, ruleID, vA, vB string, tenantID string) (*pb.DiffRuleVersionsResponse, error) {
 	getVersionJSON := func(verID string) (*pb.Rule, error) {
 		queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 		defer cancel()
 		var rJSON []byte
-		err := s.db.QueryRowContext(queryCtx, "SELECT rule_json FROM rule_versions WHERE rule_id = $1 AND version_id = $2", ruleID, verID).Scan(&rJSON)
+		query := "SELECT rule_json FROM rule_versions WHERE rule_id = $1 AND version_id = $2"
+		args := []interface{}{ruleID, verID}
+		if tenantID != "" {
+			query += " AND tenant_id = $3"
+			args = append(args, tenantID)
+		}
+		err := s.db.QueryRowContext(queryCtx, query, args...).Scan(&rJSON)
 
 		if err != nil {
 			return nil, db.MapDBError(err)
@@ -262,11 +313,11 @@ func (s *SQLStore) DiffRuleVersions(ctx context.Context, ruleID, vA, vB string) 
 	}, nil
 }
 
-func (s *SQLStore) SaveRule(ctx context.Context, r *pb.Rule) error {
+func (s *SQLStore) SaveRule(ctx context.Context, r *pb.Rule, tenantID string) error {
 	query := `
 		INSERT INTO rules (
-			rule_id, field, op, value, action, score, severity, reason, status
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			rule_id, field, op, value, action, score, severity, reason, status, tenant_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		ON CONFLICT (rule_id) DO UPDATE SET
 			field = EXCLUDED.field,
 			op = EXCLUDED.op,
@@ -275,13 +326,14 @@ func (s *SQLStore) SaveRule(ctx context.Context, r *pb.Rule) error {
 			score = EXCLUDED.score,
 			severity = EXCLUDED.severity,
 			reason = EXCLUDED.reason,
-			status = EXCLUDED.status
+			status = EXCLUDED.status,
+			tenant_id = EXCLUDED.tenant_id
 	`
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
 	_, err := s.db.ExecContext(queryCtx, query,
-		r.Id, r.Field, r.Op, r.ValueJson, r.Action, r.Score, r.Severity, r.Reason, r.Status,
+		r.Id, r.Field, r.Op, r.ValueJson, r.Action, r.Score, r.Severity, r.Reason, r.Status, tenantID,
 	)
 
 	if err != nil {
@@ -290,14 +342,19 @@ func (s *SQLStore) SaveRule(ctx context.Context, r *pb.Rule) error {
 	return nil
 }
 
-func (s *SQLStore) GetRule(ctx context.Context, ruleID string) (*pb.Rule, error) {
+func (s *SQLStore) GetRule(ctx context.Context, ruleID string, tenantID string) (*pb.Rule, error) {
 	query := `SELECT rule_id, field, op, value, action, score, severity, reason, status FROM rules WHERE rule_id = $1`
+	args := []interface{}{ruleID}
+	if tenantID != "" {
+		query += " AND tenant_id = $2"
+		args = append(args, tenantID)
+	}
 
 	var r pb.Rule
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	err := s.db.QueryRowContext(queryCtx, query, ruleID).Scan(
+	err := s.db.QueryRowContext(queryCtx, query, args...).Scan(
 		&r.Id, &r.Field, &r.Op, &r.ValueJson, &r.Action, &r.Score, &r.Severity, &r.Reason, &r.Status,
 	)
 
@@ -308,7 +365,7 @@ func (s *SQLStore) GetRule(ctx context.Context, ruleID string) (*pb.Rule, error)
 	return &r, nil
 }
 
-func (s *SQLStore) ListRules(ctx context.Context, statusFilter string, includeArchived bool) ([]*pb.Rule, error) {
+func (s *SQLStore) ListRules(ctx context.Context, statusFilter string, includeArchived bool, tenantID string) ([]*pb.Rule, error) {
 	query := `SELECT rule_id, field, op, value, action, score, severity, reason, status FROM rules WHERE 1=1`
 	args := []interface{}{}
 
@@ -317,6 +374,11 @@ func (s *SQLStore) ListRules(ctx context.Context, statusFilter string, includeAr
 		query += fmt.Sprintf(" AND status = $%d", len(args))
 	} else if !includeArchived {
 		query += " AND status != 'archived'"
+	}
+
+	if tenantID != "" {
+		args = append(args, tenantID)
+		query += fmt.Sprintf(" AND tenant_id = $%d", len(args))
 	}
 
 	query += " ORDER BY rule_id"
@@ -343,12 +405,17 @@ func (s *SQLStore) ListRules(ctx context.Context, statusFilter string, includeAr
 	return rules, nil
 }
 
-func (s *SQLStore) DeleteRule(ctx context.Context, ruleID string) error {
+func (s *SQLStore) DeleteRule(ctx context.Context, ruleID string, tenantID string) error {
 	query := `UPDATE rules SET status = 'archived' WHERE rule_id = $1`
+	args := []interface{}{ruleID}
+	if tenantID != "" {
+		query += " AND tenant_id = $2"
+		args = append(args, tenantID)
+	}
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	_, err := s.db.ExecContext(queryCtx, query, ruleID)
+	_, err := s.db.ExecContext(queryCtx, query, args...)
 	if err != nil {
 		return db.MapDBError(fmt.Errorf("failed to archive rule: %w", err))
 	}
