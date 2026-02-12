@@ -9,7 +9,13 @@ import psycopg2
 from psycopg2.extras import Json, RealDictCursor
 
 from training.job_store import decode_jobs_cursor
-from training.jobs import TrialRecord, TuningJob, TuningJobStatus
+from training.jobs import (
+    TrialRecord,
+    TuningJob,
+    TuningJobStatus,
+    bound_params,
+    truncate_error_message,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -142,8 +148,8 @@ class PostgresJobStore:
                     job.completed_trials,
                     job.pruned_trials,
                     job.best_value,
-                    Json(job.best_params),
-                    job.error_message,
+                    Json(bound_params(job.best_params)),
+                    truncate_error_message(job.error_message),
                 ),
             )
             self._upsert_trials(cur, job.job_id, job.trials)
@@ -374,8 +380,8 @@ class PostgresJobStore:
                 job.completed_trials,
                 job.pruned_trials,
                 job.best_value,
-                Json(job.best_params),
-                job.error_message,
+                Json(bound_params(job.best_params)),
+                truncate_error_message(job.error_message),
                 job.job_id,
             ),
         )
@@ -411,7 +417,7 @@ class PostgresJobStore:
                 trial.trial_number,
                 trial.state,
                 trial.value,
-                Json(trial.params),
+                Json(bound_params(trial.params)),
                 _coerce_utc(trial.started_at),
                 _coerce_utc(trial.ended_at),
                 trial.duration_ms,
@@ -469,8 +475,8 @@ class PostgresJobStore:
             completed_trials=row["completed_trials"] or 0,
             pruned_trials=row["pruned_trials"] or 0,
             best_value=row["best_value"],
-            best_params=row["best_params"] or {},
-            error_message=row["error_message"],
+            best_params=bound_params(row["best_params"] or {}),
+            error_message=truncate_error_message(row["error_message"]),
         )
 
     def _row_to_trial(self, row: dict) -> TrialRecord:
@@ -478,7 +484,7 @@ class PostgresJobStore:
             trial_number=row["trial_number"],
             state=row["state"],
             value=row["value"],
-            params=row["params_json"] or {},
+            params=bound_params(row["params_json"] or {}),
             started_at=_coerce_utc(row["started_at"]),
             ended_at=_coerce_utc(row["ended_at"]),
             duration_ms=row["duration_ms"],

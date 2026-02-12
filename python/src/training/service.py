@@ -20,7 +20,12 @@ from model.train import EXPERIMENT_NAME, train_model
 from training.crud_client import get_crud_client
 from training.job_queue import JobQueue
 from training.job_store import JobStore, encode_jobs_cursor
-from training.jobs import TuningJob, TuningJobStatus
+from training.jobs import (
+    TuningJob,
+    TuningJobStatus,
+    bound_params,
+    truncate_error_message,
+)
 from training.schemas import SplitConfig, TuningConfig
 from training.v1 import training_pb2, training_pb2_grpc
 
@@ -777,9 +782,9 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
             total_trials=job.total_trials,
             pruned_trials=job.pruned_trials,
             best_value=job.best_value if job.best_value is not None else 0.0,
-            best_params=job.best_params,
+            best_params=bound_params(job.best_params),
             mlflow_run_id=job.mlflow_run_id or "",
-            error_message=job.error_message or "",
+            error_message=truncate_error_message(job.error_message) or "",
             created_at=int(job.created_at.timestamp() * 1000),
             started_at=int(job.started_at.timestamp() * 1000) if job.started_at else 0,
             updated_at=int(job.updated_at.timestamp() * 1000),
@@ -851,7 +856,7 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                 if job.requested_by:
                     summary.requested_by = job.requested_by
                 if job.error_message:
-                    summary.error_message = job.error_message
+                    summary.error_message = truncate_error_message(job.error_message)
                 summaries.append(summary)
 
             return training_pb2.ListTuningJobsResponse(
@@ -904,7 +909,7 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                     trial_number=t.trial_number,
                     state=t.state,
                     value=t.value if t.value is not None else 0.0,
-                    params=t.params,
+                    params=bound_params(t.params),
                     started_at=int(t.started_at.timestamp() * 1000)
                     if t.started_at
                     else 0,

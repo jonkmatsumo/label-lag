@@ -8,7 +8,13 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Protocol
 
-from training.jobs import TrialRecord, TuningJob, TuningJobStatus
+from training.jobs import (
+    TrialRecord,
+    TuningJob,
+    TuningJobStatus,
+    bound_params,
+    truncate_error_message,
+)
 
 
 def encode_jobs_cursor(created_at: datetime, job_id: str) -> str:
@@ -36,6 +42,19 @@ def _max_trial_rows_per_job() -> int:
         return max(1, int(raw))
     except ValueError:
         return 2000
+
+
+def _sanitize_trial(trial: TrialRecord) -> TrialRecord:
+    sanitized = copy.deepcopy(trial)
+    sanitized.params = bound_params(sanitized.params)
+    return sanitized
+
+
+def _sanitize_job(job: TuningJob) -> None:
+    job.best_params = bound_params(job.best_params)
+    job.error_message = truncate_error_message(job.error_message)
+    if job.trials:
+        job.trials = [_sanitize_trial(trial) for trial in job.trials]
 
 
 class JobStore(Protocol):
@@ -80,6 +99,7 @@ class InMemoryJobStore:
         with self._lock:
             if job.job_id in self._jobs:
                 raise ValueError(f"Job {job.job_id} already exists")
+            _sanitize_job(job)
             self._jobs[job.job_id] = copy.deepcopy(job)
 
     def get(self, job_id: str) -> TuningJob | None:
@@ -93,6 +113,7 @@ class InMemoryJobStore:
                 raise ValueError(f"Job {job_id} not found")
             job = self._jobs[job_id]
             mutate_fn(job)
+            _sanitize_job(job)
             return copy.deepcopy(job)
 
     def list_jobs(
@@ -123,7 +144,7 @@ class InMemoryJobStore:
             if job_id not in self._jobs:
                 raise ValueError(f"Job {job_id} not found")
             job = self._jobs[job_id]
-            job.trials.append(copy.deepcopy(trial))
+            job.trials.append(_sanitize_trial(trial))
             max_rows = _max_trial_rows_per_job()
             if len(job.trials) > max_rows:
                 job.trials = job.trials[-max_rows:]
