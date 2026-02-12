@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -45,6 +46,13 @@ DEFAULT_SEARCH_SPACE = {
     "reg_alpha": (0.0, 1.0),
     "reg_lambda": (0.0, 10.0),
 }
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _create_objective(
@@ -137,9 +145,20 @@ def get_trial_params(trials_df: pd.DataFrame, trial_number: int) -> dict:
 class JobProgressCallback:
     """Optuna callback to update JobStore with trial results."""
 
-    def __init__(self, job_id: str, job_store: JobStore):
+    def __init__(
+        self,
+        job_id: str,
+        job_store: JobStore,
+        nested_mlflow_runs: bool | None = None,
+    ):
         self.job_id = job_id
         self.job_store = job_store
+        # Optional per-trial nested runs. Disabled by default to preserve behavior.
+        self._nested_mlflow_runs = (
+            _env_flag("TUNING_MLFLOW_NESTED_RUNS", default=False)
+            if nested_mlflow_runs is None
+            else nested_mlflow_runs
+        )
 
     def __call__(
         self, study: optuna.study.Study, trial: optuna.trial.FrozenTrial
@@ -180,12 +199,39 @@ class JobProgressCallback:
 
         self.job_store.update(self.job_id, update_fn)
         self.job_store.set_heartbeat(self.job_id, datetime.now(UTC))
+        self._maybe_log_nested_trial_run(trial)
 
         # 2. Check for cancellation
         job = self.job_store.get(self.job_id)
         if job and job.status == TuningJobStatus.CANCELING:
             logger.info(f"Job {self.job_id} is canceling, stopping study.")
             study.stop()
+
+    def _maybe_log_nested_trial_run(self, trial: optuna.trial.FrozenTrial) -> None:
+        if not self._nested_mlflow_runs:
+            return
+        if str(trial.state) != "TrialState.COMPLETE":
+            return
+
+        try:
+            import mlflow
+
+            with mlflow.start_run(run_name=f"trial_{trial.number}", nested=True):
+                mlflow.set_tag("job_id", self.job_id)
+                mlflow.set_tag("tuning_job_id", self.job_id)
+                mlflow.set_tag("trial_number", str(trial.number))
+                mlflow.set_tag("state", str(trial.state))
+                for key, value in trial.params.items():
+                    mlflow.log_param(key, value)
+                if trial.value is not None:
+                    mlflow.log_metric("objective_value", float(trial.value))
+        except Exception as exc:
+            logger.warning(
+                "Failed to log nested MLflow run for job %s trial=%s: %s",
+                self.job_id,
+                trial.number,
+                exc,
+            )
 
 
 def run_tuning_study(
