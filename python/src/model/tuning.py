@@ -25,6 +25,8 @@ from sklearn.metrics import (
 )
 from xgboost import XGBClassifier
 
+from training.optuna_resume import create_tuning_study
+
 logger = logging.getLogger(__name__)
 
 _METRIC_FNS = {
@@ -249,6 +251,7 @@ def run_tuning_study(
     search_space_overrides: dict[str, str] | None = None,
     job_id: str | None = None,
     job_store: JobStore | None = None,
+    storage_url: str | None = None,
 ) -> tuple[dict, pd.DataFrame]:
     """Run Optuna study and return best params and trial history.
 
@@ -267,6 +270,7 @@ def run_tuning_study(
         search_space_overrides: Optional overrides for search space (JSON strings).
         job_id: Optional job ID for tracking.
         job_store: Optional JobStore for tracking.
+        storage_url: Optional Optuna RDB storage URL override.
 
     Returns:
         (best_params, trials_df) where trials_df has columns like
@@ -315,7 +319,15 @@ def run_tuning_study(
         sampler = optuna.samplers.TPESampler(seed=seed, n_startup_trials=5)
 
     pruner = MedianPruner(n_startup_trials=5, n_warmup_steps=10)
-    study = optuna.create_study(direction=direction, sampler=sampler, pruner=pruner)
+    study = create_tuning_study(
+        direction=direction,
+        sampler=sampler,
+        pruner=pruner,
+        job_id=job_id,
+        storage_url=storage_url,
+    )
+    if job_id:
+        study.set_user_attr("tuning_job_id", job_id)
 
     callbacks = []
     if job_id and job_store:
