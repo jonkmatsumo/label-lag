@@ -92,3 +92,49 @@ def test_job_cancellation_logic():
 
     updated_job = store.get(job.job_id)
     assert updated_job.status == TuningJobStatus.CANCELED
+
+
+@patch("training.worker.DataLoader")
+@patch("training.worker.run_tuning_study")
+@patch("mlflow.start_run")
+def test_worker_updates_heartbeat(mock_mlflow, mock_run_tuning, mock_loader):
+    mock_run_tuning.return_value = ({}, MagicMock(attrs={}))
+
+    mock_loader_instance = mock_loader.return_value
+    mock_split = MagicMock()
+    mock_split.train_size = 100
+    mock_split.X_train = MagicMock()
+    mock_split.y_train = MagicMock()
+    mock_split.y_train.__eq__.return_value = MagicMock()
+    mock_split.y_train.__eq__.return_value.sum.return_value = 50
+    mock_loader_instance.load_train_test_split.return_value = mock_split
+
+    store = InMemoryJobStore()
+    original_set_heartbeat = store.set_heartbeat
+    store.set_heartbeat = MagicMock(side_effect=original_set_heartbeat)
+    queue = JobQueue()
+    worker = TuningWorker(store, queue, heartbeat_interval_seconds=1)
+
+    job = TuningJob.create(
+        config={
+            "training_window_days": 30,
+            "tuning_config": {
+                "n_trials": 2,
+                "metric": "pr_auc",
+                "timeout_minutes": 1,
+                "direction": "maximize",
+                "strategy": "bayesian",
+                "search_space": {},
+            },
+            "split_config": {"validation_fraction": 0.2, "seed": 42},
+        },
+        total_trials=2,
+        mlflow_run_id="run-123",
+    )
+    store.create(job)
+
+    worker._execute_job(job.job_id)
+
+    updated_job = store.get(job.job_id)
+    assert updated_job.heartbeat_at is not None
+    assert store.set_heartbeat.called

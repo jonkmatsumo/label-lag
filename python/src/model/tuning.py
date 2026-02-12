@@ -146,34 +146,28 @@ class JobProgressCallback:
     ) -> None:
         from training.jobs import TrialRecord, TuningJobStatus
 
-        # 1. Update JobStore with trial results
+        record = TrialRecord(
+            trial_number=trial.number,
+            state=str(trial.state),
+            value=float(trial.value) if trial.value is not None else None,
+            params={k: str(v) for k, v in trial.params.items()},
+            started_at=trial.datetime_start,
+            ended_at=trial.datetime_complete,
+            duration_ms=(
+                (trial.datetime_complete - trial.datetime_start).total_seconds() * 1000
+                if trial.datetime_complete and trial.datetime_start
+                else None
+            ),
+        )
+        self.job_store.append_trial(self.job_id, record)
+
+        # 1. Update JobStore aggregates
         def update_fn(job):
             # Update counts
             if str(trial.state) == "TrialState.COMPLETE":
                 job.completed_trials += 1
             elif str(trial.state) == "TrialState.PRUNED":
                 job.pruned_trials += 1
-
-            # Append TrialRecord
-            record = TrialRecord(
-                trial_number=trial.number,
-                state=str(trial.state),
-                value=float(trial.value) if trial.value is not None else None,
-                params={k: str(v) for k, v in trial.params.items()},
-                started_at=trial.datetime_start,
-                ended_at=trial.datetime_complete,
-                duration_ms=(
-                    (trial.datetime_complete - trial.datetime_start).total_seconds()
-                    * 1000
-                    if trial.datetime_complete and trial.datetime_start
-                    else None
-                ),
-            )
-            job.trials.append(record)
-
-            # Cap growth: keep last 500
-            if len(job.trials) > 500:
-                job.trials = job.trials[-500:]
 
             # Update best value/params
             if study.best_trial and study.best_trial.number == trial.number:
@@ -185,6 +179,7 @@ class JobProgressCallback:
             job.updated_at = datetime.now(UTC)
 
         self.job_store.update(self.job_id, update_fn)
+        self.job_store.set_heartbeat(self.job_id, datetime.now(UTC))
 
         # 2. Check for cancellation
         job = self.job_store.get(self.job_id)

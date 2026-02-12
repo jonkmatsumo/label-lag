@@ -190,6 +190,7 @@ message TuningJobStatusResponse {
   int64 started_at = 11;
   int64 updated_at = 12;
   int64 ended_at = 13;
+  int64 heartbeat_at = 14;
 }
 
 message ListTrialsRequest {

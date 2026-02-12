@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from datetime import UTC, datetime, timedelta
 
@@ -45,13 +46,21 @@ def _coerce_model(cfg, model_cls):
 
 
 class TuningWorker:
-    def __init__(self, job_store: JobStore, job_queue: JobQueue):
+    def __init__(
+        self,
+        job_store: JobStore,
+        job_queue: JobQueue,
+        heartbeat_interval_seconds: int | None = None,
+    ):
         self.job_store = job_store
         self.job_queue = job_queue
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
         self._current_job_id: str | None = None
         self._lock = threading.Lock()
+        configured_interval = int(os.getenv("TUNING_HEARTBEAT_INTERVAL_SECONDS", "5"))
+        interval = heartbeat_interval_seconds or configured_interval
+        self._heartbeat_interval_seconds = max(1, interval)
 
     def start(self):
         """Start the background worker thread."""
@@ -111,87 +120,117 @@ class TuningWorker:
 
         def start_job(j):
             j.status = TuningJobStatus.RUNNING
-            j.started_at = datetime.now(UTC)
-            j.updated_at = datetime.now(UTC)
+            now = datetime.now(UTC)
+            j.started_at = now
+            j.heartbeat_at = now
+            j.updated_at = now
 
         self.job_store.update(job_id, start_job)
+        self._set_heartbeat(job_id)
 
-        config = job.config
-        training_window_days = config.get("training_window_days", 30)
-        feature_columns = config.get("feature_columns")
-        split_cfg_obj = _coerce_model(config.get("split_config"), SplitConfig)
-        tuning_cfg_obj = _coerce_model(config.get("tuning_config"), TuningConfig)
-        database_url = config.get("database_url")
-
-        # Load data
-        training_cutoff_date = datetime.now(UTC) - timedelta(days=training_window_days)
-        loader = DataLoader(database_url=database_url)
-        split = loader.load_train_test_split(
-            training_cutoff_date,
-            feature_columns=feature_columns,
-            split_config=split_cfg_obj,
+        heartbeat_stop = threading.Event()
+        heartbeat_thread = threading.Thread(
+            target=self._heartbeat_loop,
+            args=(job_id, heartbeat_stop),
+            daemon=True,
         )
+        heartbeat_thread.start()
 
-        if split.train_size == 0:
-            raise ValueError("No training data available.")
+        try:
+            config = job.config
+            training_window_days = config.get("training_window_days", 30)
+            feature_columns = config.get("feature_columns")
+            split_cfg_obj = _coerce_model(config.get("split_config"), SplitConfig)
+            tuning_cfg_obj = _coerce_model(config.get("tuning_config"), TuningConfig)
+            database_url = config.get("database_url")
 
-        # Prepare tuning params
-        v_frac = _get(split_cfg_obj, "validation_fraction", 0.2)
-        val_size = max(5, int(split.train_size * v_frac))
-        train_size = split.train_size - val_size
-
-        if train_size < 10:
-            raise ValueError(
-                f"Insufficient training data for tuning: {train_size} rows"
+            # Load data
+            training_cutoff_date = datetime.now(UTC) - timedelta(
+                days=training_window_days
+            )
+            loader = DataLoader(database_url=database_url)
+            split = loader.load_train_test_split(
+                training_cutoff_date,
+                feature_columns=feature_columns,
+                split_config=split_cfg_obj,
             )
 
-        x_tr = split.X_train.iloc[:train_size]
-        y_tr = split.y_train.iloc[:train_size]
-        x_val = split.X_train.iloc[train_size:]
-        y_val = split.y_train.iloc[train_size:]
+            if split.train_size == 0:
+                raise ValueError("No training data available.")
 
-        y_is_negative = y_tr == 0
-        y_is_positive = y_tr == 1
-        n_negative = y_is_negative.sum() if hasattr(y_is_negative, "sum") else 0
-        n_positive = y_is_positive.sum() if hasattr(y_is_positive, "sum") else 0
-        scale_pos_weight = n_negative / n_positive if n_positive > 0 else 1.0
+            # Prepare tuning params
+            v_frac = _get(split_cfg_obj, "validation_fraction", 0.2)
+            val_size = max(5, int(split.train_size * v_frac))
+            train_size = split.train_size - val_size
 
-        import mlflow
+            if train_size < 10:
+                raise ValueError(
+                    f"Insufficient training data for tuning: {train_size} rows"
+                )
 
-        with mlflow.start_run(run_id=job.mlflow_run_id):
-            best, trials_df = run_tuning_study(
-                x_tr,
-                y_tr,
-                x_val,
-                y_val,
-                n_trials=_get(tuning_cfg_obj, "n_trials", 20),
-                metric=_get(tuning_cfg_obj, "metric", "pr_auc"),
-                timeout_seconds=_get(tuning_cfg_obj, "timeout_minutes", 30) * 60,
-                seed=_get(split_cfg_obj, "seed", 42),
-                scale_pos_weight=scale_pos_weight,
-                direction=_get(tuning_cfg_obj, "direction", "maximize"),
-                strategy=_get(tuning_cfg_obj, "strategy", "bayesian"),
-                search_space_overrides=_as_dict(_get(tuning_cfg_obj, "search_space")),
-                job_id=job_id,
-                job_store=self.job_store,
-            )
+            x_tr = split.X_train.iloc[:train_size]
+            y_tr = split.y_train.iloc[:train_size]
+            x_val = split.X_train.iloc[train_size:]
+            y_val = split.y_train.iloc[train_size:]
 
-        # After completion, check status again (might have been canceled)
-        final_job = self.job_store.get(job_id)
-        if final_job.status == TuningJobStatus.CANCELING:
+            y_is_negative = y_tr == 0
+            y_is_positive = y_tr == 1
+            n_negative = y_is_negative.sum() if hasattr(y_is_negative, "sum") else 0
+            n_positive = y_is_positive.sum() if hasattr(y_is_positive, "sum") else 0
+            scale_pos_weight = n_negative / n_positive if n_positive > 0 else 1.0
 
-            def set_canceled(j):
-                j.status = TuningJobStatus.CANCELED
-                j.ended_at = datetime.now(UTC)
+            import mlflow
 
-            self.job_store.update(job_id, set_canceled)
-        else:
+            with mlflow.start_run(run_id=job.mlflow_run_id):
+                best, trials_df = run_tuning_study(
+                    x_tr,
+                    y_tr,
+                    x_val,
+                    y_val,
+                    n_trials=_get(tuning_cfg_obj, "n_trials", 20),
+                    metric=_get(tuning_cfg_obj, "metric", "pr_auc"),
+                    timeout_seconds=_get(tuning_cfg_obj, "timeout_minutes", 30) * 60,
+                    seed=_get(split_cfg_obj, "seed", 42),
+                    scale_pos_weight=scale_pos_weight,
+                    direction=_get(tuning_cfg_obj, "direction", "maximize"),
+                    strategy=_get(tuning_cfg_obj, "strategy", "bayesian"),
+                    search_space_overrides=_as_dict(
+                        _get(tuning_cfg_obj, "search_space")
+                    ),
+                    job_id=job_id,
+                    job_store=self.job_store,
+                )
 
-            def set_completed(j):
-                j.status = TuningJobStatus.COMPLETED
-                j.ended_at = datetime.now(UTC)
+            # After completion, check status again (might have been canceled)
+            final_job = self.job_store.get(job_id)
+            if final_job.status == TuningJobStatus.CANCELING:
 
-            self.job_store.update(job_id, set_completed)
+                def set_canceled(j):
+                    j.status = TuningJobStatus.CANCELED
+                    j.ended_at = datetime.now(UTC)
+
+                self.job_store.update(job_id, set_canceled)
+            else:
+
+                def set_completed(j):
+                    j.status = TuningJobStatus.COMPLETED
+                    j.ended_at = datetime.now(UTC)
+
+                self.job_store.update(job_id, set_completed)
+        finally:
+            heartbeat_stop.set()
+            heartbeat_thread.join(timeout=1)
+            self._set_heartbeat(job_id)
+
+    def _heartbeat_loop(self, job_id: str, stop_event: threading.Event) -> None:
+        while not stop_event.wait(self._heartbeat_interval_seconds):
+            self._set_heartbeat(job_id)
+
+    def _set_heartbeat(self, job_id: str) -> None:
+        try:
+            self.job_store.set_heartbeat(job_id, datetime.now(UTC))
+        except Exception:
+            logger.exception("Failed to update heartbeat for job %s", job_id)
 
     @property
     def is_busy(self) -> bool:

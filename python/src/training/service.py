@@ -698,6 +698,9 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
             started_at=int(job.started_at.timestamp() * 1000) if job.started_at else 0,
             updated_at=int(job.updated_at.timestamp() * 1000),
             ended_at=int(job.ended_at.timestamp() * 1000) if job.ended_at else 0,
+            heartbeat_at=int(job.heartbeat_at.timestamp() * 1000)
+            if job.heartbeat_at
+            else 0,
         )
 
     def ListTrials(self, request, context):  # noqa: N802
@@ -768,6 +771,9 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
             updated_at=int(updated_job.updated_at.timestamp() * 1000),
             ended_at=int(updated_job.ended_at.timestamp() * 1000)
             if updated_job.ended_at
+            else 0,
+            heartbeat_at=int(updated_job.heartbeat_at.timestamp() * 1000)
+            if updated_job.heartbeat_at
             else 0,
         )
 
