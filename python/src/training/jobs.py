@@ -44,6 +44,7 @@ class TuningJob:
     status: TuningJobStatus = TuningJobStatus.PENDING
     created_at: datetime = field(default_factory=_utc_now)
     started_at: datetime | None = None
+    heartbeat_at: datetime | None = None
     updated_at: datetime = field(default_factory=_utc_now)
     ended_at: datetime | None = None
     mlflow_run_id: str | None = None
