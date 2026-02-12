@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 from concurrent import futures
+from datetime import UTC, datetime
 
 import grpc
 
@@ -26,9 +27,13 @@ from forecast.model_manager import get_model_manager  # noqa: E402
 from forecast.service import ForecastService  # noqa: E402
 from training.config import load_config  # noqa: E402
 from training.job_queue import JobQueue  # noqa: E402
-from training.job_store import InMemoryJobStore  # noqa: E402
 from training.proto.training.v1 import training_pb2_grpc  # noqa: E402
 from training.service import TrainingService  # noqa: E402
+from training.tuning_startup import (  # noqa: E402
+    build_tuning_job_store,
+    reconcile_stale_jobs,
+    reenqueue_pending_jobs,
+)
 from training.worker import TuningWorker  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -57,14 +62,30 @@ def serve():
         logger.warning(f"Failed to replay spooled reports: {e}")
 
     # Initialize Job infrastructure
-    job_store = InMemoryJobStore()
+    config = load_config()
+    job_store = build_tuning_job_store(config)
     job_queue = JobQueue()
+    heartbeat_interval_seconds = int(
+        os.getenv("TUNING_HEARTBEAT_INTERVAL_SECONDS", "5")
+    )
+
+    reconciled_jobs = reconcile_stale_jobs(
+        job_store=job_store,
+        heartbeat_interval_seconds=heartbeat_interval_seconds,
+        now=datetime.now(UTC),
+    )
+    requeued_jobs = reenqueue_pending_jobs(job_store=job_store, job_queue=job_queue)
+    logger.info(
+        "Tuning startup reconciliation complete: stale_failed=%s pending_requeued=%s",
+        reconciled_jobs,
+        requeued_jobs,
+    )
+
     worker = TuningWorker(job_store, job_queue)
     worker.start()
 
     # Start gRPC server in main process
     # Adjust max_workers as needed config not available globally, assume load_config
-    config = load_config()
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=config.max_workers))
 
     # Register both services
