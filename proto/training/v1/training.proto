@@ -198,6 +198,7 @@ message ListTrialsRequest {
   int32 limit = 2;
   string sort_by = 3; // "value" or "trial_number"
   string tenant_id = 4;
+  string cursor = 5;
 }
 
 message TrialRecord {
@@ -212,6 +213,7 @@ message TrialRecord {
 
 message ListTrialsResponse {
   repeated TrialRecord trials = 1;
+  string next_cursor = 2;
 }
 
 message CancelTuningJobRequest {

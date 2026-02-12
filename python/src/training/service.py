@@ -765,16 +765,29 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
         if not job:
             context.abort(grpc.StatusCode.NOT_FOUND, f"Job {request.job_id} not found")
 
-        trials = job.trials
-        if request.sort_by == "value":
-            trials = sorted(
-                trials,
-                key=lambda t: t.value if t.value is not None else -1e9,
-                reverse=True,
+        sort_by = request.sort_by or "trial_number"
+        if sort_by not in {"trial_number", "value"}:
+            context.abort(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                f"Unsupported sort_by '{sort_by}'. Expected 'trial_number' or 'value'.",
             )
 
-        limit = request.limit or 100
-        trials = trials[:limit]
+        limit = request.limit or 50
+        limit = max(1, min(limit, 200))
+
+        cursor = request.cursor if request.cursor else None
+        if sort_by == "value" and cursor:
+            context.abort(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                "cursor is only supported when sort_by=trial_number",
+            )
+
+        trials, next_cursor = self.job_store.list_trials(
+            request.job_id,
+            limit=limit,
+            cursor=cursor,
+            sort_by=sort_by,
+        )
 
         return training_pb2.ListTrialsResponse(
             trials=[
@@ -790,7 +803,8 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                     duration_ms=t.duration_ms or 0.0,
                 )
                 for t in trials
-            ]
+            ],
+            next_cursor=next_cursor or "",
         )
 
     def CancelTuningJob(self, request, context):  # noqa: N802
