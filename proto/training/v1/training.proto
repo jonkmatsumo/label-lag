@@ -29,6 +29,12 @@ service TrainingService {
   // Checks the status of a tuning job.
   rpc GetTuningStatus(GetTuningStatusRequest) returns (TuningJobStatusResponse);
 
+  // Lists tuning jobs for operator visibility.
+  rpc ListTuningJobs(ListTuningJobsRequest) returns (ListTuningJobsResponse);
+
+  // Returns current in-memory queue depth.
+  rpc GetQueueDepth(GetQueueDepthRequest) returns (GetQueueDepthResponse);
+
   // Lists trials for a specific tuning job.
   rpc ListTrials(ListTrialsRequest) returns (ListTrialsResponse);
 
@@ -191,6 +197,41 @@ message TuningJobStatusResponse {
   int64 updated_at = 12;
   int64 ended_at = 13;
   int64 heartbeat_at = 14;
+}
+
+message ListTuningJobsRequest {
+  repeated string statuses = 1;
+  int32 limit = 2;
+  string cursor = 3;
+}
+
+message TuningJobSummary {
+  string job_id = 1;
+  string status = 2;
+  int64 created_at = 3;
+  int64 started_at = 4;
+  int64 updated_at = 5;
+  int64 ended_at = 6;
+  string mlflow_run_id = 7;
+  int32 total_trials = 8;
+  int32 completed_trials = 9;
+  int32 pruned_trials = 10;
+  optional float best_value = 11;
+  string metric = 12;
+  string direction = 13;
+  optional string requested_by = 14;
+  optional string error_message = 15;
+}
+
+message ListTuningJobsResponse {
+  repeated TuningJobSummary jobs = 1;
+  string next_cursor = 2;
+}
+
+message GetQueueDepthRequest {}
+
+message GetQueueDepthResponse {
+  int32 depth = 1;
 }
 
 message ListTrialsRequest {

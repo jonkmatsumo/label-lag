@@ -765,6 +765,14 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
             else 0,
         )
 
+    def ListTuningJobs(self, request, context):  # noqa: N802
+        """Lists tuning jobs for operators."""
+        context.abort(grpc.StatusCode.UNIMPLEMENTED, "ListTuningJobs not implemented")
+
+    def GetQueueDepth(self, request, context):  # noqa: N802
+        """Returns tuning queue depth."""
+        return training_pb2.GetQueueDepthResponse(depth=self.job_queue.depth())
+
     def ListTrials(self, request, context):  # noqa: N802
         """Lists trials for a specific tuning job."""
         job = self.job_store.get(request.job_id)
