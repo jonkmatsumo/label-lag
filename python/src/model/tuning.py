@@ -48,6 +48,7 @@ DEFAULT_SEARCH_SPACE = {
     "reg_alpha": (0.0, 1.0),
     "reg_lambda": (0.0, 10.0),
 }
+MAX_BEST_PARAMS_TAG_LENGTH = 2000
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -55,6 +56,30 @@ def _env_flag(name: str, default: bool = False) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _is_transient_mlflow_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return any(
+        marker in message
+        for marker in (
+            "timeout",
+            "temporarily",
+            "connection",
+            "unavailable",
+            "connection reset",
+            "429",
+            "503",
+        )
+    )
+
+
+def _best_params_tag_value(best_params: dict[str, object]) -> str:
+    serialized = json.dumps(
+        {str(key): str(value) for key, value in best_params.items()},
+        sort_keys=True,
+    )
+    return serialized[:MAX_BEST_PARAMS_TAG_LENGTH]
 
 
 def _create_objective(
@@ -215,25 +240,39 @@ class JobProgressCallback:
         if str(trial.state) != "TrialState.COMPLETE":
             return
 
-        try:
-            import mlflow
+        for attempt in range(2):
+            try:
+                import mlflow
 
-            with mlflow.start_run(run_name=f"trial_{trial.number}", nested=True):
-                mlflow.set_tag("job_id", self.job_id)
-                mlflow.set_tag("tuning_job_id", self.job_id)
-                mlflow.set_tag("trial_number", str(trial.number))
-                mlflow.set_tag("state", str(trial.state))
-                for key, value in trial.params.items():
-                    mlflow.log_param(key, value)
-                if trial.value is not None:
-                    mlflow.log_metric("objective_value", float(trial.value))
-        except Exception as exc:
-            logger.warning(
-                "Failed to log nested MLflow run for job %s trial=%s: %s",
-                self.job_id,
-                trial.number,
-                exc,
-            )
+                with mlflow.start_run(run_name=f"trial_{trial.number}", nested=True):
+                    mlflow.set_tag("job_id", self.job_id)
+                    mlflow.set_tag("tuning_job_id", self.job_id)
+                    mlflow.set_tag("trial_number", str(trial.number))
+                    mlflow.set_tag("state", str(trial.state))
+                    for key, value in trial.params.items():
+                        mlflow.log_param(key, value)
+                    if trial.value is not None:
+                        mlflow.log_metric("objective_value", float(trial.value))
+                return
+            except Exception as exc:
+                if attempt == 0 and _is_transient_mlflow_error(exc):
+                    logger.warning(
+                        (
+                            "Transient MLflow error for nested run job=%s "
+                            "trial=%s; retrying: %s"
+                        ),
+                        self.job_id,
+                        trial.number,
+                        exc,
+                    )
+                    continue
+                logger.warning(
+                    "Failed to log nested MLflow run for job %s trial=%s: %s",
+                    self.job_id,
+                    trial.number,
+                    exc,
+                )
+                return
 
 
 def run_tuning_study(
@@ -344,7 +383,23 @@ def run_tuning_study(
             show_progress_bar=False,
             callbacks=callbacks,
         )
-    best = study.best_params if study.best_trial else {}
+    best_trial = None
+    best = {}
+    try:
+        best_trial = study.best_trial
+        best = study.best_params if best_trial else {}
+    except Exception:
+        best = {}
+
+    try:
+        import mlflow
+
+        mlflow.set_tag(
+            "best_trial_number", str(best_trial.number) if best_trial else ""
+        )
+        mlflow.set_tag("best_params_json", _best_params_tag_value(best))
+    except Exception as exc:
+        logger.warning("Failed to log best trial metadata tags: %s", exc)
     rows = []
     pruned_count = 0
     completed_count = 0
