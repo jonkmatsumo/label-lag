@@ -875,6 +875,15 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
         """Returns tuning queue depth."""
         return training_pb2.GetQueueDepthResponse(depth=self.job_queue.depth())
 
+    def PromoteTrial(self, request, context):  # noqa: N802
+        context.abort(grpc.StatusCode.UNIMPLEMENTED, "PromoteTrial is not implemented")
+
+    def GetTuningJobInfo(self, request, context):  # noqa: N802
+        context.abort(
+            grpc.StatusCode.UNIMPLEMENTED,
+            "GetTuningJobInfo is not implemented",
+        )
+
     def ListTrials(self, request, context):  # noqa: N802
         """Lists trials for a specific tuning job."""
         job = self.job_store.get(request.job_id)
