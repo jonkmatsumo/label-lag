@@ -26,7 +26,13 @@ func TestMonitoringDriftContract(t *testing.T) {
 			DriftDetected: false,
 		},
 	}
-	handler := NewHandler(logger, nil, nil, stubTrainingClient{}, stub, rules.NewEmptyProvider(), 1024, "", "")
+	handler := NewHandler(HandlerOptions{
+		Logger:         logger,
+		TrainingClient: stubTrainingClient{},
+		ForecastClient: stub,
+		RulesProvider:  rules.NewEmptyProvider(),
+		MaxBodyBytes:   1024,
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/monitoring/drift?hours=24&threshold=0.25&force_refresh=false", nil)
 	rec := httptest.NewRecorder()
@@ -51,7 +57,13 @@ func TestMonitoringDriftContractError(t *testing.T) {
 	stub := stubForecastClient{
 		err: &grpcclient.RPCError{Code: codes.Unavailable, Message: "service down"},
 	}
-	handler := NewHandler(logger, nil, nil, stubTrainingClient{}, stub, rules.NewEmptyProvider(), 1024, "", "")
+	handler := NewHandler(HandlerOptions{
+		Logger:         logger,
+		TrainingClient: stubTrainingClient{},
+		ForecastClient: stub,
+		RulesProvider:  rules.NewEmptyProvider(),
+		MaxBodyBytes:   1024,
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/monitoring/drift", nil)
 	rec := httptest.NewRecorder()
@@ -72,7 +84,14 @@ func TestShadowComparisonContract(t *testing.T) {
 			},
 		},
 	}
-	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
+	handler := NewHandler(HandlerOptions{
+		Logger:          logger,
+		AnalyticsClient: stub,
+		TrainingClient:  stubTrainingClient{},
+		ForecastClient:  stubForecastClient{},
+		RulesProvider:   rules.NewEmptyProvider(),
+		MaxBodyBytes:    1024,
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/metrics/shadow/comparison?hours=24", nil)
 	rec := httptest.NewRecorder()
@@ -97,7 +116,14 @@ func TestShadowComparisonContractError(t *testing.T) {
 	stub := &stubAnalyticsClient{
 		err: &grpcclient.RPCError{Code: codes.Unavailable, Message: "upstream down"},
 	}
-	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
+	handler := NewHandler(HandlerOptions{
+		Logger:          logger,
+		AnalyticsClient: stub,
+		TrainingClient:  stubTrainingClient{},
+		ForecastClient:  stubForecastClient{},
+		RulesProvider:   rules.NewEmptyProvider(),
+		MaxBodyBytes:    1024,
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/metrics/shadow/comparison", nil)
 	rec := httptest.NewRecorder()
@@ -125,7 +151,14 @@ func TestBacktestResultsContract(t *testing.T) {
 			},
 		},
 	}
-	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
+	handler := NewHandler(HandlerOptions{
+		Logger:          logger,
+		AnalyticsClient: stub,
+		TrainingClient:  stubTrainingClient{},
+		ForecastClient:  stubForecastClient{},
+		RulesProvider:   rules.NewEmptyProvider(),
+		MaxBodyBytes:    1024,
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/backtest/results?limit=1", nil)
 	rec := httptest.NewRecorder()
@@ -142,7 +175,14 @@ func TestBacktestResultsContractError(t *testing.T) {
 	stub := &stubAnalyticsClient{
 		err: &grpcclient.RPCError{Code: codes.InvalidArgument, Message: "bad request"},
 	}
-	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
+	handler := NewHandler(HandlerOptions{
+		Logger:          logger,
+		AnalyticsClient: stub,
+		TrainingClient:  stubTrainingClient{},
+		ForecastClient:  stubForecastClient{},
+		RulesProvider:   rules.NewEmptyProvider(),
+		MaxBodyBytes:    1024,
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/backtest/results", nil)
 	rec := httptest.NewRecorder()
@@ -156,7 +196,14 @@ func TestBacktestResultsContractError(t *testing.T) {
 
 func TestBacktestResultsRejectsInvalidDate(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, nil, &stubAnalyticsClient{}, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
+	handler := NewHandler(HandlerOptions{
+		Logger:          logger,
+		AnalyticsClient: &stubAnalyticsClient{},
+		TrainingClient:  stubTrainingClient{},
+		ForecastClient:  stubForecastClient{},
+		RulesProvider:   rules.NewEmptyProvider(),
+		MaxBodyBytes:    1024,
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/backtest/results?start_date=not-a-date", nil)
 	rec := httptest.NewRecorder()
@@ -170,9 +217,16 @@ func TestBacktestResultsRejectsInvalidDate(t *testing.T) {
 
 func TestBacktestResultsPreserveRequestIDHeader(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, nil, &stubAnalyticsClient{
-		backtestResultsResp: &crudv1.ListBacktestResultsResponse{},
-	}, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
+	handler := NewHandler(HandlerOptions{
+		Logger: logger,
+		AnalyticsClient: &stubAnalyticsClient{
+			backtestResultsResp: &crudv1.ListBacktestResultsResponse{},
+		},
+		TrainingClient: stubTrainingClient{},
+		ForecastClient: stubForecastClient{},
+		RulesProvider:  rules.NewEmptyProvider(),
+		MaxBodyBytes:   1024,
+	})
 
 	mux := http.NewServeMux()
 	handler.Register(mux)
