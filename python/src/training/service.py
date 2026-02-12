@@ -45,6 +45,90 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
             1, int(os.getenv("MAX_CONCURRENT_TUNING_JOBS", "1"))
         )
 
+    def _find_trial(self, job_id: str, trial_number: int):
+        cursor: str | None = None
+        while True:
+            trials, next_cursor = self.job_store.list_trials(
+                job_id=job_id,
+                limit=200,
+                cursor=cursor,
+                sort_by="trial_number",
+            )
+            for trial in trials:
+                if trial.trial_number == trial_number:
+                    return trial
+                if trial.trial_number > trial_number:
+                    return None
+            if not next_cursor:
+                return None
+            cursor = next_cursor
+
+    @staticmethod
+    def _coerce_trial_hyperparameters(params: dict[str, str]) -> dict[str, float | int]:
+        int_keys = {"max_depth", "n_estimators", "min_child_weight", "random_state"}
+        float_keys = {
+            "learning_rate",
+            "subsample",
+            "colsample_bytree",
+            "gamma",
+            "reg_alpha",
+            "reg_lambda",
+            "scale_pos_weight",
+        }
+
+        coerced: dict[str, float | int] = {}
+        for key in int_keys:
+            raw = params.get(key)
+            if raw is None:
+                continue
+            try:
+                coerced[key] = int(float(raw))
+            except ValueError:
+                continue
+
+        for key in float_keys:
+            raw = params.get(key)
+            if raw is None:
+                continue
+            try:
+                coerced[key] = float(raw)
+            except ValueError:
+                continue
+
+        return coerced
+
+    @staticmethod
+    def _split_config_from_job(job: TuningJob) -> SplitConfig | None:
+        payload = (
+            job.config.get("split_config") if isinstance(job.config, dict) else None
+        )
+        if not isinstance(payload, dict):
+            return None
+        try:
+            return SplitConfig(**payload)
+        except ValidationError:
+            return SplitConfig.model_construct(**payload)
+
+    @staticmethod
+    def _ensure_registered_model(client: mlflow.MlflowClient, model_name: str) -> None:
+        try:
+            client.get_registered_model(model_name)
+        except Exception:
+            client.create_registered_model(model_name)
+
+    @staticmethod
+    def _find_model_version_for_run(
+        client: mlflow.MlflowClient, model_name: str, run_id: str
+    ) -> str:
+        try:
+            versions = client.search_model_versions(f"name='{model_name}'")
+        except Exception:
+            return ""
+        for version in versions:
+            if version.run_id == run_id:
+                return str(version.version)
+        return ""
+
     def ClearData(self, request, context):  # noqa: N802
         """Clear all data from the database via Analytics service."""
         try:
@@ -876,7 +960,116 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
         return training_pb2.GetQueueDepthResponse(depth=self.job_queue.depth())
 
     def PromoteTrial(self, request, context):  # noqa: N802
-        context.abort(grpc.StatusCode.UNIMPLEMENTED, "PromoteTrial is not implemented")
+        if not request.job_id:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "job_id is required")
+        if request.trial_number < 0:
+            context.abort(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                "trial_number must be non-negative",
+            )
+
+        job = self.job_store.get(request.job_id)
+        if not job:
+            context.abort(grpc.StatusCode.NOT_FOUND, f"Job {request.job_id} not found")
+        if not job.status.is_terminal() and job.status != TuningJobStatus.RUNNING:
+            context.abort(
+                grpc.StatusCode.FAILED_PRECONDITION,
+                f"Job {job.job_id} must be terminal or RUNNING for promotion",
+            )
+
+        trial = self._find_trial(job.job_id, request.trial_number)
+        if not trial:
+            context.abort(
+                grpc.StatusCode.NOT_FOUND,
+                (f"Trial {request.trial_number} not found for job {request.job_id}"),
+            )
+
+        trial_hyperparams = self._coerce_trial_hyperparameters(trial.params)
+        target_model_name = request.model_name or EXPERIMENT_NAME
+        split_config = self._split_config_from_job(job)
+        feature_columns = (
+            job.config.get("feature_columns") if isinstance(job.config, dict) else None
+        )
+        training_window_days = (
+            int(job.config.get("training_window_days", 30))
+            if isinstance(job.config, dict)
+            else 30
+        )
+
+        if request.dry_run:
+            return training_pb2.PromoteTrialResponse(
+                status="COMPLETED",
+                error_message=(
+                    f"dry-run: would promote trial {request.trial_number} "
+                    f"from job {request.job_id} to model '{target_model_name}'"
+                ),
+            )
+
+        logger.info(
+            "promote_trial_started job_id=%s trial_number=%s model_name=%s",
+            request.job_id,
+            request.trial_number,
+            target_model_name,
+        )
+        try:
+            run_id = train_model(
+                training_window_days=training_window_days,
+                feature_columns=feature_columns,
+                split_config=split_config,
+                max_depth=int(trial_hyperparams.get("max_depth", 6)),
+                n_estimators=int(trial_hyperparams.get("n_estimators", 100)),
+                learning_rate=float(trial_hyperparams.get("learning_rate", 0.1)),
+                min_child_weight=int(trial_hyperparams.get("min_child_weight", 1)),
+                subsample=float(trial_hyperparams.get("subsample", 1.0)),
+                colsample_bytree=float(trial_hyperparams.get("colsample_bytree", 1.0)),
+                gamma=float(trial_hyperparams.get("gamma", 0.0)),
+                reg_alpha=float(trial_hyperparams.get("reg_alpha", 0.0)),
+                reg_lambda=float(trial_hyperparams.get("reg_lambda", 1.0)),
+                random_state=int(trial_hyperparams.get("random_state", 42)),
+            )
+
+            client = mlflow.MlflowClient()
+            for key, value in {
+                "tuning_job_id": job.job_id,
+                "tuning_trial_number": str(request.trial_number),
+                "run_type": "promoted_tuning_trial",
+                "source_tuning_run_id": job.mlflow_run_id or "",
+            }.items():
+                client.set_tag(run_id, key, value)
+
+            model_version = self._find_model_version_for_run(
+                client, EXPERIMENT_NAME, run_id
+            )
+            if target_model_name != EXPERIMENT_NAME:
+                self._ensure_registered_model(client, target_model_name)
+                created_version = client.create_model_version(
+                    name=target_model_name,
+                    source=f"runs:/{run_id}/model",
+                    run_id=run_id,
+                )
+                model_version = str(created_version.version)
+
+            logger.info(
+                "promote_trial_completed job_id=%s trial_number=%s run_id=%s",
+                request.job_id,
+                request.trial_number,
+                run_id,
+            )
+            return training_pb2.PromoteTrialResponse(
+                status="COMPLETED",
+                mlflow_run_id=run_id,
+                model_version=model_version,
+            )
+        except Exception as exc:
+            logger.exception(
+                "promote_trial_failed job_id=%s trial_number=%s",
+                request.job_id,
+                request.trial_number,
+            )
+            return training_pb2.PromoteTrialResponse(
+                status="FAILED",
+                error_message=truncate_error_message(str(exc)) or "unknown error",
+            )
 
     def GetTuningJobInfo(self, request, context):  # noqa: N802
         context.abort(
