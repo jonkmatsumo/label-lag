@@ -215,6 +215,7 @@ message ListTuningJobsRequest {
   repeated string statuses = 1;
   int32 limit = 2;
   string cursor = 3;
+  string tenant_id = 4;
 }
 
 message TuningJobSummary {
@@ -240,7 +241,9 @@ message ListTuningJobsResponse {
   string next_cursor = 2;
 }
 
-message GetQueueDepthRequest {}
+message GetQueueDepthRequest {
+  string tenant_id = 1;
+}
 
 message GetQueueDepthResponse {
   int32 depth = 1;

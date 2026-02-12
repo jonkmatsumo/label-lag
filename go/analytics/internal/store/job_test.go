@@ -12,6 +12,36 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+func TestListJobs_IncludesTenantFilter(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+
+	req := &pb.ListJobsRequest{
+		TenantId: "tenant-1",
+		Limit:    10,
+		Offset:   0,
+	}
+
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM\s*\(.*FROM jobs WHERE tenant_id = \$1\)\s*as count_query`).
+		WithArgs("tenant-1").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+
+	mock.ExpectQuery(`SELECT\s+job_id,.*FROM jobs WHERE tenant_id = \$1 ORDER BY created_at DESC LIMIT 10`).
+		WithArgs("tenant-1").
+		WillReturnRows(sqlmock.NewRows([]string{
+			"job_id", "job_type", "status", "created_at", "started_at", "ended_at", "error_code", "error_message", "params", "metrics",
+		}))
+
+	jobs, total, err := s.ListJobs(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), total)
+	assert.Len(t, jobs, 0)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestListJobs(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
