@@ -109,6 +109,11 @@ web-test:
 web-dev:
 	cd typescript/ui && npm run dev
 
+test-smoke:
+	ORCHESTRATOR_BASE_URL=$${ORCHESTRATOR_BASE_URL:-http://localhost:8081} \
+	TENANT_ID=$${TENANT_ID:-tenant-1} \
+	uv run pytest -q python/tests/integration/test_orchestrator_analytics_smoke.py
+
 # Proto generation
 PROTO_DIR = proto
 PYTHON_SRC_DIR = python/src
