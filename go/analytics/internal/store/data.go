@@ -110,7 +110,7 @@ func (s *SQLStore) GetFeatureSample(ctx context.Context, sampleSize int32, strat
 	pgVersion, _ := getPostgresVersion(ctx, s.db)
 	stats, err := getTableStats(ctx, s.db, "generated_records")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get table stats: %v", err)
+		return nil, db.MapDBError(fmt.Errorf("failed to get table stats: %w", err))
 	}
 
 	if stats.totalCount == 0 {
@@ -135,7 +135,7 @@ func (s *SQLStore) GetFeatureSample(ctx context.Context, sampleSize int32, strat
 		if fraudTarget > 0 {
 			fSamples, err := s.sampleClass(ctx, true, fraudTarget, pgVersion, stats)
 			if err != nil {
-				return nil, fmt.Errorf("failed to sample fraud class: %v", err)
+				return nil, db.MapDBError(fmt.Errorf("failed to sample fraud class: %w", err))
 			}
 			samples = append(samples, fSamples...)
 		}
@@ -144,7 +144,7 @@ func (s *SQLStore) GetFeatureSample(ctx context.Context, sampleSize int32, strat
 		if nonFraudTarget > 0 {
 			nfSamples, err := s.sampleClass(ctx, false, nonFraudTarget, pgVersion, stats)
 			if err != nil {
-				return nil, fmt.Errorf("failed to sample non-fraud class: %v", err)
+				return nil, db.MapDBError(fmt.Errorf("failed to sample non-fraud class: %w", err))
 			}
 			samples = append(samples, nfSamples...)
 		}
@@ -154,7 +154,7 @@ func (s *SQLStore) GetFeatureSample(ctx context.Context, sampleSize int32, strat
 		// Fallback to generic sampling if stratification failed or not requested
 		samples, err = s.sampleGeneric(ctx, sampleSize, pgVersion, stats)
 		if err != nil {
-			return nil, err
+			return nil, db.MapDBError(err)
 		}
 	}
 
@@ -228,7 +228,7 @@ func (s *SQLStore) executeQuery(ctx context.Context, query string) ([]*pb.Featur
 
 	rows, err := s.db.QueryContext(queryCtx, query)
 	if err != nil {
-		return nil, err
+		return nil, db.MapDBError(err)
 	}
 	defer rows.Close()
 
@@ -243,7 +243,7 @@ func (s *SQLStore) executeQuery(ctx context.Context, query string) ([]*pb.Featur
 			&sample.BalanceVolatilityZScore,
 		)
 		if err != nil {
-			return nil, err
+			return nil, db.MapDBError(err)
 		}
 		samples = append(samples, &sample)
 	}
@@ -301,7 +301,7 @@ func (s *SQLStore) GetDriftWindow(ctx context.Context, cutoff time.Time) ([]*pb.
 
 	rows, err := s.db.QueryContext(queryCtx, query, cutoff)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query drift window: %v", err)
+		return nil, db.MapDBError(fmt.Errorf("failed to query drift window: %w", err))
 	}
 	defer rows.Close()
 
@@ -317,7 +317,7 @@ func (s *SQLStore) GetDriftWindow(ctx context.Context, cutoff time.Time) ([]*pb.
 			&tx.AmountToAvgRatio_30D,
 			&tx.BalanceVolatilityZScore,
 		); err != nil {
-			return nil, fmt.Errorf("failed to scan drift window record: %v", err)
+			return nil, db.MapDBError(fmt.Errorf("failed to scan drift window record: %w", err))
 		}
 		tx.CreatedAt = timestamppb.New(createdAt)
 		txs = append(txs, &tx)
@@ -338,7 +338,7 @@ func (s *SQLStore) GetInferenceScores(ctx context.Context, cutoff time.Time) ([]
 
 	rows, err := s.db.QueryContext(queryCtx, query, cutoff)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query inference scores: %v", err)
+		return nil, db.MapDBError(fmt.Errorf("failed to query inference scores: %w", err))
 	}
 	defer rows.Close()
 
@@ -346,7 +346,7 @@ func (s *SQLStore) GetInferenceScores(ctx context.Context, cutoff time.Time) ([]
 	for rows.Next() {
 		var score int32
 		if err := rows.Scan(&score); err != nil {
-			return nil, fmt.Errorf("failed to scan score: %v", err)
+			return nil, db.MapDBError(fmt.Errorf("failed to scan score: %w", err))
 		}
 		scores = append(scores, score)
 	}
@@ -369,7 +369,7 @@ func (s *SQLStore) GetGenerationJob(ctx context.Context, key string) (*pb.Genera
 		return nil, "", nil
 	}
 	if err != nil {
-		return nil, "", err
+		return nil, "", db.MapDBError(err)
 	}
 
 	resp := &pb.GenerateDataResponse{
@@ -389,7 +389,7 @@ func (s *SQLStore) CreateGenerationJob(ctx context.Context, key string) error {
 		VALUES ($1, 'in_progress', NOW())
 	`
 	_, err := s.db.ExecContext(ctx, query, key)
-	return err
+	return db.MapDBError(err)
 }
 
 func (s *SQLStore) CompleteGenerationJob(ctx context.Context, key string, resp *pb.GenerateDataResponse) error {
@@ -403,7 +403,7 @@ func (s *SQLStore) CompleteGenerationJob(ctx context.Context, key string, resp *
 		WHERE idempotency_key = $4
 	`
 	_, err := s.db.ExecContext(ctx, query, resp.TotalRecords, resp.FraudRecords, resp.FeaturesMaterialized, key)
-	return err
+	return db.MapDBError(err)
 }
 
 func (s *SQLStore) FailGenerationJob(ctx context.Context, key string, errMsg string) error {
@@ -415,75 +415,7 @@ func (s *SQLStore) FailGenerationJob(ctx context.Context, key string, errMsg str
 		WHERE idempotency_key = $2
 	`
 	_, err := s.db.ExecContext(ctx, query, errMsg, key)
-	return err
-}
-
-func (s *SQLStore) GetDatasetFingerprint(ctx context.Context) (*pb.GetDatasetFingerprintResponse, error) {
-	queryGR := `
-		SELECT
-			COUNT(*) as count,
-			MAX(created_at) as max_created_at,
-			MAX(transaction_timestamp) as max_transaction_timestamp,
-			MAX(id) as max_id
-		FROM generated_records
-	`
-	queryFS := `
-		SELECT
-			COUNT(*) as count,
-			MAX(computed_at) as max_computed_at,
-			MAX(snapshot_id) as max_snapshot_id
-		FROM feature_snapshots
-	`
-
-	resp := &pb.GetDatasetFingerprintResponse{
-		GeneratedRecords: &pb.TableFingerprint{},
-		FeatureSnapshots: &pb.TableFingerprint{},
-	}
-
-	var maxCr, maxTx sql.NullTime
-	var maxId sql.NullInt64
-
-	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
-	defer cancel()
-
-	err := s.db.QueryRowContext(queryCtx, queryGR).Scan(
-		&resp.GeneratedRecords.Count,
-		&maxCr,
-		&maxTx,
-		&maxId,
-	)
-	if err != nil {
-		return nil, db.MapDBError(err)
-	}
-	if maxCr.Valid {
-		resp.GeneratedRecords.MaxCreatedAt = timestamppb.New(maxCr.Time)
-	}
-	if maxTx.Valid {
-		resp.GeneratedRecords.MaxTimestamp = timestamppb.New(maxTx.Time)
-	}
-	if maxId.Valid {
-		resp.GeneratedRecords.MaxId = maxId.Int64
-	}
-
-	var maxComp sql.NullTime
-	var maxSnapshotId sql.NullInt64
-
-	err = s.db.QueryRowContext(queryCtx, queryFS).Scan(
-		&resp.FeatureSnapshots.Count,
-		&maxComp,
-		&maxSnapshotId,
-	)
-	if err != nil {
-		return nil, db.MapDBError(err)
-	}
-	if maxComp.Valid {
-		resp.FeatureSnapshots.MaxCreatedAt = timestamppb.New(maxComp.Time)
-	}
-	if maxSnapshotId.Valid {
-		resp.FeatureSnapshots.MaxId = maxSnapshotId.Int64
-	}
-
-	return resp, nil
+	return db.MapDBError(err)
 }
 
 func (s *SQLStore) ClearAllData(ctx context.Context) ([]string, error) {

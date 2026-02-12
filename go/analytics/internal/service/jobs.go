@@ -9,7 +9,7 @@ import (
 )
 
 func (s *Service) ListJobs(ctx context.Context, req *pb.ListJobsRequest) (*pb.ListJobsResponse, error) {
-	limit, err := normalizeLimit(req.Limit, 50, 100, "limit")
+	limit, err := normalizeLimit(req.Limit, 50, 250, "limit")
 	if err != nil {
 		return nil, err
 	}
@@ -55,18 +55,42 @@ func (s *Service) GetJobEvents(ctx context.Context, req *pb.GetJobEventsRequest)
 		return nil, status.Error(codes.InvalidArgument, "job_id required")
 	}
 
-	// Verify job exists first
-	_, err := s.store.GetJob(ctx, req.JobId)
+	limit, err := normalizeLimit(req.Limit, 100, 500, "limit")
+	if err != nil {
+		return nil, err
+	}
+	offset, err := normalizeOffset(req.Offset)
 	if err != nil {
 		return nil, err
 	}
 
-	events, err := s.store.GetJobEvents(ctx, req.JobId)
+	// Verify job exists first
+	_, err = s.store.GetJob(ctx, req.JobId)
+	if err != nil {
+		return nil, err
+	}
+
+	events, err := s.store.GetJobEvents(ctx, req.JobId, limit, offset)
 	if err != nil {
 		return nil, err
 	}
 
 	return &pb.GetJobEventsResponse{
 		Events: events,
+	}, nil
+}
+
+func (s *Service) GetJobSummary(ctx context.Context, req *pb.GetJobSummaryRequest) (*pb.GetJobSummaryResponse, error) {
+	if req.StartTime != nil && req.EndTime != nil && req.StartTime.AsTime().After(req.EndTime.AsTime()) {
+		return nil, status.Error(codes.InvalidArgument, "start_time must be <= end_time")
+	}
+
+	summaries, err := s.store.GetJobSummary(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.GetJobSummaryResponse{
+		Summaries: summaries,
 	}, nil
 }

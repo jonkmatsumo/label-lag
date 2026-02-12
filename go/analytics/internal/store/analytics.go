@@ -426,52 +426,6 @@ func (s *SQLStore) GetOverviewMetrics(ctx context.Context) (*pb.GetOverviewMetri
 	return &resp, nil
 }
 
-func (s *SQLStore) GetSchemaSummary(ctx context.Context) (*pb.GetSchemaSummaryResponse, error) {
-	query := `
-		SELECT
-			table_name,
-			column_name,
-			data_type,
-			is_nullable,
-			ordinal_position
-		FROM information_schema.columns
-		WHERE table_schema = 'public'
-		  AND table_name = ANY($1::text[])
-		ORDER BY table_name, ordinal_position
-	`
-
-	tableNames := []string{"generated_records", "feature_snapshots"}
-	arrStr := "{" + strings.Join(tableNames, ",") + "}"
-
-	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
-	defer cancel()
-
-	rows, err := s.db.QueryContext(queryCtx, query, arrStr)
-	if err != nil {
-		return nil, db.MapDBError(err)
-	}
-	defer rows.Close()
-
-	var columns []*pb.ColumnInfo
-	for rows.Next() {
-		var col pb.ColumnInfo
-		err := rows.Scan(
-			&col.TableName,
-			&col.ColumnName,
-			&col.DataType,
-			&col.IsNullable,
-			&col.OrdinalPosition,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan column info: %v", err)
-		}
-		col.ColumnName = strings.ToLower(col.ColumnName)
-		columns = append(columns, &col)
-	}
-
-	return &pb.GetSchemaSummaryResponse{Columns: columns}, nil
-}
-
 const (
 	MaxNumericKeysProfiled     = 25
 	MaxCategoricalKeysProfiled = 25
@@ -569,7 +523,7 @@ func (s *SQLStore) discoverJSONBKeys(ctx context.Context, table, column string, 
 
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
-		return nil, err
+		return nil, db.MapDBError(err)
 	}
 	defer rows.Close()
 
@@ -608,7 +562,7 @@ func (s *SQLStore) profileNumericFeatureExpr(ctx context.Context, table, expr, n
 	var nullCount int64
 	err := s.db.QueryRowContext(ctx, query).Scan(&mean, &stddev, &nullCount, &minVal, &maxVal)
 	if err != nil {
-		return nil, err
+		return nil, db.MapDBError(err)
 	}
 
 	profile := &pb.FeatureProfile{
@@ -676,7 +630,7 @@ func (s *SQLStore) profileCategoricalJSONBKey(ctx context.Context, table, column
 	nullQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s IS NULL", table, expr)
 	err := s.db.QueryRowContext(ctx, nullQuery).Scan(&nullCount)
 	if err != nil {
-		return nil, err
+		return nil, db.MapDBError(err)
 	}
 
 	profile := &pb.FeatureProfile{
@@ -970,7 +924,7 @@ func (s *SQLStore) ListDecisions(ctx context.Context, req *pb.ListDecisionsReque
 		return nil, 0, db.MapDBError(err)
 	}
 
-	query := fmt.Sprintf("SELECT request_id, user_id, ts, final_score, decision FROM inference_events WHERE %s ORDER BY ts DESC, request_id DESC LIMIT $%d OFFSET $%d",
+	query := fmt.Sprintf("SELECT request_id, user_id, ts, final_score, decision, rule_impacts FROM inference_events WHERE %s ORDER BY ts DESC, request_id DESC LIMIT $%d OFFSET $%d",
 		whereStmt, len(args)+1, len(args)+2)
 
 	args = append(args, req.Limit, req.Offset)
@@ -985,10 +939,12 @@ func (s *SQLStore) ListDecisions(ctx context.Context, req *pb.ListDecisionsReque
 	for rows.Next() {
 		var d pb.DecisionSummary
 		var ts time.Time
-		if err := rows.Scan(&d.RequestId, &d.UserId, &ts, &d.FinalScore, &d.Decision); err != nil {
+		var ruleImpactsJSON []byte
+		if err := rows.Scan(&d.RequestId, &d.UserId, &ts, &d.FinalScore, &d.Decision, &ruleImpactsJSON); err != nil {
 			return nil, 0, fmt.Errorf("failed to scan decision summary: %v", err)
 		}
 		d.CreatedAt = timestamppb.New(ts)
+		d.DecisionReason, d.Thresholds = populateExplainability(d.Decision, d.FinalScore, ruleImpactsJSON)
 		decisions = append(decisions, &d)
 	}
 	return decisions, total, nil
@@ -1014,6 +970,7 @@ func (s *SQLStore) GetDecision(ctx context.Context, requestID string) (*pb.Infer
 	if err := json.Unmarshal(ruleImpactsJSON, &ie.RuleImpacts); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal rule impacts: %v", err)
 	}
+	ie.DecisionReason, ie.Thresholds = populateExplainability(ie.Decision, ie.FinalScore, ruleImpactsJSON)
 	return &ie, nil
 }
 
@@ -1328,4 +1285,37 @@ func (s *SQLStore) GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesR
 	}
 
 	return resp, nil
+}
+
+func populateExplainability(decision string, finalScore int32, ruleImpactsJSON []byte) (string, *pb.DecisionThresholds) {
+	thresholds := &pb.DecisionThresholds{
+		ApproveMax: 50,
+		ReviewMax:  80,
+	}
+
+	var impacts []*pb.RuleImpact
+	if len(ruleImpactsJSON) > 0 {
+		_ = json.Unmarshal(ruleImpactsJSON, &impacts)
+	}
+
+	var reason string
+	ruleFired := false
+	for _, ri := range impacts {
+		if !ri.IsShadow && ri.ScoreDelta != 0 {
+			ruleFired = true
+			break
+		}
+	}
+
+	if ruleFired {
+		reason = "rule_triggered"
+	} else if finalScore < thresholds.ApproveMax {
+		reason = "score_below_threshold"
+	} else if finalScore < thresholds.ReviewMax {
+		reason = "score_below_review_threshold"
+	} else {
+		reason = "score_above_review_threshold"
+	}
+
+	return reason, thresholds
 }

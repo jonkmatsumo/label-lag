@@ -14,6 +14,7 @@ func NewServer(addr string, logger *slog.Logger, handler *Handler, readTimeout, 
 	}
 
 	h := requestIDMiddleware(logger, mux)
+	h = metricsMiddleware(logger, h)
 
 	return &http.Server{
 		Addr:              addr,

@@ -93,27 +93,38 @@ func (s *SQLStore) GetDatasetProfileCached(ctx context.Context, profileID string
 	return &p, nil
 }
 
-func (s *SQLStore) ListDatasetProfiles(ctx context.Context, limit, offset int32) ([]*pb.DatasetProfile, int64, error) {
+func (s *SQLStore) ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetProfilesRequest) ([]*pb.DatasetProfile, int64, error) {
+	queryBuilder := db.NewQueryBuilder(`
+		SELECT
+			profile_id, tenant_id, computed_at, record_count, feature_profiles
+		FROM dataset_profiles
+	`)
+
+	if req.StartDate != nil {
+		queryBuilder.AddCondition("computed_at >= ?", req.StartDate.AsTime())
+	}
+	if req.EndDate != nil {
+		queryBuilder.AddCondition("computed_at <= ?", req.EndDate.AsTime())
+	}
+
 	// Count
+	countQuery, countArgs := queryBuilder.BuildCount()
 	var total int64
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	err := s.db.QueryRowContext(queryCtx, "SELECT COUNT(*) FROM dataset_profiles").Scan(&total)
+	err := s.db.QueryRowContext(queryCtx, countQuery, countArgs...).Scan(&total)
 	if err != nil {
 		return nil, 0, db.MapDBError(err)
 	}
 
 	// List
-	query := `
-		SELECT
-			profile_id, tenant_id, computed_at, record_count, feature_profiles
-		FROM dataset_profiles
-		ORDER BY computed_at DESC
-		LIMIT $1 OFFSET $2
-	`
+	queryBuilder.AddOrderBy("computed_at DESC, profile_id DESC")
+	queryBuilder.SetLimit(req.Limit)
+	queryBuilder.SetOffset(req.Offset)
+	selectQuery, selectArgs := queryBuilder.BuildSelect()
 
-	rows, err := s.db.QueryContext(queryCtx, query, limit, offset)
+	rows, err := s.db.QueryContext(queryCtx, selectQuery, selectArgs...)
 	if err != nil {
 		return nil, 0, db.MapDBError(err)
 	}
@@ -145,4 +156,52 @@ func (s *SQLStore) ListDatasetProfiles(ctx context.Context, limit, offset int32)
 	}
 
 	return profiles, total, nil
+}
+
+func (s *SQLStore) GetLatestDatasetProfile(ctx context.Context) (*pb.GetLatestDatasetProfileResponse, error) {
+	query := `
+		SELECT
+			profile_id, computed_at, record_count
+		FROM dataset_profiles
+		ORDER BY computed_at DESC, profile_id DESC
+		LIMIT 1
+	`
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	var resp pb.GetLatestDatasetProfileResponse
+	var computedAt time.Time
+	err := s.db.QueryRowContext(queryCtx, query).Scan(
+		&resp.ProfileId,
+		&computedAt,
+		&resp.RecordCount,
+	)
+	if err == sql.ErrNoRows {
+		return nil, status.Error(codes.NotFound, "no dataset profiles found")
+	}
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+
+	resp.ComputedAt = timestamppb.New(computedAt)
+	return &resp, nil
+}
+
+func (s *SQLStore) PruneDatasetProfiles(ctx context.Context, olderThan time.Time) (int64, error) {
+	query := `DELETE FROM dataset_profiles WHERE computed_at < $1`
+
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	result, err := s.db.ExecContext(queryCtx, query, olderThan)
+	if err != nil {
+		return 0, db.MapDBError(err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %v", err)
+	}
+
+	return rowsAffected, nil
 }

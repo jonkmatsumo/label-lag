@@ -12,9 +12,9 @@ service AnalyticsService {
   rpc SearchTransactions(SearchTransactionsRequest) returns (SearchTransactionsResponse);
   rpc GetRecentAlerts(GetRecentAlertsRequest) returns (GetRecentAlertsResponse);
   rpc GetOverviewMetrics(GetOverviewMetricsRequest) returns (GetOverviewMetricsResponse);
-  rpc GetDatasetFingerprint(GetDatasetFingerprintRequest) returns (GetDatasetFingerprintResponse);
+
   rpc GetFeatureSample(GetFeatureSampleRequest) returns (GetFeatureSampleResponse);
-  rpc GetSchemaSummary(GetSchemaSummaryRequest) returns (GetSchemaSummaryResponse);
+
   rpc GetTrainingData(GetTrainingDataRequest) returns (GetTrainingDataResponse);
   rpc GetBacktestFeatures(GetBacktestFeaturesRequest) returns (GetBacktestFeaturesResponse);
   rpc SaveBacktestResult(SaveBacktestResultRequest) returns (SaveBacktestResultResponse);
@@ -81,15 +81,18 @@ service AnalyticsService {
   rpc ListJobs(ListJobsRequest) returns (ListJobsResponse);
   rpc GetJob(GetJobRequest) returns (GetJobResponse);
   rpc GetJobEvents(GetJobEventsRequest) returns (GetJobEventsResponse);
+  rpc GetJobSummary(GetJobSummaryRequest) returns (GetJobSummaryResponse);
 
   // Dataset Profiles (Phase A2)
   rpc GetDatasetSummary(GetDatasetSummaryRequest) returns (GetDatasetSummaryResponse);
   rpc ListDatasetProfiles(ListDatasetProfilesRequest) returns (ListDatasetProfilesResponse);
+  rpc GetLatestDatasetProfile(GetLatestDatasetProfileRequest) returns (GetLatestDatasetProfileResponse);
   rpc CompareDatasetProfiles(CompareDatasetProfilesRequest) returns (CompareDatasetProfilesResponse);
 
   // Training Runs (Phase B)
   rpc ListTrainingRuns(ListTrainingRunsRequest) returns (ListTrainingRunsResponse);
   rpc GetTrainingRun(GetTrainingRunRequest) returns (GetTrainingRunResponse);
+  rpc ListModelVersions(ListModelVersionsRequest) returns (ListModelVersionsResponse);
   rpc GetMetricSeries(GetMetricSeriesRequest) returns (GetMetricSeriesResponse);
   rpc ReportTrainingRun(ReportTrainingRunRequest) returns (ReportTrainingRunResponse);
 }
@@ -290,19 +293,7 @@ message GetOverviewMetricsResponse {
   double fraud_amount = 10;
 }
 
-message GetDatasetFingerprintRequest {}
 
-message TableFingerprint {
-  int64 count = 1;
-  google.protobuf.Timestamp max_created_at = 2;
-  google.protobuf.Timestamp max_timestamp = 3;
-  int64 max_id = 4;
-}
-
-message GetDatasetFingerprintResponse {
-  TableFingerprint generated_records = 1;
-  TableFingerprint feature_snapshots = 2;
-}
 
 message GetFeatureSampleRequest {
   int32 sample_size = 1;
@@ -321,21 +312,7 @@ message GetFeatureSampleResponse {
   repeated FeatureSample samples = 1;
 }
 
-message GetSchemaSummaryRequest {
-  repeated string table_names = 1;
-}
 
-message ColumnInfo {
-  string table_name = 1;
-  string column_name = 2;
-  string data_type = 3;
-  string is_nullable = 4;
-  int32 ordinal_position = 5;
-}
-
-message GetSchemaSummaryResponse {
-  repeated ColumnInfo columns = 1;
-}
 
 message GetTrainingDataRequest {
   google.protobuf.Timestamp cutoff_date = 1;
@@ -580,6 +557,13 @@ message InferenceEvent {
   repeated RuleImpact rule_impacts = 7;
   string user_id = 8;
   string decision = 9;
+  string decision_reason = 10;
+  DecisionThresholds thresholds = 11;
+}
+
+message DecisionThresholds {
+  int32 approve_max = 1;
+  int32 review_max = 2;
 }
 
 message LogInferenceEventRequest {
@@ -710,6 +694,8 @@ message DecisionSummary {
   google.protobuf.Timestamp created_at = 3;
   int32 final_score = 4;
   string decision = 5;
+  string decision_reason = 6;
+  DecisionThresholds thresholds = 7;
 }
 
 message GetDecisionRequest {
@@ -868,10 +854,28 @@ message GetJobResponse {
 
 message GetJobEventsRequest {
   string job_id = 1;
+  int32 limit = 2;
+  int32 offset = 3;
 }
 
 message GetJobEventsResponse {
   repeated JobEvent events = 1;
+}
+
+message GetJobSummaryRequest {
+  google.protobuf.Timestamp start_time = 1;
+  google.protobuf.Timestamp end_time = 2;
+}
+
+message JobSummaryBucket {
+  google.protobuf.Timestamp bucket_time = 1;
+  int64 total_jobs = 2;
+  int64 completed_jobs = 3;
+  int64 failed_jobs = 4;
+}
+
+message GetJobSummaryResponse {
+  repeated JobSummaryBucket summaries = 1;
 }
 
 message DatasetProfile {
@@ -893,11 +897,21 @@ message GetDatasetSummaryResponse {
 message ListDatasetProfilesRequest {
   int32 limit = 1;
   int32 offset = 2;
+  google.protobuf.Timestamp start_date = 3;
+  google.protobuf.Timestamp end_date = 4;
 }
 
 message ListDatasetProfilesResponse {
   repeated DatasetProfile profiles = 1;
   int64 total = 2;
+}
+
+message GetLatestDatasetProfileRequest {}
+
+message GetLatestDatasetProfileResponse {
+  string profile_id = 1;
+  google.protobuf.Timestamp computed_at = 2;
+  int64 record_count = 3;
 }
 
 message CompareDatasetProfilesRequest {
@@ -933,10 +947,24 @@ message ListTrainingRunsRequest {
   string model_name = 1;
   int32 limit = 2;
   int32 offset = 3;
+  string status = 4;
+  google.protobuf.Timestamp start_date = 5;
+  google.protobuf.Timestamp end_date = 6;
 }
 
 message ListTrainingRunsResponse {
   repeated TrainingRun runs = 1;
+  int64 total = 2;
+}
+
+message ListModelVersionsRequest {
+  string model_name = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+}
+
+message ListModelVersionsResponse {
+  repeated TrainingRun versions = 1; // lightweight summary using TrainingRun
   int64 total = 2;
 }
 

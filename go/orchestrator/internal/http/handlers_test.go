@@ -24,7 +24,7 @@ import (
 
 func TestHandleEvaluateSignal_RejectsLargeBody(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, nil, nil, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 32, "", "", false, false, false, false, false)
+	handler := NewHandler(logger, nil, nil, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 32, "", "")
 
 	body := strings.Repeat("a", 64)
 	req := httptest.NewRequest(http.MethodPost, "/evaluate/signal", strings.NewReader(body))
@@ -39,7 +39,7 @@ func TestHandleEvaluateSignal_RejectsLargeBody(t *testing.T) {
 
 func TestHandleEvaluateSignal_RejectsUnknownFields(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, nil, nil, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false, false)
+	handler := NewHandler(logger, nil, nil, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
 	payload := `{"user_id":"u1","amount":12.3,"currency":"USD","client_transaction_id":"t1","unknown":"x"}`
 	req := httptest.NewRequest(http.MethodPost, "/evaluate/signal", strings.NewReader(payload))
@@ -54,7 +54,7 @@ func TestHandleEvaluateSignal_RejectsUnknownFields(t *testing.T) {
 
 func TestHandleReadyReportsHealthy(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, stubInferenceClient{}, nil, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false, false)
+	handler := NewHandler(logger, stubInferenceClient{}, nil, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
 	rec := httptest.NewRecorder()
@@ -76,7 +76,7 @@ func TestHandleReadyReportsHealthy(t *testing.T) {
 
 func TestHandleReadyReportsUnhealthy(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, stubInferenceClient{readyErr: errors.New("not ready")}, nil, stubTrainingClient{}, stubForecastClient{}, errProvider{}, 1024, "", "", false, false, false, false, false)
+	handler := NewHandler(logger, stubInferenceClient{readyErr: errors.New("not ready")}, nil, stubTrainingClient{}, stubForecastClient{}, errProvider{}, 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
 	rec := httptest.NewRecorder()
@@ -112,7 +112,7 @@ func TestHandleSearchTransactions(t *testing.T) {
 			Total: 1,
 		},
 	}
-	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false, false)
+	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodPost, "/analytics/transactions/search", strings.NewReader(`{"user_id":"user-1","limit":10}`))
 	rec := httptest.NewRecorder()
@@ -159,7 +159,7 @@ func TestHandleAnalyticsOverview(t *testing.T) {
 			FraudAmount:             6.78,
 		},
 	}
-	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false, false)
+	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/analytics/overview", nil)
 	rec := httptest.NewRecorder()
@@ -190,7 +190,7 @@ func TestHandleAnalyticsOverviewPropagatesErrors(t *testing.T) {
 	stub := &stubAnalyticsClient{
 		err: &grpcclient.RPCError{Code: codes.Unavailable, Message: "downstream unavailable"},
 	}
-	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false, false)
+	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/analytics/overview", nil)
 	rec := httptest.NewRecorder()
@@ -218,7 +218,7 @@ func TestHandleAnalyticsDailyStats(t *testing.T) {
 			},
 		},
 	}
-	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false, false)
+	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/analytics/daily-stats?days=7", nil)
 	rec := httptest.NewRecorder()
@@ -269,7 +269,7 @@ func TestHandleAnalyticsTransactions(t *testing.T) {
 			},
 		},
 	}
-	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false, false)
+	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/analytics/transactions", nil)
 	rec := httptest.NewRecorder()
@@ -318,7 +318,7 @@ func TestHandleAnalyticsRecentAlerts(t *testing.T) {
 			},
 		},
 	}
-	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false, false)
+	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/analytics/recent-alerts", nil)
 	rec := httptest.NewRecorder()
@@ -346,44 +346,6 @@ func TestHandleAnalyticsRecentAlerts(t *testing.T) {
 	}
 }
 
-func TestHandleAnalyticsFingerprint(t *testing.T) {
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	stub := &stubAnalyticsClient{
-		fingerprintResp: &crudv1.GetDatasetFingerprintResponse{
-			GeneratedRecords: &crudv1.TableFingerprint{
-				Count:        10,
-				MaxCreatedAt: timestamppb.New(time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)),
-				MaxTimestamp: timestamppb.New(time.Date(2025, 2, 1, 1, 0, 0, 0, time.UTC)),
-				MaxId:        99,
-			},
-			FeatureSnapshots: &crudv1.TableFingerprint{
-				Count:        5,
-				MaxCreatedAt: timestamppb.New(time.Date(2025, 2, 2, 0, 0, 0, 0, time.UTC)),
-				MaxTimestamp: timestamppb.New(time.Date(2025, 2, 2, 1, 0, 0, 0, time.UTC)),
-				MaxId:        42,
-			},
-		},
-	}
-	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false, false)
-
-	req := httptest.NewRequest(http.MethodGet, "/analytics/fingerprint", nil)
-	rec := httptest.NewRecorder()
-
-	handler.handleAnalyticsFingerprint(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-	var payload map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	generated := payload["generated_records"].(map[string]any)
-	if generated["count"] != float64(10) {
-		t.Fatalf("expected generated_records count 10, got %v", generated["count"])
-	}
-}
-
 func TestHandleAnalyticsFeatureSample(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	stub := &stubAnalyticsClient{
@@ -399,7 +361,7 @@ func TestHandleAnalyticsFeatureSample(t *testing.T) {
 			},
 		},
 	}
-	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false, false)
+	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/analytics/feature-sample?sample_size=5&stratify=false", nil)
 	rec := httptest.NewRecorder()
@@ -422,36 +384,6 @@ func TestHandleAnalyticsFeatureSample(t *testing.T) {
 	}
 }
 
-func TestHandleAnalyticsSchema(t *testing.T) {
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	stub := &stubAnalyticsClient{
-		schemaSummaryResp: &crudv1.GetSchemaSummaryResponse{
-			Columns: []*crudv1.ColumnInfo{
-				{
-					TableName:       "generated_records",
-					ColumnName:      "record_id",
-					DataType:        "text",
-					IsNullable:      "NO",
-					OrdinalPosition: 1,
-				},
-			},
-		},
-	}
-	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false, false)
-
-	req := httptest.NewRequest(http.MethodGet, "/analytics/schema?table_names=generated_records&table_names=feature_snapshots", nil)
-	rec := httptest.NewRecorder()
-
-	handler.handleAnalyticsSchema(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-	if stub.lastSchemaSummaryReq == nil || len(stub.lastSchemaSummaryReq.GetTableNames()) != 2 {
-		t.Fatalf("expected 2 table_names, got %v", stub.lastSchemaSummaryReq)
-	}
-}
-
 func TestHandleMonitoringDrift(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	stub := stubForecastClient{
@@ -460,7 +392,7 @@ func TestHandleMonitoringDrift(t *testing.T) {
 			DriftDetected: true,
 		},
 	}
-	handler := NewHandler(logger, nil, nil, stubTrainingClient{}, stub, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false, false)
+	handler := NewHandler(logger, nil, nil, stubTrainingClient{}, stub, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/monitoring/drift?hours=24", nil)
 	rec := httptest.NewRecorder()
@@ -493,7 +425,7 @@ func TestHandleMetricsShadowComparison(t *testing.T) {
 			},
 		},
 	}
-	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false, false)
+	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/metrics/shadow/comparison?hours=24", nil)
 	rec := httptest.NewRecorder()
@@ -550,7 +482,7 @@ func TestHandleBacktestResults(t *testing.T) {
 			},
 		},
 	}
-	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "", false, false, false, false, false)
+	handler := NewHandler(logger, nil, stub, stubTrainingClient{}, stubForecastClient{}, rules.NewEmptyProvider(), 1024, "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/backtest/results?rule_id=rule-1&start_date=2025-01-01&end_date=2025-01-31&limit=1", nil)
 	rec := httptest.NewRecorder()
@@ -644,25 +576,36 @@ func (s stubTrainingClient) ClearData(ctx context.Context, req *trainingv1.Clear
 }
 
 type stubAnalyticsClient struct {
-	resp                      *crudv1.SearchTransactionsResponse
-	dailyStatsResp            *crudv1.GetDailyStatsResponse
-	overviewResp              *crudv1.GetOverviewMetricsResponse
-	transactionDetailsResp    *crudv1.GetTransactionDetailsResponse
-	recentAlertsResp          *crudv1.GetRecentAlertsResponse
-	generateDataResp          *crudv1.GenerateDataResponse
-	fingerprintResp           *crudv1.GetDatasetFingerprintResponse
-	featureSampleResp         *crudv1.GetFeatureSampleResponse
-	schemaSummaryResp         *crudv1.GetSchemaSummaryResponse
-	backtestResultsResp       *crudv1.ListBacktestResultsResponse
+	resp                   *crudv1.SearchTransactionsResponse
+	dailyStatsResp         *crudv1.GetDailyStatsResponse
+	overviewResp           *crudv1.GetOverviewMetricsResponse
+	transactionDetailsResp *crudv1.GetTransactionDetailsResponse
+	recentAlertsResp       *crudv1.GetRecentAlertsResponse
+	featureSampleResp      *crudv1.GetFeatureSampleResponse
+	generateDataResp       *crudv1.GenerateDataResponse
+
+	backtestResultsResp         *crudv1.ListBacktestResultsResponse
+	listDecisionsResp           *crudv1.ListDecisionsResponse
+	getDecisionResp             *crudv1.GetDecisionResponse
+	listJobsResp                *crudv1.ListJobsResponse
+	getJobResp                  *crudv1.GetJobResponse
+	getJobEventsResp            *crudv1.GetJobEventsResponse
+	getJobSummaryResp           *crudv1.GetJobSummaryResponse
+	listTrainingRunsResp        *crudv1.ListTrainingRunsResponse
+	getTrainingRunResp          *crudv1.GetTrainingRunResponse
+	listModelVersionsResp       *crudv1.ListModelVersionsResponse
+	getMetricSeriesResp         *crudv1.GetMetricSeriesResponse
+	listDatasetProfilesResp     *crudv1.ListDatasetProfilesResponse
+	getLatestDatasetProfileResp *crudv1.GetLatestDatasetProfileResponse
+	compareDatasetProfilesResp  *crudv1.CompareDatasetProfilesResponse
+
 	err                       error
 	lastReq                   *crudv1.SearchTransactionsRequest
 	lastDailyStatsReq         *crudv1.GetDailyStatsRequest
 	lastOverviewReq           *crudv1.GetOverviewMetricsRequest
 	lastTransactionDetailsReq *crudv1.GetTransactionDetailsRequest
 	lastRecentAlertsReq       *crudv1.GetRecentAlertsRequest
-	lastFingerprintReq        *crudv1.GetDatasetFingerprintRequest
 	lastFeatureSampleReq      *crudv1.GetFeatureSampleRequest
-	lastSchemaSummaryReq      *crudv1.GetSchemaSummaryRequest
 	lastBacktestResultsReq    *crudv1.ListBacktestResultsRequest
 	lastClearAllDataReq       *crudv1.ClearAllDataRequest
 	shadowComparisonResp      *crudv1.GetShadowComparisonResponse
@@ -693,19 +636,9 @@ func (s *stubAnalyticsClient) GetRecentAlerts(ctx context.Context, req *crudv1.G
 	return s.recentAlertsResp, s.err
 }
 
-func (s *stubAnalyticsClient) GetDatasetFingerprint(ctx context.Context, req *crudv1.GetDatasetFingerprintRequest) (*crudv1.GetDatasetFingerprintResponse, error) {
-	s.lastFingerprintReq = req
-	return s.fingerprintResp, s.err
-}
-
 func (s *stubAnalyticsClient) GetFeatureSample(ctx context.Context, req *crudv1.GetFeatureSampleRequest) (*crudv1.GetFeatureSampleResponse, error) {
 	s.lastFeatureSampleReq = req
 	return s.featureSampleResp, s.err
-}
-
-func (s *stubAnalyticsClient) GetSchemaSummary(ctx context.Context, req *crudv1.GetSchemaSummaryRequest) (*crudv1.GetSchemaSummaryResponse, error) {
-	s.lastSchemaSummaryReq = req
-	return s.schemaSummaryResp, s.err
 }
 
 func (s *stubAnalyticsClient) ListBacktestResults(ctx context.Context, req *crudv1.ListBacktestResultsRequest) (*crudv1.ListBacktestResultsResponse, error) {
@@ -788,10 +721,16 @@ func (s *stubAnalyticsClient) GetShadowComparison(ctx context.Context, req *crud
 }
 
 func (s *stubAnalyticsClient) ListDecisions(ctx context.Context, req *crudv1.ListDecisionsRequest) (*crudv1.ListDecisionsResponse, error) {
+	if s.listDecisionsResp != nil {
+		return s.listDecisionsResp, s.err
+	}
 	return &crudv1.ListDecisionsResponse{}, s.err
 }
 
 func (s *stubAnalyticsClient) GetDecision(ctx context.Context, req *crudv1.GetDecisionRequest) (*crudv1.GetDecisionResponse, error) {
+	if s.getDecisionResp != nil {
+		return s.getDecisionResp, s.err
+	}
 	return &crudv1.GetDecisionResponse{}, s.err
 }
 
@@ -816,14 +755,23 @@ func (s *stubAnalyticsClient) GetConfusionMatrix(ctx context.Context, req *crudv
 }
 
 func (s *stubAnalyticsClient) ListJobs(ctx context.Context, req *crudv1.ListJobsRequest) (*crudv1.ListJobsResponse, error) {
+	if s.listJobsResp != nil {
+		return s.listJobsResp, s.err
+	}
 	return &crudv1.ListJobsResponse{}, s.err
 }
 
 func (s *stubAnalyticsClient) GetJob(ctx context.Context, req *crudv1.GetJobRequest) (*crudv1.GetJobResponse, error) {
+	if s.getJobResp != nil {
+		return s.getJobResp, s.err
+	}
 	return &crudv1.GetJobResponse{}, s.err
 }
 
 func (s *stubAnalyticsClient) GetJobEvents(ctx context.Context, req *crudv1.GetJobEventsRequest) (*crudv1.GetJobEventsResponse, error) {
+	if s.getJobEventsResp != nil {
+		return s.getJobEventsResp, s.err
+	}
 	return &crudv1.GetJobEventsResponse{}, s.err
 }
 
@@ -832,23 +780,59 @@ func (s *stubAnalyticsClient) GetDatasetSummary(ctx context.Context, req *crudv1
 }
 
 func (s *stubAnalyticsClient) ListDatasetProfiles(ctx context.Context, req *crudv1.ListDatasetProfilesRequest) (*crudv1.ListDatasetProfilesResponse, error) {
+	if s.listDatasetProfilesResp != nil {
+		return s.listDatasetProfilesResp, s.err
+	}
 	return &crudv1.ListDatasetProfilesResponse{}, s.err
 }
 
 func (s *stubAnalyticsClient) CompareDatasetProfiles(ctx context.Context, req *crudv1.CompareDatasetProfilesRequest) (*crudv1.CompareDatasetProfilesResponse, error) {
+	if s.compareDatasetProfilesResp != nil {
+		return s.compareDatasetProfilesResp, s.err
+	}
 	return &crudv1.CompareDatasetProfilesResponse{}, s.err
 }
 
 func (s *stubAnalyticsClient) ListTrainingRuns(ctx context.Context, req *crudv1.ListTrainingRunsRequest) (*crudv1.ListTrainingRunsResponse, error) {
+	if s.listTrainingRunsResp != nil {
+		return s.listTrainingRunsResp, s.err
+	}
 	return &crudv1.ListTrainingRunsResponse{}, s.err
 }
 
 func (s *stubAnalyticsClient) GetTrainingRun(ctx context.Context, req *crudv1.GetTrainingRunRequest) (*crudv1.GetTrainingRunResponse, error) {
+	if s.getTrainingRunResp != nil {
+		return s.getTrainingRunResp, s.err
+	}
 	return &crudv1.GetTrainingRunResponse{}, s.err
 }
 
 func (s *stubAnalyticsClient) GetMetricSeries(ctx context.Context, req *crudv1.GetMetricSeriesRequest) (*crudv1.GetMetricSeriesResponse, error) {
+	if s.getMetricSeriesResp != nil {
+		return s.getMetricSeriesResp, s.err
+	}
 	return &crudv1.GetMetricSeriesResponse{}, s.err
+}
+
+func (s *stubAnalyticsClient) GetJobSummary(ctx context.Context, req *crudv1.GetJobSummaryRequest) (*crudv1.GetJobSummaryResponse, error) {
+	if s.getJobSummaryResp != nil {
+		return s.getJobSummaryResp, s.err
+	}
+	return &crudv1.GetJobSummaryResponse{}, s.err
+}
+
+func (s *stubAnalyticsClient) ListModelVersions(ctx context.Context, req *crudv1.ListModelVersionsRequest) (*crudv1.ListModelVersionsResponse, error) {
+	if s.listModelVersionsResp != nil {
+		return s.listModelVersionsResp, s.err
+	}
+	return &crudv1.ListModelVersionsResponse{}, s.err
+}
+
+func (s *stubAnalyticsClient) GetLatestDatasetProfile(ctx context.Context, req *crudv1.GetLatestDatasetProfileRequest) (*crudv1.GetLatestDatasetProfileResponse, error) {
+	if s.getLatestDatasetProfileResp != nil {
+		return s.getLatestDatasetProfileResp, s.err
+	}
+	return &crudv1.GetLatestDatasetProfileResponse{}, s.err
 }
 
 func (s *stubAnalyticsClient) ReportTrainingRun(ctx context.Context, req *crudv1.ReportTrainingRunRequest) (*crudv1.ReportTrainingRunResponse, error) {
@@ -871,7 +855,7 @@ func (errProvider) Reload(context.Context) error {
 
 func TestHandleEvaluateSignal_RulesProviderError(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	handler := NewHandler(logger, stubInferenceClient{}, nil, stubTrainingClient{}, stubForecastClient{}, errProvider{}, 1024, "", "", false, false, false, false, false)
+	handler := NewHandler(logger, stubInferenceClient{}, nil, stubTrainingClient{}, stubForecastClient{}, errProvider{}, 1024, "", "")
 
 	payload := `{"user_id":"u1","amount":100,"currency":"USD","client_transaction_id":"t1"}`
 	req := httptest.NewRequest(http.MethodPost, "/evaluate/signal", strings.NewReader(payload))
@@ -915,7 +899,7 @@ func TestHandleEvaluateSignal_MissingFeatures(t *testing.T) {
 	// Analytics returns no features
 	analytics := &stubAnalyticsClient{}
 
-	handler := NewHandler(logger, inference, analytics, stubTrainingClient{}, stubForecastClient{}, provider, 1024, "", "", false, false, false, false, false)
+	handler := NewHandler(logger, inference, analytics, stubTrainingClient{}, stubForecastClient{}, provider, 1024, "", "")
 
 	// user_id "u1" will result in a simulated velocity
 	// hash("u1") % 1000 = 327 (approx)

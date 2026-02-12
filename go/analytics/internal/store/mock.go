@@ -55,22 +55,6 @@ func (m *MockStore) GetOverviewMetrics(ctx context.Context) (*pb.GetOverviewMetr
 	return args.Get(0).(*pb.GetOverviewMetricsResponse), args.Error(1)
 }
 
-func (m *MockStore) GetDatasetFingerprint(ctx context.Context) (*pb.GetDatasetFingerprintResponse, error) {
-	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*pb.GetDatasetFingerprintResponse), args.Error(1)
-}
-
-func (m *MockStore) GetSchemaSummary(ctx context.Context) (*pb.GetSchemaSummaryResponse, error) {
-	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*pb.GetSchemaSummaryResponse), args.Error(1)
-}
-
 func (m *MockStore) GetShadowComparison(ctx context.Context, hours int32) (*pb.ShadowModeMetrics, error) {
 	args := m.Called(ctx, hours)
 	if args.Get(0) == nil {
@@ -365,8 +349,8 @@ func (m *MockStore) GetJob(ctx context.Context, jobID string) (*pb.Job, error) {
 	return args.Get(0).(*pb.Job), args.Error(1)
 }
 
-func (m *MockStore) GetJobEvents(ctx context.Context, jobID string) ([]*pb.JobEvent, error) {
-	args := m.Called(ctx, jobID)
+func (m *MockStore) GetJobEvents(ctx context.Context, jobID string, limit, offset int32) ([]*pb.JobEvent, error) {
+	args := m.Called(ctx, jobID, limit, offset)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -386,12 +370,28 @@ func (m *MockStore) GetDatasetProfileCached(ctx context.Context, profileID strin
 	return args.Get(0).(*pb.DatasetProfile), args.Error(1)
 }
 
-func (m *MockStore) ListDatasetProfiles(ctx context.Context, limit, offset int32) ([]*pb.DatasetProfile, int64, error) {
-	args := m.Called(ctx, limit, offset)
+func (m *MockStore) ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetProfilesRequest) ([]*pb.DatasetProfile, int64, error) {
+	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
 		return nil, 0, args.Error(2)
 	}
 	return args.Get(0).([]*pb.DatasetProfile), args.Get(1).(int64), args.Error(2)
+}
+
+func (m *MockStore) GetLatestDatasetProfile(ctx context.Context) (*pb.GetLatestDatasetProfileResponse, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.GetLatestDatasetProfileResponse), args.Error(1)
+}
+
+func (m *MockStore) GetJobSummary(ctx context.Context, req *pb.GetJobSummaryRequest) ([]*pb.JobSummaryBucket, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*pb.JobSummaryBucket), args.Error(1)
 }
 
 func (m *MockStore) SaveTrainingRun(ctx context.Context, run *pb.TrainingRun) error {
@@ -399,8 +399,16 @@ func (m *MockStore) SaveTrainingRun(ctx context.Context, run *pb.TrainingRun) er
 	return args.Error(0)
 }
 
-func (m *MockStore) ListTrainingRuns(ctx context.Context, modelName string, limit, offset int32) ([]*pb.TrainingRun, int64, error) {
-	args := m.Called(ctx, modelName, limit, offset)
+func (m *MockStore) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRunsRequest) ([]*pb.TrainingRun, int64, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, 0, args.Error(2)
+	}
+	return args.Get(0).([]*pb.TrainingRun), args.Get(1).(int64), args.Error(2)
+}
+
+func (m *MockStore) ListModelVersions(ctx context.Context, req *pb.ListModelVersionsRequest) ([]*pb.TrainingRun, int64, error) {
+	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
 		return nil, 0, args.Error(2)
 	}

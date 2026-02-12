@@ -9,8 +9,6 @@ import (
 	"time"
 
 	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // Store defines the data access methods for the analytics service.
@@ -21,9 +19,6 @@ type Store interface {
 	SearchTransactions(ctx context.Context, req *pb.SearchTransactionsRequest, limit, offset int32) ([]*pb.TransactionDetail, int64, error)
 	GetRecentAlerts(ctx context.Context, limit, offset int32) ([]*pb.Alert, error)
 	GetOverviewMetrics(ctx context.Context) (*pb.GetOverviewMetricsResponse, error)
-
-	GetDatasetFingerprint(ctx context.Context) (*pb.GetDatasetFingerprintResponse, error)
-	GetSchemaSummary(ctx context.Context) (*pb.GetSchemaSummaryResponse, error)
 
 	// Analytics
 	GetShadowComparison(ctx context.Context, hours int32) (*pb.ShadowModeMetrics, error)
@@ -44,17 +39,20 @@ type Store interface {
 	// Jobs (Phase A1)
 	ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb.Job, int64, error)
 	GetJob(ctx context.Context, jobID string) (*pb.Job, error)
-	GetJobEvents(ctx context.Context, jobID string) ([]*pb.JobEvent, error)
+	GetJobEvents(ctx context.Context, jobID string, limit, offset int32) ([]*pb.JobEvent, error)
+	GetJobSummary(ctx context.Context, req *pb.GetJobSummaryRequest) ([]*pb.JobSummaryBucket, error)
 
 	// Dataset Profiles (Phase A2)
 	SaveDatasetProfile(ctx context.Context, profile *pb.DatasetProfile) error
 	GetDatasetProfileCached(ctx context.Context, profileID string) (*pb.DatasetProfile, error)
-	ListDatasetProfiles(ctx context.Context, limit, offset int32) ([]*pb.DatasetProfile, int64, error)
+	ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetProfilesRequest) ([]*pb.DatasetProfile, int64, error)
+	GetLatestDatasetProfile(ctx context.Context) (*pb.GetLatestDatasetProfileResponse, error)
 
 	// Training Runs (Phase B)
 	SaveTrainingRun(ctx context.Context, run *pb.TrainingRun) error
-	ListTrainingRuns(ctx context.Context, modelName string, limit, offset int32) ([]*pb.TrainingRun, int64, error)
+	ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRunsRequest) ([]*pb.TrainingRun, int64, error)
 	GetTrainingRun(ctx context.Context, runID string) (*pb.TrainingRun, error)
+	ListModelVersions(ctx context.Context, req *pb.ListModelVersionsRequest) ([]*pb.TrainingRun, int64, error)
 	GetMetricSeries(ctx context.Context, modelName, metricName string, start, end time.Time) ([]*pb.MetricPoint, error)
 
 	// Feature Hydration
@@ -143,26 +141,6 @@ func parseISODate(dateStr string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-func normalizeLimit(reqLimit, defaultLimit, maxLimit int32, fieldName string) (int32, error) {
-	if reqLimit < 0 {
-		return 0, status.Errorf(codes.InvalidArgument, "%s must be non-negative", fieldName)
-	}
-	if reqLimit == 0 {
-		return defaultLimit, nil
-	}
-	if reqLimit > maxLimit {
-		return maxLimit, nil
-	}
-	return reqLimit, nil
-}
-
-func normalizeOffset(offset int32) (int32, error) {
-	if offset < 0 {
-		return 0, status.Error(codes.InvalidArgument, "offset must be non-negative")
-	}
-	return offset, nil
-}
-
 func getPostgresVersion(ctx context.Context, db *sql.DB) (int, error) {
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
@@ -203,17 +181,4 @@ func getTableStats(ctx context.Context, db *sql.DB, table string) (tableStats, e
 		return stats, err
 	}
 	return stats, nil
-}
-
-func normalizeDays(days, defaultDays, maxDays int32) (int32, error) {
-	if days < 0 {
-		return 0, status.Error(codes.InvalidArgument, "days must be non-negative")
-	}
-	if days == 0 {
-		return defaultDays, nil
-	}
-	if days > maxDays {
-		return maxDays, nil // Cap at max limit
-	}
-	return days, nil
 }

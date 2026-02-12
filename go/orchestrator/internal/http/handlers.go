@@ -52,23 +52,18 @@ type ForecastClient interface {
 }
 
 type Handler struct {
-	logger             *slog.Logger
-	inferenceClient    InferenceClient
-	analyticsClient    AnalyticsClient
-	trainingClient     TrainingClient
-	forecastClient     ForecastClient
-	rulesProvider      rules.Provider
-	pythonURL          string
-	mlflowURL          string
-	maxBodyBytes       int64
-	enableDecisionAPIs bool
-	enableKpiAPIs      bool
-	enableJobAPIs      bool
-	enableProfileAPIs  bool
-	enableTrainingAPIs bool
-	logQueue           chan inferenceLogEvent
-	logWg              sync.WaitGroup
-	droppedLogs        atomic.Int64
+	logger          *slog.Logger
+	inferenceClient InferenceClient
+	analyticsClient AnalyticsClient
+	trainingClient  TrainingClient
+	forecastClient  ForecastClient
+	rulesProvider   rules.Provider
+	pythonURL       string
+	mlflowURL       string
+	maxBodyBytes    int64
+	logQueue        chan inferenceLogEvent
+	logWg           sync.WaitGroup
+	droppedLogs     atomic.Int64
 }
 
 type inferenceLogEvent struct {
@@ -78,26 +73,21 @@ type inferenceLogEvent struct {
 	requestID   string
 }
 
-func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient AnalyticsClient, trainingClient TrainingClient, forecastClient ForecastClient, provider rules.Provider, maxBodyBytes int64, pythonURL, mlflowURL string, enableDecisionAPIs bool, enableKpiAPIs bool, enableJobAPIs bool, enableProfileAPIs bool, enableTrainingAPIs bool) *Handler {
+func NewHandler(logger *slog.Logger, client InferenceClient, analyticsClient AnalyticsClient, trainingClient TrainingClient, forecastClient ForecastClient, provider rules.Provider, maxBodyBytes int64, pythonURL, mlflowURL string) *Handler {
 	if maxBodyBytes <= 0 {
 		maxBodyBytes = 1 << 20
 	}
 	h := &Handler{
-		logger:             logger,
-		inferenceClient:    client,
-		analyticsClient:    analyticsClient,
-		trainingClient:     trainingClient,
-		forecastClient:     forecastClient,
-		rulesProvider:      provider,
-		maxBodyBytes:       maxBodyBytes,
-		pythonURL:          pythonURL,
-		mlflowURL:          mlflowURL,
-		enableDecisionAPIs: enableDecisionAPIs,
-		enableKpiAPIs:      enableKpiAPIs,
-		enableJobAPIs:      enableJobAPIs,
-		enableProfileAPIs:  enableProfileAPIs,
-		enableTrainingAPIs: enableTrainingAPIs,
-		logQueue:           make(chan inferenceLogEvent, 100),
+		logger:          logger,
+		inferenceClient: client,
+		analyticsClient: analyticsClient,
+		trainingClient:  trainingClient,
+		forecastClient:  forecastClient,
+		rulesProvider:   provider,
+		maxBodyBytes:    maxBodyBytes,
+		pythonURL:       pythonURL,
+		mlflowURL:       mlflowURL,
+		logQueue:        make(chan inferenceLogEvent, 100),
 	}
 	h.startWorkers()
 	return h
@@ -152,6 +142,7 @@ func (h *Handler) Shutdown(ctx context.Context) error {
 }
 
 func (h *Handler) Register(mux *http.ServeMux) {
+	mux.HandleFunc("/metrics", h.handleMetrics)
 	mux.HandleFunc("/evaluate/signal", h.handleEvaluateSignal)
 	mux.HandleFunc("/evaluate/rules", h.handleEvaluateRules)
 	mux.HandleFunc("/evaluate/rules/diff", h.handleEvaluateRulesDiff)
@@ -162,47 +153,41 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/analytics/daily-stats", h.handleAnalyticsDailyStats)
 	mux.HandleFunc("/analytics/transactions", h.handleAnalyticsTransactions)
 	mux.HandleFunc("/analytics/recent-alerts", h.handleAnalyticsRecentAlerts)
-	mux.HandleFunc("/analytics/fingerprint", h.handleAnalyticsFingerprint)
+
 	mux.HandleFunc("GET /analytics/attribution", h.handleAnalyticsAttribution)
 	mux.HandleFunc("/analytics/feature-sample", h.handleAnalyticsFeatureSample)
-	mux.HandleFunc("/analytics/schema", h.handleAnalyticsSchema)
+
 	mux.HandleFunc("GET /analytics/rules/{rule_id}", h.handleAnalyticsRuleStats)
 	mux.HandleFunc("/analytics/transactions/search", h.handleSearchTransactions)
 
-	if h.enableDecisionAPIs {
-		// Decision Explorer: list and search inference events
-		mux.HandleFunc("GET /decisions", h.handleListDecisions)
-		// Decision Detail: fetch full event with inputs
-		mux.HandleFunc("GET /decisions/{request_id}", h.handleGetDecision)
-		// Decision Trace: fetch rule execution steps
-		mux.HandleFunc("GET /decisions/{request_id}/trace", h.handleGetDecisionTrace)
-		// Rule Impact: fetch metrics for a specific rule over time
-		mux.HandleFunc("GET /analytics/rules/{rule_id}/impact", h.handleGetRuleImpact)
-	}
+	// Decision Explorer: list and search inference events
+	mux.HandleFunc("GET /decisions", h.handleListDecisions)
+	// Decision Detail: fetch full event with inputs
+	mux.HandleFunc("GET /decisions/{request_id}", h.handleGetDecision)
+	// Decision Trace: fetch rule execution steps
+	mux.HandleFunc("GET /decisions/{request_id}/trace", h.handleGetDecisionTrace)
+	// Rule Impact: fetch metrics for a specific rule over time
+	mux.HandleFunc("GET /analytics/rules/{rule_id}/impact", h.handleGetRuleImpact)
 
-	if h.enableKpiAPIs {
-		mux.HandleFunc("GET /kpis", h.handleGetKpis)
-		mux.HandleFunc("GET /volume", h.handleGetVolumeSeries)
-		mux.HandleFunc("GET /analytics/confusion-matrix", h.handleGetConfusionMatrix)
-	}
+	mux.HandleFunc("GET /kpis", h.handleGetKpis)
+	mux.HandleFunc("GET /volume", h.handleGetVolumeSeries)
+	mux.HandleFunc("GET /analytics/confusion-matrix", h.handleGetConfusionMatrix)
 
-	if h.enableJobAPIs {
-		mux.HandleFunc("GET /jobs", h.handleListJobs)
-		mux.HandleFunc("GET /jobs/{id}", h.handleGetJob)
-		mux.HandleFunc("GET /jobs/{id}/events", h.handleGetJobEvents)
-	}
+	mux.HandleFunc("GET /jobs", h.handleListJobs)
+	mux.HandleFunc("GET /jobs/summary", h.handleGetJobSummary)
+	mux.HandleFunc("GET /jobs/{id}", h.handleGetJob)
+	mux.HandleFunc("GET /jobs/{id}/events", h.handleGetJobEvents)
 
-	if h.enableProfileAPIs {
-		mux.HandleFunc("GET /dataset/summary", h.handleGetDatasetSummary)
-		mux.HandleFunc("GET /dataset/profiles", h.handleListDatasetProfiles)
-		mux.HandleFunc("GET /dataset/profiles/compare", h.handleCompareDatasetProfiles)
-	}
+	mux.HandleFunc("GET /dataset/summary", h.handleGetDatasetProfile) // Alias for latest/default
+	mux.HandleFunc("GET /dataset/latest", h.handleGetLatestDatasetProfile)
+	mux.HandleFunc("GET /dataset/profiles", h.handleListDatasetProfiles)
+	mux.HandleFunc("GET /dataset/profiles/{id}", h.handleGetDatasetProfile)
+	mux.HandleFunc("GET /dataset/profiles/compare", h.handleCompareDatasetProfiles)
 
-	if h.enableTrainingAPIs {
-		mux.HandleFunc("GET /training-runs", h.handleListTrainingRuns)
-		mux.HandleFunc("GET /training-runs/{id}", h.handleGetTrainingRun)
-		mux.HandleFunc("GET /metrics/series", h.handleGetMetricSeries)
-	}
+	mux.HandleFunc("GET /training-runs", h.handleListTrainingRuns)
+	mux.HandleFunc("GET /models/versions", h.handleListModelVersions)
+	mux.HandleFunc("GET /training-runs/{id}", h.handleGetTrainingRun)
+	mux.HandleFunc("GET /metrics/series", h.handleGetMetricSeries)
 
 	mux.HandleFunc("/data/clear", h.handleDatasetClear)
 	mux.HandleFunc("POST /data/generate", h.handleDatasetGenerate)

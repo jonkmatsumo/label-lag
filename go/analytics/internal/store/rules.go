@@ -27,7 +27,7 @@ func (s *SQLStore) ListRuleVersions(ctx context.Context, ruleID string, limit, o
 
 	rows, err := s.db.QueryContext(queryCtx, query, ruleID, limit, offset)
 	if err != nil {
-		return nil, 0, fmt.Errorf("failed to list rule versions: %v", err)
+		return nil, 0, db.MapDBError(fmt.Errorf("failed to list rule versions: %w", err))
 	}
 	defer rows.Close()
 
@@ -38,7 +38,7 @@ func (s *SQLStore) ListRuleVersions(ctx context.Context, ruleID string, limit, o
 		var createdBy, statusStr sql.NullString
 
 		if err := rows.Scan(&ruleJSON, &createdAt, &createdBy, &statusStr); err != nil {
-			return nil, 0, fmt.Errorf("failed to scan rule version: %v", err)
+			return nil, 0, db.MapDBError(fmt.Errorf("failed to scan rule version: %w", err))
 		}
 
 		var r pb.Rule
@@ -56,7 +56,7 @@ func (s *SQLStore) ListRuleVersions(ctx context.Context, ruleID string, limit, o
 	defer cancelCount()
 	err = s.db.QueryRowContext(queryCtxCount, "SELECT COUNT(*) FROM rule_versions WHERE rule_id = $1", ruleID).Scan(&total)
 	if err != nil {
-		return nil, 0, fmt.Errorf("failed to count rule versions: %v", err)
+		return nil, 0, db.MapDBError(fmt.Errorf("failed to count rule versions: %w", err))
 	}
 
 	return versions, total, nil
@@ -102,7 +102,7 @@ func (s *SQLStore) GetRuleVersion(ctx context.Context, ruleID, versionID string)
 	if err == sql.ErrNoRows {
 		return nil, status.Error(codes.NotFound, "rule version not found")
 	} else if err != nil {
-		return nil, fmt.Errorf("failed to get rule version: %v", err)
+		return nil, db.MapDBError(fmt.Errorf("failed to get rule version: %w", err))
 	}
 
 	var r pb.Rule
@@ -123,7 +123,7 @@ func (s *SQLStore) PublishRuleVersion(ctx context.Context, req *pb.PublishRuleVe
 
 	tx, err := s.db.BeginTx(queryCtx, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to begin transaction: %v", err)
+		return "", db.MapDBError(fmt.Errorf("failed to begin transaction: %w", err))
 	}
 	defer tx.Rollback()
 
@@ -135,7 +135,7 @@ func (s *SQLStore) PublishRuleVersion(ctx context.Context, req *pb.PublishRuleVe
 	if err == sql.ErrNoRows {
 		return "", status.Error(codes.NotFound, "rule not found")
 	} else if err != nil {
-		return "", fmt.Errorf("failed to get rule: %v", err)
+		return "", db.MapDBError(fmt.Errorf("failed to get rule: %w", err))
 	}
 
 	newVersion := req.VersionId
@@ -162,7 +162,7 @@ func (s *SQLStore) PublishRuleVersion(ctx context.Context, req *pb.PublishRuleVe
 	`, newVersion, req.RuleId, ruleJSON, time.Now(), req.Actor, req.Reason, "active", true)
 
 	if err != nil {
-		return "", fmt.Errorf("failed to insert rule version: %v", err)
+		return "", db.MapDBError(fmt.Errorf("failed to insert rule version: %w", err))
 	}
 
 	_, err = tx.ExecContext(queryCtx, `
@@ -170,18 +170,18 @@ func (s *SQLStore) PublishRuleVersion(ctx context.Context, req *pb.PublishRuleVe
 	`, newVersion, req.RuleId)
 
 	if err != nil {
-		return "", fmt.Errorf("failed to update rule status: %v", err)
+		return "", db.MapDBError(fmt.Errorf("failed to update rule status: %w", err))
 	}
 
 	_, err = tx.ExecContext(queryCtx, `
 		UPDATE rule_versions SET is_active = FALSE WHERE rule_id = $1 AND version_id != $2
 	`, req.RuleId, newVersion)
 	if err != nil {
-		return "", fmt.Errorf("failed to archive old versions: %v", err)
+		return "", db.MapDBError(fmt.Errorf("failed to archive old versions: %w", err))
 	}
 
 	if err := tx.Commit(); err != nil {
-		return "", fmt.Errorf("failed to commit transaction: %v", err)
+		return "", db.MapDBError(fmt.Errorf("failed to commit transaction: %w", err))
 	}
 
 	return newVersion, nil
@@ -224,7 +224,7 @@ func (s *SQLStore) DiffRuleVersions(ctx context.Context, ruleID, vA, vB string) 
 		err := s.db.QueryRowContext(queryCtx, "SELECT rule_json FROM rule_versions WHERE rule_id = $1 AND version_id = $2", ruleID, verID).Scan(&rJSON)
 
 		if err != nil {
-			return nil, err
+			return nil, db.MapDBError(err)
 		}
 		var r pb.Rule
 		if err := json.Unmarshal(rJSON, &r); err != nil {
@@ -336,7 +336,7 @@ func (s *SQLStore) ListRules(ctx context.Context, statusFilter string, includeAr
 		if err := rows.Scan(
 			&r.Id, &r.Field, &r.Op, &r.ValueJson, &r.Action, &r.Score, &r.Severity, &r.Reason, &r.Status,
 		); err != nil {
-			return nil, fmt.Errorf("failed to scan rule: %v", err)
+			return nil, db.MapDBError(fmt.Errorf("failed to scan rule: %w", err))
 		}
 		rules = append(rules, &r)
 	}

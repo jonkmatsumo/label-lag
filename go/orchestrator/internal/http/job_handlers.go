@@ -83,7 +83,51 @@ func (h *Handler) handleGetJobEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := h.analyticsClient.GetJobEvents(r.Context(), &crudv1.GetJobEventsRequest{JobId: jobID})
+	limit, err := parseIntQuery(r, "limit", 100, 1, 1000)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	offset, err := parseIntQuery(r, "offset", 0, 0, 10000)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	resp, err := h.analyticsClient.GetJobEvents(r.Context(), &crudv1.GetJobEventsRequest{
+		JobId:  jobID,
+		Limit:  limit,
+		Offset: offset,
+	})
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	writeAnalyticsJSON(w, resp)
+}
+
+func (h *Handler) handleGetJobSummary(w http.ResponseWriter, r *http.Request) {
+	req := &crudv1.GetJobSummaryRequest{}
+
+	if startStr := r.URL.Query().Get("start_time"); startStr != "" {
+		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
+			req.StartTime = timestamppb.New(t)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
+			return
+		}
+	}
+	if endStr := r.URL.Query().Get("end_time"); endStr != "" {
+		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
+			req.EndTime = timestamppb.New(t)
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
+			return
+		}
+	}
+
+	resp, err := h.analyticsClient.GetJobSummary(r.Context(), req)
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
 		return

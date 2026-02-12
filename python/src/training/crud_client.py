@@ -1,9 +1,22 @@
+import json
+import logging
 import os
+import time
 import uuid
 
 import grpc
+import structlog
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_exception,
+    stop_after_delay,
+    wait_exponential_jitter,
+)
 
 from analytics.v1 import analytics_pb2, analytics_pb2_grpc
+
+logger = structlog.get_logger(__name__)
 
 
 def _parse_timeout(value: str | None, default: float) -> float:
@@ -240,13 +253,76 @@ class AnalyticsCRUDClient:
         )
 
     def report_training_run(self, run, request_id: str | None = None):
-        """Report training run status to Analytics service."""
+        """Report training run status to Analytics service with retry and fallback."""
         request = analytics_pb2.ReportTrainingRunRequest(run=run)
-        return self.stub.ReportTrainingRun(
-            request,
-            timeout=self.timeout_seconds,
-            metadata=self._get_metadata(request_id),
+
+        # Retryable gRPC statuses
+        retryable_codes = {
+            grpc.StatusCode.UNAVAILABLE,
+            grpc.StatusCode.DEADLINE_EXCEEDED,
+            grpc.StatusCode.RESOURCE_EXHAUSTED,
+        }
+
+        def is_retryable(exception):
+            return (
+                isinstance(exception, grpc.RpcError)
+                and exception.code() in retryable_codes
+            )
+
+        @retry(
+            retry=retry_if_exception(is_retryable),
+            wait=wait_exponential_jitter(initial=1, max=5),
+            stop=stop_after_delay(20),
+            before_sleep=before_sleep_log(logger, logging.WARNING),
+            reraise=True,
         )
+        def _do_report():
+            return self.stub.ReportTrainingRun(
+                request,
+                timeout=self.timeout_seconds,
+                metadata=self._get_metadata(request_id),
+            )
+
+        try:
+            return _do_report()
+        except Exception as e:
+            logger.error(
+                "failed to report training run after retries",
+                run_id=run.run_id,
+                error=str(e),
+                request_id=request_id,
+            )
+            self._fallback_persist(run, request_id)
+            # Re-raise or return None? Best-effort suggests continuing training.
+            # We'll return None to allow training to proceed.
+            return None
+
+    def _fallback_persist(self, run, request_id: str | None):
+        """Best-effort local persistence for failed reports."""
+        try:
+            var_dir = os.path.join(os.getcwd(), "var")
+            os.makedirs(var_dir, exist_ok=True)
+            log_path = os.path.join(var_dir, "training_run_events.log")
+
+            # Convert proto message to dict for JSON serialization
+            # Using simple dict for now as we don't have MessageToDict here easily
+            # and it's best-effort.
+            payload = {
+                "run_id": run.run_id,
+                "model_name": run.model_name,
+                "status": run.status,
+                "metrics": run.metrics_json,
+                "params": run.params_json,
+                "request_id": request_id,
+                "timestamp": time.time(),
+            }
+
+            with open(log_path, "a") as f:
+                f.write(json.dumps(payload) + "\n")
+
+            logger.info("persisted failed report to local fallback", log_path=log_path)
+        except Exception as fallback_err:
+            logger.error("fallback persistence failed", error=str(fallback_err))
 
 
 _client = None

@@ -180,7 +180,7 @@ func (s *SQLStore) GetJob(ctx context.Context, jobID string) (*pb.Job, error) {
 	return &j, nil
 }
 
-func (s *SQLStore) GetJobEvents(ctx context.Context, jobID string) ([]*pb.JobEvent, error) {
+func (s *SQLStore) GetJobEvents(ctx context.Context, jobID string, limit, offset int32) ([]*pb.JobEvent, error) {
 	query := `
 		SELECT
 			event_id,
@@ -191,11 +191,12 @@ func (s *SQLStore) GetJobEvents(ctx context.Context, jobID string) ([]*pb.JobEve
 		FROM job_events
 		WHERE job_id = $1
 		ORDER BY timestamp ASC
+		LIMIT $2 OFFSET $3
 	`
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	rows, err := s.db.QueryContext(queryCtx, query, jobID)
+	rows, err := s.db.QueryContext(queryCtx, query, jobID, limit, offset)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -225,4 +226,48 @@ func (s *SQLStore) GetJobEvents(ctx context.Context, jobID string) ([]*pb.JobEve
 		events = append(events, &e)
 	}
 	return events, nil
+}
+
+func (s *SQLStore) GetJobSummary(ctx context.Context, req *pb.GetJobSummaryRequest) ([]*pb.JobSummaryBucket, error) {
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	query := `
+		SELECT
+			date_trunc('hour', created_at) as bucket,
+			COUNT(*) as total,
+			COUNT(*) FILTER (WHERE status = 'completed') as completed,
+			COUNT(*) FILTER (WHERE status = 'failed') as failed
+		FROM jobs
+		WHERE created_at >= $1 AND created_at <= $2
+		GROUP BY bucket
+		ORDER BY bucket ASC
+	`
+
+	start := time.Now().AddDate(0, 0, -7)
+	if req.StartTime != nil {
+		start = req.StartTime.AsTime()
+	}
+	end := time.Now()
+	if req.EndTime != nil {
+		end = req.EndTime.AsTime()
+	}
+
+	rows, err := s.db.QueryContext(queryCtx, query, start, end)
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+	defer rows.Close()
+
+	var summaries []*pb.JobSummaryBucket
+	for rows.Next() {
+		var b pb.JobSummaryBucket
+		var bucket time.Time
+		if err := rows.Scan(&bucket, &b.TotalJobs, &b.CompletedJobs, &b.FailedJobs); err != nil {
+			return nil, fmt.Errorf("failed to scan job summary: %v", err)
+		}
+		b.BucketTime = timestamppb.New(bucket)
+		summaries = append(summaries, &b)
+	}
+	return summaries, nil
 }

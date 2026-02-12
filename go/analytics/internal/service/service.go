@@ -32,18 +32,18 @@ func NewService(store store.Store, registry *generator.GeneratorRegistry) *Servi
 }
 
 const (
-	defaultDailyStatsDay = 30
-	defaultTxnDays       = 30
-	defaultTxnLimit      = 100
-	maxTransactionLimit  = 1000
-	defaultSearchLimit   = 50
-	maxSearchLimit       = 500
-	defaultAlertLimit    = 20
-	maxAlertLimit        = 100
-	defaultSampleSize    = 1000
-	maxSampleSizeLimit   = 10000
+	defaultDailyStatsDay  = 30
+	defaultTxnDays        = 30
+	defaultTxnLimit       = 100
+	maxTransactionLimit   = 1000
+	defaultSearchLimit    = 50
+	maxSearchLimit        = 500
+	defaultAlertLimit     = 50
+	maxAlertLimit         = 250
+	defaultSampleSize     = 1000
+	maxSampleSizeLimit    = 10000
 	defaultRuleImpactDays = 7
-	maxRuleImpactDays    = 90
+	maxRuleImpactDays     = 90
 )
 
 var allowedDecisions = map[string]bool{
@@ -143,14 +143,6 @@ func (s *Service) GetOverviewMetrics(ctx context.Context, req *pb.GetOverviewMet
 	return s.store.GetOverviewMetrics(ctx)
 }
 
-func (s *Service) GetDatasetFingerprint(ctx context.Context, req *pb.GetDatasetFingerprintRequest) (*pb.GetDatasetFingerprintResponse, error) {
-	return s.store.GetDatasetFingerprint(ctx)
-}
-
-func (s *Service) GetSchemaSummary(ctx context.Context, req *pb.GetSchemaSummaryRequest) (*pb.GetSchemaSummaryResponse, error) {
-	return s.store.GetSchemaSummary(ctx)
-}
-
 func (s *Service) GetTrainingData(ctx context.Context, req *pb.GetTrainingDataRequest) (*pb.GetTrainingDataResponse, error) {
 	if req == nil || req.CutoffDate == nil {
 		return nil, status.Error(codes.InvalidArgument, "cutoff_date required")
@@ -206,7 +198,7 @@ func (s *Service) ListBacktestResults(ctx context.Context, req *pb.ListBacktestR
 		end = &t
 	}
 
-	limit, err := normalizeLimit(req.Limit, 20, 100, "limit")
+	limit, err := normalizeLimit(req.Limit, 50, 250, "limit")
 	if err != nil {
 		return nil, err
 	}
@@ -540,7 +532,7 @@ func (s *Service) ListRuleVersions(ctx context.Context, req *pb.ListRuleVersions
 		return nil, status.Error(codes.InvalidArgument, "rule_id required")
 	}
 
-	limit, err := normalizeLimit(req.Limit, 100, 1000, "limit")
+	limit, err := normalizeLimit(req.Limit, 50, 250, "limit")
 	if err != nil {
 		return nil, err
 	}
@@ -619,7 +611,7 @@ func (s *Service) GetAttribution(ctx context.Context, req *pb.GetAttributionRequ
 	if err != nil {
 		return nil, err
 	}
-	limit, err := normalizeLimit(req.Limit, 100, 1000, "limit")
+	limit, err := normalizeLimit(req.Limit, 50, 250, "limit")
 	if err != nil {
 		return nil, err
 	}
