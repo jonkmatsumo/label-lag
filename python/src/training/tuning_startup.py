@@ -8,11 +8,19 @@ from training.config import TrainingServerConfig
 from training.job_queue import JobQueue
 from training.job_store import InMemoryJobStore, JobStore
 from training.jobs import TuningJobStatus
+from training.optuna_resume import (
+    load_existing_tuning_study,
+    study_can_resume,
+    sync_job_from_optuna,
+)
 from training.postgres_job_store import PostgresJobStore
 
 logger = logging.getLogger(__name__)
 
 STALE_HEARTBEAT_ERROR = "worker restart / stale heartbeat"
+STALE_HEARTBEAT_RESUME_UNAVAILABLE_ERROR = (
+    "worker restart / stale heartbeat (resume unavailable)"
+)
 
 
 def get_tuning_job_retention_days() -> int:
@@ -61,6 +69,7 @@ def reconcile_stale_jobs(
     reference_time = now if now else datetime.now(UTC)
     stale_cutoff = reference_time - timedelta(seconds=heartbeat_interval_seconds * 2)
     stale_count = 0
+    resumed_count = 0
 
     candidates = job_store.list_jobs(
         statuses=[TuningJobStatus.RUNNING, TuningJobStatus.CANCELING],
@@ -77,14 +86,46 @@ def reconcile_stale_jobs(
         if heartbeat_ts > stale_cutoff:
             continue
 
+        tuning_cfg = (
+            job.config.get("tuning_config", {}) if isinstance(job.config, dict) else {}
+        )
+        direction = tuning_cfg.get("direction", "maximize")
+        study = load_existing_tuning_study(
+            job_id=job.job_id,
+            direction=direction,
+        )
+
+        if study and study_can_resume(study, total_trials=job.total_trials):
+            sync_job_from_optuna(
+                job_store=job_store,
+                job_id=job.job_id,
+                study=study,
+                now=reference_time,
+            )
+
+            def mark_pending(j):
+                j.status = TuningJobStatus.PENDING
+                j.updated_at = reference_time
+                j.ended_at = None
+                j.error_message = None
+
+            job_store.update(job.job_id, mark_pending)
+            resumed_count += 1
+            continue
+
         def mark_stale_failed(j):
             j.status = TuningJobStatus.FAILED
-            j.error_message = STALE_HEARTBEAT_ERROR
+            j.error_message = STALE_HEARTBEAT_RESUME_UNAVAILABLE_ERROR
             j.updated_at = reference_time
             j.ended_at = reference_time
 
         job_store.update(job.job_id, mark_stale_failed)
         stale_count += 1
+
+    if resumed_count:
+        logger.info(
+            "Recovered stale tuning jobs for resume: resumed_jobs=%s", resumed_count
+        )
 
     return stale_count
 

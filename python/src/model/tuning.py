@@ -329,17 +329,21 @@ def run_tuning_study(
     if job_id:
         study.set_user_attr("tuning_job_id", job_id)
 
+    existing_trial_count = len(study.trials)
+    remaining_trials = max(0, n_trials - existing_trial_count)
+
     callbacks = []
     if job_id and job_store:
         callbacks.append(JobProgressCallback(job_id, job_store))
 
-    study.optimize(
-        objective,
-        n_trials=n_trials,
-        timeout=timeout_seconds,
-        show_progress_bar=False,
-        callbacks=callbacks,
-    )
+    if remaining_trials > 0:
+        study.optimize(
+            objective,
+            n_trials=remaining_trials,
+            timeout=timeout_seconds,
+            show_progress_bar=False,
+            callbacks=callbacks,
+        )
     best = study.best_params if study.best_trial else {}
     rows = []
     pruned_count = 0

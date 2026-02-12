@@ -26,6 +26,7 @@ from training.jobs import (
     bound_params,
     truncate_error_message,
 )
+from training.optuna_resume import get_optuna_storage_url
 from training.schemas import SplitConfig, TuningConfig
 from training.v1 import training_pb2, training_pb2_grpc
 
@@ -732,6 +733,7 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                     "feature_columns": final_feature_list,
                     "split_config": split_config,
                     "tuning_config": tuning_config,
+                    "optuna_storage_url": get_optuna_storage_url(),
                 }
 
                 job = TuningJob.create(

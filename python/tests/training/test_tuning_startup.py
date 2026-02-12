@@ -7,7 +7,7 @@ from training.job_queue import JobQueue
 from training.job_store import InMemoryJobStore
 from training.jobs import TuningJob, TuningJobStatus
 from training.tuning_startup import (
-    STALE_HEARTBEAT_ERROR,
+    STALE_HEARTBEAT_RESUME_UNAVAILABLE_ERROR,
     build_tuning_job_store,
     reconcile_stale_jobs,
     reenqueue_pending_jobs,
@@ -70,7 +70,10 @@ def test_reconcile_stale_jobs_marks_stale_running_as_failed():
 
     assert changed == 1
     assert store.get(stale_job.job_id).status == TuningJobStatus.FAILED
-    assert store.get(stale_job.job_id).error_message == STALE_HEARTBEAT_ERROR
+    assert (
+        store.get(stale_job.job_id).error_message
+        == STALE_HEARTBEAT_RESUME_UNAVAILABLE_ERROR
+    )
     assert store.get(fresh_job.job_id).status == TuningJobStatus.RUNNING
 
 

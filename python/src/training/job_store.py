@@ -144,7 +144,13 @@ class InMemoryJobStore:
             if job_id not in self._jobs:
                 raise ValueError(f"Job {job_id} not found")
             job = self._jobs[job_id]
-            job.trials.append(_sanitize_trial(trial))
+            sanitized = _sanitize_trial(trial)
+            for idx, existing in enumerate(job.trials):
+                if existing.trial_number == sanitized.trial_number:
+                    job.trials[idx] = sanitized
+                    break
+            else:
+                job.trials.append(sanitized)
             max_rows = _max_trial_rows_per_job()
             if len(job.trials) > max_rows:
                 job.trials = job.trials[-max_rows:]

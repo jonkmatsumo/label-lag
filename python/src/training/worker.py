@@ -12,6 +12,7 @@ from model.tuning import run_tuning_study
 from training.job_queue import JobQueue
 from training.job_store import JobStore
 from training.jobs import TuningJobStatus
+from training.optuna_resume import get_optuna_storage_url
 from training.schemas import SplitConfig, TuningConfig
 from training.tuning_startup import get_tuning_job_retention_days, prune_tuning_jobs
 
@@ -133,7 +134,7 @@ class TuningWorker:
         def start_job(j):
             j.status = TuningJobStatus.RUNNING
             now = datetime.now(UTC)
-            j.started_at = now
+            j.started_at = j.started_at or now
             j.heartbeat_at = now
             j.updated_at = now
 
@@ -156,6 +157,9 @@ class TuningWorker:
             split_cfg_obj = _coerce_model(config.get("split_config"), SplitConfig)
             tuning_cfg_obj = _coerce_model(config.get("tuning_config"), TuningConfig)
             database_url = config.get("database_url")
+            optuna_storage_url = (
+                config.get("optuna_storage_url") or get_optuna_storage_url()
+            )
 
             if self._cancel_if_requested(job_id):
                 return
@@ -224,6 +228,7 @@ class TuningWorker:
                     ),
                     job_id=job_id,
                     job_store=self.job_store,
+                    storage_url=optuna_storage_url,
                 )
 
             # After completion, check status again (might have been canceled)
