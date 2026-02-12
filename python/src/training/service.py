@@ -558,6 +558,7 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
             from training.grpc_errors import abort_invalid_argument
 
             resolved_features_set = set()
+            feature_set_hash = ""
 
             if request.HasField("feature_set_id"):
                 if request.selected_feature_columns or request.feature_groups:
@@ -575,6 +576,7 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                         f"Feature set {request.feature_set_id} not found",
                     )
                 resolved_features_set = set(spec.features)
+                feature_set_hash = spec.hash
             else:
                 if request.selected_feature_columns:
                     resolved_features_set.update(request.selected_feature_columns)
@@ -675,6 +677,40 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                     ),
                 )
 
+            split_config = {
+                "strategy": request.split_config.strategy,
+                "n_folds": request.split_config.n_folds,
+                "stratify_column": (
+                    request.split_config.stratify_column
+                    if request.split_config.HasField("stratify_column")
+                    else None
+                ),
+                "group_column": request.split_config.group_column,
+                "validation_fraction": request.split_config.validation_fraction,
+                "seed": request.split_config.seed,
+            }
+            tuning_config = {
+                "enabled": True,
+                "strategy": request.tuning_config.strategy,
+                "n_trials": request.tuning_config.n_trials,
+                "timeout_minutes": request.tuning_config.timeout_minutes,
+                "metric": request.tuning_config.metric,
+                "direction": request.tuning_config.direction,
+                "search_space": dict(request.tuning_config.search_space),
+            }
+
+            training_config_hash = hashlib.sha256(
+                json.dumps(
+                    {
+                        "training_window_days": request.training_window_days,
+                        "feature_columns": final_feature_list,
+                        "split_config": split_config,
+                        "tuning_config": tuning_config,
+                    },
+                    sort_keys=True,
+                ).encode("utf-8")
+            ).hexdigest()
+
             # Create MLflow parent run
             from forecast.model_manager import MODEL_NAME
 
@@ -689,27 +725,8 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                 job_config = {
                     "training_window_days": request.training_window_days,
                     "feature_columns": final_feature_list,
-                    "split_config": {
-                        "strategy": request.split_config.strategy,
-                        "n_folds": request.split_config.n_folds,
-                        "stratify_column": (
-                            request.split_config.stratify_column
-                            if request.split_config.HasField("stratify_column")
-                            else None
-                        ),
-                        "group_column": request.split_config.group_column,
-                        "validation_fraction": request.split_config.validation_fraction,
-                        "seed": request.split_config.seed,
-                    },
-                    "tuning_config": {
-                        "enabled": True,
-                        "strategy": request.tuning_config.strategy,
-                        "n_trials": request.tuning_config.n_trials,
-                        "timeout_minutes": request.tuning_config.timeout_minutes,
-                        "metric": request.tuning_config.metric,
-                        "direction": request.tuning_config.direction,
-                        "search_space": dict(request.tuning_config.search_space),
-                    },
+                    "split_config": split_config,
+                    "tuning_config": tuning_config,
                 }
 
                 job = TuningJob.create(
@@ -719,6 +736,13 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                 )
 
                 mlflow.set_tag("job_id", job.job_id)
+                mlflow.set_tag("tuning_job_id", job.job_id)
+                mlflow.set_tag("tuning_metric", request.tuning_config.metric)
+                mlflow.set_tag("tuning_direction", request.tuning_config.direction)
+                mlflow.set_tag("tuning_strategy", request.tuning_config.strategy)
+                mlflow.set_tag("training_config_hash", training_config_hash)
+                if feature_set_hash:
+                    mlflow.set_tag("feature_set_hash", feature_set_hash)
                 self.job_store.create(job)
                 self.job_queue.enqueue(job.job_id)
                 logger.info(
