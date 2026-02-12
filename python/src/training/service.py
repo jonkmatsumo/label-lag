@@ -129,6 +129,33 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                 return str(version.version)
         return ""
 
+    @staticmethod
+    def _build_job_summary(job: TuningJob) -> training_pb2.TuningJobSummary:
+        tuning_cfg = (
+            job.config.get("tuning_config", {}) if isinstance(job.config, dict) else {}
+        )
+        summary = training_pb2.TuningJobSummary(
+            job_id=job.job_id,
+            status=job.status.value,
+            created_at=int(job.created_at.timestamp() * 1000),
+            started_at=int(job.started_at.timestamp() * 1000) if job.started_at else 0,
+            updated_at=int(job.updated_at.timestamp() * 1000),
+            ended_at=int(job.ended_at.timestamp() * 1000) if job.ended_at else 0,
+            mlflow_run_id=job.mlflow_run_id or "",
+            total_trials=job.total_trials,
+            completed_trials=job.completed_trials,
+            pruned_trials=job.pruned_trials,
+            metric=tuning_cfg.get("metric", ""),
+            direction=tuning_cfg.get("direction", ""),
+        )
+        if job.best_value is not None:
+            summary.best_value = job.best_value
+        if job.requested_by:
+            summary.requested_by = job.requested_by
+        if job.error_message:
+            summary.error_message = truncate_error_message(job.error_message)
+        return summary
+
     def ClearData(self, request, context):  # noqa: N802
         """Clear all data from the database via Analytics service."""
         try:
@@ -914,36 +941,7 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
 
             summaries = []
             for job in page_jobs:
-                tuning_cfg = (
-                    job.config.get("tuning_config", {})
-                    if isinstance(job.config, dict)
-                    else {}
-                )
-                summary = training_pb2.TuningJobSummary(
-                    job_id=job.job_id,
-                    status=job.status.value,
-                    created_at=int(job.created_at.timestamp() * 1000),
-                    started_at=int(job.started_at.timestamp() * 1000)
-                    if job.started_at
-                    else 0,
-                    updated_at=int(job.updated_at.timestamp() * 1000),
-                    ended_at=int(job.ended_at.timestamp() * 1000)
-                    if job.ended_at
-                    else 0,
-                    mlflow_run_id=job.mlflow_run_id or "",
-                    total_trials=job.total_trials,
-                    completed_trials=job.completed_trials,
-                    pruned_trials=job.pruned_trials,
-                    metric=tuning_cfg.get("metric", ""),
-                    direction=tuning_cfg.get("direction", ""),
-                )
-                if job.best_value is not None:
-                    summary.best_value = job.best_value
-                if job.requested_by:
-                    summary.requested_by = job.requested_by
-                if job.error_message:
-                    summary.error_message = truncate_error_message(job.error_message)
-                summaries.append(summary)
+                summaries.append(self._build_job_summary(job))
 
             return training_pb2.ListTuningJobsResponse(
                 jobs=summaries,
@@ -1072,9 +1070,59 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
             )
 
     def GetTuningJobInfo(self, request, context):  # noqa: N802
-        context.abort(
-            grpc.StatusCode.UNIMPLEMENTED,
-            "GetTuningJobInfo is not implemented",
+        if not request.job_id:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "job_id is required")
+        job = self.job_store.get(request.job_id)
+        if not job:
+            context.abort(grpc.StatusCode.NOT_FOUND, f"Job {request.job_id} not found")
+
+        sort_by = request.sort_by or "trial_number"
+        if sort_by not in {"trial_number", "value"}:
+            context.abort(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                f"Unsupported sort_by '{sort_by}'. Expected 'trial_number' or 'value'.",
+            )
+
+        trials_limit = request.trials_limit or 50
+        trials_limit = max(1, min(trials_limit, 200))
+        cursor = request.trials_cursor if request.trials_cursor else None
+        if sort_by == "value" and cursor:
+            context.abort(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                "trials_cursor is only supported when sort_by=trial_number",
+            )
+
+        trials, next_cursor = self.job_store.list_trials(
+            request.job_id,
+            limit=trials_limit,
+            cursor=cursor,
+            sort_by=sort_by,
+        )
+
+        links: dict[str, str] = {}
+        if job.mlflow_run_id:
+            links["tuning_run_id"] = job.mlflow_run_id
+
+        return training_pb2.GetTuningJobInfoResponse(
+            job=self._build_job_summary(job),
+            trials=[
+                training_pb2.TrialResult(
+                    trial_number=trial.trial_number,
+                    state=trial.state,
+                    value=trial.value if trial.value is not None else 0.0,
+                    params=bound_params(trial.params),
+                    started_at=int(trial.started_at.timestamp() * 1000)
+                    if trial.started_at
+                    else 0,
+                    ended_at=int(trial.ended_at.timestamp() * 1000)
+                    if trial.ended_at
+                    else 0,
+                    duration_ms=trial.duration_ms or 0.0,
+                )
+                for trial in trials
+            ],
+            next_cursor=next_cursor or "",
+            mlflow_links=links,
         )
 
     def ListTrials(self, request, context):  # noqa: N802
