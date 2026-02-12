@@ -5,7 +5,6 @@ import (
 	"time"
 
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
-	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/tenant"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -18,7 +17,7 @@ func (h *Handler) handleGetDatasetProfile(w http.ResponseWriter, r *http.Request
 
 	req := &crudv1.GetDatasetSummaryRequest{
 		ProfileId: profileID,
-		TenantId:  tenant.FromContext(r.Context()),
+		TenantId:  tenantIDFromRequest(r),
 	}
 
 	resp, err := h.analyticsClient.GetDatasetSummary(r.Context(), req)
@@ -45,7 +44,7 @@ func (h *Handler) handleListDatasetProfiles(w http.ResponseWriter, r *http.Reque
 	req := &crudv1.ListDatasetProfilesRequest{
 		Limit:    limit,
 		Offset:   offset,
-		TenantId: tenant.FromContext(r.Context()),
+		TenantId: tenantIDFromRequest(r),
 	}
 
 	if startStr := r.URL.Query().Get("start_date"); startStr != "" {
@@ -76,7 +75,7 @@ func (h *Handler) handleListDatasetProfiles(w http.ResponseWriter, r *http.Reque
 
 func (h *Handler) handleGetLatestDatasetProfile(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.analyticsClient.GetLatestDatasetProfile(r.Context(), &crudv1.GetLatestDatasetProfileRequest{
-		TenantId: tenant.FromContext(r.Context()),
+		TenantId: tenantIDFromRequest(r),
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -90,7 +89,7 @@ func (h *Handler) handleCompareDatasetProfiles(w http.ResponseWriter, r *http.Re
 	req := &crudv1.CompareDatasetProfilesRequest{
 		BaselineProfileId:  r.URL.Query().Get("baseline_id"),
 		CandidateProfileId: r.URL.Query().Get("candidate_id"),
-		TenantId:           tenant.FromContext(r.Context()),
+		TenantId:           tenantIDFromRequest(r),
 	}
 
 	if req.BaselineProfileId == "" || req.CandidateProfileId == "" {

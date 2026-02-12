@@ -17,7 +17,7 @@ func tenancyMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tenantID := r.Header.Get("X-Tenant-Id")
 		if tenantID == "" {
-			tenantID = "global"
+			tenantID = "default"
 		}
 
 		ctx := tenant.WithTenantID(r.Context(), tenantID)

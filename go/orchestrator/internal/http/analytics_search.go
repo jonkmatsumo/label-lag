@@ -10,7 +10,6 @@ import (
 
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
 	grpcclient "github.com/jonkmatsumo/label-lag/go/orchestrator/internal/grpc"
-	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/tenant"
 	"google.golang.org/grpc/codes"
 )
 
@@ -158,7 +157,7 @@ func (h *Handler) handleSearchTransactions(w http.ResponseWriter, r *http.Reques
 	if req.Offset != nil {
 		grpcReq.Offset = *req.Offset
 	}
-	grpcReq.TenantId = tenant.FromContext(r.Context())
+	grpcReq.TenantId = tenantIDFromRequest(r)
 
 	resp, err := h.analyticsClient.SearchTransactions(r.Context(), grpcReq)
 	if err != nil {

@@ -10,7 +10,6 @@ import (
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/requestid"
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/rules"
-	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/tenant"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -494,7 +493,7 @@ func (h *Handler) handleListRules(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.analyticsClient.ListRules(r.Context(), &crudv1.ListRulesRequest{
 		Status:          statusFilter,
 		IncludeArchived: includeArchived,
-		TenantId:        tenant.FromContext(r.Context()),
+		TenantId:        tenantIDFromRequest(r),
 	})
 	if err != nil {
 		writeRPCError(w, err)
@@ -542,7 +541,7 @@ func (h *Handler) handleCreateRule(w http.ResponseWriter, r *http.Request) {
 	// Reuse SaveRule
 	_, err := h.analyticsClient.SaveRule(r.Context(), &crudv1.SaveRuleRequest{
 		Rule:     &rule,
-		TenantId: tenant.FromContext(r.Context()),
+		TenantId: tenantIDFromRequest(r),
 	})
 	if err != nil {
 		writeRPCError(w, err)
@@ -567,7 +566,7 @@ func (h *Handler) handleGetRule(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := h.analyticsClient.GetRule(r.Context(), &crudv1.GetRuleRequest{
 		RuleId:   ruleID,
-		TenantId: tenant.FromContext(r.Context()),
+		TenantId: tenantIDFromRequest(r),
 	})
 	if err != nil {
 		writeRPCError(w, err)
@@ -615,7 +614,7 @@ func (h *Handler) handleUpdateRule(w http.ResponseWriter, r *http.Request) {
 
 	_, err := h.analyticsClient.SaveRule(r.Context(), &crudv1.SaveRuleRequest{
 		Rule:     &rule,
-		TenantId: tenant.FromContext(r.Context()),
+		TenantId: tenantIDFromRequest(r),
 	})
 	if err != nil {
 		writeRPCError(w, err)
@@ -640,7 +639,7 @@ func (h *Handler) handleDeleteRule(w http.ResponseWriter, r *http.Request) {
 
 	_, err := h.analyticsClient.DeleteRule(r.Context(), &crudv1.DeleteRuleRequest{
 		RuleId:   ruleID,
-		TenantId: tenant.FromContext(r.Context()),
+		TenantId: tenantIDFromRequest(r),
 	})
 	if err != nil {
 		writeRPCError(w, err)
@@ -671,7 +670,7 @@ func (h *Handler) handleListRuleVersions(w http.ResponseWriter, r *http.Request)
 		RuleId:   ruleID,
 		Limit:    int32(limit),
 		Offset:   int32(offset),
-		TenantId: tenant.FromContext(r.Context()),
+		TenantId: tenantIDFromRequest(r),
 	})
 	if err != nil {
 		writeRPCError(w, err)
@@ -700,7 +699,7 @@ func (h *Handler) handleGetRuleVersion(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.analyticsClient.GetRuleVersion(r.Context(), &crudv1.GetRuleVersionRequest{
 		RuleId:    ruleID,
 		VersionId: versionID,
-		TenantId:  tenant.FromContext(r.Context()),
+		TenantId:  tenantIDFromRequest(r),
 	})
 	if err != nil {
 		writeRPCError(w, err)
@@ -726,7 +725,7 @@ func (h *Handler) handleRuleReadiness(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := h.analyticsClient.GetRuleReadiness(r.Context(), &crudv1.GetRuleReadinessRequest{
 		RuleId:   ruleID,
-		TenantId: tenant.FromContext(r.Context()),
+		TenantId: tenantIDFromRequest(r),
 	})
 	if err != nil {
 		writeRPCError(w, err)
@@ -766,7 +765,7 @@ func (h *Handler) handlePublishRule(w http.ResponseWriter, r *http.Request) {
 		VersionId: req.VersionID,
 		Reason:    req.Reason,
 		Actor:     req.Actor,
-		TenantId:  tenant.FromContext(r.Context()),
+		TenantId:  tenantIDFromRequest(r),
 	})
 	if err != nil {
 		writeRPCError(w, err)
@@ -801,7 +800,7 @@ func (h *Handler) handleRuleDiff(w http.ResponseWriter, r *http.Request) {
 		RuleId:   ruleID,
 		VersionA: versionA,
 		VersionB: versionB,
-		TenantId: tenant.FromContext(r.Context()),
+		TenantId: tenantIDFromRequest(r),
 	})
 	if err != nil {
 		writeRPCError(w, err)

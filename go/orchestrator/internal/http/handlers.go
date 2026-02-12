@@ -21,7 +21,6 @@ import (
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/http/proxy"
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/requestid"
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/rules"
-	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/tenant"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -340,7 +339,7 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 		Amount:              req.Amount,
 		Currency:            req.Currency,
 		ClientTransactionId: req.ClientTransactionId,
-		TenantId:            tenant.FromContext(r.Context()),
+		TenantId:            tenantIDFromRequest(r),
 	})
 	if err != nil {
 		writeRPCError(w, err)
@@ -354,7 +353,7 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 
 	// 1. Try to fetch from Analytics
 	if h.analyticsClient != nil {
-		hydrated, err := h.analyticsClient.GetFeatures(r.Context(), req.UserId, tenant.FromContext(r.Context()))
+		hydrated, err := h.analyticsClient.GetFeatures(r.Context(), req.UserId, tenantIDFromRequest(r))
 		if err != nil {
 			h.logger.Warn("failed to hydrate features from analytics", "error", err, "user_id", req.UserId)
 		} else if hydrated != nil {
@@ -439,7 +438,7 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 
-		tenantID := tenant.FromContext(r.Context())
+		tenantID := tenantIDFromRequest(r)
 		evt := inferenceLogEvent{
 			ctx:         context.Background(),
 			requestID:   requestID,
@@ -670,7 +669,7 @@ func (h *Handler) handleTrain(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
 		return
 	}
-	req.TenantId = tenant.FromContext(r.Context())
+	req.TenantId = tenantIDFromRequest(r)
 
 	resp, err := h.trainingClient.Train(r.Context(), &req)
 	if err != nil {
@@ -707,7 +706,7 @@ func (h *Handler) handleDeployModel(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
 		return
 	}
-	req.TenantId = tenant.FromContext(r.Context())
+	req.TenantId = tenantIDFromRequest(r)
 
 	resp, err := h.forecastClient.DeployModel(r.Context(), &req)
 	if err != nil {
