@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import copy
+import os
 import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -26,6 +27,15 @@ def decode_jobs_cursor(cursor: str) -> tuple[datetime, str]:
 
     created_at = datetime.fromtimestamp(created_at_ms / 1000, tz=UTC)
     return created_at, job_id
+
+
+def _max_trial_rows_per_job() -> int:
+    # TUNING_MAX_TRIAL_ROWS_PER_JOB bounds persisted trial rows per job.
+    raw = os.getenv("TUNING_MAX_TRIAL_ROWS_PER_JOB", "2000")
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 2000
 
 
 class JobStore(Protocol):
@@ -55,6 +65,8 @@ class JobStore(Protocol):
     ) -> tuple[list[TrialRecord], str | None]: ...
 
     def set_heartbeat(self, job_id: str, ts: datetime) -> None: ...
+
+    def prune_terminal_jobs(self, older_than: datetime) -> int: ...
 
     def list(self, limit: int = 50) -> list[TuningJob]: ...
 
@@ -110,7 +122,11 @@ class InMemoryJobStore:
         with self._lock:
             if job_id not in self._jobs:
                 raise ValueError(f"Job {job_id} not found")
-            self._jobs[job_id].trials.append(copy.deepcopy(trial))
+            job = self._jobs[job_id]
+            job.trials.append(copy.deepcopy(trial))
+            max_rows = _max_trial_rows_per_job()
+            if len(job.trials) > max_rows:
+                job.trials = job.trials[-max_rows:]
 
     def list_trials(
         self,
@@ -161,6 +177,18 @@ class InMemoryJobStore:
                 raise ValueError(f"Job {job_id} not found")
             self._jobs[job_id].heartbeat_at = ts
             self._jobs[job_id].updated_at = ts
+
+    def prune_terminal_jobs(self, older_than: datetime) -> int:
+        with self._lock:
+            stale_ids = [
+                job_id
+                for job_id, job in self._jobs.items()
+                if job.status.is_terminal()
+                and (job.ended_at or job.updated_at or job.created_at) < older_than
+            ]
+            for job_id in stale_ids:
+                del self._jobs[job_id]
+            return len(stale_ids)
 
     def list(self, limit: int = 50) -> list[TuningJob]:
         return self.list_jobs(limit=limit)

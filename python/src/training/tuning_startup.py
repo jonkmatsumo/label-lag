@@ -15,6 +15,18 @@ logger = logging.getLogger(__name__)
 STALE_HEARTBEAT_ERROR = "worker restart / stale heartbeat"
 
 
+def get_tuning_job_retention_days() -> int:
+    # TUNING_JOB_RETENTION_DAYS controls terminal tuning job retention.
+    raw = os.getenv("TUNING_JOB_RETENTION_DAYS", "14")
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        logger.warning(
+            "Invalid TUNING_JOB_RETENTION_DAYS=%s; defaulting to 14 days", raw
+        )
+        return 14
+
+
 def build_tuning_job_store(config: TrainingServerConfig) -> JobStore:
     configured_mode = os.getenv("TUNING_JOB_STORE")
     default_mode = "postgres" if config.db_dsn else "memory"
@@ -87,3 +99,18 @@ def reenqueue_pending_jobs(job_store: JobStore, job_queue: JobQueue) -> int:
             job_queue.depth(),
         )
     return len(pending_jobs)
+
+
+def prune_tuning_jobs(
+    job_store: JobStore,
+    retention_days: int | None = None,
+    now: datetime | None = None,
+) -> int:
+    retention = (
+        retention_days
+        if retention_days is not None
+        else get_tuning_job_retention_days()
+    )
+    reference_time = now if now else datetime.now(UTC)
+    older_than = reference_time - timedelta(days=retention)
+    return job_store.prune_terminal_jobs(older_than=older_than)

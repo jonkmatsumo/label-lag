@@ -30,6 +30,7 @@ from training.job_queue import JobQueue  # noqa: E402
 from training.service import TrainingService  # noqa: E402
 from training.tuning_startup import (  # noqa: E402
     build_tuning_job_store,
+    prune_tuning_jobs,
     reconcile_stale_jobs,
     reenqueue_pending_jobs,
 )
@@ -68,6 +69,7 @@ def serve():
     heartbeat_interval_seconds = int(
         os.getenv("TUNING_HEARTBEAT_INTERVAL_SECONDS", "5")
     )
+    pruned_jobs = prune_tuning_jobs(job_store=job_store, now=datetime.now(UTC))
 
     reconciled_jobs = reconcile_stale_jobs(
         job_store=job_store,
@@ -76,7 +78,9 @@ def serve():
     )
     requeued_jobs = reenqueue_pending_jobs(job_store=job_store, job_queue=job_queue)
     logger.info(
-        "Tuning startup reconciliation complete: stale_failed=%s pending_requeued=%s",
+        "Tuning startup reconciliation complete: pruned=%s stale_failed=%s "
+        "pending_requeued=%s",
+        pruned_jobs,
         reconciled_jobs,
         requeued_jobs,
     )

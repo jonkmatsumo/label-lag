@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 
@@ -25,6 +26,15 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+def _max_trial_rows_per_job() -> int:
+    # TUNING_MAX_TRIAL_ROWS_PER_JOB bounds persisted trial rows per tuning job.
+    raw = os.getenv("TUNING_MAX_TRIAL_ROWS_PER_JOB", "2000")
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 2000
+
+
 class PostgresJobStore:
     """Durable tuning job storage backed by PostgreSQL."""
 
@@ -32,6 +42,7 @@ class PostgresJobStore:
         if not dsn:
             raise ValueError("PostgresJobStore requires a non-empty DSN")
         self._dsn = dsn
+        self._max_trial_rows_per_job = _max_trial_rows_per_job()
         self.ensure_tables_exist()
 
     def _connect(self):
@@ -136,6 +147,7 @@ class PostgresJobStore:
                 ),
             )
             self._upsert_trials(cur, job.job_id, job.trials)
+            self._trim_trials(cur, job.job_id)
 
     def get(self, job_id: str) -> TuningJob | None:
         with self._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -160,6 +172,7 @@ class PostgresJobStore:
             mutate_fn(job)
             self._persist_job(cur, job)
             self._upsert_trials(cur, job.job_id, job.trials)
+            self._trim_trials(cur, job.job_id)
             return job
 
     def list_jobs(
@@ -223,6 +236,7 @@ class PostgresJobStore:
     def append_trial(self, job_id: str, trial: TrialRecord) -> None:
         with self._connect() as conn, conn.cursor() as cur:
             self._upsert_trial(cur, job_id, trial)
+            self._trim_trials(cur, job_id)
             cur.execute(
                 "UPDATE tuning_jobs SET updated_at = %s WHERE job_id = %s",
                 (_utc_now(), job_id),
@@ -305,6 +319,24 @@ class PostgresJobStore:
             if cur.rowcount == 0:
                 raise ValueError(f"Job {job_id} not found")
 
+    def prune_terminal_jobs(self, older_than: datetime) -> int:
+        cutoff = _coerce_utc(older_than) or _utc_now()
+        terminal_statuses = [
+            TuningJobStatus.COMPLETED.value,
+            TuningJobStatus.FAILED.value,
+            TuningJobStatus.CANCELED.value,
+        ]
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM tuning_jobs
+                WHERE status = ANY(%s)
+                  AND COALESCE(ended_at, updated_at, created_at) < %s
+                """,
+                (terminal_statuses, cutoff),
+            )
+            return cur.rowcount
+
     def list(self, limit: int = 50) -> list[TuningJob]:
         return self.list_jobs(limit=limit)
 
@@ -384,6 +416,22 @@ class PostgresJobStore:
                 _coerce_utc(trial.ended_at),
                 trial.duration_ms,
             ),
+        )
+
+    def _trim_trials(self, cur, job_id: str) -> None:
+        cur.execute(
+            """
+            DELETE FROM tuning_trials
+            WHERE job_id = %s
+              AND trial_number IN (
+                SELECT trial_number
+                FROM tuning_trials
+                WHERE job_id = %s
+                ORDER BY trial_number DESC
+                OFFSET %s
+              )
+            """,
+            (job_id, job_id, self._max_trial_rows_per_job),
         )
 
     def _fetch_trials(self, cur, job_id: str) -> list[TrialRecord]:

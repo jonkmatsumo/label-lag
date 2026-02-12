@@ -13,6 +13,7 @@ from training.job_queue import JobQueue
 from training.job_store import JobStore
 from training.jobs import TuningJobStatus
 from training.schemas import SplitConfig, TuningConfig
+from training.tuning_startup import get_tuning_job_retention_days, prune_tuning_jobs
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,9 @@ class TuningWorker:
         configured_interval = int(os.getenv("TUNING_HEARTBEAT_INTERVAL_SECONDS", "5"))
         interval = heartbeat_interval_seconds or configured_interval
         self._heartbeat_interval_seconds = max(1, interval)
+        self._prune_interval_seconds = 15 * 60
+        self._tuning_job_retention_days = get_tuning_job_retention_days()
+        self._next_prune_at = datetime.now(UTC)
 
     def start(self):
         """Start the background worker thread."""
@@ -78,6 +82,7 @@ class TuningWorker:
     def _run(self):
         """Main loop of the worker thread."""
         while not self._stop_event.is_set():
+            self._maybe_prune_jobs()
             job_id = self.job_queue.get(block=True, timeout=1.0)
             if not job_id:
                 continue
@@ -247,6 +252,26 @@ class TuningWorker:
     def _heartbeat_loop(self, job_id: str, stop_event: threading.Event) -> None:
         while not stop_event.wait(self._heartbeat_interval_seconds):
             self._set_heartbeat(job_id)
+
+    def _maybe_prune_jobs(self) -> None:
+        now = datetime.now(UTC)
+        if now < self._next_prune_at:
+            return
+        self._next_prune_at = now + timedelta(seconds=self._prune_interval_seconds)
+        try:
+            removed = prune_tuning_jobs(
+                self.job_store,
+                retention_days=self._tuning_job_retention_days,
+                now=now,
+            )
+            if removed:
+                logger.info(
+                    "tuning_job_pruned removed_jobs=%s retention_days=%s",
+                    removed,
+                    self._tuning_job_retention_days,
+                )
+        except Exception:
+            logger.exception("Failed to prune terminal tuning jobs")
 
     def _set_heartbeat(self, job_id: str) -> None:
         try:
