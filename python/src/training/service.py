@@ -1203,6 +1203,18 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
         self.job_store.update(request.job_id, set_canceling)
         return self.GetTuningStatus(request, context)
 
+    def RequeueTuningJob(self, request, context):  # noqa: N802
+        context.abort(
+            grpc.StatusCode.UNIMPLEMENTED,
+            "RequeueTuningJob is not implemented",
+        )
+
+    def FinalizeTuningJob(self, request, context):  # noqa: N802
+        context.abort(
+            grpc.StatusCode.UNIMPLEMENTED,
+            "FinalizeTuningJob is not implemented",
+        )
+
     def GetHealth(self, request, context):  # noqa: N802
         """Fetch health status including spool information."""
         try:

@@ -47,6 +47,12 @@ service TrainingService {
   // Cancels a running tuning job.
   rpc CancelTuningJob(CancelTuningJobRequest) returns (TuningJobStatusResponse);
 
+  // Requeues a terminal tuning job for another execution attempt.
+  rpc RequeueTuningJob(RequeueTuningJobRequest) returns (RequeueTuningJobResponse);
+
+  // Force-finalizes a tuning job with an operator-provided reason.
+  rpc FinalizeTuningJob(FinalizeTuningJobRequest) returns (FinalizeTuningJobResponse);
+
   // Fetches health status including spool information.
   rpc GetHealth(GetHealthRequest) returns (GetHealthResponse);
 }
@@ -306,6 +312,30 @@ message ListTrialsResponse {
 message CancelTuningJobRequest {
   string job_id = 1;
   string tenant_id = 2;
+}
+
+message RequeueTuningJobRequest {
+  string job_id = 1;
+  string tenant_id = 2;
+}
+
+message RequeueTuningJobResponse {
+  string job_id = 1;
+  string status = 2;
+  string message = 3;
+}
+
+message FinalizeTuningJobRequest {
+  string job_id = 1;
+  string final_status = 2;
+  string reason = 3;
+  string tenant_id = 4;
+}
+
+message FinalizeTuningJobResponse {
+  string job_id = 1;
+  string status = 2;
+  string error_message = 3;
 }
 
 message GetHealthRequest {}
