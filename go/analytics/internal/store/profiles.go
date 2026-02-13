@@ -219,12 +219,21 @@ func (s *SQLStore) GetLatestDatasetProfile(ctx context.Context, tenantID string)
 }
 
 func (s *SQLStore) PruneDatasetProfiles(ctx context.Context, olderThan time.Time) (int64, error) {
+	return s.PruneDatasetProfilesByTenant(ctx, olderThan, "")
+}
+
+func (s *SQLStore) PruneDatasetProfilesByTenant(ctx context.Context, olderThan time.Time, tenantID string) (int64, error) {
 	query := `DELETE FROM dataset_profiles WHERE computed_at < $1`
+	args := []interface{}{olderThan}
+	if tenantID != "" {
+		query += ` AND tenant_id = $2`
+		args = append(args, tenantID)
+	}
 
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	result, err := s.db.ExecContext(queryCtx, query, olderThan)
+	result, err := s.db.ExecContext(queryCtx, query, args...)
 	if err != nil {
 		return 0, db.MapDBError(err)
 	}

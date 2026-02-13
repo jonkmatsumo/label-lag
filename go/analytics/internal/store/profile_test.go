@@ -119,3 +119,21 @@ func TestPruneDatasetProfiles(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(5), count)
 }
+
+func TestPruneDatasetProfilesByTenant(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+
+	cutoff := time.Now().Add(-24 * time.Hour)
+
+	mock.ExpectExec("DELETE FROM dataset_profiles").
+		WithArgs(cutoff, "tenant-1").
+		WillReturnResult(sqlmock.NewResult(0, 2))
+
+	count, err := s.PruneDatasetProfilesByTenant(context.Background(), cutoff, "tenant-1")
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), count)
+}

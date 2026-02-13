@@ -1,4 +1,4 @@
-.PHONY: up down restart install test lint clean infra-up infra-down infra-logs app-up app-down app-build app-rebuild app-logs rebuild-api rebuild-bff rebuild-web bff-test web-test reset-db reset-minio reset-all proto-gen proto-gen-go proto-gen-python
+.PHONY: up down restart install test lint clean infra-up infra-down infra-logs app-up app-down app-build app-rebuild app-logs rebuild-api rebuild-bff rebuild-web bff-test web-test reset-db reset-minio reset-all proto-gen proto-gen-go proto-gen-python analytics-maintenance
 
 # Catch-all start command
 up: app-up
@@ -201,3 +201,22 @@ db-verify:
 	@echo "Verifying migrations apply cleanly..."
 	# This target expects a running DB or can be used in CI with a service container
 	cd go/analytics && go run cmd/migrate/main.go
+
+TENANT_ID ?= tenant-1
+RETENTION_DAYS ?= 30
+ALL_TENANTS ?= 0
+
+analytics-maintenance:
+	@echo "Running analytics aggregate reconciliation..."
+	cd go/analytics && go run cmd/reconcile/main.go
+	@if [ "$(ALL_TENANTS)" = "1" ]; then \
+		echo "WARNING: pruning dataset profiles for ALL tenants (retention=$(RETENTION_DAYS)d)"; \
+		cd go/analytics && go run cmd/prune/main.go --all-tenants --retention-days $(RETENTION_DAYS); \
+	else \
+		if [ -z "$(TENANT_ID)" ]; then \
+			echo "TENANT_ID is required unless ALL_TENANTS=1"; \
+			exit 1; \
+		fi; \
+		echo "Pruning dataset profiles for tenant $(TENANT_ID) (retention=$(RETENTION_DAYS)d)"; \
+		cd go/analytics && go run cmd/prune/main.go --tenant-id "$(TENANT_ID)" --retention-days $(RETENTION_DAYS); \
+	fi
