@@ -18,6 +18,7 @@ func TestGetDatasetProfile_DynamicFeatures(t *testing.T) {
 
 	// 1. Total records count
 	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM generated_records`).
+		WithArgs("tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(100))
 
 	// 2. Static numeric features (just mock one, then mock the rest)
@@ -54,7 +55,7 @@ func TestGetDatasetProfile_DynamicFeatures(t *testing.T) {
 			AddRow("val1", 50).
 			AddRow("val2", 30))
 
-	resp, err := s.GetDatasetProfile(context.Background(), "test-dataset", 50, 5)
+	resp, err := s.GetDatasetProfile(context.Background(), "test-dataset", 50, 5, "tenant-1")
 	require.NoError(t, err)
 	assert.Equal(t, int64(100), resp.TotalRecords)
 
@@ -94,7 +95,7 @@ func TestGetDatasetProfile_Caps(t *testing.T) {
 
 	s := NewSQLStore(db)
 
-	mock.ExpectQuery("SELECT COUNT").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(100))
+	mock.ExpectQuery("SELECT COUNT").WithArgs("tenant-1").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(100))
 
 	// If limitFeatures is 2, it should stop after 2 features
 	mock.ExpectQuery("SELECT AVG").WillReturnRows(sqlmock.NewRows([]string{"mean", "stddev", "null_count", "min_val", "max_val"}).
@@ -106,7 +107,7 @@ func TestGetDatasetProfile_Caps(t *testing.T) {
 	mock.ExpectQuery("SELECT WIDTH_BUCKET").WillReturnRows(sqlmock.NewRows([]string{"bucket", "count"}).
 		AddRow(1, 100))
 
-	resp, err := s.GetDatasetProfile(context.Background(), "test-dataset", 2, 5)
+	resp, err := s.GetDatasetProfile(context.Background(), "test-dataset", 2, 5, "tenant-1")
 	require.NoError(t, err)
 	assert.Len(t, resp.FeatureProfiles, 2)
 	assert.True(t, resp.IsPartial)

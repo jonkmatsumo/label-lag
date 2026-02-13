@@ -40,7 +40,7 @@ func (s *Service) GetJob(ctx context.Context, req *pb.GetJobRequest) (*pb.GetJob
 		return nil, status.Error(codes.InvalidArgument, "job_id required")
 	}
 
-	job, err := s.store.GetJob(ctx, req.JobId)
+	job, err := s.store.GetJob(ctx, req.JobId, req.TenantId)
 	if err != nil {
 		return nil, err
 	}
@@ -63,14 +63,19 @@ func (s *Service) GetJobEvents(ctx context.Context, req *pb.GetJobEventsRequest)
 	if err != nil {
 		return nil, err
 	}
+	if req.BeforeId < 0 {
+		return nil, status.Error(codes.InvalidArgument, "before_id must be >= 0")
+	}
+	req.Limit = limit
+	req.Offset = offset
 
 	// Verify job exists first
-	_, err = s.store.GetJob(ctx, req.JobId)
+	_, err = s.store.GetJob(ctx, req.JobId, req.TenantId)
 	if err != nil {
 		return nil, err
 	}
 
-	events, err := s.store.GetJobEvents(ctx, req.JobId, limit, offset)
+	events, err := s.store.GetJobEvents(ctx, req)
 	if err != nil {
 		return nil, err
 	}

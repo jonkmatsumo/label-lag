@@ -8,17 +8,30 @@ import (
 	"os"
 	"time"
 
+	"github.com/jonkmatsumo/label-lag/go/analytics/internal/config"
 	"github.com/jonkmatsumo/label-lag/go/analytics/internal/store"
 	_ "github.com/lib/pq"
 )
 
 func main() {
-	retention := flag.Duration("retention", 30*24*time.Hour, "Retention period for dataset profiles (e.g., 720h)")
+	tenantID := flag.String("tenant-id", defaultTenantID(), "Tenant ID to prune dataset profiles for")
+	allTenants := flag.Bool("all-tenants", false, "Prune dataset profiles across all tenants")
+	retentionDays := flag.Int("retention-days", 30, "Retention period in days for dataset profiles")
 	flag.Parse()
 
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		dbURL = "postgres://synthetic:synthetic_dev_password@localhost:5432/synthetic_data?sslmode=disable"
+	if *retentionDays <= 0 {
+		log.Fatalf("retention-days must be > 0 (got %d)", *retentionDays)
+	}
+	if *allTenants && *tenantID != "" {
+		log.Printf("ignoring --tenant-id=%q because --all-tenants was provided", *tenantID)
+	}
+	if !*allTenants && *tenantID == "" {
+		log.Fatal("tenant-id is required unless --all-tenants is set")
+	}
+
+	dbURL, err := config.ResolveDatabaseURL(os.Getenv)
+	if err != nil {
+		log.Fatalf("failed to resolve database url: %v", err)
 	}
 
 	db, err := sql.Open("postgres", dbURL)
@@ -33,13 +46,33 @@ func main() {
 
 	s := store.NewSQLStore(db)
 
-	olderThan := time.Now().Add(-*retention)
-	log.Printf("Pruning dataset profiles older than %v (%s)", *retention, olderThan.Format(time.RFC3339))
+	retention := time.Duration(*retentionDays) * 24 * time.Hour
+	olderThan := time.Now().Add(-retention)
+	if *allTenants {
+		log.Printf("WARNING: pruning dataset profiles for ALL tenants older than %d days (%s)", *retentionDays, olderThan.Format(time.RFC3339))
+	} else {
+		log.Printf("Pruning dataset profiles for tenant %q older than %d days (%s)", *tenantID, *retentionDays, olderThan.Format(time.RFC3339))
+	}
 
-	count, err := s.PruneDatasetProfiles(context.Background(), olderThan)
+	scopeTenantID := ""
+	if !*allTenants {
+		scopeTenantID = *tenantID
+	}
+	count, err := s.PruneDatasetProfilesByTenant(context.Background(), olderThan, scopeTenantID)
 	if err != nil {
 		log.Fatalf("pruning failed: %v", err)
 	}
 
-	log.Printf("Successfully pruned %d dataset profiles", count)
+	if *allTenants {
+		log.Printf("Successfully pruned %d dataset profiles across all tenants", count)
+	} else {
+		log.Printf("Successfully pruned %d dataset profiles for tenant %q", count, *tenantID)
+	}
+}
+
+func defaultTenantID() string {
+	if v := os.Getenv("TENANT_ID"); v != "" {
+		return v
+	}
+	return "tenant-1"
 }

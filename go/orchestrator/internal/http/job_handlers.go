@@ -2,10 +2,10 @@ package httpserver
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
-	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/tenant"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -23,11 +23,18 @@ func (h *Handler) handleListJobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	req := &crudv1.ListJobsRequest{
-		Limit:   limit,
-		Offset:  offset,
-		JobType: r.URL.Query().Get("job_type"),
-		Status:  r.URL.Query().Get("status"),
+		Limit:    limit,
+		Offset:   offset,
+		JobType:  r.URL.Query().Get("job_type"),
+		Status:   r.URL.Query().Get("status"),
+		TenantId: tenantID,
 	}
 
 	if startStr := r.URL.Query().Get("start_date"); startStr != "" {
@@ -68,9 +75,15 @@ func (h *Handler) handleGetJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	resp, err := h.analyticsClient.GetJob(r.Context(), &crudv1.GetJobRequest{
 		JobId:    jobID,
-		TenantId: tenant.FromContext(r.Context()),
+		TenantId: tenantID,
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -98,12 +111,36 @@ func (h *Handler) handleGetJobEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := h.analyticsClient.GetJobEvents(r.Context(), &crudv1.GetJobEventsRequest{
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
+	req := &crudv1.GetJobEventsRequest{
 		JobId:    jobID,
 		Limit:    limit,
 		Offset:   offset,
-		TenantId: tenant.FromContext(r.Context()),
-	})
+		TenantId: tenantID,
+	}
+	if beforeTS := r.URL.Query().Get("before_ts"); beforeTS != "" {
+		parsed, err := time.Parse(time.RFC3339, beforeTS)
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, "invalid before_ts format (RFC3339 required)")
+			return
+		}
+		req.BeforeTs = timestamppb.New(parsed)
+	}
+	if beforeID := r.URL.Query().Get("before_id"); beforeID != "" {
+		parsed, err := strconv.ParseInt(beforeID, 10, 64)
+		if err != nil || parsed < 0 {
+			writeJSONError(w, http.StatusBadRequest, "invalid before_id (integer >= 0 required)")
+			return
+		}
+		req.BeforeId = parsed
+	}
+
+	resp, err := h.analyticsClient.GetJobEvents(r.Context(), req)
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
 		return
@@ -113,8 +150,14 @@ func (h *Handler) handleGetJobEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleGetJobSummary(w http.ResponseWriter, r *http.Request) {
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	req := &crudv1.GetJobSummaryRequest{
-		TenantId: tenant.FromContext(r.Context()),
+		TenantId: tenantID,
 	}
 
 	if startStr := r.URL.Query().Get("start_time"); startStr != "" {

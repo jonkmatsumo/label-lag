@@ -13,39 +13,52 @@ import (
 )
 
 func (s *Service) GetDatasetSummary(ctx context.Context, req *pb.GetDatasetSummaryRequest) (*pb.GetDatasetSummaryResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "request required")
+	}
+	if req.ProfileId == "" {
+		req.ProfileId = "latest"
+	}
+
 	if req.ProfileId != "" && req.ProfileId != "latest" {
-		profile, err := s.store.GetDatasetProfileCached(ctx, req.ProfileId)
+		profile, err := s.store.GetDatasetProfileCached(ctx, req.ProfileId, req.TenantId)
 		if err != nil {
 			return nil, err
 		}
 		return &pb.GetDatasetSummaryResponse{Profile: profile}, nil
 	}
 
-	// Compute on-the-fly if "latest" or empty
-	// Use default limits
-	rawProfile, err := s.store.GetDatasetProfile(ctx, "", 100, 20)
+	// Resolve "latest" within tenant if a cached profile already exists.
+	latest, err := s.store.GetLatestDatasetProfile(ctx, req.TenantId)
+	if err == nil && latest != nil && latest.ProfileId != "" {
+		profile, err := s.store.GetDatasetProfileCached(ctx, latest.ProfileId, req.TenantId)
+		if err == nil {
+			return &pb.GetDatasetSummaryResponse{Profile: profile}, nil
+		}
+		if status.Code(err) != codes.NotFound {
+			return nil, err
+		}
+	} else if err != nil && status.Code(err) != codes.NotFound {
+		return nil, err
+	}
+
+	// Compute on-the-fly if no cached latest is available.
+	rawProfile, err := s.store.GetDatasetProfile(ctx, "", 100, 20, req.TenantId)
 	if err != nil {
 		return nil, err
 	}
 
 	// Convert and save
 	profileID := uuid.New().String()
-	if req.ProfileId == "latest" {
-		// In a real system, we might update a "latest" pointer or just create new
-		// For now, create new
-	}
-
 	profile := &pb.DatasetProfile{
 		ProfileId:       profileID,
-		TenantId:        "", // Default
+		TenantId:        req.TenantId,
 		ComputedAt:      timestamppb.New(time.Now()),
 		RecordCount:     rawProfile.TotalRecords,
 		FeatureProfiles: rawProfile.FeatureProfiles,
 	}
 
 	if err := s.store.SaveDatasetProfile(ctx, profile); err != nil {
-		// Log error but return result? Or fail?
-		// Let's fail for now to signal issues
 		return nil, err
 	}
 
@@ -80,7 +93,7 @@ func (s *Service) ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetPr
 }
 
 func (s *Service) GetLatestDatasetProfile(ctx context.Context, req *pb.GetLatestDatasetProfileRequest) (*pb.GetLatestDatasetProfileResponse, error) {
-	return s.store.GetLatestDatasetProfile(ctx)
+	return s.store.GetLatestDatasetProfile(ctx, req.TenantId)
 }
 
 func (s *Service) CompareDatasetProfiles(ctx context.Context, req *pb.CompareDatasetProfilesRequest) (*pb.CompareDatasetProfilesResponse, error) {
@@ -88,12 +101,12 @@ func (s *Service) CompareDatasetProfiles(ctx context.Context, req *pb.CompareDat
 		return nil, status.Error(codes.InvalidArgument, "baseline and candidate profile IDs required")
 	}
 
-	baseline, err := s.getProfileOrCompute(ctx, req.BaselineProfileId)
+	baseline, err := s.getProfileOrCompute(ctx, req.BaselineProfileId, req.TenantId)
 	if err != nil {
 		return nil, err
 	}
 
-	candidate, err := s.getProfileOrCompute(ctx, req.CandidateProfileId)
+	candidate, err := s.getProfileOrCompute(ctx, req.CandidateProfileId, req.TenantId)
 	if err != nil {
 		return nil, err
 	}
@@ -136,15 +149,15 @@ func (s *Service) CompareDatasetProfiles(ctx context.Context, req *pb.CompareDat
 	}, nil
 }
 
-func (s *Service) getProfileOrCompute(ctx context.Context, id string) (*pb.DatasetProfile, error) {
+func (s *Service) getProfileOrCompute(ctx context.Context, id, tenantID string) (*pb.DatasetProfile, error) {
 	if id == "latest" {
-		resp, err := s.GetDatasetSummary(ctx, &pb.GetDatasetSummaryRequest{ProfileId: "latest"})
+		resp, err := s.GetDatasetSummary(ctx, &pb.GetDatasetSummaryRequest{ProfileId: "latest", TenantId: tenantID})
 		if err != nil {
 			return nil, err
 		}
 		return resp.Profile, nil
 	}
-	return s.store.GetDatasetProfileCached(ctx, id)
+	return s.store.GetDatasetProfileCached(ctx, id, tenantID)
 }
 
 func calculatePSI(base, cand *pb.FeatureProfile) float64 {

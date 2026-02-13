@@ -22,16 +22,17 @@ func TestListDecisions(t *testing.T) {
 	req := &pb.ListDecisionsRequest{
 		UserId:   "user-1",
 		Decision: "APPROVE",
+		TenantId: "tenant-1",
 		Limit:    10,
 		Offset:   0,
 	}
 
 	mock.ExpectQuery("SELECT COUNT").
-		WithArgs("user-1", "APPROVE").
+		WithArgs("user-1", "APPROVE", "tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 
 	mock.ExpectQuery("SELECT request_id, user_id, ts, final_score, decision, rule_impacts").
-		WithArgs("user-1", "APPROVE", int32(10), int32(0)).
+		WithArgs("user-1", "APPROVE", "tenant-1", int32(10), int32(0)).
 		WillReturnRows(sqlmock.NewRows([]string{"request_id", "user_id", "ts", "final_score", "decision", "rule_impacts"}).
 			AddRow("req-1", "user-1", time.Now(), 45, "APPROVE", []byte("[]")))
 
@@ -55,10 +56,10 @@ func TestGetDecision(t *testing.T) {
 		AddRow("req-1", time.Now(), "v1", "v1", 35, 45, []byte(ruleImpactsJSON), "user-1", "APPROVE")
 
 	mock.ExpectQuery(`SELECT .* FROM inference_events WHERE request_id = \$1`).
-		WithArgs("req-1").
+		WithArgs("req-1", "tenant-1").
 		WillReturnRows(rows)
 
-	decision, err := s.GetDecision(context.Background(), "req-1")
+	decision, err := s.GetDecision(context.Background(), "req-1", "tenant-1")
 	require.NoError(t, err)
 	assert.Equal(t, "req-1", decision.RequestId)
 	assert.Len(t, decision.RuleImpacts, 1)
@@ -73,8 +74,8 @@ func TestGetDecisionTrace(t *testing.T) {
 
 	s := NewSQLStore(db)
 
-	mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM inference_events WHERE request_id = \$1\)`).
-		WithArgs("req-1").
+	mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM inference_events WHERE request_id = \$1.*\)`).
+		WithArgs("req-1", "tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
 
 	rows := sqlmock.NewRows([]string{"rule_id", "is_shadow", "score_delta"}).
@@ -82,10 +83,10 @@ func TestGetDecisionTrace(t *testing.T) {
 		AddRow("rule-2", true, 5.0)
 
 	mock.ExpectQuery("SELECT rule_id, is_shadow, score_delta FROM rule_impacts").
-		WithArgs("req-1").
+		WithArgs("req-1", "tenant-1").
 		WillReturnRows(rows)
 
-	trace, err := s.GetDecisionTrace(context.Background(), "req-1")
+	trace, err := s.GetDecisionTrace(context.Background(), "req-1", "tenant-1")
 	require.NoError(t, err)
 	assert.Len(t, trace, 2)
 	assert.Equal(t, "rule-1", trace[0].RuleId)
@@ -105,6 +106,7 @@ func TestGetRuleImpact(t *testing.T) {
 	req := &pb.GetRuleImpactRequest{
 		RuleId:    "rule-1",
 		StartDate: timestamppb.New(startDate),
+		TenantId:  "tenant-1",
 	}
 
 	mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM rules WHERE rule_id = \$1\)`).
@@ -112,11 +114,11 @@ func TestGetRuleImpact(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
 
 	mock.ExpectQuery(`SELECT COUNT\(\*\), COALESCE\(AVG\(ri.score_delta\), 0\)`).
-		WithArgs("rule-1", startDate).
+		WithArgs("rule-1", "tenant-1", startDate).
 		WillReturnRows(sqlmock.NewRows([]string{"count", "avg"}).AddRow(100, 15.5))
 
 	mock.ExpectQuery(`SELECT DATE\(ie.ts\) as date, COUNT\(\*\), COALESCE\(AVG\(ri.score_delta\), 0\), SUM`).
-		WithArgs("rule-1", startDate).
+		WithArgs("rule-1", "tenant-1", startDate).
 		WillReturnRows(sqlmock.NewRows([]string{"date", "count", "avg", "changes"}).
 			AddRow(time.Now().UTC(), 50, 14.0, 5).
 			AddRow(time.Now().AddDate(0, 0, -1).UTC(), 50, 17.0, 10))

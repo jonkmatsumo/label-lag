@@ -9,6 +9,8 @@ import (
 
 	"github.com/jonkmatsumo/label-lag/go/analytics/internal/db"
 	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -106,9 +108,22 @@ func (s *SQLStore) StoreGeneratedData(ctx context.Context, records []*pb.Generat
 	return int64(len(records)), nil
 }
 
-func (s *SQLStore) GetFeatureSample(ctx context.Context, sampleSize int32, stratify bool) ([]*pb.FeatureSample, error) {
+func (s *SQLStore) GetFeatureSample(ctx context.Context, sampleSize int32, stratify bool, tenantID string) ([]*pb.FeatureSample, error) {
 	pgVersion, _ := getPostgresVersion(ctx, s.db)
-	stats, err := getTableStats(ctx, s.db, "generated_records")
+	stats := tableStats{}
+	var err error
+	if tenantID != "" {
+		queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+		defer cancel()
+		err = s.db.QueryRowContext(queryCtx, `
+			SELECT COALESCE(MIN(gr.id), 0), COALESCE(MAX(gr.id), 0), COUNT(*)
+			FROM generated_records gr
+			INNER JOIN inference_events ie ON gr.record_id = ie.request_id
+			WHERE ie.tenant_id = $1
+		`, tenantID).Scan(&stats.minID, &stats.maxID, &stats.totalCount)
+	} else {
+		stats, err = getTableStats(ctx, s.db, "generated_records")
+	}
 	if err != nil {
 		return nil, db.MapDBError(fmt.Errorf("failed to get table stats: %w", err))
 	}
@@ -124,7 +139,13 @@ func (s *SQLStore) GetFeatureSample(ctx context.Context, sampleSize int32, strat
 		var fraudRate float64
 		queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 		defer cancel()
-		err = s.db.QueryRowContext(queryCtx, "SELECT CAST(SUM(CASE WHEN is_fraudulent THEN 1 ELSE 0 END) AS FLOAT) / COUNT(*) FROM generated_records").Scan(&fraudRate)
+		fraudRateQuery := "SELECT CAST(SUM(CASE WHEN gr.is_fraudulent THEN 1 ELSE 0 END) AS FLOAT) / COUNT(*) FROM generated_records gr"
+		var fraudArgs []interface{}
+		if tenantID != "" {
+			fraudRateQuery += " INNER JOIN inference_events ie ON gr.record_id = ie.request_id WHERE ie.tenant_id = $1"
+			fraudArgs = append(fraudArgs, tenantID)
+		}
+		err = s.db.QueryRowContext(queryCtx, fraudRateQuery, fraudArgs...).Scan(&fraudRate)
 		if err != nil {
 			fraudRate = 0.0 // Fallback
 		}
@@ -133,7 +154,7 @@ func (s *SQLStore) GetFeatureSample(ctx context.Context, sampleSize int32, strat
 
 		// Sample fraud
 		if fraudTarget > 0 {
-			fSamples, err := s.sampleClass(ctx, true, fraudTarget, pgVersion, stats)
+			fSamples, err := s.sampleClass(ctx, true, fraudTarget, pgVersion, stats, tenantID)
 			if err != nil {
 				return nil, db.MapDBError(fmt.Errorf("failed to sample fraud class: %w", err))
 			}
@@ -142,7 +163,7 @@ func (s *SQLStore) GetFeatureSample(ctx context.Context, sampleSize int32, strat
 
 		// Sample non-fraud
 		if nonFraudTarget > 0 {
-			nfSamples, err := s.sampleClass(ctx, false, nonFraudTarget, pgVersion, stats)
+			nfSamples, err := s.sampleClass(ctx, false, nonFraudTarget, pgVersion, stats, tenantID)
 			if err != nil {
 				return nil, db.MapDBError(fmt.Errorf("failed to sample non-fraud class: %w", err))
 			}
@@ -152,7 +173,7 @@ func (s *SQLStore) GetFeatureSample(ctx context.Context, sampleSize int32, strat
 
 	if len(samples) == 0 {
 		// Fallback to generic sampling if stratification failed or not requested
-		samples, err = s.sampleGeneric(ctx, sampleSize, pgVersion, stats)
+		samples, err = s.sampleGeneric(ctx, sampleSize, pgVersion, stats, tenantID)
 		if err != nil {
 			return nil, db.MapDBError(err)
 		}
@@ -161,7 +182,16 @@ func (s *SQLStore) GetFeatureSample(ctx context.Context, sampleSize int32, strat
 	return samples, nil
 }
 
-func (s *SQLStore) sampleClass(ctx context.Context, isFraudulent bool, limit int32, pgVersion int, stats tableStats) ([]*pb.FeatureSample, error) {
+func (s *SQLStore) sampleClass(ctx context.Context, isFraudulent bool, limit int32, pgVersion int, stats tableStats, tenantID string) ([]*pb.FeatureSample, error) {
+	tenantJoin := ""
+	tenantPredicate := ""
+	queryArgs := []interface{}{}
+	if tenantID != "" {
+		tenantJoin = " INNER JOIN inference_events ie ON gr.record_id = ie.request_id"
+		tenantPredicate = " AND ie.tenant_id = $1"
+		queryArgs = append(queryArgs, tenantID)
+	}
+
 	var query string
 	if pgVersion >= 16 && stats.totalCount > 100000 {
 		fraction := float64(limit) / float64(stats.totalCount)
@@ -169,28 +199,42 @@ func (s *SQLStore) sampleClass(ctx context.Context, isFraudulent bool, limit int
 			SELECT gr.record_id, gr.is_fraudulent, fs.velocity_24h, fs.amount_to_avg_ratio_30d, fs.balance_volatility_z_score
 			FROM generated_records gr TABLESAMPLE SYSTEM (%f)
 			INNER JOIN feature_snapshots fs ON gr.record_id = fs.record_id
-			WHERE gr.is_fraudulent = %t
-			LIMIT %d`, fraction*100, isFraudulent, limit)
+			%s
+			WHERE gr.is_fraudulent = %t%s
+			LIMIT %d`, fraction*100, tenantJoin, isFraudulent, tenantPredicate, limit)
 	} else if stats.maxID > stats.minID && stats.totalCount > 10000 {
 		query = fmt.Sprintf(`
 			SELECT gr.record_id, gr.is_fraudulent, fs.velocity_24h, fs.amount_to_avg_ratio_30d, fs.balance_volatility_z_score
 			FROM generated_records gr
 			INNER JOIN feature_snapshots fs ON gr.record_id = fs.record_id
-			WHERE gr.id BETWEEN %d AND %d AND gr.is_fraudulent = %t
-			LIMIT %d`, stats.minID, stats.maxID, isFraudulent, limit)
+			%s
+			WHERE gr.id BETWEEN %d AND %d AND gr.is_fraudulent = %t%s
+			LIMIT %d`, tenantJoin, stats.minID, stats.maxID, isFraudulent, tenantPredicate, limit)
 	} else {
 		query = fmt.Sprintf(`
 			SELECT gr.record_id, gr.is_fraudulent, fs.velocity_24h, fs.amount_to_avg_ratio_30d, fs.balance_volatility_z_score
 			FROM generated_records gr
 			INNER JOIN feature_snapshots fs ON gr.record_id = fs.record_id
-			WHERE gr.is_fraudulent = %t
+			%s
+			WHERE gr.is_fraudulent = %t%s
 			ORDER BY RANDOM()
-			LIMIT %d`, isFraudulent, limit)
+			LIMIT %d`, tenantJoin, isFraudulent, tenantPredicate, limit)
 	}
-	return s.executeQuery(ctx, query)
+	return s.executeQuery(ctx, query, queryArgs...)
 }
 
-func (s *SQLStore) sampleGeneric(ctx context.Context, limit int32, pgVersion int, stats tableStats) ([]*pb.FeatureSample, error) {
+func (s *SQLStore) sampleGeneric(ctx context.Context, limit int32, pgVersion int, stats tableStats, tenantID string) ([]*pb.FeatureSample, error) {
+	tenantJoin := ""
+	tenantWhere := ""
+	tenantPredicate := ""
+	queryArgs := []interface{}{}
+	if tenantID != "" {
+		tenantJoin = " INNER JOIN inference_events ie ON gr.record_id = ie.request_id"
+		tenantWhere = " WHERE ie.tenant_id = $1"
+		tenantPredicate = " AND ie.tenant_id = $1"
+		queryArgs = append(queryArgs, tenantID)
+	}
+
 	var query string
 	if pgVersion >= 16 && stats.totalCount > 100000 {
 		fraction := float64(limit) / float64(stats.totalCount)
@@ -198,7 +242,9 @@ func (s *SQLStore) sampleGeneric(ctx context.Context, limit int32, pgVersion int
 			SELECT gr.record_id, gr.is_fraudulent, fs.velocity_24h, fs.amount_to_avg_ratio_30d, fs.balance_volatility_z_score
 			FROM generated_records gr TABLESAMPLE SYSTEM (%f)
 			INNER JOIN feature_snapshots fs ON gr.record_id = fs.record_id
-			LIMIT %d`, fraction*100, limit)
+			%s
+			%s
+			LIMIT %d`, fraction*100, tenantJoin, tenantWhere, limit)
 	} else if stats.maxID > stats.minID && stats.totalCount > 10000 {
 		// Uniform ID sampling hint
 		step := (stats.maxID - stats.minID) / int64(limit)
@@ -209,24 +255,27 @@ func (s *SQLStore) sampleGeneric(ctx context.Context, limit int32, pgVersion int
 			SELECT gr.record_id, gr.is_fraudulent, fs.velocity_24h, fs.amount_to_avg_ratio_30d, fs.balance_volatility_z_score
 			FROM generated_records gr
 			INNER JOIN feature_snapshots fs ON gr.record_id = fs.record_id
-			WHERE gr.id IN (SELECT generate_series(%d, %d, %d))
-			LIMIT %d`, stats.minID, stats.maxID, step, limit)
+			%s
+			WHERE gr.id IN (SELECT generate_series(%d, %d, %d))%s
+			LIMIT %d`, tenantJoin, stats.minID, stats.maxID, step, tenantPredicate, limit)
 	} else {
 		query = fmt.Sprintf(`
 			SELECT gr.record_id, gr.is_fraudulent, fs.velocity_24h, fs.amount_to_avg_ratio_30d, fs.balance_volatility_z_score
 			FROM generated_records gr
 			INNER JOIN feature_snapshots fs ON gr.record_id = fs.record_id
+			%s
+			%s
 			ORDER BY RANDOM()
-			LIMIT %d`, limit)
+			LIMIT %d`, tenantJoin, tenantWhere, limit)
 	}
-	return s.executeQuery(ctx, query)
+	return s.executeQuery(ctx, query, queryArgs...)
 }
 
-func (s *SQLStore) executeQuery(ctx context.Context, query string) ([]*pb.FeatureSample, error) {
+func (s *SQLStore) executeQuery(ctx context.Context, query string, args ...interface{}) ([]*pb.FeatureSample, error) {
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	rows, err := s.db.QueryContext(queryCtx, query)
+	rows, err := s.db.QueryContext(queryCtx, query, args...)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -283,23 +332,30 @@ func calculateStratifiedCounts(total int64, fraudRate float64, sampleSize int32,
 	return fraudSample, nonFraudSample
 }
 
-func (s *SQLStore) GetDriftWindow(ctx context.Context, cutoff time.Time) ([]*pb.TransactionDetail, error) {
+func (s *SQLStore) GetDriftWindow(ctx context.Context, cutoff time.Time, tenantID string) ([]*pb.TransactionDetail, error) {
 	query := `
 		SELECT
-			record_id,
-			user_id,
-			created_at,
-			velocity_24h,
-			amount_to_avg_ratio_30d,
-			balance_volatility_z_score
-		FROM feature_snapshots
-		WHERE computed_at >= $1
-		ORDER BY computed_at DESC
+			fs.record_id,
+			fs.user_id,
+			fs.computed_at,
+			fs.velocity_24h,
+			fs.amount_to_avg_ratio_30d,
+			fs.balance_volatility_z_score
+		FROM feature_snapshots fs
 	`
+	args := []interface{}{cutoff}
+	where := " WHERE fs.computed_at >= $1"
+	if tenantID != "" {
+		query += " INNER JOIN inference_events ie ON fs.record_id = ie.request_id"
+		where += " AND ie.tenant_id = $2"
+		args = append(args, tenantID)
+	}
+	query += where + " ORDER BY fs.computed_at DESC"
+
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	rows, err := s.db.QueryContext(queryCtx, query, cutoff)
+	rows, err := s.db.QueryContext(queryCtx, query, args...)
 	if err != nil {
 		return nil, db.MapDBError(fmt.Errorf("failed to query drift window: %w", err))
 	}
@@ -326,17 +382,23 @@ func (s *SQLStore) GetDriftWindow(ctx context.Context, cutoff time.Time) ([]*pb.
 	return txs, nil
 }
 
-func (s *SQLStore) GetInferenceScores(ctx context.Context, cutoff time.Time) ([]int32, error) {
+func (s *SQLStore) GetInferenceScores(ctx context.Context, cutoff time.Time, tenantID string) ([]int32, error) {
 	query := `
 		SELECT final_score
 		FROM inference_events
-		WHERE ts >= $1
-		ORDER BY ts DESC
 	`
+	args := []interface{}{cutoff}
+	where := " WHERE ts >= $1"
+	if tenantID != "" {
+		where += " AND tenant_id = $2"
+		args = append(args, tenantID)
+	}
+	query += where + " ORDER BY ts DESC"
+
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	rows, err := s.db.QueryContext(queryCtx, query, cutoff)
+	rows, err := s.db.QueryContext(queryCtx, query, args...)
 	if err != nil {
 		return nil, db.MapDBError(fmt.Errorf("failed to query inference scores: %w", err))
 	}
@@ -444,6 +506,13 @@ func (s *SQLStore) ClearAllData(ctx context.Context) ([]string, error) {
 }
 
 func (s *SQLStore) LogInferenceEvent(ctx context.Context, event *pb.InferenceEvent) error {
+	if event == nil || event.RequestId == "" {
+		return status.Error(codes.InvalidArgument, "event and request_id required")
+	}
+	if event.TenantId == "" {
+		return status.Error(codes.InvalidArgument, "tenant_id required")
+	}
+
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
@@ -463,8 +532,8 @@ func (s *SQLStore) LogInferenceEvent(ctx context.Context, event *pb.InferenceEve
 	queryEvent := `
 		INSERT INTO inference_events (
 			request_id, ts, model_version, rules_version,
-			model_score, final_score, rule_impacts, user_id, decision
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			model_score, final_score, rule_impacts, user_id, decision, tenant_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`
 	_, err = tx.ExecContext(queryCtx, queryEvent,
 		event.RequestId,
@@ -476,6 +545,7 @@ func (s *SQLStore) LogInferenceEvent(ctx context.Context, event *pb.InferenceEve
 		impactsJSON,
 		event.UserId,
 		event.Decision,
+		event.TenantId,
 	)
 	if err != nil {
 		return db.MapDBError(fmt.Errorf("failed to insert inference event: %w", err))
@@ -497,28 +567,28 @@ func (s *SQLStore) LogInferenceEvent(ctx context.Context, event *pb.InferenceEve
 
 	queryDaily := `
 		INSERT INTO aggregates_daily (tenant_id, date, total_decisions, total_alerts, sum_score, rules_fired_total)
-		VALUES ('', $1, 1, $2, $3, $4)
+		VALUES ($1, $2, 1, $3, $4, $5)
 		ON CONFLICT (tenant_id, date) DO UPDATE SET
 			total_decisions = aggregates_daily.total_decisions + 1,
-			total_alerts = aggregates_daily.total_alerts + $2,
-			sum_score = aggregates_daily.sum_score + $3,
-			rules_fired_total = aggregates_daily.rules_fired_total + $4
+			total_alerts = aggregates_daily.total_alerts + EXCLUDED.total_alerts,
+			sum_score = aggregates_daily.sum_score + EXCLUDED.sum_score,
+			rules_fired_total = aggregates_daily.rules_fired_total + EXCLUDED.rules_fired_total
 	`
-	_, err = tx.ExecContext(queryCtx, queryDaily, date, alertIncr, event.FinalScore, rulesFired)
+	_, err = tx.ExecContext(queryCtx, queryDaily, event.TenantId, date, alertIncr, event.FinalScore, rulesFired)
 	if err != nil {
 		return db.MapDBError(fmt.Errorf("failed to update daily aggregates: %w", err))
 	}
 
 	queryHourly := `
 		INSERT INTO aggregates_hourly (tenant_id, hour, total_decisions, total_alerts, sum_score, rules_fired_total)
-		VALUES ('', $1, 1, $2, $3, $4)
+		VALUES ($1, $2, 1, $3, $4, $5)
 		ON CONFLICT (tenant_id, hour) DO UPDATE SET
 			total_decisions = aggregates_hourly.total_decisions + 1,
-			total_alerts = aggregates_hourly.total_alerts + $2,
-			sum_score = aggregates_hourly.sum_score + $3,
-			rules_fired_total = aggregates_hourly.rules_fired_total + $4
+			total_alerts = aggregates_hourly.total_alerts + EXCLUDED.total_alerts,
+			sum_score = aggregates_hourly.sum_score + EXCLUDED.sum_score,
+			rules_fired_total = aggregates_hourly.rules_fired_total + EXCLUDED.rules_fired_total
 	`
-	_, err = tx.ExecContext(queryCtx, queryHourly, hour, alertIncr, event.FinalScore, rulesFired)
+	_, err = tx.ExecContext(queryCtx, queryHourly, event.TenantId, hour, alertIncr, event.FinalScore, rulesFired)
 	if err != nil {
 		return db.MapDBError(fmt.Errorf("failed to update hourly aggregates: %w", err))
 	}

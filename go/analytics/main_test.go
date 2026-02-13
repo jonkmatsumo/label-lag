@@ -34,7 +34,7 @@ func TestGetDailyStats(t *testing.T) {
 		},
 	}
 
-	mockStore.On("GetDailyStats", mock.Anything, mock.Anything).Return(expectedStats, nil)
+	mockStore.On("GetDailyStats", mock.Anything, mock.Anything, mock.Anything).Return(expectedStats, nil)
 
 	req := &pb.GetDailyStatsRequest{Days: 30}
 	resp, err := s.GetDailyStats(context.Background(), req)
@@ -57,7 +57,7 @@ func TestGetOverviewMetrics(t *testing.T) {
 		FraudRate:    5.0,
 	}
 
-	mockStore.On("GetOverviewMetrics", mock.Anything).Return(expectedResp, nil)
+	mockStore.On("GetOverviewMetrics", mock.Anything, mock.Anything).Return(expectedResp, nil)
 
 	resp, err := s.GetOverviewMetrics(context.Background(), &pb.GetOverviewMetricsRequest{})
 
@@ -79,7 +79,7 @@ func TestGetFeatureSample_Stratified(t *testing.T) {
 	}
 
 	// Expectation for GetFeatureSample
-	mockStore.On("GetFeatureSample", mock.Anything, int32(20), true).Return(expectedSamples, nil)
+	mockStore.On("GetFeatureSample", mock.Anything, int32(20), true, "").Return(expectedSamples, nil)
 
 	req := &pb.GetFeatureSampleRequest{SampleSize: 20, Stratify: true}
 	resp, err := s.GetFeatureSample(context.Background(), req)
@@ -137,7 +137,7 @@ func TestSearchTransactions(t *testing.T) {
 	}
 	expectedTotal := int64(2)
 
-	mockStore.On("SearchTransactions", mock.Anything, mock.Anything, int32(25), int32(0)).
+	mockStore.On("SearchTransactions", mock.Anything, mock.Anything).
 		Return(expectedTxs, expectedTotal, nil)
 
 	minAmount := 12.5
@@ -168,7 +168,7 @@ func TestSearchTransactions_Unfiltered(t *testing.T) {
 	}
 	expectedTotal := int64(5000)
 
-	mockStore.On("SearchTransactions", mock.Anything, mock.Anything, int32(10), int32(0)).
+	mockStore.On("SearchTransactions", mock.Anything, mock.Anything).
 		Return(expectedTxs, expectedTotal, nil)
 
 	req := &pb.SearchTransactionsRequest{

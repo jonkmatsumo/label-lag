@@ -59,7 +59,7 @@ func (s *Service) GetDailyStats(ctx context.Context, req *pb.GetDailyStatsReques
 	}
 	cutoffDate := time.Now().AddDate(0, 0, -int(days))
 
-	stats, err := s.store.GetDailyStats(ctx, cutoffDate)
+	stats, err := s.store.GetDailyStats(ctx, cutoffDate, req.TenantId)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +84,7 @@ func (s *Service) GetTransactionDetails(ctx context.Context, req *pb.GetTransact
 	}
 	cutoffDate := time.Now().AddDate(0, 0, -int(days))
 
-	details, err := s.store.GetTransactionDetails(ctx, cutoffDate, limit, offset)
+	details, err := s.store.GetTransactionDetails(ctx, cutoffDate, limit, offset, req.TenantId)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +108,10 @@ func (s *Service) SearchTransactions(ctx context.Context, req *pb.SearchTransact
 		return nil, err
 	}
 
-	transactions, total, err := s.store.SearchTransactions(ctx, req, limit, offset)
+	req.Limit = limit
+	req.Offset = offset
+
+	transactions, total, err := s.store.SearchTransactions(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +132,7 @@ func (s *Service) GetRecentAlerts(ctx context.Context, req *pb.GetRecentAlertsRe
 		return nil, err
 	}
 
-	alerts, err := s.store.GetRecentAlerts(ctx, limit, offset)
+	alerts, err := s.store.GetRecentAlerts(ctx, limit, offset, req.TenantId)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +143,7 @@ func (s *Service) GetRecentAlerts(ctx context.Context, req *pb.GetRecentAlertsRe
 }
 
 func (s *Service) GetOverviewMetrics(ctx context.Context, req *pb.GetOverviewMetricsRequest) (*pb.GetOverviewMetricsResponse, error) {
-	return s.store.GetOverviewMetrics(ctx)
+	return s.store.GetOverviewMetrics(ctx, req.TenantId)
 }
 
 func (s *Service) GetTrainingData(ctx context.Context, req *pb.GetTrainingDataRequest) (*pb.GetTrainingDataResponse, error) {
@@ -149,7 +152,7 @@ func (s *Service) GetTrainingData(ctx context.Context, req *pb.GetTrainingDataRe
 	}
 	cutoff := req.CutoffDate.AsTime()
 
-	train, test, err := s.store.GetTrainingData(ctx, cutoff)
+	train, test, err := s.store.GetTrainingData(ctx, cutoff, req.TenantId)
 	if err != nil {
 		return nil, err
 	}
@@ -261,7 +264,7 @@ func (s *Service) GetShadowComparison(ctx context.Context, req *pb.GetShadowComp
 		return nil, err
 	}
 
-	metrics, err := s.store.GetShadowComparison(ctx, hours)
+	metrics, err := s.store.GetShadowComparison(ctx, hours, req.TenantId)
 	if err != nil {
 		return nil, err
 	}
@@ -286,7 +289,11 @@ func (s *Service) GetDatasetProfile(ctx context.Context, req *pb.GetDatasetProfi
 		numBuckets = 50
 	}
 
-	return s.store.GetDatasetProfile(ctx, req.DatasetId, limitFeatures, numBuckets)
+	profile, err := s.store.GetDatasetProfile(ctx, req.DatasetId, limitFeatures, numBuckets, "")
+	if err != nil {
+		return nil, err
+	}
+	return profile, nil
 }
 
 func (s *Service) GenerateData(ctx context.Context, req *pb.GenerateDataRequest) (*pb.GenerateDataResponse, error) {
@@ -409,7 +416,7 @@ func (s *Service) GenerateData(ctx context.Context, req *pb.GenerateDataRequest)
 	return resp, nil
 }
 
-func (s *Service) ClearAllData(ctx context.Context, req *pb.ClearAllDataRequest) (*pb.ClearAllDataResponse, error) {
+func (s *Service) ClearAllData(ctx context.Context, _ *pb.ClearAllDataRequest) (*pb.ClearAllDataResponse, error) {
 	tables, err := s.store.ClearAllData(ctx)
 	if err != nil {
 		return nil, err
@@ -417,7 +424,7 @@ func (s *Service) ClearAllData(ctx context.Context, req *pb.ClearAllDataRequest)
 	return &pb.ClearAllDataResponse{Success: true, TablesCleared: tables}, nil
 }
 
-func (s *Service) MaterializeFeatures(ctx context.Context, req *pb.MaterializeFeaturesRequest) (*pb.MaterializeFeaturesResponse, error) {
+func (s *Service) MaterializeFeatures(ctx context.Context, _ *pb.MaterializeFeaturesRequest) (*pb.MaterializeFeaturesResponse, error) {
 	count, err := s.store.MaterializeFeatures(ctx)
 	if err != nil {
 		return nil, err
@@ -434,7 +441,7 @@ func (s *Service) SaveRule(ctx context.Context, req *pb.SaveRuleRequest) (*pb.Sa
 		return nil, status.Error(codes.InvalidArgument, "rule required")
 	}
 
-	if err := s.store.SaveRule(ctx, req.Rule); err != nil {
+	if err := s.store.SaveRule(ctx, req.Rule, req.TenantId); err != nil {
 		return nil, err
 	}
 
@@ -445,15 +452,15 @@ func (s *Service) GetRule(ctx context.Context, req *pb.GetRuleRequest) (*pb.GetR
 	if req == nil || req.RuleId == "" {
 		return nil, status.Error(codes.InvalidArgument, "rule_id required")
 	}
-	rule, err := s.store.GetRule(ctx, req.RuleId)
+	resp, err := s.store.GetRule(ctx, req.RuleId, req.TenantId)
 	if err != nil {
 		return nil, err
 	}
-	return &pb.GetRuleResponse{Rule: rule}, nil
+	return &pb.GetRuleResponse{Rule: resp}, nil
 }
 
 func (s *Service) ListRules(ctx context.Context, req *pb.ListRulesRequest) (*pb.ListRulesResponse, error) {
-	rules, err := s.store.ListRules(ctx, req.Status, req.IncludeArchived)
+	rules, err := s.store.ListRules(ctx, req.Status, req.IncludeArchived, req.TenantId)
 	if err != nil {
 		return nil, err
 	}
@@ -464,7 +471,7 @@ func (s *Service) DeleteRule(ctx context.Context, req *pb.DeleteRuleRequest) (*p
 	if req == nil || req.RuleId == "" {
 		return nil, status.Error(codes.InvalidArgument, "rule_id required")
 	}
-	err := s.store.DeleteRule(ctx, req.RuleId)
+	err := s.store.DeleteRule(ctx, req.RuleId, req.TenantId)
 	if err != nil {
 		return nil, err
 	}
@@ -474,6 +481,9 @@ func (s *Service) DeleteRule(ctx context.Context, req *pb.DeleteRuleRequest) (*p
 func (s *Service) LogInferenceEvent(ctx context.Context, req *pb.LogInferenceEventRequest) (*pb.LogInferenceEventResponse, error) {
 	if req == nil || req.Event == nil {
 		return nil, status.Error(codes.InvalidArgument, "event required")
+	}
+	if req.Event.TenantId == "" {
+		return nil, status.Error(codes.InvalidArgument, "event.tenant_id required")
 	}
 	err := s.store.LogInferenceEvent(ctx, req.Event)
 	if err != nil {
@@ -491,7 +501,7 @@ func (s *Service) GetFeatureSample(ctx context.Context, req *pb.GetFeatureSample
 		sampleSize = maxSampleSizeLimit
 	}
 
-	samples, err := s.store.GetFeatureSample(ctx, sampleSize, req.Stratify)
+	samples, err := s.store.GetFeatureSample(ctx, sampleSize, req.Stratify, req.TenantId)
 	if err != nil {
 		return nil, err
 	}
@@ -505,7 +515,7 @@ func (s *Service) GetDriftWindow(ctx context.Context, req *pb.GetDriftWindowRequ
 	}
 	cutoff := time.Now().Add(-time.Duration(req.Hours) * time.Hour)
 
-	txs, err := s.store.GetDriftWindow(ctx, cutoff)
+	txs, err := s.store.GetDriftWindow(ctx, cutoff, req.TenantId)
 	if err != nil {
 		return nil, err
 	}
@@ -519,7 +529,7 @@ func (s *Service) GetInferenceScores(ctx context.Context, req *pb.GetInferenceSc
 	}
 	cutoff := time.Now().Add(-time.Duration(req.Hours) * time.Hour)
 
-	scores, err := s.store.GetInferenceScores(ctx, cutoff)
+	scores, err := s.store.GetInferenceScores(ctx, cutoff, req.TenantId)
 	if err != nil {
 		return nil, err
 	}
@@ -541,7 +551,7 @@ func (s *Service) ListRuleVersions(ctx context.Context, req *pb.ListRuleVersions
 		return nil, err
 	}
 
-	versions, total, err := s.store.ListRuleVersions(ctx, req.RuleId, limit, offset)
+	versions, total, err := s.store.ListRuleVersions(ctx, req.RuleId, limit, offset, req.TenantId)
 	if err != nil {
 		return nil, errVersionNotFound(err)
 	}
@@ -556,7 +566,7 @@ func (s *Service) GetRuleVersion(ctx context.Context, req *pb.GetRuleVersionRequ
 	if req == nil || req.RuleId == "" || req.VersionId == "" {
 		return nil, status.Error(codes.InvalidArgument, "rule_id and version_id required")
 	}
-	return s.store.GetRuleVersion(ctx, req.RuleId, req.VersionId)
+	return s.store.GetRuleVersion(ctx, req.RuleId, req.VersionId, req.TenantId)
 }
 
 func (s *Service) PublishRuleVersion(ctx context.Context, req *pb.PublishRuleVersionRequest) (*pb.PublishRuleVersionResponse, error) {
@@ -579,14 +589,14 @@ func (s *Service) DiffRuleVersions(ctx context.Context, req *pb.DiffRuleVersions
 	if req == nil || req.RuleId == "" || req.VersionA == "" || req.VersionB == "" {
 		return nil, status.Error(codes.InvalidArgument, "rule_id and both version IDs required")
 	}
-	return s.store.DiffRuleVersions(ctx, req.RuleId, req.VersionA, req.VersionB)
+	return s.store.DiffRuleVersions(ctx, req.RuleId, req.VersionA, req.VersionB, req.TenantId)
 }
 
 func (s *Service) GetRuleReadiness(ctx context.Context, req *pb.GetRuleReadinessRequest) (*pb.GetRuleReadinessResponse, error) {
 	if req == nil || req.RuleId == "" {
 		return nil, status.Error(codes.InvalidArgument, "rule_id required")
 	}
-	return s.store.GetRuleReadiness(ctx, req.RuleId)
+	return s.store.GetRuleReadiness(ctx, req.RuleId, req.TenantId)
 }
 
 func (s *Service) GetRuleStats(ctx context.Context, req *pb.GetRuleStatsRequest) (*pb.GetRuleStatsResponse, error) {
@@ -596,7 +606,7 @@ func (s *Service) GetRuleStats(ctx context.Context, req *pb.GetRuleStatsRequest)
 	}
 	cutoff := time.Now().AddDate(0, 0, -int(days))
 
-	stats, err := s.store.GetRuleStats(ctx, req.RuleId, cutoff)
+	stats, err := s.store.GetRuleStats(ctx, req.RuleId, cutoff, req.TenantId)
 	if err != nil {
 		return nil, err
 	}
@@ -617,7 +627,7 @@ func (s *Service) GetAttribution(ctx context.Context, req *pb.GetAttributionRequ
 	}
 	cutoff := time.Now().AddDate(0, 0, -int(days))
 
-	items, err := s.store.GetAttribution(ctx, cutoff, limit)
+	items, err := s.store.GetAttribution(ctx, cutoff, limit, req.TenantId)
 	if err != nil {
 		return nil, err
 	}
@@ -632,7 +642,7 @@ func (s *Service) GetLatestUserFeatures(ctx context.Context, req *pb.GetLatestUs
 		return nil, status.Error(codes.InvalidArgument, "user_id is required")
 	}
 
-	features, found, err := s.store.GetLatestUserFeatures(ctx, req.UserId)
+	features, found, err := s.store.GetLatestUserFeatures(ctx, req.UserId, req.TenantId)
 	if err != nil {
 		return nil, err
 	}
@@ -653,7 +663,7 @@ func (s *Service) BatchGetLatestUserFeatures(ctx context.Context, req *pb.BatchG
 		return nil, status.Error(codes.InvalidArgument, "batch size cannot exceed 500")
 	}
 
-	results, err := s.store.BatchGetLatestUserFeatures(ctx, req.UserIds)
+	results, err := s.store.BatchGetLatestUserFeatures(ctx, req.UserIds, req.TenantId)
 	if err != nil {
 		return nil, err
 	}
@@ -706,7 +716,7 @@ func (s *Service) GetDecision(ctx context.Context, req *pb.GetDecisionRequest) (
 		return nil, status.Error(codes.InvalidArgument, "request_id required")
 	}
 
-	decision, err := s.store.GetDecision(ctx, req.RequestId)
+	decision, err := s.store.GetDecision(ctx, req.RequestId, req.TenantId)
 	if err != nil {
 		return nil, err
 	}
@@ -721,7 +731,7 @@ func (s *Service) GetDecisionTrace(ctx context.Context, req *pb.GetDecisionTrace
 		return nil, status.Error(codes.InvalidArgument, "request_id required")
 	}
 
-	trace, err := s.store.GetDecisionTrace(ctx, req.RequestId)
+	trace, err := s.store.GetDecisionTrace(ctx, req.RequestId, req.TenantId)
 	if err != nil {
 		return nil, err
 	}

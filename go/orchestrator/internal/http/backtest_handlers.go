@@ -8,7 +8,6 @@ import (
 	"time"
 
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
-	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/tenant"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -58,10 +57,16 @@ func (h *Handler) handleBacktestCompare(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	resp, err := h.analyticsClient.CompareBacktests(r.Context(), &crudv1.CompareBacktestsRequest{
 		BaselineJobId:  req.BaselineJobID,
 		CandidateJobId: req.CandidateJobID,
-		TenantId:       tenant.FromContext(r.Context()),
+		TenantId:       tenantID,
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -111,9 +116,15 @@ func (h *Handler) handleBacktestResults(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	req := &crudv1.ListBacktestResultsRequest{
 		RuleId:   ruleID,
-		TenantId: tenant.FromContext(r.Context()),
+		TenantId: tenantID,
 	}
 	if startDate != nil {
 		req.StartDate = timestamppb.New(*startDate)

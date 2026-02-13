@@ -14,21 +14,21 @@ import (
 // Store defines the data access methods for the analytics service.
 type Store interface {
 	// Analytics
-	GetDailyStats(ctx context.Context, cutoffDate time.Time) ([]*pb.DailyStat, error)
-	GetTransactionDetails(ctx context.Context, cutoffDate time.Time, limit, offset int32) ([]*pb.TransactionDetail, error)
-	SearchTransactions(ctx context.Context, req *pb.SearchTransactionsRequest, limit, offset int32) ([]*pb.TransactionDetail, int64, error)
-	GetRecentAlerts(ctx context.Context, limit, offset int32) ([]*pb.Alert, error)
-	GetOverviewMetrics(ctx context.Context) (*pb.GetOverviewMetricsResponse, error)
+	GetDailyStats(ctx context.Context, cutoffDate time.Time, tenantID string) ([]*pb.DailyStat, error)
+	GetTransactionDetails(ctx context.Context, cutoffDate time.Time, limit, offset int32, tenantID string) ([]*pb.TransactionDetail, error)
+	SearchTransactions(ctx context.Context, req *pb.SearchTransactionsRequest) ([]*pb.TransactionDetail, int64, error)
+	GetRecentAlerts(ctx context.Context, limit, offset int32, tenantID string) ([]*pb.Alert, error)
+	GetOverviewMetrics(ctx context.Context, tenantID string) (*pb.GetOverviewMetricsResponse, error)
 
 	// Analytics
-	GetShadowComparison(ctx context.Context, hours int32) (*pb.ShadowModeMetrics, error)
-	GetRuleStats(ctx context.Context, ruleID string, cutoff time.Time) ([]*pb.RuleStats, error)
-	GetAttribution(ctx context.Context, cutoff time.Time, limit int32) ([]*pb.DailyAttribution, error)
+	GetShadowComparison(ctx context.Context, hours int32, tenantID string) (*pb.ShadowModeMetrics, error)
+	GetRuleStats(ctx context.Context, ruleID string, cutoff time.Time, tenantID string) ([]*pb.RuleStats, error)
+	GetAttribution(ctx context.Context, cutoff time.Time, limit int32, tenantID string) ([]*pb.DailyAttribution, error)
 
 	// Decisions (Phase 2)
 	ListDecisions(ctx context.Context, req *pb.ListDecisionsRequest) ([]*pb.DecisionSummary, int64, error)
-	GetDecision(ctx context.Context, requestID string) (*pb.InferenceEvent, error)
-	GetDecisionTrace(ctx context.Context, requestID string) ([]*pb.RuleImpact, error)
+	GetDecision(ctx context.Context, requestID string, tenantID string) (*pb.InferenceEvent, error)
+	GetDecisionTrace(ctx context.Context, requestID string, tenantID string) ([]*pb.RuleImpact, error)
 	GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactRequest) (*pb.GetRuleImpactResponse, error)
 
 	// Dashboard Aggregates (Phase 3)
@@ -38,40 +38,40 @@ type Store interface {
 
 	// Jobs (Phase A1)
 	ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb.Job, int64, error)
-	GetJob(ctx context.Context, jobID string) (*pb.Job, error)
-	GetJobEvents(ctx context.Context, jobID string, limit, offset int32) ([]*pb.JobEvent, error)
+	GetJob(ctx context.Context, jobID string, tenantID string) (*pb.Job, error)
+	GetJobEvents(ctx context.Context, req *pb.GetJobEventsRequest) ([]*pb.JobEvent, error)
 	GetJobSummary(ctx context.Context, req *pb.GetJobSummaryRequest) ([]*pb.JobSummaryBucket, error)
 
 	// Dataset Profiles (Phase A2)
 	SaveDatasetProfile(ctx context.Context, profile *pb.DatasetProfile) error
-	GetDatasetProfileCached(ctx context.Context, profileID string) (*pb.DatasetProfile, error)
+	GetDatasetProfileCached(ctx context.Context, profileID string, tenantID string) (*pb.DatasetProfile, error)
 	ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetProfilesRequest) ([]*pb.DatasetProfile, int64, error)
-	GetLatestDatasetProfile(ctx context.Context) (*pb.GetLatestDatasetProfileResponse, error)
+	GetLatestDatasetProfile(ctx context.Context, tenantID string) (*pb.GetLatestDatasetProfileResponse, error)
 
 	// Training Runs (Phase B)
 	SaveTrainingRun(ctx context.Context, run *pb.TrainingRun) error
 	ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRunsRequest) ([]*pb.TrainingRun, int64, error)
-	GetTrainingRun(ctx context.Context, runID string) (*pb.TrainingRun, error)
+	GetTrainingRun(ctx context.Context, runID string, tenantID string) (*pb.TrainingRun, error)
 	ListModelVersions(ctx context.Context, req *pb.ListModelVersionsRequest) ([]*pb.TrainingRun, int64, error)
-	GetMetricSeries(ctx context.Context, modelName, metricName string, start, end time.Time) ([]*pb.MetricPoint, error)
+	GetMetricSeries(ctx context.Context, req *pb.GetMetricSeriesRequest) ([]*pb.MetricPoint, error)
 
 	// Feature Hydration
-	GetLatestUserFeatures(ctx context.Context, userID string) (*pb.UserFeatures, bool, error)
-	BatchGetLatestUserFeatures(ctx context.Context, userIDs []string) (map[string]*pb.UserFeatures, error)
+	GetLatestUserFeatures(ctx context.Context, userID string, tenantID string) (*pb.UserFeatures, bool, error)
+	BatchGetLatestUserFeatures(ctx context.Context, userIDs []string, tenantID string) (map[string]*pb.UserFeatures, error)
 
 	// Training
-	GetTrainingData(ctx context.Context, cutoff time.Time) (train []*pb.TransactionDetail, test []*pb.TransactionDetail, err error)
+	GetTrainingData(ctx context.Context, cutoff time.Time, tenantID string) (train []*pb.TransactionDetail, test []*pb.TransactionDetail, err error)
 
 	// Rules
-	ListRuleVersions(ctx context.Context, ruleID string, limit, offset int32) ([]*pb.Rule, int64, error)
-	GetRuleVersion(ctx context.Context, ruleID, versionID string) (*pb.GetRuleVersionResponse, error)
+	ListRuleVersions(ctx context.Context, ruleID string, limit, offset int32, tenantID string) ([]*pb.Rule, int64, error)
+	GetRuleVersion(ctx context.Context, ruleID, versionID string, tenantID string) (*pb.GetRuleVersionResponse, error)
 	PublishRuleVersion(ctx context.Context, req *pb.PublishRuleVersionRequest) (string, error)
-	GetRuleReadiness(ctx context.Context, ruleID string) (*pb.GetRuleReadinessResponse, error)
-	DiffRuleVersions(ctx context.Context, ruleID, vA, vB string) (*pb.DiffRuleVersionsResponse, error)
-	SaveRule(ctx context.Context, r *pb.Rule) error
-	GetRule(ctx context.Context, ruleID string) (*pb.Rule, error)
-	ListRules(ctx context.Context, statusFilter string, includeArchived bool) ([]*pb.Rule, error)
-	DeleteRule(ctx context.Context, ruleID string) error
+	GetRuleReadiness(ctx context.Context, ruleID string, tenantID string) (*pb.GetRuleReadinessResponse, error)
+	DiffRuleVersions(ctx context.Context, ruleID, vA, vB string, tenantID string) (*pb.DiffRuleVersionsResponse, error)
+	SaveRule(ctx context.Context, r *pb.Rule, tenantID string) error
+	GetRule(ctx context.Context, ruleID string, tenantID string) (*pb.Rule, error)
+	ListRules(ctx context.Context, statusFilter string, includeArchived bool, tenantID string) ([]*pb.Rule, error)
+	DeleteRule(ctx context.Context, ruleID string, tenantID string) error
 
 	// Backtest
 	GetBacktestFeatures(ctx context.Context, start, end time.Time) ([]*pb.BacktestFeatureVector, error)
@@ -84,9 +84,9 @@ type Store interface {
 	ClearAllData(ctx context.Context) ([]string, error)
 	MaterializeFeatures(ctx context.Context) (int64, error)
 	LogInferenceEvent(ctx context.Context, event *pb.InferenceEvent) error
-	GetFeatureSample(ctx context.Context, sampleSize int32, stratify bool) ([]*pb.FeatureSample, error)
-	GetDriftWindow(ctx context.Context, cutoff time.Time) ([]*pb.TransactionDetail, error)
-	GetInferenceScores(ctx context.Context, cutoff time.Time) ([]int32, error)
+	GetFeatureSample(ctx context.Context, sampleSize int32, stratify bool, tenantID string) ([]*pb.FeatureSample, error)
+	GetDriftWindow(ctx context.Context, cutoff time.Time, tenantID string) ([]*pb.TransactionDetail, error)
+	GetInferenceScores(ctx context.Context, cutoff time.Time, tenantID string) ([]int32, error)
 
 	// Idempotency
 	GetGenerationJob(ctx context.Context, key string) (*pb.GenerateDataResponse, string, error)
@@ -95,7 +95,7 @@ type Store interface {
 	FailGenerationJob(ctx context.Context, key string, errMsg string) error
 
 	// Profiling
-	GetDatasetProfile(ctx context.Context, datasetID string, limitFeatures, numBuckets int32) (*pb.GetDatasetProfileResponse, error)
+	GetDatasetProfile(ctx context.Context, datasetID string, limitFeatures, numBuckets int32, tenantID string) (*pb.GetDatasetProfileResponse, error)
 }
 
 // SQLStore implements Store using a PostgreSQL database.

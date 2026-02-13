@@ -24,7 +24,7 @@ func TestGetDailyStats(t *testing.T) {
 
 	mock.ExpectQuery("SELECT").WillReturnRows(rows)
 
-	stats, err := s.GetDailyStats(context.Background(), time.Now().AddDate(0, 0, -30))
+	stats, err := s.GetDailyStats(context.Background(), time.Now().AddDate(0, 0, -30), "")
 	require.NoError(t, err)
 	require.NotEmpty(t, stats)
 	assert.Equal(t, int64(100), stats[0].TotalTransactions)
@@ -47,7 +47,7 @@ func TestGetOverviewMetrics(t *testing.T) {
 
 	mock.ExpectQuery("SELECT").WillReturnRows(rows)
 
-	resp, err := s.GetOverviewMetrics(context.Background())
+	resp, err := s.GetOverviewMetrics(context.Background(), "")
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	assert.Equal(t, int64(1000), resp.TotalRecords)
@@ -66,22 +66,25 @@ func TestGetFeatureSample_Stratified(t *testing.T) {
 	mock.ExpectQuery("SELECT version").WillReturnRows(sqlmock.NewRows([]string{"version"}).AddRow("PostgreSQL 16.1"))
 
 	// 2. Stats query
-	mock.ExpectQuery("SELECT COALESCE\\(MIN\\(id\\), 0\\), COALESCE\\(MAX\\(id\\), 0\\), COUNT\\(\\*\\) FROM generated_records").
+	mock.ExpectQuery("SELECT COALESCE\\(MIN\\(gr.id\\), 0\\), COALESCE\\(MAX\\(gr.id\\), 0\\), COUNT\\(\\*\\)\\s+FROM generated_records gr\\s+INNER JOIN inference_events ie ON gr.record_id = ie.request_id\\s+WHERE ie.tenant_id = \\$1").
+		WithArgs("tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{"min", "max", "count"}).AddRow(1, 1000, 1000))
 
 	// 3. Fraud rate query
-	mock.ExpectQuery("SELECT CAST").WillReturnRows(sqlmock.NewRows([]string{"rate"}).AddRow(0.05))
+	mock.ExpectQuery("SELECT CAST").WithArgs("tenant-1").WillReturnRows(sqlmock.NewRows([]string{"rate"}).AddRow(0.05))
 
 	// 4. Sampling queries
 	mock.ExpectQuery("(?s)SELECT.*is_fraudulent\\s*=\\s*true.*").
+		WithArgs("tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{"record_id", "is_fraudulent", "velocity_24h", "amount_to_avg_ratio_30d", "balance_volatility_z_score"}).
 			AddRow("f1", true, 1.0, 1.0, 1.0))
 
 	mock.ExpectQuery("(?s)SELECT.*is_fraudulent\\s*=\\s*false.*").
+		WithArgs("tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{"record_id", "is_fraudulent", "velocity_24h", "amount_to_avg_ratio_30d", "balance_volatility_z_score"}).
 			AddRow("nf1", false, 0.0, 0.0, 0.0))
 
-	samples, err := s.GetFeatureSample(context.Background(), 20, true) // Stratify is internal logic or param in store?
+	samples, err := s.GetFeatureSample(context.Background(), 20, true, "tenant-1")
 	// Wait, GetFeatureSample in store interface: GetFeatureSample(ctx context.Context, sampleSize int32) ([]*pb.FeatureSample, error)
 	// It doesn't take 'stratify' param?
 	// Let's check store interface.
@@ -96,12 +99,12 @@ func TestSearchTransactions(t *testing.T) {
 
 	s := NewSQLStore(db)
 
-	mock.ExpectQuery(`(?s)SELECT COUNT\(\*\) FROM\s*\(.*SELECT em.record_id, em.user_id,.*WHERE em.user_id = \$1 AND gr.amount >= \$2\s*\)\s*as count_query`).
-		WithArgs("user-1", 12.5).
+	mock.ExpectQuery(`(?s)SELECT COUNT\(\*\) FROM\s*\(.*SELECT em.record_id, em.user_id,.*WHERE em.user_id = \$1 AND gr.amount >= \$2 AND ie.tenant_id = \$3\s*\)\s*as count_query`).
+		WithArgs("user-1", 12.5, "tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
 
-	mock.ExpectQuery(`(?s)SELECT em.record_id, em.user_id,.*WHERE em.user_id = \$1 AND gr.amount >= \$2.*ORDER BY em.created_at DESC LIMIT 25`).
-		WithArgs("user-1", 12.5).
+	mock.ExpectQuery(`(?s)SELECT em.record_id, em.user_id,.*WHERE em.user_id = \$1 AND gr.amount >= \$2 AND ie.tenant_id = \$3.*ORDER BY em.created_at DESC LIMIT 25`).
+		WithArgs("user-1", 12.5, "tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{
 			"record_id",
 			"user_id",
@@ -124,9 +127,12 @@ func TestSearchTransactions(t *testing.T) {
 	req := &pb.SearchTransactionsRequest{
 		UserId:    "user-1",
 		MinAmount: &minAmount,
+		Limit:     25,
+		Offset:    0,
+		TenantId:  "tenant-1",
 	}
 
-	details, total, err := s.SearchTransactions(context.Background(), req, 25, 0)
+	details, total, err := s.SearchTransactions(context.Background(), req)
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), total)
 	assert.Len(t, details, 1)
@@ -141,7 +147,7 @@ func TestGetDatasetProfile(t *testing.T) {
 	s := NewSQLStore(db)
 
 	// 1. Total records count
-	mock.ExpectQuery("SELECT COUNT").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(100))
+	mock.ExpectQuery("SELECT COUNT").WithArgs("tenant-1").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(100))
 
 	// 2. Mock numeric feature profiling (one example: amount)
 	mock.ExpectQuery("SELECT AVG\\(amount\\)").WillReturnRows(sqlmock.NewRows([]string{"mean", "stddev", "null_count", "min_val", "max_val"}).
@@ -157,7 +163,7 @@ func TestGetDatasetProfile(t *testing.T) {
 			AddRow(0.0, 0.0, 0, 0.0, 0.0))
 	}
 
-	resp, err := s.GetDatasetProfile(context.Background(), "test-dataset", 50, 10)
+	resp, err := s.GetDatasetProfile(context.Background(), "test-dataset", 50, 10, "tenant-1")
 	require.NoError(t, err)
 	assert.Equal(t, int64(100), resp.TotalRecords)
 	assert.NotEmpty(t, resp.FeatureProfiles)
@@ -194,9 +200,9 @@ func TestGetRuleStats(t *testing.T) {
 	rows := sqlmock.NewRows([]string{"rule_id", "triggered_count", "shadow_triggered_count", "approval_rate"}).
 		AddRow("rule-1", 100, 10, 0.85)
 
-	mock.ExpectQuery("SELECT").WithArgs(cutoff).WillReturnRows(rows)
+	mock.ExpectQuery("SELECT").WithArgs(cutoff, "tenant-1").WillReturnRows(rows)
 
-	stats, err := s.GetRuleStats(context.Background(), "", cutoff)
+	stats, err := s.GetRuleStats(context.Background(), "", cutoff, "tenant-1")
 	require.NoError(t, err)
 	require.Len(t, stats, 1)
 	assert.Equal(t, "rule-1", stats[0].RuleId)
@@ -215,9 +221,9 @@ func TestGetAttribution(t *testing.T) {
 	rows := sqlmock.NewRows([]string{"date", "rule_id", "contribution_score", "volume"}).
 		AddRow(time.Now(), "rule-2", 500, 50)
 
-	mock.ExpectQuery("SELECT").WithArgs(cutoff, int32(20)).WillReturnRows(rows)
+	mock.ExpectQuery("SELECT").WithArgs(cutoff, int32(20), "tenant-1").WillReturnRows(rows)
 
-	items, err := s.GetAttribution(context.Background(), cutoff, 20)
+	items, err := s.GetAttribution(context.Background(), cutoff, 20, "tenant-1")
 	require.NoError(t, err)
 	require.Len(t, items, 1)
 	assert.Equal(t, "rule-2", items[0].RuleId)
@@ -236,7 +242,7 @@ func TestGetShadowComparison(t *testing.T) {
 
 	mock.ExpectQuery("SELECT").WillReturnRows(rows)
 
-	m, err := s.GetShadowComparison(context.Background(), 24)
+	m, err := s.GetShadowComparison(context.Background(), 24, "tenant-1")
 	require.NoError(t, err)
 	assert.Equal(t, int64(100), m.TotalEvaluations)
 	assert.Equal(t, int64(10), m.DivergentScoresCount)
@@ -255,9 +261,9 @@ func TestGetLatestUserFeatures(t *testing.T) {
 		"experimental_signals",
 	}).AddRow("rec-1", "user-1", 101, time.Now(), 5, 1.2, 0.5, []byte(`{"bank_connections_24h": 2, "merchant_risk_score": 10}`))
 
-	mock.ExpectQuery("SELECT").WithArgs("user-1").WillReturnRows(rows)
+	mock.ExpectQuery("SELECT").WithArgs("user-1", "tenant-1").WillReturnRows(rows)
 
-	f, found, err := s.GetLatestUserFeatures(context.Background(), "user-1")
+	f, found, err := s.GetLatestUserFeatures(context.Background(), "user-1", "tenant-1")
 	require.NoError(t, err)
 	assert.True(t, found)
 	assert.Equal(t, "user-1", f.UserId)
@@ -282,9 +288,9 @@ func TestBatchGetLatestUserFeatures(t *testing.T) {
 		AddRow("rec-1", "user-1", 101, time.Now(), 5, 1.2, 0.5, []byte(`{"bank_connections_24h": 2}`)).
 		AddRow("rec-2", "user-2", 102, time.Now(), 10, 0.8, -0.3, []byte(`{"bank_connections_24h": 0}`))
 
-	mock.ExpectQuery("SELECT").WithArgs(pq.Array(userIDs)).WillReturnRows(rows)
+	mock.ExpectQuery("SELECT").WithArgs(pq.Array(userIDs), "tenant-1").WillReturnRows(rows)
 
-	results, err := s.BatchGetLatestUserFeatures(context.Background(), userIDs)
+	results, err := s.BatchGetLatestUserFeatures(context.Background(), userIDs, "tenant-1")
 	require.NoError(t, err)
 	assert.Len(t, results, 2)
 	assert.Contains(t, results, "user-1")

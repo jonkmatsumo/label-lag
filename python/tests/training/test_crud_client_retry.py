@@ -16,6 +16,7 @@ class TestAnalyticsCRUDClientRetry(unittest.TestCase):
             run_id="test-run",
             model_name="test-model",
             status="FINISHED",
+            tenant_id="tenant-1",
         )
 
     @patch("training.crud_client.AnalyticsCRUDClient._get_metadata")
@@ -46,6 +47,9 @@ class TestAnalyticsCRUDClientRetry(unittest.TestCase):
         self.assertIsNotNone(resp)
         self.assertTrue(resp.success)
         self.assertEqual(self.client.stub.ReportTrainingRun.call_count, 3)
+        sent_req = self.client.stub.ReportTrainingRun.call_args[0][0]
+        self.assertEqual(sent_req.tenant_id, "tenant-1")
+        self.assertEqual(sent_req.run.tenant_id, "tenant-1")
 
     @patch("training.crud_client.os.makedirs")
     @patch("builtins.open", new_callable=unittest.mock.mock_open)
@@ -80,11 +84,12 @@ class TestAnalyticsCRUDClientRetry(unittest.TestCase):
         args, kwargs = handle.write.call_args
         written_data = json.loads(args[0].strip())
         self.assertEqual(written_data["run_id"], "test-run")
+        self.assertEqual(written_data["tenant_id"], "tenant-1")
 
     def test_fallback_persist_writes_to_correct_path(self):
         with patch("training.crud_client.os.makedirs") as mock_makedirs:
             with patch("builtins.open", unittest.mock.mock_open()) as mock_file:
-                self.client._fallback_persist(self.mock_run, "req-123")
+                self.client._fallback_persist(self.mock_run, "tenant-1", "req-123")
 
                 mock_makedirs.assert_called()
                 # Check that open was called with a path ending in
@@ -107,6 +112,8 @@ class TestAnalyticsCRUDClientRetry(unittest.TestCase):
             "status": "COMPLETED",
             "metrics": "{}",
             "params": "{}",
+            "tenant_id": "tenant-1",
+            "request_id": "req-999",
         }
         mock_open.return_value.readlines.return_value = [json.dumps(payload) + "\n"]
 
@@ -117,4 +124,9 @@ class TestAnalyticsCRUDClientRetry(unittest.TestCase):
         self.client.replay_spooled_reports()
 
         self.assertEqual(self.client.stub.ReportTrainingRun.call_count, 1)
+        sent_req = self.client.stub.ReportTrainingRun.call_args[0][0]
+        sent_kwargs = self.client.stub.ReportTrainingRun.call_args.kwargs
+        self.assertEqual(sent_req.run.tenant_id, "tenant-1")
+        self.assertEqual(sent_req.tenant_id, "tenant-1")
+        self.assertIn(("x-request-id", "req-999"), sent_kwargs.get("metadata", []))
         mock_remove.assert_called_once()

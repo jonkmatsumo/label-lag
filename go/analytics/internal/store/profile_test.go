@@ -32,9 +32,13 @@ func TestSaveDatasetProfile(t *testing.T) {
 	mock.ExpectExec("INSERT INTO dataset_profiles").
 		WithArgs("prof-1", "tenant-1", sqlmock.AnyArg(), int64(100), sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("DELETE FROM dataset_profiles").
+		WithArgs("tenant-1", sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 
 	err = s.SaveDatasetProfile(context.Background(), profile)
 	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestGetDatasetProfileCached(t *testing.T) {
@@ -48,12 +52,12 @@ func TestGetDatasetProfileCached(t *testing.T) {
 	jsonProfiles := `[{"name":"f1","type":"numeric"}]`
 
 	mock.ExpectQuery("SELECT profile_id").
-		WithArgs("prof-1").
+		WithArgs("prof-1", "tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{
 			"profile_id", "tenant_id", "computed_at", "record_count", "feature_profiles",
 		}).AddRow("prof-1", "tenant-1", ts, 100, []byte(jsonProfiles)))
 
-	p, err := s.GetDatasetProfileCached(context.Background(), "prof-1")
+	p, err := s.GetDatasetProfileCached(context.Background(), "prof-1", "tenant-1")
 	require.NoError(t, err)
 	assert.Equal(t, "prof-1", p.ProfileId)
 	assert.Equal(t, "tenant-1", p.TenantId)
@@ -70,6 +74,7 @@ func TestListDatasetProfiles(t *testing.T) {
 	s := NewSQLStore(db)
 
 	mock.ExpectQuery("SELECT COUNT").
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), "tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 
 	ts := time.Now().UTC()
@@ -79,7 +84,7 @@ func TestListDatasetProfiles(t *testing.T) {
 	end := time.Now()
 
 	mock.ExpectQuery("SELECT profile_id").
-		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), "tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{
 			"profile_id", "tenant_id", "computed_at", "record_count", "feature_profiles",
 		}).AddRow("prof-1", "tenant-1", ts, 100, []byte(jsonProfiles)))
@@ -89,6 +94,7 @@ func TestListDatasetProfiles(t *testing.T) {
 		Offset:    0,
 		StartDate: timestamppb.New(start),
 		EndDate:   timestamppb.New(end),
+		TenantId:  "tenant-1",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), total)
@@ -112,4 +118,22 @@ func TestPruneDatasetProfiles(t *testing.T) {
 	count, err := s.PruneDatasetProfiles(context.Background(), cutoff)
 	require.NoError(t, err)
 	assert.Equal(t, int64(5), count)
+}
+
+func TestPruneDatasetProfilesByTenant(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+
+	cutoff := time.Now().Add(-24 * time.Hour)
+
+	mock.ExpectExec("DELETE FROM dataset_profiles").
+		WithArgs(cutoff, "tenant-1").
+		WillReturnResult(sqlmock.NewResult(0, 2))
+
+	count, err := s.PruneDatasetProfilesByTenant(context.Background(), cutoff, "tenant-1")
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), count)
 }

@@ -205,6 +205,16 @@ func InitDB(db *sql.DB) error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_training_runs_model_name ON training_runs(model_name)`,
 		`CREATE INDEX IF NOT EXISTS idx_training_runs_started_at ON training_runs(started_at DESC)`,
+		`ALTER TABLE inference_events ADD COLUMN IF NOT EXISTS tenant_id TEXT DEFAULT ''`,
+		`CREATE INDEX IF NOT EXISTS idx_inference_events_tenant_id ON inference_events(tenant_id)`,
+		`ALTER TABLE rules ADD COLUMN IF NOT EXISTS tenant_id TEXT DEFAULT ''`,
+		`CREATE INDEX IF NOT EXISTS idx_rules_tenant_id ON rules(tenant_id)`,
+		`ALTER TABLE rule_versions ADD COLUMN IF NOT EXISTS tenant_id TEXT DEFAULT ''`,
+		`CREATE INDEX IF NOT EXISTS idx_rule_versions_tenant_id ON rule_versions(tenant_id)`,
+		`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS tenant_id TEXT DEFAULT ''`,
+		`CREATE INDEX IF NOT EXISTS idx_jobs_tenant_id ON jobs(tenant_id)`,
+		`ALTER TABLE training_runs ADD COLUMN IF NOT EXISTS tenant_id TEXT DEFAULT ''`,
+		`CREATE INDEX IF NOT EXISTS idx_training_runs_tenant_id ON training_runs(tenant_id)`,
 	}
 
 	for _, q := range queries {

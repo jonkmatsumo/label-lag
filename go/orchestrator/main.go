@@ -119,10 +119,17 @@ func main() {
 		}
 	}
 
-	handler := httpserver.NewHandler(logger, inferenceClient, analyticsClient, trainingClient, forecastClient, rulesProvider, maxBodyBytes,
-		getEnv("PYTHON_API_URL", "http://api:8000"),
-		getEnv("MLFLOW_TRACKING_URI", "http://mlflow:5000"),
-	)
+	handler := httpserver.NewHandler(httpserver.HandlerOptions{
+		Logger:          logger,
+		InferenceClient: inferenceClient,
+		AnalyticsClient: analyticsClient,
+		TrainingClient:  trainingClient,
+		ForecastClient:  forecastClient,
+		RulesProvider:   rulesProvider,
+		MaxBodyBytes:    maxBodyBytes,
+		PythonURL:       getEnv("PYTHON_API_URL", "http://api:8000"),
+		MlflowURL:       getEnv("MLFLOW_TRACKING_URI", "http://mlflow:5000"),
+	})
 	readTimeout := parseDurationEnv(logger, "INFERENCE_GATEWAY_READ_TIMEOUT", 10*time.Second)
 	writeTimeout := parseDurationEnv(logger, "INFERENCE_GATEWAY_WRITE_TIMEOUT", 30*time.Second)
 	idleTimeout := parseDurationEnv(logger, "INFERENCE_GATEWAY_IDLE_TIMEOUT", 60*time.Second)

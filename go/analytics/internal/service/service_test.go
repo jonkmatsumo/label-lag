@@ -8,6 +8,8 @@ import (
 	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestListDecisions_Validation(t *testing.T) {
@@ -72,4 +74,110 @@ func TestGetRuleImpact_Validation(t *testing.T) {
 	resp, err := svc.GetRuleImpact(context.Background(), req)
 	assert.Error(t, err)
 	assert.Nil(t, resp)
+}
+
+func TestReportTrainingRun_UsesRequestTenantWhenRunTenantMissing(t *testing.T) {
+	mockStore := new(store.MockStore)
+	svc := NewService(mockStore, nil)
+
+	req := &pb.ReportTrainingRunRequest{
+		TenantId: "tenant-1",
+		Run: &pb.TrainingRun{
+			RunId: "run-1",
+		},
+	}
+	mockStore.On("SaveTrainingRun", mock.Anything, mock.MatchedBy(func(run *pb.TrainingRun) bool {
+		return run.RunId == "run-1" && run.TenantId == "tenant-1"
+	})).Return(nil).Once()
+
+	resp, err := svc.ReportTrainingRun(context.Background(), req)
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.True(t, resp.Success)
+	assert.Equal(t, "tenant-1", req.Run.TenantId)
+	mockStore.AssertExpectations(t)
+}
+
+func TestReportTrainingRun_RejectsMissingTenant(t *testing.T) {
+	mockStore := new(store.MockStore)
+	svc := NewService(mockStore, nil)
+
+	_, err := svc.ReportTrainingRun(context.Background(), &pb.ReportTrainingRunRequest{
+		Run: &pb.TrainingRun{
+			RunId: "run-1",
+		},
+	})
+	assert.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestReportTrainingRun_RejectsTenantMismatch(t *testing.T) {
+	mockStore := new(store.MockStore)
+	svc := NewService(mockStore, nil)
+
+	_, err := svc.ReportTrainingRun(context.Background(), &pb.ReportTrainingRunRequest{
+		TenantId: "tenant-a",
+		Run: &pb.TrainingRun{
+			RunId:    "run-1",
+			TenantId: "tenant-b",
+		},
+	})
+	assert.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestLogInferenceEvent_RequiresTenant(t *testing.T) {
+	mockStore := new(store.MockStore)
+	svc := NewService(mockStore, nil)
+
+	_, err := svc.LogInferenceEvent(context.Background(), &pb.LogInferenceEventRequest{
+		Event: &pb.InferenceEvent{
+			RequestId: "req-1",
+		},
+	})
+	assert.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestGetDatasetSummary_UsesLatestCachedProfileByTenant(t *testing.T) {
+	mockStore := new(store.MockStore)
+	svc := NewService(mockStore, nil)
+
+	mockStore.On("GetLatestDatasetProfile", mock.Anything, "tenant-1").
+		Return(&pb.GetLatestDatasetProfileResponse{ProfileId: "prof-latest"}, nil).
+		Once()
+
+	expected := &pb.DatasetProfile{ProfileId: "prof-latest", TenantId: "tenant-1", RecordCount: 42}
+	mockStore.On("GetDatasetProfileCached", mock.Anything, "prof-latest", "tenant-1").
+		Return(expected, nil).
+		Once()
+
+	resp, err := svc.GetDatasetSummary(context.Background(), &pb.GetDatasetSummaryRequest{
+		ProfileId: "latest",
+		TenantId:  "tenant-1",
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, "prof-latest", resp.Profile.ProfileId)
+	mockStore.AssertExpectations(t)
+}
+
+func TestGetDatasetSummary_DefaultsMissingProfileIDToLatest(t *testing.T) {
+	mockStore := new(store.MockStore)
+	svc := NewService(mockStore, nil)
+
+	mockStore.On("GetLatestDatasetProfile", mock.Anything, "tenant-1").
+		Return(&pb.GetLatestDatasetProfileResponse{ProfileId: "prof-latest"}, nil).
+		Once()
+	mockStore.On("GetDatasetProfileCached", mock.Anything, "prof-latest", "tenant-1").
+		Return(&pb.DatasetProfile{ProfileId: "prof-latest", TenantId: "tenant-1"}, nil).
+		Once()
+
+	resp, err := svc.GetDatasetSummary(context.Background(), &pb.GetDatasetSummaryRequest{
+		TenantId: "tenant-1",
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, "prof-latest", resp.Profile.ProfileId)
+	mockStore.AssertExpectations(t)
 }

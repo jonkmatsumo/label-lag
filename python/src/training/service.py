@@ -201,9 +201,10 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                 model_name=EXPERIMENT_NAME,
                 status="RUNNING",
                 started_at=start_ts,
+                tenant_id=request.tenant_id,
             )
             try:
-                crud.report_training_run(run_start)
+                crud.report_training_run(run_start, tenant_id=request.tenant_id)
             except Exception as e:
                 logger.warning(f"Failed to report training start: {e}")
 
@@ -378,9 +379,10 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                 status="COMPLETED",
                 ended_at=end_ts,
                 mlflow_run_id=run_id,
+                tenant_id=request.tenant_id,
             )
             try:
-                crud.report_training_run(run_complete)
+                crud.report_training_run(run_complete, tenant_id=request.tenant_id)
             except Exception as e:
                 logger.warning(f"Failed to report training completion: {e}")
 
@@ -400,7 +402,9 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                         run_id=analytics_run_id,
                         status="FAILED",
                         ended_at=end_ts,
-                    )
+                        tenant_id=request.tenant_id,
+                    ),
+                    tenant_id=request.tenant_id,
                 )
             except Exception:
                 pass
@@ -415,7 +419,9 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                         run_id=analytics_run_id,
                         status="FAILED",
                         ended_at=end_ts,
-                    )
+                        tenant_id=request.tenant_id,
+                    ),
+                    tenant_id=request.tenant_id,
                 )
             except Exception:
                 pass

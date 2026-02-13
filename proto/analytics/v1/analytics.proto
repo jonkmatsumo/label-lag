@@ -194,6 +194,7 @@ message GetDatasetProfileResponse {
 
 message GetDailyStatsRequest {
   int32 days = 1;
+  string tenant_id = 15;
 }
 
 message DailyStat {
@@ -213,6 +214,7 @@ message GetTransactionDetailsRequest {
   int32 days = 1;
   int32 limit = 2;
   int32 offset = 3;
+  string tenant_id = 15;
 }
 
 message TransactionDetail {
@@ -262,6 +264,7 @@ message SearchTransactionsResponse {
 message GetRecentAlertsRequest {
   int32 limit = 1;
   int32 offset = 2;
+  string tenant_id = 15;
 }
 
 message Alert {
@@ -282,7 +285,9 @@ message GetRecentAlertsResponse {
   repeated Alert alerts = 1;
 }
 
-message GetOverviewMetricsRequest {}
+message GetOverviewMetricsRequest {
+  string tenant_id = 15;
+}
 
 message GetOverviewMetricsResponse {
   int64 total_records = 1;
@@ -377,6 +382,14 @@ message SaveBacktestResultRequest {
 
 message SaveBacktestResultResponse {
   bool success = 1;
+}
+
+message ListDatasetProfilesRequest {
+  google.protobuf.Timestamp start_date = 1;
+  google.protobuf.Timestamp end_date = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+  string tenant_id = 15;
 }
 
 message ListBacktestResultsRequest {
@@ -686,6 +699,7 @@ message GetRuleStatsResponse {
 message GetAttributionRequest {
   int32 days = 1;
   int32 limit = 2;
+  string tenant_id = 15;
 }
 
 message DailyAttribution {
@@ -733,6 +747,7 @@ message GetDecisionResponse {
 
 message GetDecisionTraceRequest {
   string request_id = 1;
+  string tenant_id = 2;
 }
 
 message GetDecisionTraceResponse {
@@ -743,6 +758,7 @@ message GetRuleImpactRequest {
   string rule_id = 1;
   google.protobuf.Timestamp start_date = 2;
   google.protobuf.Timestamp end_date = 3;
+  string tenant_id = 15;
 }
 
 message RuleImpactBucket {
@@ -866,6 +882,7 @@ message ListJobsRequest {
   google.protobuf.Timestamp end_date = 4;
   int32 limit = 5;
   int32 offset = 6;
+  string tenant_id = 15;
 }
 
 message ListJobsResponse {
@@ -886,6 +903,8 @@ message GetJobEventsRequest {
   string job_id = 1;
   int32 limit = 2;
   int32 offset = 3;
+  google.protobuf.Timestamp before_ts = 4;
+  int64 before_id = 5;
   string tenant_id = 15;
 }
 
@@ -927,13 +946,6 @@ message GetDatasetSummaryResponse {
   DatasetProfile profile = 1;
 }
 
-message ListDatasetProfilesRequest {
-  int32 limit = 1;
-  int32 offset = 2;
-  google.protobuf.Timestamp start_date = 3;
-  google.protobuf.Timestamp end_date = 4;
-  string tenant_id = 15;
-}
 
 message ListDatasetProfilesResponse {
   repeated DatasetProfile profiles = 1;

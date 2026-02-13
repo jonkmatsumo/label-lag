@@ -1,4 +1,4 @@
-.PHONY: up down restart install test lint clean infra-up infra-down infra-logs app-up app-down app-build app-rebuild app-logs rebuild-api rebuild-bff rebuild-web bff-test web-test reset-db reset-minio reset-all proto-gen proto-gen-go proto-gen-python
+.PHONY: up down restart install test lint clean infra-up infra-down infra-logs app-up app-down app-build app-rebuild app-logs rebuild-api rebuild-bff rebuild-web bff-test web-test reset-db reset-minio reset-all proto-gen proto-gen-go proto-gen-python analytics-maintenance
 
 # Catch-all start command
 up: app-up
@@ -109,6 +109,11 @@ web-test:
 web-dev:
 	cd typescript/ui && npm run dev
 
+test-smoke:
+	ORCHESTRATOR_BASE_URL=$${ORCHESTRATOR_BASE_URL:-http://localhost:8081} \
+	TENANT_ID=$${TENANT_ID:-tenant-1} \
+	uv run pytest -q python/tests/integration/test_orchestrator_analytics_smoke.py
+
 # Proto generation
 PROTO_DIR = proto
 PYTHON_SRC_DIR = python/src
@@ -153,7 +158,7 @@ proto-gen-go:
 		$(PROTO_DIR)/training/v1/training.proto
 	@mv go/training/proto/trainingv1/training/v1/*.go go/training/proto/trainingv1/ 2>/dev/null || true
 	@rm -rf go/training/proto/trainingv1/training 2>/dev/null || true
-	@[ -f go/training/go.mod ] || (cd go/training && go mod init github.com/jonkmatsumo/label-lag/go/training && go mod tidy)
+	@[ -f go/training/go.mod ] || (echo "missing go/training/go.mod; restore tracked module file" && exit 1)
 
 	# Forecast service
 	@mkdir -p go/forecast/proto/forecastv1
@@ -163,7 +168,7 @@ proto-gen-go:
 		$(PROTO_DIR)/forecast/v1/forecast.proto
 	@mv go/forecast/proto/forecastv1/forecast/v1/*.go go/forecast/proto/forecastv1/ 2>/dev/null || true
 	@rm -rf go/forecast/proto/forecastv1/forecast 2>/dev/null || true
-	@[ -f go/forecast/go.mod ] || (cd go/forecast && go mod init github.com/jonkmatsumo/label-lag/go/forecast && go mod tidy)
+	@[ -f go/forecast/go.mod ] || (echo "missing go/forecast/go.mod; restore tracked module file" && exit 1)
 
 proto-gen-python:
 	@echo "Generating Python stubs..."
@@ -196,3 +201,22 @@ db-verify:
 	@echo "Verifying migrations apply cleanly..."
 	# This target expects a running DB or can be used in CI with a service container
 	cd go/analytics && go run cmd/migrate/main.go
+
+TENANT_ID ?= tenant-1
+RETENTION_DAYS ?= 30
+ALL_TENANTS ?= 0
+
+analytics-maintenance:
+	@echo "Running analytics aggregate reconciliation..."
+	cd go/analytics && go run cmd/reconcile/main.go
+	@if [ "$(ALL_TENANTS)" = "1" ]; then \
+		echo "WARNING: pruning dataset profiles for ALL tenants (retention=$(RETENTION_DAYS)d)"; \
+		cd go/analytics && go run cmd/prune/main.go --all-tenants --retention-days $(RETENTION_DAYS); \
+	else \
+		if [ -z "$(TENANT_ID)" ]; then \
+			echo "TENANT_ID is required unless ALL_TENANTS=1"; \
+			exit 1; \
+		fi; \
+		echo "Pruning dataset profiles for tenant $(TENANT_ID) (retention=$(RETENTION_DAYS)d)"; \
+		cd go/analytics && go run cmd/prune/main.go --tenant-id "$(TENANT_ID)" --retention-days $(RETENTION_DAYS); \
+	fi

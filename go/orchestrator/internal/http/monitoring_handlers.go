@@ -12,7 +12,6 @@ import (
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
 	forecastv1 "github.com/jonkmatsumo/label-lag/go/forecast/proto/forecastv1"
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/requestid"
-	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/tenant"
 )
 
 // TODO(phase4): Map core monitoring read routes.
@@ -38,11 +37,17 @@ func (h *Handler) handleMonitoringDrift(w http.ResponseWriter, r *http.Request) 
 	}
 	forceRefresh := r.URL.Query().Get("force_refresh") == "true"
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	resp, err := h.forecastClient.GetDriftMonitoring(r.Context(), &forecastv1.GetDriftMonitoringRequest{
 		Hours:        hours,
 		Threshold:    threshold,
 		ForceRefresh: forceRefresh,
-		TenantId:     tenant.FromContext(r.Context()),
+		TenantId:     tenantID,
 	})
 	if err != nil {
 		writeRPCError(w, err)
@@ -67,9 +72,15 @@ func (h *Handler) handleMetricsShadowComparison(w http.ResponseWriter, r *http.R
 
 	hours, _ := parseIntQuery(r, "hours", 24, 1, 720)
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	resp, err := h.analyticsClient.GetShadowComparison(r.Context(), &crudv1.GetShadowComparisonRequest{
 		Hours:    hours,
-		TenantId: tenant.FromContext(r.Context()),
+		TenantId: tenantID,
 	})
 	if err != nil {
 		writeRPCError(w, err)

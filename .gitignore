@@ -106,8 +106,6 @@ bin/
 **/gateway_grpc/**/*_pb2_grpc.py
 
 # Generated boilerplate modules and packages
-go/forecast/go.mod
-go/training/go.mod
 python/src/analytics/__init__.py
 python/src/analytics/v1/__init__.py
 python/src/forecast/v1/__init__.py

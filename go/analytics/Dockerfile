@@ -21,8 +21,9 @@ FROM alpine:latest
 
 WORKDIR /app
 
-# Copy the binary from the builder
+# Copy the binary and config from the builder
 COPY --from=builder /app/go/analytics/analytics .
+COPY --from=builder /app/go/analytics/config ./config
 
 # Expose the gRPC port
 EXPOSE 50051
