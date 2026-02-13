@@ -160,6 +160,14 @@ proto-gen-go:
 	@rm -rf go/training/proto/trainingv1/training 2>/dev/null || true
 	@[ -f go/training/go.mod ] || (echo "missing go/training/go.mod; restore tracked module file" && exit 1)
 
+	# Common protos
+	@mkdir -p go/common/proto/v1
+	protoc -I $(PROTO_DIR) \
+		--go_out=. --go_opt=module=github.com/jonkmatsumo/label-lag \
+		$(PROTO_DIR)/common/v1/pagination.proto
+	@mv go/common/proto/v1/common/v1/*.go go/common/proto/v1/ 2>/dev/null || true
+	@rm -rf go/common/proto/v1/common 2>/dev/null || true
+
 	# Forecast service
 	@mkdir -p go/forecast/proto/forecastv1
 	protoc -I $(PROTO_DIR) \

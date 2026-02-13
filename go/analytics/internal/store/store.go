@@ -26,7 +26,7 @@ type Store interface {
 	GetAttribution(ctx context.Context, cutoff time.Time, limit int32, tenantID string) ([]*pb.DailyAttribution, error)
 
 	// Decisions (Phase 2)
-	ListDecisions(ctx context.Context, req *pb.ListDecisionsRequest) ([]*pb.DecisionSummary, int64, error)
+	ListDecisions(ctx context.Context, req *pb.ListDecisionsRequest) ([]*pb.DecisionSummary, int64, string, error)
 	GetDecision(ctx context.Context, requestID string, tenantID string) (*pb.InferenceEvent, error)
 	GetDecisionTrace(ctx context.Context, requestID string, tenantID string) ([]*pb.RuleImpact, error)
 	GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactRequest) (*pb.GetRuleImpactResponse, error)

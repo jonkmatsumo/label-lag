@@ -5,6 +5,7 @@ package crud.v1;
 option go_package = "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1;crudv1";
 
 import "google/protobuf/timestamp.proto";
+import "common/v1/pagination.proto";
 
 service AnalyticsService {
   rpc GetDailyStats(GetDailyStatsRequest) returns (GetDailyStatsResponse);
@@ -719,11 +720,13 @@ message ListDecisionsRequest {
   int32 limit = 7;
   int32 offset = 8;
   string tenant_id = 15;
+  common.v1.CursorPageRequest pagination = 16;
 }
 
 message ListDecisionsResponse {
   repeated DecisionSummary decisions = 1;
   int64 total = 2;
+  common.v1.CursorPageResponse pagination = 3;
 }
 
 message DecisionSummary {

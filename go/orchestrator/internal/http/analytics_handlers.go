@@ -8,6 +8,7 @@ import (
 	"time"
 
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	commonv1 "github.com/jonkmatsumo/label-lag/go/common/proto/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -537,6 +538,13 @@ func (h *Handler) handleListDecisions(w http.ResponseWriter, r *http.Request) {
 		UserId:   r.URL.Query().Get("user_id"),
 		Decision: r.URL.Query().Get("decision"),
 		TenantId: tenantID,
+	}
+
+	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
+		req.Pagination = &commonv1.CursorPageRequest{
+			Cursor: cursor,
+			Limit:  limit,
+		}
 	}
 
 	if minScoreStr := r.URL.Query().Get("min_score"); minScoreStr != "" {

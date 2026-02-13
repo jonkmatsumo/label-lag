@@ -959,7 +959,7 @@ func (s *SQLStore) BatchGetLatestUserFeatures(ctx context.Context, userIDs []str
 	return results, nil
 }
 
-func (s *SQLStore) ListDecisions(ctx context.Context, req *pb.ListDecisionsRequest) ([]*pb.DecisionSummary, int64, error) {
+func (s *SQLStore) ListDecisions(ctx context.Context, req *pb.ListDecisionsRequest) ([]*pb.DecisionSummary, int64, string, error) {
 	whereClauses := []string{"1=1"}
 	args := []interface{}{}
 
@@ -992,39 +992,75 @@ func (s *SQLStore) ListDecisions(ctx context.Context, req *pb.ListDecisionsReque
 		whereClauses = append(whereClauses, fmt.Sprintf("tenant_id = $%d", len(args)))
 	}
 
+	// Cursor pagination
+	var cursorObj *decisionCursor
+	if req.Pagination != nil && req.Pagination.Cursor != "" {
+		var err error
+		cursorObj, err = decodeDecisionCursor(req.Pagination.Cursor)
+		if err != nil {
+			return nil, 0, "", status.Errorf(codes.InvalidArgument, "invalid cursor: %v", err)
+		}
+		args = append(args, cursorObj.CreatedAt, cursorObj.RequestId)
+		whereClauses = append(whereClauses, fmt.Sprintf("(ts, request_id) < ($%d, $%d)", len(args)-1, len(args)))
+	}
+
 	whereStmt := strings.Join(whereClauses, " AND ")
 
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM inference_events WHERE %s", whereStmt)
 	var total int64
 	err := s.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
 	if err != nil {
-		return nil, 0, db.MapDBError(err)
+		return nil, 0, "", db.MapDBError(err)
 	}
 
-	query := fmt.Sprintf("SELECT request_id, user_id, ts, final_score, decision, rule_impacts FROM inference_events WHERE %s ORDER BY ts DESC, request_id DESC LIMIT $%d OFFSET $%d",
-		whereStmt, len(args)+1, len(args)+2)
+	limit := req.Limit
+	if req.Pagination != nil && req.Pagination.Limit > 0 {
+		limit = req.Pagination.Limit
+	}
+	if limit <= 0 {
+		limit = 50
+	}
 
-	args = append(args, req.Limit, req.Offset)
+	query := fmt.Sprintf("SELECT request_id, user_id, ts, final_score, decision, rule_impacts FROM inference_events WHERE %s ORDER BY ts DESC, request_id DESC LIMIT $%d",
+		whereStmt, len(args)+1)
+	args = append(args, limit)
+
+	// Add offset only if cursor is NOT provided (backward compatibility)
+	if cursorObj == nil && req.Offset > 0 {
+		query += fmt.Sprintf(" OFFSET $%d", len(args)+1)
+		args = append(args, req.Offset)
+	}
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, 0, db.MapDBError(err)
+		return nil, 0, "", db.MapDBError(err)
 	}
 	defer rows.Close()
 
 	var decisions []*pb.DecisionSummary
+	var lastCreatedAt time.Time
+	var lastRequestID string
+
 	for rows.Next() {
 		var d pb.DecisionSummary
 		var ts time.Time
 		var ruleImpactsJSON []byte
 		if err := rows.Scan(&d.RequestId, &d.UserId, &ts, &d.FinalScore, &d.Decision, &ruleImpactsJSON); err != nil {
-			return nil, 0, fmt.Errorf("failed to scan decision summary: %v", err)
+			return nil, 0, "", fmt.Errorf("failed to scan decision summary: %v", err)
 		}
 		d.CreatedAt = timestamppb.New(ts)
 		d.DecisionReason, d.Thresholds = populateExplainability(d.Decision, d.FinalScore, ruleImpactsJSON)
 		decisions = append(decisions, &d)
+		lastCreatedAt = ts
+		lastRequestID = d.RequestId
 	}
-	return decisions, total, nil
+
+	var nextCursor string
+	if len(decisions) > 0 && int32(len(decisions)) == limit {
+		nextCursor = encodeDecisionCursor(lastCreatedAt, lastRequestID)
+	}
+
+	return decisions, total, nextCursor, nil
 }
 
 func (s *SQLStore) GetDecision(ctx context.Context, requestID string, tenantID string) (*pb.InferenceEvent, error) {

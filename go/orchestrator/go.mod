@@ -5,6 +5,7 @@ go 1.25.5
 require (
 	github.com/fsnotify/fsnotify v1.8.0
 	github.com/jonkmatsumo/label-lag/go/analytics v0.0.0-00010101000000-000000000000
+	github.com/jonkmatsumo/label-lag/go/common v0.0.0-00010101000000-000000000000
 	github.com/jonkmatsumo/label-lag/go/forecast v0.0.0-00010101000000-000000000000
 	github.com/jonkmatsumo/label-lag/go/training v0.0.0-00010101000000-000000000000
 	github.com/prometheus/client_golang v1.23.2
@@ -24,6 +25,8 @@ replace github.com/jonkmatsumo/label-lag/go/analytics => ../analytics
 replace github.com/jonkmatsumo/label-lag/go/training => ../training
 
 replace github.com/jonkmatsumo/label-lag/go/forecast => ../forecast
+
+replace github.com/jonkmatsumo/label-lag/go/common => ../common
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect

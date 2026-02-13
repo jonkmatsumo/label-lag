@@ -10,6 +10,7 @@ import (
 	"github.com/jonkmatsumo/label-lag/go/analytics/internal/generator"
 	"github.com/jonkmatsumo/label-lag/go/analytics/internal/store"
 	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	commonv1 "github.com/jonkmatsumo/label-lag/go/common/proto/v1"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -685,6 +686,11 @@ func (s *Service) ListDecisions(ctx context.Context, req *pb.ListDecisionsReques
 	req.Limit = limit
 	req.Offset = offset
 
+	// If cursor pagination is provided, normalize it too
+	if req.Pagination != nil {
+		req.Pagination.Limit, _ = normalizeLimit(req.Pagination.Limit, limit, 250, "pagination.limit")
+	}
+
 	if req.Decision != "" {
 		req.Decision = strings.ToUpper(strings.TrimSpace(req.Decision))
 		if !allowedDecisions[req.Decision] {
@@ -700,15 +706,21 @@ func (s *Service) ListDecisions(ctx context.Context, req *pb.ListDecisionsReques
 		return nil, status.Error(codes.InvalidArgument, "start_date must be <= end_date")
 	}
 
-	decisions, total, err := s.store.ListDecisions(ctx, req)
+	decisions, total, nextCursor, err := s.store.ListDecisions(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	return &pb.ListDecisionsResponse{
+	resp := &pb.ListDecisionsResponse{
 		Decisions: decisions,
 		Total:     total,
-	}, nil
+	}
+	if nextCursor != "" {
+		resp.Pagination = &commonv1.CursorPageResponse{
+			NextCursor: nextCursor,
+		}
+	}
+	return resp, nil
 }
 
 func (s *Service) GetDecision(ctx context.Context, req *pb.GetDecisionRequest) (*pb.GetDecisionResponse, error) {

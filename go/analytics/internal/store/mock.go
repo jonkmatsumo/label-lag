@@ -277,12 +277,12 @@ func (m *MockStore) BatchGetLatestUserFeatures(ctx context.Context, userIDs []st
 	return args.Get(0).(map[string]*pb.UserFeatures), args.Error(1)
 }
 
-func (m *MockStore) ListDecisions(ctx context.Context, req *pb.ListDecisionsRequest) ([]*pb.DecisionSummary, int64, error) {
+func (m *MockStore) ListDecisions(ctx context.Context, req *pb.ListDecisionsRequest) ([]*pb.DecisionSummary, int64, string, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
-		return nil, 0, args.Error(2)
+		return nil, 0, "", args.Error(2)
 	}
-	return args.Get(0).([]*pb.DecisionSummary), args.Get(1).(int64), args.Error(2)
+	return args.Get(0).([]*pb.DecisionSummary), args.Get(1).(int64), args.String(2), args.Error(3)
 }
 
 func (m *MockStore) GetDecision(ctx context.Context, requestID string, tenantID string) (*pb.InferenceEvent, error) {

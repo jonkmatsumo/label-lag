@@ -38,7 +38,7 @@ func TestListDecisions_Success(t *testing.T) {
 
 	mockStore.On("ListDecisions", mock.Anything, mock.MatchedBy(func(r *pb.ListDecisionsRequest) bool {
 		return r.Limit == 10 && r.Offset == 0
-	})).Return(expectedDecisions, int64(1), nil)
+	})).Return(expectedDecisions, int64(1), "", nil)
 
 	resp, err := svc.ListDecisions(context.Background(), req)
 	assert.NoError(t, err)
