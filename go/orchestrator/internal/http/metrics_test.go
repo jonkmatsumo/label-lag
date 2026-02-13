@@ -71,7 +71,7 @@ func TestMetricsInstrumentation(t *testing.T) {
 	}
 
 	// Verify metrics
-	count := testutil.ToFloat64(httpRequestsTotal.WithLabelValues("GET", "/test", "202"))
+	count := testutil.ToFloat64(httpRequestsTotal.WithLabelValues("GET", "/test", "202", "missing"))
 	if count != 1 {
 		t.Errorf("expected count 1, got %v", count)
 	}
@@ -100,5 +100,14 @@ func TestNormalizeRoute(t *testing.T) {
 				t.Errorf("normalizeRoute(%q) = %q; want %q", tc.path, got, tc.expected)
 			}
 		})
+	}
+}
+
+func TestTenantPresenceLabel(t *testing.T) {
+	if got := tenantPresenceLabel(""); got != "missing" {
+		t.Fatalf("expected missing, got %q", got)
+	}
+	if got := tenantPresenceLabel("tenant-1"); got != "present" {
+		t.Fatalf("expected present, got %q", got)
 	}
 }

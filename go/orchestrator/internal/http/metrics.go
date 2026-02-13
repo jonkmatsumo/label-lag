@@ -13,16 +13,19 @@ import (
 )
 
 var (
+	// Metrics label policy:
+	// - Never use unbounded labels (tenant IDs, user IDs, request IDs, model names).
+	// - For tenancy visibility use a bounded dimension: tenant=present|missing.
 	httpRequestsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "orchestrator_http_requests_total",
 		Help: "Total number of HTTP requests.",
-	}, []string{"method", "route", "status"})
+	}, []string{"method", "route", "status", "tenant"})
 
 	httpRequestDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "orchestrator_http_request_duration_seconds",
 		Help:    "Duration of HTTP requests in seconds.",
 		Buckets: prometheus.DefBuckets,
-	}, []string{"method", "route"})
+	}, []string{"method", "route", "tenant"})
 )
 
 type responseWriter struct {
@@ -44,10 +47,18 @@ func metricsMiddleware(logger *slog.Logger, next http.Handler) http.Handler {
 
 		duration := time.Since(start).Seconds()
 		route := normalizeRoute(r.URL.Path)
+		tenant := tenantPresenceLabel(r.Header.Get("X-Tenant-Id"))
 
-		httpRequestsTotal.WithLabelValues(r.Method, route, strconv.Itoa(rw.statusCode)).Inc()
-		httpRequestDuration.WithLabelValues(r.Method, route).Observe(duration)
+		httpRequestsTotal.WithLabelValues(r.Method, route, strconv.Itoa(rw.statusCode), tenant).Inc()
+		httpRequestDuration.WithLabelValues(r.Method, route, tenant).Observe(duration)
 	})
+}
+
+func tenantPresenceLabel(headerValue string) string {
+	if strings.TrimSpace(headerValue) == "" {
+		return "missing"
+	}
+	return "present"
 }
 
 // normalizeRoute maps raw paths to templates to avoid cardinality explosion.
