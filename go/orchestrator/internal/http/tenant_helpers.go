@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/tenant"
 )
@@ -14,4 +15,43 @@ func tenantIDFromRequest(r *http.Request) string {
 		return "default"
 	}
 	return tenantID
+}
+
+// Tenant contract: analytics/readiness surfaces are tenant-scoped and require
+// X-Tenant-Id. Non-analytics endpoints may continue to use the middleware
+// fallback tenant for backward compatibility.
+//
+// requiresTenantHeader reports whether a route is tenant-scoped for analytics
+// and must include X-Tenant-Id.
+func requiresTenantHeader(path string) bool {
+	if path == "/metrics/shadow/comparison" || strings.HasPrefix(path, "/metrics/shadow/comparison/") {
+		return true
+	}
+
+	if strings.HasPrefix(path, "/rules/sandbox/") {
+		return false
+	}
+
+	for _, prefix := range []string{
+		"/analytics",
+		"/decisions",
+		"/kpis",
+		"/volume",
+		"/jobs",
+		"/dataset",
+		"/training-runs",
+		"/models/versions",
+		"/metrics/series",
+		"/monitoring/drift",
+		"/backtest",
+		"/rules",
+		"/data/clear",
+		"/data/generate",
+	} {
+		if path == prefix || strings.HasPrefix(path, prefix+"/") {
+			return true
+		}
+	}
+
+	return false
 }
