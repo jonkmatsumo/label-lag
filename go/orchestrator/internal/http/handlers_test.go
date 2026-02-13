@@ -694,6 +694,7 @@ type stubAnalyticsClient struct {
 	getTrainingRunResp          *crudv1.GetTrainingRunResponse
 	listModelVersionsResp       *crudv1.ListModelVersionsResponse
 	getMetricSeriesResp         *crudv1.GetMetricSeriesResponse
+	datasetSummaryResp          *crudv1.GetDatasetSummaryResponse
 	listDatasetProfilesResp     *crudv1.ListDatasetProfilesResponse
 	getLatestDatasetProfileResp *crudv1.GetLatestDatasetProfileResponse
 	compareDatasetProfilesResp  *crudv1.CompareDatasetProfilesResponse
@@ -705,6 +706,7 @@ type stubAnalyticsClient struct {
 	lastTransactionDetailsReq *crudv1.GetTransactionDetailsRequest
 	lastRecentAlertsReq       *crudv1.GetRecentAlertsRequest
 	lastFeatureSampleReq      *crudv1.GetFeatureSampleRequest
+	lastDatasetSummaryReq     *crudv1.GetDatasetSummaryRequest
 	lastBacktestResultsReq    *crudv1.ListBacktestResultsRequest
 	lastClearAllDataReq       *crudv1.ClearAllDataRequest
 	shadowComparisonResp      *crudv1.GetShadowComparisonResponse
@@ -875,6 +877,10 @@ func (s *stubAnalyticsClient) GetJobEvents(ctx context.Context, req *crudv1.GetJ
 }
 
 func (s *stubAnalyticsClient) GetDatasetSummary(ctx context.Context, req *crudv1.GetDatasetSummaryRequest) (*crudv1.GetDatasetSummaryResponse, error) {
+	s.lastDatasetSummaryReq = req
+	if s.datasetSummaryResp != nil {
+		return s.datasetSummaryResp, s.err
+	}
 	return &crudv1.GetDatasetSummaryResponse{}, s.err
 }
 

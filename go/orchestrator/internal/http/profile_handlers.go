@@ -11,8 +11,10 @@ import (
 func (h *Handler) handleGetDatasetProfile(w http.ResponseWriter, r *http.Request) {
 	profileID := r.PathValue("id")
 	if profileID == "" {
-		writeJSONError(w, http.StatusBadRequest, "profile_id required")
-		return
+		profileID = r.URL.Query().Get("profile_id")
+	}
+	if profileID == "" {
+		profileID = "latest"
 	}
 
 	req := &crudv1.GetDatasetSummaryRequest{

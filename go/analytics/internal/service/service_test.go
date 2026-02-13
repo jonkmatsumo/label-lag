@@ -138,3 +138,46 @@ func TestLogInferenceEvent_RequiresTenant(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
+
+func TestGetDatasetSummary_UsesLatestCachedProfileByTenant(t *testing.T) {
+	mockStore := new(store.MockStore)
+	svc := NewService(mockStore, nil)
+
+	mockStore.On("GetLatestDatasetProfile", mock.Anything, "tenant-1").
+		Return(&pb.GetLatestDatasetProfileResponse{ProfileId: "prof-latest"}, nil).
+		Once()
+
+	expected := &pb.DatasetProfile{ProfileId: "prof-latest", TenantId: "tenant-1", RecordCount: 42}
+	mockStore.On("GetDatasetProfileCached", mock.Anything, "prof-latest", "tenant-1").
+		Return(expected, nil).
+		Once()
+
+	resp, err := svc.GetDatasetSummary(context.Background(), &pb.GetDatasetSummaryRequest{
+		ProfileId: "latest",
+		TenantId:  "tenant-1",
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, "prof-latest", resp.Profile.ProfileId)
+	mockStore.AssertExpectations(t)
+}
+
+func TestGetDatasetSummary_DefaultsMissingProfileIDToLatest(t *testing.T) {
+	mockStore := new(store.MockStore)
+	svc := NewService(mockStore, nil)
+
+	mockStore.On("GetLatestDatasetProfile", mock.Anything, "tenant-1").
+		Return(&pb.GetLatestDatasetProfileResponse{ProfileId: "prof-latest"}, nil).
+		Once()
+	mockStore.On("GetDatasetProfileCached", mock.Anything, "prof-latest", "tenant-1").
+		Return(&pb.DatasetProfile{ProfileId: "prof-latest", TenantId: "tenant-1"}, nil).
+		Once()
+
+	resp, err := svc.GetDatasetSummary(context.Background(), &pb.GetDatasetSummaryRequest{
+		TenantId: "tenant-1",
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, "prof-latest", resp.Profile.ProfileId)
+	mockStore.AssertExpectations(t)
+}

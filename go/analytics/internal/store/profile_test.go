@@ -32,9 +32,13 @@ func TestSaveDatasetProfile(t *testing.T) {
 	mock.ExpectExec("INSERT INTO dataset_profiles").
 		WithArgs("prof-1", "tenant-1", sqlmock.AnyArg(), int64(100), sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("DELETE FROM dataset_profiles").
+		WithArgs("tenant-1", sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 
 	err = s.SaveDatasetProfile(context.Background(), profile)
 	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestGetDatasetProfileCached(t *testing.T) {

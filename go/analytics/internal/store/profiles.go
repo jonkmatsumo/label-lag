@@ -14,6 +14,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+const datasetProfileRetention = 30 * 24 * time.Hour
+
 func (s *SQLStore) SaveDatasetProfile(ctx context.Context, profile *pb.DatasetProfile) error {
 	if profile == nil || profile.ProfileId == "" {
 		return status.Error(codes.InvalidArgument, "profile and profile_id required")
@@ -53,6 +55,16 @@ func (s *SQLStore) SaveDatasetProfile(ctx context.Context, profile *pb.DatasetPr
 		computedAt,
 		profile.RecordCount,
 		profilesJSON,
+	)
+	if err != nil {
+		return db.MapDBError(err)
+	}
+
+	olderThan := computedAt.Add(-datasetProfileRetention)
+	_, err = s.db.ExecContext(queryCtx,
+		`DELETE FROM dataset_profiles WHERE tenant_id = $1 AND computed_at < $2`,
+		profile.TenantId,
+		olderThan,
 	)
 	if err != nil {
 		return db.MapDBError(err)

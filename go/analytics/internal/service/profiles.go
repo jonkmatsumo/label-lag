@@ -13,6 +13,13 @@ import (
 )
 
 func (s *Service) GetDatasetSummary(ctx context.Context, req *pb.GetDatasetSummaryRequest) (*pb.GetDatasetSummaryResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "request required")
+	}
+	if req.ProfileId == "" {
+		req.ProfileId = "latest"
+	}
+
 	if req.ProfileId != "" && req.ProfileId != "latest" {
 		profile, err := s.store.GetDatasetProfileCached(ctx, req.ProfileId, req.TenantId)
 		if err != nil {
@@ -21,8 +28,21 @@ func (s *Service) GetDatasetSummary(ctx context.Context, req *pb.GetDatasetSumma
 		return &pb.GetDatasetSummaryResponse{Profile: profile}, nil
 	}
 
-	// Compute on-the-fly if "latest" or empty
-	// Use default limits
+	// Resolve "latest" within tenant if a cached profile already exists.
+	latest, err := s.store.GetLatestDatasetProfile(ctx, req.TenantId)
+	if err == nil && latest != nil && latest.ProfileId != "" {
+		profile, err := s.store.GetDatasetProfileCached(ctx, latest.ProfileId, req.TenantId)
+		if err == nil {
+			return &pb.GetDatasetSummaryResponse{Profile: profile}, nil
+		}
+		if status.Code(err) != codes.NotFound {
+			return nil, err
+		}
+	} else if err != nil && status.Code(err) != codes.NotFound {
+		return nil, err
+	}
+
+	// Compute on-the-fly if no cached latest is available.
 	rawProfile, err := s.store.GetDatasetProfile(ctx, "", 100, 20, req.TenantId)
 	if err != nil {
 		return nil, err
@@ -30,11 +50,6 @@ func (s *Service) GetDatasetSummary(ctx context.Context, req *pb.GetDatasetSumma
 
 	// Convert and save
 	profileID := uuid.New().String()
-	if req.ProfileId == "latest" {
-		// In a real system, we might update a "latest" pointer or just create new
-		// For now, create new
-	}
-
 	profile := &pb.DatasetProfile{
 		ProfileId:       profileID,
 		TenantId:        req.TenantId,
@@ -44,8 +59,6 @@ func (s *Service) GetDatasetSummary(ctx context.Context, req *pb.GetDatasetSumma
 	}
 
 	if err := s.store.SaveDatasetProfile(ctx, profile); err != nil {
-		// Log error but return result? Or fail?
-		// Let's fail for now to signal issues
 		return nil, err
 	}
 

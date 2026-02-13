@@ -514,6 +514,13 @@ func TestAnalyticsTrainingRunsContract(t *testing.T) {
 func TestAnalyticsDatasetProfilesContract(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	stub := &stubAnalyticsClient{
+		datasetSummaryResp: &crudv1.GetDatasetSummaryResponse{
+			Profile: &crudv1.DatasetProfile{
+				ProfileId:   "prof-1",
+				TenantId:    "tenant-1",
+				RecordCount: 1000,
+			},
+		},
 		listDatasetProfilesResp: &crudv1.ListDatasetProfilesResponse{
 			Profiles: []*crudv1.DatasetProfile{
 				{ProfileId: "prof-1", RecordCount: 1000},
@@ -563,6 +570,22 @@ func TestAnalyticsDatasetProfilesContract(t *testing.T) {
 		json.Unmarshal(rec.Body.Bytes(), &payload)
 		if payload["profile_id"] != "prof-1" {
 			t.Fatalf("expected profile_id prof-1, got %v", payload["profile_id"])
+		}
+	})
+
+	t.Run("get_dataset_summary_defaults_to_latest", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/dataset/summary", nil)
+		rec := httptest.NewRecorder()
+		handler.handleGetDatasetProfile(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+		}
+		if stub.lastDatasetSummaryReq == nil {
+			t.Fatalf("expected summary request to be captured")
+		}
+		if stub.lastDatasetSummaryReq.ProfileId != "latest" {
+			t.Fatalf("expected profile_id latest, got %q", stub.lastDatasetSummaryReq.ProfileId)
 		}
 	})
 }
