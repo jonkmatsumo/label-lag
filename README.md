@@ -99,6 +99,83 @@ stateDiagram-v2
 2) Start the stack with `docker compose -f docker-compose.infra.yml -f docker-compose.app.yml --profile react up -d`.
 3) Open the dashboard at `http://localhost:5180` and verify Live Scoring renders.
 
+## Analytics API
+
+All analytics routes on the Orchestrator HTTP API are tenant-scoped and require:
+
+`X-Tenant-Id: <tenant>`
+
+If the tenant header is missing, the API returns:
+- `400 Bad Request`
+- JSON error shape: `{"detail":"missing X-Tenant-Id"}`
+
+Set local defaults once:
+
+```bash
+export BASE_URL="${BASE_URL:-http://localhost:8081}"
+export TENANT_ID="${TENANT_ID:-tenant-1}"
+```
+
+Jobs list:
+
+```bash
+curl -sS -H "X-Tenant-Id: ${TENANT_ID}" \
+  "${BASE_URL}/jobs?limit=5&offset=0"
+```
+
+Job events (offset pagination):
+
+```bash
+export JOB_ID="job-1"
+curl -sS -H "X-Tenant-Id: ${TENANT_ID}" \
+  "${BASE_URL}/jobs/${JOB_ID}/events?limit=5&offset=0"
+```
+
+Job events (cursor-style pagination, recommended for large streams):
+
+```bash
+curl -sS -H "X-Tenant-Id: ${TENANT_ID}" \
+  "${BASE_URL}/jobs/${JOB_ID}/events?limit=5&before_ts=2026-01-02T03:04:05Z&before_id=99"
+```
+
+Dataset profiles list + latest profile resolution:
+
+```bash
+curl -sS -H "X-Tenant-Id: ${TENANT_ID}" \
+  "${BASE_URL}/dataset/profiles?limit=5&offset=0"
+
+curl -sS -H "X-Tenant-Id: ${TENANT_ID}" \
+  "${BASE_URL}/dataset/summary?profile_id=latest"
+```
+
+`profile_id=latest` is resolved within the provided tenant, not globally across tenants.
+
+KPI reads (`/kpis` + `/volume`):
+
+```bash
+curl -sS -H "X-Tenant-Id: ${TENANT_ID}" \
+  "${BASE_URL}/kpis?group_by=day&start_time=2026-01-01T00:00:00Z&end_time=2026-01-31T23:59:59Z"
+
+curl -sS -H "X-Tenant-Id: ${TENANT_ID}" \
+  "${BASE_URL}/volume?granularity=hour&start_time=2026-01-01T00:00:00Z&end_time=2026-01-02T00:00:00Z"
+```
+
+Training runs list + metric series:
+
+```bash
+curl -sS -H "X-Tenant-Id: ${TENANT_ID}" \
+  "${BASE_URL}/training-runs?status=completed&limit=10&offset=0"
+
+curl -sS -H "X-Tenant-Id: ${TENANT_ID}" \
+  "${BASE_URL}/metrics/series?model_name=default-model&metric_name=accuracy&start_date=2026-01-01T00:00:00Z&end_date=2026-01-31T23:59:59Z"
+```
+
+Missing tenant header example:
+
+```bash
+curl -sS -i "${BASE_URL}/jobs?limit=1&offset=0"
+```
+
 ## Detailed Architecture Breakdown
 
 Label Lag separates infrastructure, application runtime, and lifecycle workflows so that training and deployment are explicit and observable. The system design diagram above shows the runtime path (React → BFF → Go Orchestrator → Python Services → Go Analytics → DB). The pipeline diagram shows how models move from training to production inference. The rule state machine anchors governance, with all rule management and analysis now handled by the Go-based control plane.
