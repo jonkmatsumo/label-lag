@@ -179,6 +179,21 @@ jobs:
           echo "orchestrator health check timed out"
           exit 1
 
+      - name: Wait for analytics-backed endpoints
+        run: |
+          for i in {1..90}; do
+            status_code=$(curl -sS -o /tmp/smoke-jobs-response.json -w "%{http_code}" \
+              -H "X-Tenant-Id: tenant-1" \
+              "http://localhost:8081/jobs?limit=1&offset=0" || true)
+            if [ "$status_code" = "200" ]; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "analytics endpoint readiness timed out"
+          cat /tmp/smoke-jobs-response.json || true
+          exit 1
+
       - name: Run smoke test
         env:
           ORCHESTRATOR_BASE_URL: http://localhost:8081
