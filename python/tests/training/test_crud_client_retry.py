@@ -112,6 +112,8 @@ class TestAnalyticsCRUDClientRetry(unittest.TestCase):
             "status": "COMPLETED",
             "metrics": "{}",
             "params": "{}",
+            "tenant_id": "tenant-1",
+            "request_id": "req-999",
         }
         mock_open.return_value.readlines.return_value = [json.dumps(payload) + "\n"]
 
@@ -122,4 +124,9 @@ class TestAnalyticsCRUDClientRetry(unittest.TestCase):
         self.client.replay_spooled_reports()
 
         self.assertEqual(self.client.stub.ReportTrainingRun.call_count, 1)
+        sent_req = self.client.stub.ReportTrainingRun.call_args[0][0]
+        sent_kwargs = self.client.stub.ReportTrainingRun.call_args.kwargs
+        self.assertEqual(sent_req.run.tenant_id, "tenant-1")
+        self.assertEqual(sent_req.tenant_id, "tenant-1")
+        self.assertIn(("x-request-id", "req-999"), sent_kwargs.get("metadata", []))
         mock_remove.assert_called_once()

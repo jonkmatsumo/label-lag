@@ -296,10 +296,16 @@ class AnalyticsCRUDClient:
         try:
             return _do_report()
         except Exception as e:
-            logger.error(
+            grpc_code = (
+                e.code().name
+                if isinstance(e, grpc.RpcError) and callable(getattr(e, "code", None))
+                else "UNKNOWN"
+            )
+            logger.warning(
                 "failed to report training run after retries",
                 run_id=run.run_id,
                 tenant_id=tenant_id,
+                grpc_code=grpc_code,
                 error=str(e),
                 request_id=request_id,
             )
@@ -386,6 +392,7 @@ class AnalyticsCRUDClient:
                             tenant_id=run.tenant_id,
                         ),
                         timeout=self.timeout_seconds,
+                        metadata=self._get_metadata(payload.get("request_id")),
                     )
                     replayed_count += 1
                 except Exception as e:
