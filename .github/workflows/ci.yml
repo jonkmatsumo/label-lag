@@ -128,6 +128,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.5'
+
       - name: Install uv
         uses: astral-sh/setup-uv@v4
 
@@ -136,6 +141,21 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --all-extras
+
+      - name: Install Protoc
+        run: |
+          PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+          curl -LO --retry 5 --retry-delay 5 $PB_REL/download/v23.4/protoc-23.4-linux-x86_64.zip
+          sudo unzip -o protoc-23.4-linux-x86_64.zip -d /usr/local bin/protoc
+          sudo unzip -o protoc-23.4-linux-x86_64.zip -d /usr/local 'include/*'
+          rm -f protoc-23.4-linux-x86_64.zip
+
+      - name: Generate Protos
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.1
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+          make proto-gen
 
       - name: Create CI env file
         run: |
