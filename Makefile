@@ -158,7 +158,7 @@ proto-gen-go:
 		$(PROTO_DIR)/training/v1/training.proto
 	@mv go/training/proto/trainingv1/training/v1/*.go go/training/proto/trainingv1/ 2>/dev/null || true
 	@rm -rf go/training/proto/trainingv1/training 2>/dev/null || true
-	@[ -f go/training/go.mod ] || (cd go/training && go mod init github.com/jonkmatsumo/label-lag/go/training && go mod tidy)
+	@[ -f go/training/go.mod ] || (echo "missing go/training/go.mod; restore tracked module file" && exit 1)
 
 	# Forecast service
 	@mkdir -p go/forecast/proto/forecastv1
@@ -168,7 +168,7 @@ proto-gen-go:
 		$(PROTO_DIR)/forecast/v1/forecast.proto
 	@mv go/forecast/proto/forecastv1/forecast/v1/*.go go/forecast/proto/forecastv1/ 2>/dev/null || true
 	@rm -rf go/forecast/proto/forecastv1/forecast 2>/dev/null || true
-	@[ -f go/forecast/go.mod ] || (cd go/forecast && go mod init github.com/jonkmatsumo/label-lag/go/forecast && go mod tidy)
+	@[ -f go/forecast/go.mod ] || (echo "missing go/forecast/go.mod; restore tracked module file" && exit 1)
 
 proto-gen-python:
 	@echo "Generating Python stubs..."

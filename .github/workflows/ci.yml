@@ -111,8 +111,8 @@ jobs:
 
       - name: Install Go Protoc Plugins
         run: |
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.1
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
       - name: Generate Protos
@@ -136,6 +136,14 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --all-extras
+
+      - name: Create CI env file
+        run: |
+          cat > .env <<'EOF'
+          POSTGRES_USER=synthetic
+          POSTGRES_PASSWORD=synthetic_dev_password
+          POSTGRES_DB=synthetic_data
+          EOF
 
       - name: Start stack
         run: make app-up
@@ -208,8 +216,8 @@ jobs:
 
       - name: Generate Protos
         run: |
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.1
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
           make proto-gen
 
