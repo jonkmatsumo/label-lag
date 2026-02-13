@@ -57,10 +57,16 @@ func (h *Handler) handleBacktestCompare(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	resp, err := h.analyticsClient.CompareBacktests(r.Context(), &crudv1.CompareBacktestsRequest{
 		BaselineJobId:  req.BaselineJobID,
 		CandidateJobId: req.CandidateJobID,
-		TenantId:       tenantIDFromRequest(r),
+		TenantId:       tenantID,
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -110,9 +116,15 @@ func (h *Handler) handleBacktestResults(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	req := &crudv1.ListBacktestResultsRequest{
 		RuleId:   ruleID,
-		TenantId: tenantIDFromRequest(r),
+		TenantId: tenantID,
 	}
 	if startDate != nil {
 		req.StartDate = timestamppb.New(*startDate)

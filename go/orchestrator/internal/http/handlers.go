@@ -669,7 +669,12 @@ func (h *Handler) handleTrain(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
 		return
 	}
-	req.TenantId = tenantIDFromRequest(r)
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+	req.TenantId = tenantID
 
 	resp, err := h.trainingClient.Train(r.Context(), &req)
 	if err != nil {
@@ -706,7 +711,12 @@ func (h *Handler) handleDeployModel(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
 		return
 	}
-	req.TenantId = tenantIDFromRequest(r)
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+	req.TenantId = tenantID
 
 	resp, err := h.forecastClient.DeployModel(r.Context(), &req)
 	if err != nil {

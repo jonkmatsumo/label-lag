@@ -20,12 +20,18 @@ func (h *Handler) handleListTrainingRuns(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	req := &crudv1.ListTrainingRunsRequest{
 		ModelName: r.URL.Query().Get("model_name"),
 		Status:    r.URL.Query().Get("status"),
 		Limit:     limit,
 		Offset:    offset,
-		TenantId:  tenantIDFromRequest(r),
+		TenantId:  tenantID,
 	}
 
 	if startStr := r.URL.Query().Get("start_date"); startStr != "" {
@@ -72,11 +78,17 @@ func (h *Handler) handleListModelVersions(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	resp, err := h.analyticsClient.ListModelVersions(r.Context(), &crudv1.ListModelVersionsRequest{
 		ModelName: modelName,
 		Limit:     limit,
 		Offset:    offset,
-		TenantId:  tenantIDFromRequest(r),
+		TenantId:  tenantID,
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -93,9 +105,15 @@ func (h *Handler) handleGetTrainingRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	resp, err := h.analyticsClient.GetTrainingRun(r.Context(), &crudv1.GetTrainingRunRequest{
 		RunId:    runID,
-		TenantId: tenantIDFromRequest(r),
+		TenantId: tenantID,
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -106,10 +124,16 @@ func (h *Handler) handleGetTrainingRun(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleGetMetricSeries(w http.ResponseWriter, r *http.Request) {
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	req := &crudv1.GetMetricSeriesRequest{
 		ModelName:  r.URL.Query().Get("model_name"),
 		MetricName: r.URL.Query().Get("metric_name"),
-		TenantId:   tenantIDFromRequest(r),
+		TenantId:   tenantID,
 	}
 
 	if startStr := r.URL.Query().Get("start_date"); startStr != "" {

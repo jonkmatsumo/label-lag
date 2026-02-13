@@ -40,7 +40,7 @@ func TestAnalyticsOverviewContract(t *testing.T) {
 		MaxBodyBytes:    1024,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/analytics/overview", nil)
+	req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/analytics/overview", nil))
 	rec := httptest.NewRecorder()
 
 	handler.handleAnalyticsOverview(rec, req)
@@ -88,7 +88,7 @@ func TestAnalyticsDailyStatsContract(t *testing.T) {
 		MaxBodyBytes:    1024,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/analytics/daily-stats", nil)
+	req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/analytics/daily-stats", nil))
 	rec := httptest.NewRecorder()
 
 	handler.handleAnalyticsDailyStats(rec, req)
@@ -128,7 +128,7 @@ func TestAnalyticsTransactionsContract(t *testing.T) {
 		MaxBodyBytes:    1024,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/analytics/transactions", nil)
+	req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/analytics/transactions", nil))
 	rec := httptest.NewRecorder()
 
 	handler.handleAnalyticsTransactions(rec, req)
@@ -168,7 +168,7 @@ func TestAnalyticsRecentAlertsContract(t *testing.T) {
 		MaxBodyBytes:    1024,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/analytics/recent-alerts", nil)
+	req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/analytics/recent-alerts", nil))
 	rec := httptest.NewRecorder()
 
 	handler.handleAnalyticsRecentAlerts(rec, req)
@@ -206,7 +206,7 @@ func TestAnalyticsFeatureSampleContract(t *testing.T) {
 		MaxBodyBytes:    1024,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/analytics/feature-sample", nil)
+	req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/analytics/feature-sample", nil))
 	rec := httptest.NewRecorder()
 
 	handler.handleAnalyticsFeatureSample(rec, req)
@@ -251,7 +251,7 @@ func TestAnalyticsHandlersMapDownstreamErrors(t *testing.T) {
 				RulesProvider:   rules.NewEmptyProvider(),
 				MaxBodyBytes:    1024,
 			})
-			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			req := withTenantRequest(httptest.NewRequest(http.MethodGet, tc.path, nil))
 			rec := httptest.NewRecorder()
 
 			tc.handler(handler, rec, req)
@@ -293,7 +293,7 @@ func TestAnalyticsHandlersPreserveRequestIDHeader(t *testing.T) {
 	}
 
 	for _, path := range paths {
-		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req := withTenantRequest(httptest.NewRequest(http.MethodGet, path, nil))
 		req.Header.Set("X-Request-Id", "req-123")
 		req = req.WithContext(requestid.WithRequestID(req.Context(), "req-123"))
 		rec := httptest.NewRecorder()
@@ -350,7 +350,7 @@ func TestAnalyticsDecisionsContract(t *testing.T) {
 	})
 
 	t.Run("list_decisions", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/decisions?limit=10", nil)
+		req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/decisions?limit=10", nil))
 		rec := httptest.NewRecorder()
 		handler.handleListDecisions(rec, req)
 
@@ -374,7 +374,7 @@ func TestAnalyticsDecisionsContract(t *testing.T) {
 	})
 
 	t.Run("get_decision", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/decisions/req-1", nil)
+		req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/decisions/req-1", nil))
 		// No req.SetPathValue in standard net/http/httptest, we depend on manual setting if using standard mux?
 		// Handler uses r.PathValue("request_id")
 		req.SetPathValue("request_id", "req-1")
@@ -426,7 +426,7 @@ func TestAnalyticsJobsContract(t *testing.T) {
 	})
 
 	t.Run("list_jobs", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/jobs", nil)
+		req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/jobs", nil))
 		rec := httptest.NewRecorder()
 		handler.handleListJobs(rec, req)
 
@@ -442,7 +442,7 @@ func TestAnalyticsJobsContract(t *testing.T) {
 	})
 
 	t.Run("get_job_summary", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/jobs/summary", nil)
+		req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/jobs/summary", nil))
 		rec := httptest.NewRecorder()
 		handler.handleGetJobSummary(rec, req)
 
@@ -458,7 +458,7 @@ func TestAnalyticsJobsContract(t *testing.T) {
 	})
 
 	t.Run("get_job_events_with_cursor", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/jobs/job-1/events?before_ts=2026-01-02T03:04:05Z&before_id=99", nil)
+		req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/jobs/job-1/events?before_ts=2026-01-02T03:04:05Z&before_id=99", nil))
 		req.SetPathValue("id", "job-1")
 		rec := httptest.NewRecorder()
 		handler.handleGetJobEvents(rec, req)
@@ -504,7 +504,7 @@ func TestAnalyticsTrainingRunsContract(t *testing.T) {
 	})
 
 	t.Run("list_training_runs", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/training-runs", nil)
+		req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/training-runs", nil))
 		rec := httptest.NewRecorder()
 		handler.handleListTrainingRuns(rec, req)
 
@@ -520,7 +520,7 @@ func TestAnalyticsTrainingRunsContract(t *testing.T) {
 	})
 
 	t.Run("list_model_versions", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/models/versions?model_name=xgboost", nil)
+		req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/models/versions?model_name=xgboost", nil))
 		rec := httptest.NewRecorder()
 		handler.handleListModelVersions(rec, req)
 
@@ -568,7 +568,7 @@ func TestAnalyticsDatasetProfilesContract(t *testing.T) {
 	})
 
 	t.Run("list_dataset_profiles", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/dataset/profiles", nil)
+		req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/dataset/profiles", nil))
 		rec := httptest.NewRecorder()
 		handler.handleListDatasetProfiles(rec, req)
 
@@ -584,7 +584,7 @@ func TestAnalyticsDatasetProfilesContract(t *testing.T) {
 	})
 
 	t.Run("get_latest_dataset_profile", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/dataset/latest", nil)
+		req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/dataset/latest", nil))
 		rec := httptest.NewRecorder()
 		handler.handleGetLatestDatasetProfile(rec, req)
 
@@ -599,7 +599,7 @@ func TestAnalyticsDatasetProfilesContract(t *testing.T) {
 	})
 
 	t.Run("get_dataset_summary_defaults_to_latest", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/dataset/summary", nil)
+		req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/dataset/summary", nil))
 		rec := httptest.NewRecorder()
 		handler.handleGetDatasetProfile(rec, req)
 

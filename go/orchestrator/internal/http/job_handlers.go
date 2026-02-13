@@ -23,12 +23,18 @@ func (h *Handler) handleListJobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	req := &crudv1.ListJobsRequest{
 		Limit:    limit,
 		Offset:   offset,
 		JobType:  r.URL.Query().Get("job_type"),
 		Status:   r.URL.Query().Get("status"),
-		TenantId: tenantIDFromRequest(r),
+		TenantId: tenantID,
 	}
 
 	if startStr := r.URL.Query().Get("start_date"); startStr != "" {
@@ -69,9 +75,15 @@ func (h *Handler) handleGetJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	resp, err := h.analyticsClient.GetJob(r.Context(), &crudv1.GetJobRequest{
 		JobId:    jobID,
-		TenantId: tenantIDFromRequest(r),
+		TenantId: tenantID,
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -99,11 +111,17 @@ func (h *Handler) handleGetJobEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	req := &crudv1.GetJobEventsRequest{
 		JobId:    jobID,
 		Limit:    limit,
 		Offset:   offset,
-		TenantId: tenantIDFromRequest(r),
+		TenantId: tenantID,
 	}
 	if beforeTS := r.URL.Query().Get("before_ts"); beforeTS != "" {
 		parsed, err := time.Parse(time.RFC3339, beforeTS)
@@ -132,8 +150,14 @@ func (h *Handler) handleGetJobEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleGetJobSummary(w http.ResponseWriter, r *http.Request) {
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	req := &crudv1.GetJobSummaryRequest{
-		TenantId: tenantIDFromRequest(r),
+		TenantId: tenantID,
 	}
 
 	if startStr := r.URL.Query().Get("start_time"); startStr != "" {

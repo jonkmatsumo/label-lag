@@ -157,7 +157,12 @@ func (h *Handler) handleSearchTransactions(w http.ResponseWriter, r *http.Reques
 	if req.Offset != nil {
 		grpcReq.Offset = *req.Offset
 	}
-	grpcReq.TenantId = tenantIDFromRequest(r)
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+	grpcReq.TenantId = tenantID
 
 	resp, err := h.analyticsClient.SearchTransactions(r.Context(), grpcReq)
 	if err != nil {

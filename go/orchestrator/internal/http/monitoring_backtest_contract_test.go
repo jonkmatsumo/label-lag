@@ -34,7 +34,7 @@ func TestMonitoringDriftContract(t *testing.T) {
 		MaxBodyBytes:   1024,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/monitoring/drift?hours=24&threshold=0.25&force_refresh=false", nil)
+	req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/monitoring/drift?hours=24&threshold=0.25&force_refresh=false", nil))
 	rec := httptest.NewRecorder()
 
 	handler.handleMonitoringDrift(rec, req)
@@ -65,7 +65,7 @@ func TestMonitoringDriftContractError(t *testing.T) {
 		MaxBodyBytes:   1024,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/monitoring/drift", nil)
+	req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/monitoring/drift", nil))
 	rec := httptest.NewRecorder()
 
 	handler.handleMonitoringDrift(rec, req)
@@ -93,7 +93,7 @@ func TestShadowComparisonContract(t *testing.T) {
 		MaxBodyBytes:    1024,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/metrics/shadow/comparison?hours=24", nil)
+	req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/metrics/shadow/comparison?hours=24", nil))
 	rec := httptest.NewRecorder()
 
 	handler.handleMetricsShadowComparison(rec, req)
@@ -125,7 +125,7 @@ func TestShadowComparisonContractError(t *testing.T) {
 		MaxBodyBytes:    1024,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/metrics/shadow/comparison", nil)
+	req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/metrics/shadow/comparison", nil))
 	rec := httptest.NewRecorder()
 
 	handler.handleMetricsShadowComparison(rec, req)
@@ -160,7 +160,7 @@ func TestBacktestResultsContract(t *testing.T) {
 		MaxBodyBytes:    1024,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/backtest/results?limit=1", nil)
+	req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/backtest/results?limit=1", nil))
 	rec := httptest.NewRecorder()
 
 	handler.handleBacktestResults(rec, req)
@@ -184,7 +184,7 @@ func TestBacktestResultsContractError(t *testing.T) {
 		MaxBodyBytes:    1024,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/backtest/results", nil)
+	req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/backtest/results", nil))
 	rec := httptest.NewRecorder()
 
 	handler.handleBacktestResults(rec, req)
@@ -205,7 +205,7 @@ func TestBacktestResultsRejectsInvalidDate(t *testing.T) {
 		MaxBodyBytes:    1024,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/backtest/results?start_date=not-a-date", nil)
+	req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/backtest/results?start_date=not-a-date", nil))
 	rec := httptest.NewRecorder()
 
 	handler.handleBacktestResults(rec, req)
@@ -232,7 +232,7 @@ func TestBacktestResultsPreserveRequestIDHeader(t *testing.T) {
 	handler.Register(mux)
 	server := requestIDMiddleware(logger, mux)
 
-	req := httptest.NewRequest(http.MethodGet, "/backtest/results", nil)
+	req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/backtest/results", nil))
 	req.Header.Set("X-Request-Id", "req-77")
 	req = req.WithContext(requestid.WithRequestID(req.Context(), "req-77"))
 	rec := httptest.NewRecorder()

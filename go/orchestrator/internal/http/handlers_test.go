@@ -147,7 +147,7 @@ func TestHandleSearchTransactions(t *testing.T) {
 		MaxBodyBytes:    1024,
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/analytics/transactions/search", strings.NewReader(`{"user_id":"user-1","limit":10}`))
+	req := withTenantRequest(httptest.NewRequest(http.MethodPost, "/analytics/transactions/search", strings.NewReader(`{"user_id":"user-1","limit":10}`)))
 	rec := httptest.NewRecorder()
 
 	handler.handleSearchTransactions(rec, req)
@@ -201,7 +201,7 @@ func TestHandleAnalyticsOverview(t *testing.T) {
 		MaxBodyBytes:    1024,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/analytics/overview", nil)
+	req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/analytics/overview", nil))
 	rec := httptest.NewRecorder()
 
 	handler.handleAnalyticsOverview(rec, req)
@@ -239,7 +239,7 @@ func TestHandleAnalyticsOverviewPropagatesErrors(t *testing.T) {
 		MaxBodyBytes:    1024,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/analytics/overview", nil)
+	req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/analytics/overview", nil))
 	rec := httptest.NewRecorder()
 
 	handler.handleAnalyticsOverview(rec, req)
@@ -274,7 +274,7 @@ func TestHandleAnalyticsDailyStats(t *testing.T) {
 		MaxBodyBytes:    1024,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/analytics/daily-stats?days=7", nil)
+	req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/analytics/daily-stats?days=7", nil))
 	rec := httptest.NewRecorder()
 
 	handler.handleAnalyticsDailyStats(rec, req)
@@ -332,7 +332,7 @@ func TestHandleAnalyticsTransactions(t *testing.T) {
 		MaxBodyBytes:    1024,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/analytics/transactions", nil)
+	req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/analytics/transactions", nil))
 	rec := httptest.NewRecorder()
 
 	handler.handleAnalyticsTransactions(rec, req)
@@ -388,7 +388,7 @@ func TestHandleAnalyticsRecentAlerts(t *testing.T) {
 		MaxBodyBytes:    1024,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/analytics/recent-alerts", nil)
+	req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/analytics/recent-alerts", nil))
 	rec := httptest.NewRecorder()
 
 	handler.handleAnalyticsRecentAlerts(rec, req)
@@ -438,7 +438,7 @@ func TestHandleAnalyticsFeatureSample(t *testing.T) {
 		MaxBodyBytes:    1024,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/analytics/feature-sample?sample_size=5&stratify=false", nil)
+	req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/analytics/feature-sample?sample_size=5&stratify=false", nil))
 	rec := httptest.NewRecorder()
 
 	handler.handleAnalyticsFeatureSample(rec, req)
@@ -475,7 +475,7 @@ func TestHandleMonitoringDrift(t *testing.T) {
 		MaxBodyBytes:   1024,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/monitoring/drift?hours=24", nil)
+	req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/monitoring/drift?hours=24", nil))
 	rec := httptest.NewRecorder()
 
 	handler.handleMonitoringDrift(rec, req)
@@ -515,7 +515,7 @@ func TestHandleMetricsShadowComparison(t *testing.T) {
 		MaxBodyBytes:    1024,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/metrics/shadow/comparison?hours=24", nil)
+	req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/metrics/shadow/comparison?hours=24", nil))
 	rec := httptest.NewRecorder()
 
 	handler.handleMetricsShadowComparison(rec, req)
@@ -579,7 +579,7 @@ func TestHandleBacktestResults(t *testing.T) {
 		MaxBodyBytes:    1024,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/backtest/results?rule_id=rule-1&start_date=2025-01-01&end_date=2025-01-31&limit=1", nil)
+	req := withTenantRequest(httptest.NewRequest(http.MethodGet, "/backtest/results?rule_id=rule-1&start_date=2025-01-01&end_date=2025-01-31&limit=1", nil))
 	rec := httptest.NewRecorder()
 
 	handler.handleBacktestResults(rec, req)

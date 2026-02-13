@@ -24,8 +24,14 @@ func (h *Handler) handleAnalyticsOverview(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	resp, err := h.analyticsClient.GetOverviewMetrics(r.Context(), &crudv1.GetOverviewMetricsRequest{
-		TenantId: tenantIDFromRequest(r),
+		TenantId: tenantID,
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -65,9 +71,15 @@ func (h *Handler) handleAnalyticsDailyStats(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	resp, err := h.analyticsClient.GetDailyStats(r.Context(), &crudv1.GetDailyStatsRequest{
 		Days:     days,
-		TenantId: tenantIDFromRequest(r),
+		TenantId: tenantID,
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -118,11 +130,17 @@ func (h *Handler) handleAnalyticsTransactions(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	resp, err := h.analyticsClient.GetTransactionDetails(r.Context(), &crudv1.GetTransactionDetailsRequest{
 		Days:     days,
 		Limit:    limit,
 		Offset:   offset,
-		TenantId: tenantIDFromRequest(r),
+		TenantId: tenantID,
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -178,10 +196,16 @@ func (h *Handler) handleAnalyticsRecentAlerts(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	resp, err := h.analyticsClient.GetRecentAlerts(r.Context(), &crudv1.GetRecentAlertsRequest{
 		Limit:    limit,
 		Offset:   offset,
-		TenantId: tenantIDFromRequest(r),
+		TenantId: tenantID,
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -235,10 +259,16 @@ func (h *Handler) handleAnalyticsFeatureSample(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	resp, err := h.analyticsClient.GetFeatureSample(r.Context(), &crudv1.GetFeatureSampleRequest{
 		SampleSize: sampleSize,
 		Stratify:   stratify,
-		TenantId:   tenantIDFromRequest(r),
+		TenantId:   tenantID,
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -270,8 +300,14 @@ func (h *Handler) handleDatasetClear(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	resp, err := h.analyticsClient.ClearAllData(r.Context(), &crudv1.ClearAllDataRequest{
-		TenantId: tenantIDFromRequest(r),
+		TenantId: tenantID,
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -307,10 +343,16 @@ func (h *Handler) handleAnalyticsRuleStats(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	resp, err := h.analyticsClient.GetRuleStats(r.Context(), &crudv1.GetRuleStatsRequest{
 		RuleId:   ruleID,
 		Days:     days,
-		TenantId: tenantIDFromRequest(r),
+		TenantId: tenantID,
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -343,10 +385,16 @@ func (h *Handler) handleAnalyticsAttribution(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	resp, err := h.analyticsClient.GetAttribution(r.Context(), &crudv1.GetAttributionRequest{
 		Days:     days,
 		Limit:    limit,
-		TenantId: tenantIDFromRequest(r),
+		TenantId: tenantID,
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -477,12 +525,18 @@ func (h *Handler) handleListDecisions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	req := &crudv1.ListDecisionsRequest{
 		Limit:    limit,
 		Offset:   offset,
 		UserId:   r.URL.Query().Get("user_id"),
 		Decision: r.URL.Query().Get("decision"),
-		TenantId: tenantIDFromRequest(r),
+		TenantId: tenantID,
 	}
 
 	if minScoreStr := r.URL.Query().Get("min_score"); minScoreStr != "" {
@@ -539,9 +593,15 @@ func (h *Handler) handleGetDecision(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	resp, err := h.analyticsClient.GetDecision(r.Context(), &crudv1.GetDecisionRequest{
 		RequestId: requestID,
-		TenantId:  tenantIDFromRequest(r),
+		TenantId:  tenantID,
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -558,9 +618,15 @@ func (h *Handler) handleGetDecisionTrace(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	resp, err := h.analyticsClient.GetDecisionTrace(r.Context(), &crudv1.GetDecisionTraceRequest{
 		RequestId: requestID,
-		TenantId:  tenantIDFromRequest(r),
+		TenantId:  tenantID,
 	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
@@ -579,9 +645,15 @@ func (h *Handler) handleGetRuleImpact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	req := &crudv1.GetRuleImpactRequest{
 		RuleId:   ruleID,
-		TenantId: tenantIDFromRequest(r),
+		TenantId: tenantID,
 	}
 
 	if startStr := r.URL.Query().Get("start_date"); startStr != "" {
@@ -618,9 +690,15 @@ func (h *Handler) handleGetRuleImpact(w http.ResponseWriter, r *http.Request) {
 // handleGetKpis returns dashboard-level KPIs.
 // Query params: start_time (RFC3339), end_time (RFC3339), group_by (day|hour).
 func (h *Handler) handleGetKpis(w http.ResponseWriter, r *http.Request) {
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	req := &crudv1.GetKpisRequest{
 		GroupBy:  r.URL.Query().Get("group_by"),
-		TenantId: tenantIDFromRequest(r),
+		TenantId: tenantID,
 	}
 
 	if startStr := r.URL.Query().Get("start_time"); startStr != "" {
@@ -662,9 +740,15 @@ func (h *Handler) handleGetKpis(w http.ResponseWriter, r *http.Request) {
 // handleGetVolumeSeries returns timeseries volume data.
 // Query params: start_time (RFC3339), end_time (RFC3339), granularity (day|hour).
 func (h *Handler) handleGetVolumeSeries(w http.ResponseWriter, r *http.Request) {
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	req := &crudv1.GetVolumeSeriesRequest{
 		Granularity: r.URL.Query().Get("granularity"),
-		TenantId:    tenantIDFromRequest(r),
+		TenantId:    tenantID,
 	}
 
 	if startStr := r.URL.Query().Get("start_time"); startStr != "" {
@@ -706,9 +790,15 @@ func (h *Handler) handleGetVolumeSeries(w http.ResponseWriter, r *http.Request) 
 // handleGetConfusionMatrix returns model performance metrics.
 // Query params: start_time (RFC3339), end_time (RFC3339), model_version, threshold.
 func (h *Handler) handleGetConfusionMatrix(w http.ResponseWriter, r *http.Request) {
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	req := &crudv1.GetConfusionMatrixRequest{
 		ModelVersion: r.URL.Query().Get("model_version"),
-		TenantId:     tenantIDFromRequest(r),
+		TenantId:     tenantID,
 	}
 
 	if startStr := r.URL.Query().Get("start_time"); startStr != "" {

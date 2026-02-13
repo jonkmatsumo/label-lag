@@ -490,10 +490,16 @@ func (h *Handler) handleListRules(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
 	includeArchived := r.URL.Query().Get("include_archived") == "true"
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	resp, err := h.analyticsClient.ListRules(r.Context(), &crudv1.ListRulesRequest{
 		Status:          statusFilter,
 		IncludeArchived: includeArchived,
-		TenantId:        tenantIDFromRequest(r),
+		TenantId:        tenantID,
 	})
 	if err != nil {
 		writeRPCError(w, err)
@@ -538,10 +544,16 @@ func (h *Handler) handleCreateRule(w http.ResponseWriter, r *http.Request) {
 		rule.Status = "draft"
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	// Reuse SaveRule
-	_, err := h.analyticsClient.SaveRule(r.Context(), &crudv1.SaveRuleRequest{
+	_, err = h.analyticsClient.SaveRule(r.Context(), &crudv1.SaveRuleRequest{
 		Rule:     &rule,
-		TenantId: tenantIDFromRequest(r),
+		TenantId: tenantID,
 	})
 	if err != nil {
 		writeRPCError(w, err)
@@ -564,9 +576,15 @@ func (h *Handler) handleGetRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	resp, err := h.analyticsClient.GetRule(r.Context(), &crudv1.GetRuleRequest{
 		RuleId:   ruleID,
-		TenantId: tenantIDFromRequest(r),
+		TenantId: tenantID,
 	})
 	if err != nil {
 		writeRPCError(w, err)
@@ -612,9 +630,15 @@ func (h *Handler) handleUpdateRule(w http.ResponseWriter, r *http.Request) {
 	}
 	rule.Id = ruleID
 
-	_, err := h.analyticsClient.SaveRule(r.Context(), &crudv1.SaveRuleRequest{
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
+	_, err = h.analyticsClient.SaveRule(r.Context(), &crudv1.SaveRuleRequest{
 		Rule:     &rule,
-		TenantId: tenantIDFromRequest(r),
+		TenantId: tenantID,
 	})
 	if err != nil {
 		writeRPCError(w, err)
@@ -637,9 +661,15 @@ func (h *Handler) handleDeleteRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := h.analyticsClient.DeleteRule(r.Context(), &crudv1.DeleteRuleRequest{
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
+	_, err = h.analyticsClient.DeleteRule(r.Context(), &crudv1.DeleteRuleRequest{
 		RuleId:   ruleID,
-		TenantId: tenantIDFromRequest(r),
+		TenantId: tenantID,
 	})
 	if err != nil {
 		writeRPCError(w, err)
@@ -666,11 +696,17 @@ func (h *Handler) handleListRuleVersions(w http.ResponseWriter, r *http.Request)
 	limit := 100
 	offset := 0
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	resp, err := h.analyticsClient.ListRuleVersions(r.Context(), &crudv1.ListRuleVersionsRequest{
 		RuleId:   ruleID,
 		Limit:    int32(limit),
 		Offset:   int32(offset),
-		TenantId: tenantIDFromRequest(r),
+		TenantId: tenantID,
 	})
 	if err != nil {
 		writeRPCError(w, err)
@@ -696,10 +732,16 @@ func (h *Handler) handleGetRuleVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	resp, err := h.analyticsClient.GetRuleVersion(r.Context(), &crudv1.GetRuleVersionRequest{
 		RuleId:    ruleID,
 		VersionId: versionID,
-		TenantId:  tenantIDFromRequest(r),
+		TenantId:  tenantID,
 	})
 	if err != nil {
 		writeRPCError(w, err)
@@ -723,9 +765,15 @@ func (h *Handler) handleRuleReadiness(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	resp, err := h.analyticsClient.GetRuleReadiness(r.Context(), &crudv1.GetRuleReadinessRequest{
 		RuleId:   ruleID,
-		TenantId: tenantIDFromRequest(r),
+		TenantId: tenantID,
 	})
 	if err != nil {
 		writeRPCError(w, err)
@@ -760,12 +808,18 @@ func (h *Handler) handlePublishRule(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&req)
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	resp, err := h.analyticsClient.PublishRuleVersion(r.Context(), &crudv1.PublishRuleVersionRequest{
 		RuleId:    ruleID,
 		VersionId: req.VersionID,
 		Reason:    req.Reason,
 		Actor:     req.Actor,
-		TenantId:  tenantIDFromRequest(r),
+		TenantId:  tenantID,
 	})
 	if err != nil {
 		writeRPCError(w, err)
@@ -796,11 +850,17 @@ func (h *Handler) handleRuleDiff(w http.ResponseWriter, r *http.Request) {
 		versionB = "active"
 	}
 
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
 	resp, err := h.analyticsClient.DiffRuleVersions(r.Context(), &crudv1.DiffRuleVersionsRequest{
 		RuleId:   ruleID,
 		VersionA: versionA,
 		VersionB: versionB,
-		TenantId: tenantIDFromRequest(r),
+		TenantId: tenantID,
 	})
 	if err != nil {
 		writeRPCError(w, err)
