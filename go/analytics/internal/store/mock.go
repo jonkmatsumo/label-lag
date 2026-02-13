@@ -399,20 +399,20 @@ func (m *MockStore) SaveTrainingRun(ctx context.Context, run *pb.TrainingRun) er
 	return args.Error(0)
 }
 
-func (m *MockStore) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRunsRequest) ([]*pb.TrainingRun, int64, error) {
+func (m *MockStore) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRunsRequest) ([]*pb.TrainingRun, int64, string, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
-		return nil, 0, args.Error(2)
+		return nil, 0, "", args.Error(3)
 	}
-	return args.Get(0).([]*pb.TrainingRun), args.Get(1).(int64), args.Error(2)
+	return args.Get(0).([]*pb.TrainingRun), args.Get(1).(int64), args.String(2), args.Error(3)
 }
 
-func (m *MockStore) ListModelVersions(ctx context.Context, req *pb.ListModelVersionsRequest) ([]*pb.TrainingRun, int64, error) {
+func (m *MockStore) ListModelVersions(ctx context.Context, req *pb.ListModelVersionsRequest) ([]*pb.TrainingRun, int64, string, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
-		return nil, 0, args.Error(2)
+		return nil, 0, "", args.Error(3)
 	}
-	return args.Get(0).([]*pb.TrainingRun), args.Get(1).(int64), args.Error(2)
+	return args.Get(0).([]*pb.TrainingRun), args.Get(1).(int64), args.String(2), args.Error(3)
 }
 
 func (m *MockStore) GetTrainingRun(ctx context.Context, runID string, tenantID string) (*pb.TrainingRun, error) {

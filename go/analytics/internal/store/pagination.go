@@ -93,3 +93,32 @@ func decodeProfileCursor(cursorStr string) (*profileCursor, error) {
 	}
 	return &c, nil
 }
+
+type trainingRunCursor struct {
+	StartedAt time.Time `json:"started_at"`
+	RunId     string    `json:"run_id"`
+}
+
+func encodeTrainingRunCursor(startedAt time.Time, runID string) string {
+	c := trainingRunCursor{
+		StartedAt: startedAt,
+		RunId:     runID,
+	}
+	b, _ := json.Marshal(c)
+	return base64.StdEncoding.EncodeToString(b)
+}
+
+func decodeTrainingRunCursor(cursorStr string) (*trainingRunCursor, error) {
+	if cursorStr == "" {
+		return nil, nil
+	}
+	b, err := base64.StdEncoding.DecodeString(cursorStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid cursor encoding: %w", err)
+	}
+	var c trainingRunCursor
+	if err := json.Unmarshal(b, &c); err != nil {
+		return nil, fmt.Errorf("invalid cursor payload: %w", err)
+	}
+	return &c, nil
+}

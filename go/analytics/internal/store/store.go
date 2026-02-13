@@ -50,9 +50,9 @@ type Store interface {
 
 	// Training Runs (Phase B)
 	SaveTrainingRun(ctx context.Context, run *pb.TrainingRun) error
-	ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRunsRequest) ([]*pb.TrainingRun, int64, error)
+	ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRunsRequest) ([]*pb.TrainingRun, int64, string, error)
 	GetTrainingRun(ctx context.Context, runID string, tenantID string) (*pb.TrainingRun, error)
-	ListModelVersions(ctx context.Context, req *pb.ListModelVersionsRequest) ([]*pb.TrainingRun, int64, error)
+	ListModelVersions(ctx context.Context, req *pb.ListModelVersionsRequest) ([]*pb.TrainingRun, int64, string, error)
 	GetMetricSeries(ctx context.Context, req *pb.GetMetricSeriesRequest) ([]*pb.MetricPoint, error)
 
 	// Feature Hydration

@@ -62,8 +62,9 @@ func TestListTrainingRuns(t *testing.T) {
 			"run_id", "model_name", "status", "started_at", "ended_at", "metrics", "params", "dataset_id", "mlflow_run_id", "tenant_id",
 		}).AddRow("run-1", "model-1", "COMPLETED", time.Now(), nil, nil, nil, nil, nil, "tenant-1"))
 
-	runs, total, err := s.ListTrainingRuns(context.Background(), req)
+	runs, total, nextCursor, err := s.ListTrainingRuns(context.Background(), req)
 	require.NoError(t, err)
+	assert.Equal(t, "", nextCursor)
 	assert.Equal(t, int64(1), total)
 	assert.Len(t, runs, 1)
 }

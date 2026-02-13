@@ -63,7 +63,7 @@ func (s *SQLStore) SaveTrainingRun(ctx context.Context, run *pb.TrainingRun) err
 	return nil
 }
 
-func (s *SQLStore) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRunsRequest) ([]*pb.TrainingRun, int64, error) {
+func (s *SQLStore) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRunsRequest) ([]*pb.TrainingRun, int64, string, error) {
 	queryBuilder := db.NewQueryBuilder(`
 		SELECT
 			run_id, model_name, status, started_at, ended_at, metrics, params, dataset_id, mlflow_run_id, tenant_id
@@ -86,6 +86,25 @@ func (s *SQLStore) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRun
 		queryBuilder.AddCondition("tenant_id = ?", req.TenantId)
 	}
 
+	limit := int32(50)
+	if req.Limit > 0 {
+		limit = req.Limit
+	}
+	if req.Pagination != nil && req.Pagination.Limit > 0 {
+		limit = req.Pagination.Limit
+	}
+
+	// Cursor pagination
+	var cursorObj *trainingRunCursor
+	if req.Pagination != nil && req.Pagination.Cursor != "" {
+		var err error
+		cursorObj, err = decodeTrainingRunCursor(req.Pagination.Cursor)
+		if err != nil {
+			return nil, 0, "", status.Errorf(codes.InvalidArgument, "invalid cursor: %v", err)
+		}
+		queryBuilder.AddCondition("(started_at, run_id) < (?, ?)", cursorObj.StartedAt, cursorObj.RunId)
+	}
+
 	// Count
 	countQuery, countArgs := queryBuilder.BuildCount()
 	var total int64
@@ -94,22 +113,27 @@ func (s *SQLStore) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRun
 
 	err := s.db.QueryRowContext(queryCtx, countQuery, countArgs...).Scan(&total)
 	if err != nil {
-		return nil, 0, db.MapDBError(err)
+		return nil, 0, "", db.MapDBError(err)
 	}
 
 	// List
 	queryBuilder.AddOrderBy("started_at DESC, run_id DESC")
-	queryBuilder.SetLimit(req.Limit)
-	queryBuilder.SetOffset(req.Offset)
+	queryBuilder.SetLimit(limit)
+	if cursorObj == nil {
+		queryBuilder.SetOffset(req.Offset)
+	}
 	selectQuery, selectArgs := queryBuilder.BuildSelect()
 
 	rows, err := s.db.QueryContext(queryCtx, selectQuery, selectArgs...)
 	if err != nil {
-		return nil, 0, db.MapDBError(err)
+		return nil, 0, "", db.MapDBError(err)
 	}
 	defer rows.Close()
 
 	var runs []*pb.TrainingRun
+	var lastStartedAt time.Time
+	var lastRunID string
+
 	for rows.Next() {
 		var r pb.TrainingRun
 		var startedAt time.Time
@@ -129,7 +153,7 @@ func (s *SQLStore) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRun
 			&mlflowID,
 			&r.TenantId,
 		); err != nil {
-			return nil, 0, fmt.Errorf("failed to scan run: %v", err)
+			return nil, 0, "", fmt.Errorf("failed to scan run: %v", err)
 		}
 
 		r.StartedAt = timestamppb.New(startedAt)
@@ -151,19 +175,27 @@ func (s *SQLStore) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRun
 		}
 
 		runs = append(runs, &r)
+		lastStartedAt = startedAt
+		lastRunID = r.RunId
 	}
 
-	return runs, total, nil
+	var nextCursor string
+	if int32(len(runs)) == limit && limit > 0 {
+		nextCursor = encodeTrainingRunCursor(lastStartedAt, lastRunID)
+	}
+
+	return runs, total, nextCursor, nil
 }
 
-func (s *SQLStore) ListModelVersions(ctx context.Context, req *pb.ListModelVersionsRequest) ([]*pb.TrainingRun, int64, error) {
+func (s *SQLStore) ListModelVersions(ctx context.Context, req *pb.ListModelVersionsRequest) ([]*pb.TrainingRun, int64, string, error) {
 	// For now, versions are just completed training runs for a model
 	return s.ListTrainingRuns(ctx, &pb.ListTrainingRunsRequest{
-		ModelName: req.ModelName,
-		Status:    "completed",
-		Limit:     req.Limit,
-		Offset:    req.Offset,
-		TenantId:  req.TenantId,
+		ModelName:  req.ModelName,
+		Status:     "completed",
+		Limit:      req.Limit,
+		Offset:     req.Offset,
+		TenantId:   req.TenantId,
+		Pagination: req.Pagination,
 	})
 }
 

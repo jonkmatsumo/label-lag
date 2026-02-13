@@ -1008,11 +1008,13 @@ message ListTrainingRunsRequest {
   google.protobuf.Timestamp start_date = 5;
   google.protobuf.Timestamp end_date = 6;
   string tenant_id = 15;
+  common.v1.CursorPageRequest pagination = 16;
 }
 
 message ListTrainingRunsResponse {
   repeated TrainingRun runs = 1;
   int64 total = 2;
+  common.v1.CursorPageResponse pagination = 3;
 }
 
 message ListModelVersionsRequest {
@@ -1020,11 +1022,13 @@ message ListModelVersionsRequest {
   int32 limit = 2;
   int32 offset = 3;
   string tenant_id = 15;
+  common.v1.CursorPageRequest pagination = 16;
 }
 
 message ListModelVersionsResponse {
   repeated TrainingRun versions = 1; // lightweight summary using TrainingRun
   int64 total = 2;
+  common.v1.CursorPageResponse pagination = 3;
 }
 
 message GetTrainingRunRequest {

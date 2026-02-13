@@ -5,6 +5,7 @@ import (
 	"time"
 
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	commonv1 "github.com/jonkmatsumo/label-lag/go/common/proto/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -32,6 +33,13 @@ func (h *Handler) handleListTrainingRuns(w http.ResponseWriter, r *http.Request)
 		Limit:     limit,
 		Offset:    offset,
 		TenantId:  tenantID,
+	}
+
+	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
+		req.Pagination = &commonv1.CursorPageRequest{
+			Cursor: cursor,
+			Limit:  limit,
+		}
 	}
 
 	if startStr := r.URL.Query().Get("start_date"); startStr != "" {
@@ -84,12 +92,21 @@ func (h *Handler) handleListModelVersions(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	resp, err := h.analyticsClient.ListModelVersions(r.Context(), &crudv1.ListModelVersionsRequest{
+	req := &crudv1.ListModelVersionsRequest{
 		ModelName: modelName,
 		Limit:     limit,
 		Offset:    offset,
 		TenantId:  tenantID,
-	})
+	}
+
+	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
+		req.Pagination = &commonv1.CursorPageRequest{
+			Cursor: cursor,
+			Limit:  limit,
+		}
+	}
+
+	resp, err := h.analyticsClient.ListModelVersions(r.Context(), req)
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
 		return
