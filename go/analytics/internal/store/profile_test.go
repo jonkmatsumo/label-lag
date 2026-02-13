@@ -89,7 +89,7 @@ func TestListDatasetProfiles(t *testing.T) {
 			"profile_id", "tenant_id", "computed_at", "record_count", "feature_profiles",
 		}).AddRow("prof-1", "tenant-1", ts, 100, []byte(jsonProfiles)))
 
-	profiles, total, err := s.ListDatasetProfiles(context.Background(), &pb.ListDatasetProfilesRequest{
+	profiles, total, nextCursor, err := s.ListDatasetProfiles(context.Background(), &pb.ListDatasetProfilesRequest{
 		Limit:     10,
 		Offset:    0,
 		StartDate: timestamppb.New(start),
@@ -97,6 +97,7 @@ func TestListDatasetProfiles(t *testing.T) {
 		TenantId:  "tenant-1",
 	})
 	require.NoError(t, err)
+	assert.Equal(t, "", nextCursor)
 	assert.Equal(t, int64(1), total)
 	assert.Len(t, profiles, 1)
 	assert.Equal(t, "prof-1", profiles[0].ProfileId)

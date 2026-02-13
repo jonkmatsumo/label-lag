@@ -5,6 +5,7 @@ import (
 	"time"
 
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	commonv1 "github.com/jonkmatsumo/label-lag/go/common/proto/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -59,6 +60,13 @@ func (h *Handler) handleListDatasetProfiles(w http.ResponseWriter, r *http.Reque
 		Limit:    limit,
 		Offset:   offset,
 		TenantId: tenantID,
+	}
+
+	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
+		req.Pagination = &commonv1.CursorPageRequest{
+			Cursor: cursor,
+			Limit:  limit,
+		}
 	}
 
 	if startStr := r.URL.Query().Get("start_date"); startStr != "" {

@@ -333,12 +333,12 @@ func (m *MockStore) GetConfusionMatrix(ctx context.Context, req *pb.GetConfusion
 	return args.Get(0).(*pb.GetConfusionMatrixResponse), args.Error(1)
 }
 
-func (m *MockStore) ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb.Job, int64, error) {
+func (m *MockStore) ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb.Job, int64, string, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
-		return nil, 0, args.Error(2)
+		return nil, 0, "", args.Error(2)
 	}
-	return args.Get(0).([]*pb.Job), args.Get(1).(int64), args.Error(2)
+	return args.Get(0).([]*pb.Job), args.Get(1).(int64), args.String(2), args.Error(3)
 }
 
 func (m *MockStore) GetJob(ctx context.Context, jobID string, tenantID string) (*pb.Job, error) {
@@ -370,12 +370,12 @@ func (m *MockStore) GetDatasetProfileCached(ctx context.Context, profileID strin
 	return args.Get(0).(*pb.DatasetProfile), args.Error(1)
 }
 
-func (m *MockStore) ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetProfilesRequest) ([]*pb.DatasetProfile, int64, error) {
+func (m *MockStore) ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetProfilesRequest) ([]*pb.DatasetProfile, int64, string, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
-		return nil, 0, args.Error(2)
+		return nil, 0, "", args.Error(2)
 	}
-	return args.Get(0).([]*pb.DatasetProfile), args.Get(1).(int64), args.Error(2)
+	return args.Get(0).([]*pb.DatasetProfile), args.Get(1).(int64), args.String(2), args.Error(3)
 }
 
 func (m *MockStore) GetLatestDatasetProfile(ctx context.Context, tenantID string) (*pb.GetLatestDatasetProfileResponse, error) {

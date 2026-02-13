@@ -391,6 +391,7 @@ message ListDatasetProfilesRequest {
   int32 limit = 3;
   int32 offset = 4;
   string tenant_id = 15;
+  common.v1.CursorPageRequest pagination = 16;
 }
 
 message ListBacktestResultsRequest {
@@ -886,11 +887,13 @@ message ListJobsRequest {
   int32 limit = 5;
   int32 offset = 6;
   string tenant_id = 15;
+  common.v1.CursorPageRequest pagination = 16;
 }
 
 message ListJobsResponse {
   repeated Job jobs = 1;
   int64 total = 2;
+  common.v1.CursorPageResponse pagination = 3;
 }
 
 message GetJobRequest {
@@ -953,6 +956,7 @@ message GetDatasetSummaryResponse {
 message ListDatasetProfilesResponse {
   repeated DatasetProfile profiles = 1;
   int64 total = 2;
+  common.v1.CursorPageResponse pagination = 3;
 }
 
 message GetLatestDatasetProfileRequest {

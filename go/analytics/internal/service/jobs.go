@@ -4,6 +4,7 @@ import (
 	"context"
 
 	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	commonv1 "github.com/jonkmatsumo/label-lag/go/common/proto/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -24,15 +25,21 @@ func (s *Service) ListJobs(ctx context.Context, req *pb.ListJobsRequest) (*pb.Li
 		return nil, status.Error(codes.InvalidArgument, "start_date must be <= end_date")
 	}
 
-	jobs, total, err := s.store.ListJobs(ctx, req)
+	jobs, total, nextCursor, err := s.store.ListJobs(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	return &pb.ListJobsResponse{
+	resp := &pb.ListJobsResponse{
 		Jobs:  jobs,
 		Total: total,
-	}, nil
+	}
+	if nextCursor != "" {
+		resp.Pagination = &commonv1.CursorPageResponse{
+			NextCursor: nextCursor,
+		}
+	}
+	return resp, nil
 }
 
 func (s *Service) GetJob(ctx context.Context, req *pb.GetJobRequest) (*pb.GetJobResponse, error) {

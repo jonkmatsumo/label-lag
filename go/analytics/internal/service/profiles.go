@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	commonv1 "github.com/jonkmatsumo/label-lag/go/common/proto/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -81,15 +82,21 @@ func (s *Service) ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetPr
 		return nil, status.Error(codes.InvalidArgument, "start_date must be <= end_date")
 	}
 
-	profiles, total, err := s.store.ListDatasetProfiles(ctx, req)
+	profiles, total, nextCursor, err := s.store.ListDatasetProfiles(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	return &pb.ListDatasetProfilesResponse{
+	resp := &pb.ListDatasetProfilesResponse{
 		Profiles: profiles,
 		Total:    total,
-	}, nil
+	}
+	if nextCursor != "" {
+		resp.Pagination = &commonv1.CursorPageResponse{
+			NextCursor: nextCursor,
+		}
+	}
+	return resp, nil
 }
 
 func (s *Service) GetLatestDatasetProfile(ctx context.Context, req *pb.GetLatestDatasetProfileRequest) (*pb.GetLatestDatasetProfileResponse, error) {

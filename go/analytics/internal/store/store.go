@@ -37,7 +37,7 @@ type Store interface {
 	GetConfusionMatrix(ctx context.Context, req *pb.GetConfusionMatrixRequest) (*pb.GetConfusionMatrixResponse, error)
 
 	// Jobs (Phase A1)
-	ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb.Job, int64, error)
+	ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb.Job, int64, string, error)
 	GetJob(ctx context.Context, jobID string, tenantID string) (*pb.Job, error)
 	GetJobEvents(ctx context.Context, req *pb.GetJobEventsRequest) ([]*pb.JobEvent, error)
 	GetJobSummary(ctx context.Context, req *pb.GetJobSummaryRequest) ([]*pb.JobSummaryBucket, error)
@@ -45,7 +45,7 @@ type Store interface {
 	// Dataset Profiles (Phase A2)
 	SaveDatasetProfile(ctx context.Context, profile *pb.DatasetProfile) error
 	GetDatasetProfileCached(ctx context.Context, profileID string, tenantID string) (*pb.DatasetProfile, error)
-	ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetProfilesRequest) ([]*pb.DatasetProfile, int64, error)
+	ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetProfilesRequest) ([]*pb.DatasetProfile, int64, string, error)
 	GetLatestDatasetProfile(ctx context.Context, tenantID string) (*pb.GetLatestDatasetProfileResponse, error)
 
 	// Training Runs (Phase B)

@@ -13,7 +13,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (s *SQLStore) ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb.Job, int64, error) {
+func (s *SQLStore) ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb.Job, int64, string, error) {
 	queryBuilder := db.NewQueryBuilder(`
 		SELECT
 			job_id,
@@ -45,6 +45,25 @@ func (s *SQLStore) ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb
 		queryBuilder.AddCondition("tenant_id = ?", req.TenantId)
 	}
 
+	limit := int32(20)
+	if req.Limit > 0 {
+		limit = req.Limit
+	}
+	if req.Pagination != nil && req.Pagination.Limit > 0 {
+		limit = req.Pagination.Limit
+	}
+
+	// Cursor pagination
+	var cursorObj *jobCursor
+	if req.Pagination != nil && req.Pagination.Cursor != "" {
+		var err error
+		cursorObj, err = decodeJobCursor(req.Pagination.Cursor)
+		if err != nil {
+			return nil, 0, "", status.Errorf(codes.InvalidArgument, "invalid cursor: %v", err)
+		}
+		queryBuilder.AddCondition("(created_at, job_id) < (?, ?)", cursorObj.CreatedAt, cursorObj.JobId)
+	}
+
 	// Get total count
 	countQuery, countArgs := queryBuilder.BuildCount()
 	var total int64
@@ -53,22 +72,27 @@ func (s *SQLStore) ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb
 
 	err := s.db.QueryRowContext(queryCtx, countQuery, countArgs...).Scan(&total)
 	if err != nil {
-		return nil, 0, db.MapDBError(err)
+		return nil, 0, "", db.MapDBError(err)
 	}
 
 	// Get results
-	queryBuilder.AddOrderBy("created_at DESC")
-	queryBuilder.SetLimit(req.Limit)
-	queryBuilder.SetOffset(req.Offset)
+	queryBuilder.AddOrderBy("created_at DESC, job_id DESC")
+	queryBuilder.SetLimit(limit)
+	if cursorObj == nil {
+		queryBuilder.SetOffset(req.Offset)
+	}
 	selectQuery, selectArgs := queryBuilder.BuildSelect()
 
 	rows, err := s.db.QueryContext(queryCtx, selectQuery, selectArgs...)
 	if err != nil {
-		return nil, 0, db.MapDBError(err)
+		return nil, 0, "", db.MapDBError(err)
 	}
 	defer rows.Close()
 
 	var jobs []*pb.Job
+	var lastCreatedAt time.Time
+	var lastJobID string
+
 	for rows.Next() {
 		var j pb.Job
 		var createdAt time.Time
@@ -88,7 +112,7 @@ func (s *SQLStore) ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb
 			&paramsJSON,
 			&metricsJSON,
 		); err != nil {
-			return nil, 0, fmt.Errorf("failed to scan job: %v", err)
+			return nil, 0, "", fmt.Errorf("failed to scan job: %v", err)
 		}
 
 		j.CreatedAt = timestamppb.New(createdAt)
@@ -112,8 +136,16 @@ func (s *SQLStore) ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb
 		}
 
 		jobs = append(jobs, &j)
+		lastCreatedAt = createdAt
+		lastJobID = j.JobId
 	}
-	return jobs, total, nil
+
+	var nextCursor string
+	if int32(len(jobs)) == limit && limit > 0 {
+		nextCursor = encodeJobCursor(lastCreatedAt, lastJobID)
+	}
+
+	return jobs, total, nextCursor, nil
 }
 
 func (s *SQLStore) GetJob(ctx context.Context, jobID string, tenantID string) (*pb.Job, error) {

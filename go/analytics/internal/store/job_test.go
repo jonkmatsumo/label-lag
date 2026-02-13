@@ -29,14 +29,15 @@ func TestListJobs_IncludesTenantFilter(t *testing.T) {
 		WithArgs("tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 
-	mock.ExpectQuery(`SELECT\s+job_id,.*FROM jobs WHERE tenant_id = \$1 ORDER BY created_at DESC LIMIT 10`).
+	mock.ExpectQuery(`SELECT\s+job_id,.*FROM jobs WHERE tenant_id = \$1 ORDER BY created_at DESC, job_id DESC LIMIT 10`).
 		WithArgs("tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{
 			"job_id", "job_type", "status", "created_at", "started_at", "ended_at", "error_code", "error_message", "params", "metrics",
 		}))
 
-	jobs, total, err := s.ListJobs(context.Background(), req)
+	jobs, total, nextCursor, err := s.ListJobs(context.Background(), req)
 	require.NoError(t, err)
+	_ = nextCursor
 	assert.Equal(t, int64(0), total)
 	assert.Len(t, jobs, 0)
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -68,8 +69,9 @@ func TestListJobs(t *testing.T) {
 			"job_id", "job_type", "status", "created_at", "started_at", "ended_at", "error_code", "error_message", "params", "metrics",
 		}).AddRow("job-1", "backfill", "completed", ts, ts, ts, nil, nil, []byte("{}"), []byte("{}")))
 
-	jobs, total, err := s.ListJobs(context.Background(), req)
+	jobs, total, nextCursor, err := s.ListJobs(context.Background(), req)
 	require.NoError(t, err)
+	_ = nextCursor
 	assert.Equal(t, int64(1), total)
 	assert.Len(t, jobs, 1)
 	assert.Equal(t, "job-1", jobs[0].JobId)
@@ -173,6 +175,6 @@ func TestListJobs_DateFilter(t *testing.T) {
 			"job_id", "job_type", "status", "created_at", "started_at", "ended_at", "error_code", "error_message", "params", "metrics",
 		}))
 
-	_, _, err = s.ListJobs(context.Background(), req)
+	_, _, _, err = s.ListJobs(context.Background(), req)
 	require.NoError(t, err)
 }

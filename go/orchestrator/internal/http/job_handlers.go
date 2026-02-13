@@ -6,6 +6,7 @@ import (
 	"time"
 
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	commonv1 "github.com/jonkmatsumo/label-lag/go/common/proto/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -35,6 +36,13 @@ func (h *Handler) handleListJobs(w http.ResponseWriter, r *http.Request) {
 		JobType:  r.URL.Query().Get("job_type"),
 		Status:   r.URL.Query().Get("status"),
 		TenantId: tenantID,
+	}
+
+	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
+		req.Pagination = &commonv1.CursorPageRequest{
+			Cursor: cursor,
+			Limit:  limit,
+		}
 	}
 
 	if startStr := r.URL.Query().Get("start_date"); startStr != "" {
