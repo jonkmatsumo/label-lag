@@ -405,6 +405,11 @@ func TestAnalyticsJobsContract(t *testing.T) {
 			},
 			Total: 1,
 		},
+		getJobEventsResp: &crudv1.GetJobEventsResponse{
+			Events: []*crudv1.JobEvent{
+				{EventId: 99, JobId: "job-1", EventType: "started", Timestamp: timestamppb.Now()},
+			},
+		},
 		getJobSummaryResp: &crudv1.GetJobSummaryResponse{
 			Summaries: []*crudv1.JobSummaryBucket{
 				{BucketTime: timestamppb.Now(), TotalJobs: 5, CompletedJobs: 4, FailedJobs: 1},
@@ -449,6 +454,26 @@ func TestAnalyticsJobsContract(t *testing.T) {
 		summaries := payload["summaries"].([]any)
 		if len(summaries) != 1 {
 			t.Fatalf("expected 1 summary, got %v", len(summaries))
+		}
+	})
+
+	t.Run("get_job_events_with_cursor", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/jobs/job-1/events?before_ts=2026-01-02T03:04:05Z&before_id=99", nil)
+		req.SetPathValue("id", "job-1")
+		rec := httptest.NewRecorder()
+		handler.handleGetJobEvents(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+		}
+		if stub.lastGetJobEventsReq == nil {
+			t.Fatalf("expected job events request to be captured")
+		}
+		if stub.lastGetJobEventsReq.BeforeId != 99 {
+			t.Fatalf("expected before_id 99, got %d", stub.lastGetJobEventsReq.BeforeId)
+		}
+		if stub.lastGetJobEventsReq.BeforeTs == nil {
+			t.Fatalf("expected before_ts to be set")
 		}
 	})
 }

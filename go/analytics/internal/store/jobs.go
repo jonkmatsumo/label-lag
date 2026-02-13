@@ -188,7 +188,7 @@ func (s *SQLStore) GetJob(ctx context.Context, jobID string, tenantID string) (*
 	return &j, nil
 }
 
-func (s *SQLStore) GetJobEvents(ctx context.Context, jobID string, limit, offset int32, tenantID string) ([]*pb.JobEvent, error) {
+func (s *SQLStore) GetJobEvents(ctx context.Context, req *pb.GetJobEventsRequest) ([]*pb.JobEvent, error) {
 	query := `
 		SELECT
 			event_id,
@@ -200,12 +200,29 @@ func (s *SQLStore) GetJobEvents(ctx context.Context, jobID string, limit, offset
 		INNER JOIN jobs j ON je.job_id = j.job_id
 		WHERE je.job_id = $1
 	`
-	args := []interface{}{jobID, limit, offset}
-	if tenantID != "" {
-		query += " AND j.tenant_id = $4"
-		args = append(args, tenantID)
+	args := []interface{}{req.JobId, req.Limit, req.Offset}
+	nextArg := 4
+	if req.TenantId != "" {
+		query += fmt.Sprintf(" AND j.tenant_id = $%d", nextArg)
+		args = append(args, req.TenantId)
+		nextArg++
 	}
-	query += " ORDER BY timestamp ASC LIMIT $2 OFFSET $3"
+	if req.BeforeTs != nil {
+		if req.BeforeId > 0 {
+			query += fmt.Sprintf(" AND (je.timestamp, je.event_id) < ($%d, $%d)", nextArg, nextArg+1)
+			args = append(args, req.BeforeTs.AsTime(), req.BeforeId)
+			nextArg += 2
+		} else {
+			query += fmt.Sprintf(" AND je.timestamp < $%d", nextArg)
+			args = append(args, req.BeforeTs.AsTime())
+			nextArg++
+		}
+	} else if req.BeforeId > 0 {
+		query += fmt.Sprintf(" AND je.event_id < $%d", nextArg)
+		args = append(args, req.BeforeId)
+		nextArg++
+	}
+	query += " ORDER BY je.timestamp DESC, je.event_id DESC LIMIT $2 OFFSET $3"
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 

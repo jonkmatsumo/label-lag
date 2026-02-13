@@ -349,8 +349,8 @@ func (m *MockStore) GetJob(ctx context.Context, jobID string, tenantID string) (
 	return args.Get(0).(*pb.Job), args.Error(1)
 }
 
-func (m *MockStore) GetJobEvents(ctx context.Context, jobID string, limit, offset int32, tenantID string) ([]*pb.JobEvent, error) {
-	args := m.Called(ctx, jobID, limit, offset, tenantID)
+func (m *MockStore) GetJobEvents(ctx context.Context, req *pb.GetJobEventsRequest) ([]*pb.JobEvent, error) {
+	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

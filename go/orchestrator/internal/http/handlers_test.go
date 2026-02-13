@@ -707,6 +707,7 @@ type stubAnalyticsClient struct {
 	lastRecentAlertsReq       *crudv1.GetRecentAlertsRequest
 	lastFeatureSampleReq      *crudv1.GetFeatureSampleRequest
 	lastDatasetSummaryReq     *crudv1.GetDatasetSummaryRequest
+	lastGetJobEventsReq       *crudv1.GetJobEventsRequest
 	lastBacktestResultsReq    *crudv1.ListBacktestResultsRequest
 	lastClearAllDataReq       *crudv1.ClearAllDataRequest
 	shadowComparisonResp      *crudv1.GetShadowComparisonResponse
@@ -870,6 +871,7 @@ func (s *stubAnalyticsClient) GetJob(ctx context.Context, req *crudv1.GetJobRequ
 }
 
 func (s *stubAnalyticsClient) GetJobEvents(ctx context.Context, req *crudv1.GetJobEventsRequest) (*crudv1.GetJobEventsResponse, error) {
+	s.lastGetJobEventsReq = req
 	if s.getJobEventsResp != nil {
 		return s.getJobEventsResp, s.err
 	}

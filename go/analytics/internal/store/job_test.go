@@ -109,11 +109,43 @@ func TestGetJobEvents(t *testing.T) {
 			"event_id", "job_id", "event_type", "timestamp", "details",
 		}).AddRow(1, "job-1", "started", ts, []byte(`{"foo":"bar"}`)))
 
-	events, err := s.GetJobEvents(context.Background(), "job-1", 10, 0, "tenant-1")
+	events, err := s.GetJobEvents(context.Background(), &pb.GetJobEventsRequest{
+		JobId:    "job-1",
+		Limit:    10,
+		Offset:   0,
+		TenantId: "tenant-1",
+	})
 	require.NoError(t, err)
 	assert.Len(t, events, 1)
 	assert.Equal(t, "started", events[0].EventType)
 	assert.JSONEq(t, `{"foo":"bar"}`, events[0].DetailsJson)
+}
+
+func TestGetJobEvents_WithCursor(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+
+	beforeTS := time.Now().UTC()
+	mock.ExpectQuery(`SELECT event_id`).
+		WithArgs("job-1", 10, 0, "tenant-1", beforeTS, int64(99)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"event_id", "job_id", "event_type", "timestamp", "details",
+		}))
+
+	events, err := s.GetJobEvents(context.Background(), &pb.GetJobEventsRequest{
+		JobId:    "job-1",
+		Limit:    10,
+		Offset:   0,
+		TenantId: "tenant-1",
+		BeforeTs: timestamppb.New(beforeTS),
+		BeforeId: 99,
+	})
+	require.NoError(t, err)
+	assert.Len(t, events, 0)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestListJobs_DateFilter(t *testing.T) {

@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
@@ -98,12 +99,30 @@ func (h *Handler) handleGetJobEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := h.analyticsClient.GetJobEvents(r.Context(), &crudv1.GetJobEventsRequest{
+	req := &crudv1.GetJobEventsRequest{
 		JobId:    jobID,
 		Limit:    limit,
 		Offset:   offset,
 		TenantId: tenantIDFromRequest(r),
-	})
+	}
+	if beforeTS := r.URL.Query().Get("before_ts"); beforeTS != "" {
+		parsed, err := time.Parse(time.RFC3339, beforeTS)
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, "invalid before_ts format (RFC3339 required)")
+			return
+		}
+		req.BeforeTs = timestamppb.New(parsed)
+	}
+	if beforeID := r.URL.Query().Get("before_id"); beforeID != "" {
+		parsed, err := strconv.ParseInt(beforeID, 10, 64)
+		if err != nil || parsed < 0 {
+			writeJSONError(w, http.StatusBadRequest, "invalid before_id (integer >= 0 required)")
+			return
+		}
+		req.BeforeId = parsed
+	}
+
+	resp, err := h.analyticsClient.GetJobEvents(r.Context(), req)
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
 		return

@@ -39,7 +39,7 @@ type Store interface {
 	// Jobs (Phase A1)
 	ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb.Job, int64, error)
 	GetJob(ctx context.Context, jobID string, tenantID string) (*pb.Job, error)
-	GetJobEvents(ctx context.Context, jobID string, limit, offset int32, tenantID string) ([]*pb.JobEvent, error)
+	GetJobEvents(ctx context.Context, req *pb.GetJobEventsRequest) ([]*pb.JobEvent, error)
 	GetJobSummary(ctx context.Context, req *pb.GetJobSummaryRequest) ([]*pb.JobSummaryBucket, error)
 
 	// Dataset Profiles (Phase A2)
