@@ -252,9 +252,19 @@ class AnalyticsCRUDClient:
             metadata=self._get_metadata(request_id),
         )
 
-    def report_training_run(self, run, request_id: str | None = None):
+    def report_training_run(
+        self,
+        run,
+        tenant_id: str | None = None,
+        request_id: str | None = None,
+    ):
         """Report training run status to Analytics service with retry and fallback."""
-        request = analytics_pb2.ReportTrainingRunRequest(run=run)
+        if tenant_id is None:
+            tenant_id = run.tenant_id if hasattr(run, "tenant_id") else ""
+        if tenant_id and not run.tenant_id:
+            run.tenant_id = tenant_id
+
+        request = analytics_pb2.ReportTrainingRunRequest(run=run, tenant_id=tenant_id)
 
         # Retryable gRPC statuses
         retryable_codes = {
@@ -289,15 +299,16 @@ class AnalyticsCRUDClient:
             logger.error(
                 "failed to report training run after retries",
                 run_id=run.run_id,
+                tenant_id=tenant_id,
                 error=str(e),
                 request_id=request_id,
             )
-            self._fallback_persist(run, request_id)
+            self._fallback_persist(run, tenant_id, request_id)
             # Re-raise or return None? Best-effort suggests continuing training.
             # We'll return None to allow training to proceed.
             return None
 
-    def _fallback_persist(self, run, request_id: str | None):
+    def _fallback_persist(self, run, tenant_id: str | None, request_id: str | None):
         """Best-effort local persistence for failed reports."""
         try:
             var_dir = os.path.join(os.getcwd(), "var")
@@ -311,6 +322,7 @@ class AnalyticsCRUDClient:
                 "status": run.status,
                 "metrics": run.metrics_json,
                 "params": run.params_json,
+                "tenant_id": tenant_id or "",
                 "request_id": request_id,
                 "timestamp": time.time(),
             }
@@ -360,6 +372,7 @@ class AnalyticsCRUDClient:
                         status=payload["status"],
                         metrics_json=payload["metrics"],
                         params_json=payload["params"],
+                        tenant_id=payload.get("tenant_id", ""),
                     )
                     if "started_at" in payload:
                         run.started_at.FromSeconds(int(payload["started_at"]))
@@ -368,7 +381,10 @@ class AnalyticsCRUDClient:
 
                     # Call raw stub to avoid recursion or infinite retries here
                     self.stub.ReportTrainingRun(
-                        analytics_pb2.ReportTrainingRunRequest(run=run),
+                        analytics_pb2.ReportTrainingRunRequest(
+                            run=run,
+                            tenant_id=run.tenant_id,
+                        ),
                         timeout=self.timeout_seconds,
                     )
                     replayed_count += 1

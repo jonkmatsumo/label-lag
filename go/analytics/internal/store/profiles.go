@@ -15,6 +15,13 @@ import (
 )
 
 func (s *SQLStore) SaveDatasetProfile(ctx context.Context, profile *pb.DatasetProfile) error {
+	if profile == nil || profile.ProfileId == "" {
+		return status.Error(codes.InvalidArgument, "profile and profile_id required")
+	}
+	if profile.TenantId == "" {
+		return status.Error(codes.InvalidArgument, "tenant_id required")
+	}
+
 	query := `
 		INSERT INTO dataset_profiles (
 			profile_id, tenant_id, computed_at, record_count, feature_profiles

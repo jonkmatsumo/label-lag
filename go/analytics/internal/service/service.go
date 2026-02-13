@@ -482,6 +482,9 @@ func (s *Service) LogInferenceEvent(ctx context.Context, req *pb.LogInferenceEve
 	if req == nil || req.Event == nil {
 		return nil, status.Error(codes.InvalidArgument, "event required")
 	}
+	if req.Event.TenantId == "" {
+		return nil, status.Error(codes.InvalidArgument, "event.tenant_id required")
+	}
 	err := s.store.LogInferenceEvent(ctx, req.Event)
 	if err != nil {
 		return nil, err

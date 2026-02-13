@@ -14,6 +14,13 @@ import (
 )
 
 func (s *SQLStore) SaveTrainingRun(ctx context.Context, run *pb.TrainingRun) error {
+	if run == nil || run.RunId == "" {
+		return status.Error(codes.InvalidArgument, "run and run_id required")
+	}
+	if run.TenantId == "" {
+		return status.Error(codes.InvalidArgument, "tenant_id required")
+	}
+
 	query := `
 		INSERT INTO training_runs (
 			run_id, model_name, status, started_at, ended_at, metrics, params, dataset_id, mlflow_run_id, tenant_id

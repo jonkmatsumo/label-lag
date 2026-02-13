@@ -9,6 +9,8 @@ import (
 
 	"github.com/jonkmatsumo/label-lag/go/analytics/internal/db"
 	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -504,6 +506,13 @@ func (s *SQLStore) ClearAllData(ctx context.Context) ([]string, error) {
 }
 
 func (s *SQLStore) LogInferenceEvent(ctx context.Context, event *pb.InferenceEvent) error {
+	if event == nil || event.RequestId == "" {
+		return status.Error(codes.InvalidArgument, "event and request_id required")
+	}
+	if event.TenantId == "" {
+		return status.Error(codes.InvalidArgument, "tenant_id required")
+	}
+
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 

@@ -82,6 +82,7 @@ func TestLogInferenceEvent_IncrementsAggregates(t *testing.T) {
 		Timestamp:  timestamppb.New(time.Now().UTC()),
 		FinalScore: 85,
 		Decision:   DecisionReject,
+		TenantId:   "tenant-1",
 		RuleImpacts: []*pb.RuleImpact{
 			{RuleId: "rule-1", ScoreDelta: 10},
 		},
@@ -92,12 +93,12 @@ func TestLogInferenceEvent_IncrementsAggregates(t *testing.T) {
 
 	// Daily aggregate increment
 	mock.ExpectExec("INSERT INTO aggregates_daily").
-		WithArgs("", sqlmock.AnyArg(), 1, 85, 1).
+		WithArgs("tenant-1", sqlmock.AnyArg(), 1, 85, 1).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	// Hourly aggregate increment
 	mock.ExpectExec("INSERT INTO aggregates_hourly").
-		WithArgs("", sqlmock.AnyArg(), 1, 85, 1).
+		WithArgs("tenant-1", sqlmock.AnyArg(), 1, 85, 1).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	mock.ExpectPrepare("INSERT INTO rule_impacts")

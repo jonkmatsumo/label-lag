@@ -94,10 +94,28 @@ func (s *Service) ReportTrainingRun(ctx context.Context, req *pb.ReportTrainingR
 	if req.Run == nil || req.Run.RunId == "" {
 		return nil, status.Error(codes.InvalidArgument, "run and run_id required")
 	}
+	tenantID, err := resolveWriteTenantID(req.TenantId, req.Run.TenantId)
+	if err != nil {
+		return nil, err
+	}
+	req.Run.TenantId = tenantID
 
 	if err := s.store.SaveTrainingRun(ctx, req.Run); err != nil {
 		return nil, err
 	}
 
 	return &pb.ReportTrainingRunResponse{Success: true}, nil
+}
+
+func resolveWriteTenantID(requestTenantID, payloadTenantID string) (string, error) {
+	if requestTenantID == "" && payloadTenantID == "" {
+		return "", status.Error(codes.InvalidArgument, "tenant_id required")
+	}
+	if requestTenantID != "" && payloadTenantID != "" && requestTenantID != payloadTenantID {
+		return "", status.Error(codes.InvalidArgument, "tenant_id mismatch between request and payload")
+	}
+	if payloadTenantID != "" {
+		return payloadTenantID, nil
+	}
+	return requestTenantID, nil
 }
