@@ -84,12 +84,18 @@ func normalizeRoute(path string) string {
 		}
 	}
 	if parts[0] == "jobs" && len(parts) > 1 {
+		if len(parts) == 2 && parts[1] == "summary" {
+			return "/jobs/summary"
+		}
 		if len(parts) == 3 && parts[2] == "events" {
 			return "/jobs/{id}/events"
 		}
 		return "/jobs/{id}"
 	}
-	if parts[0] == "dataset" && parts[1] == "profiles" && len(parts) > 2 {
+	if parts[0] == "dataset" && len(parts) > 1 && parts[1] == "profiles" && len(parts) > 2 {
+		if len(parts) == 3 && parts[2] == "compare" {
+			return "/dataset/profiles/compare"
+		}
 		return "/dataset/profiles/{id}"
 	}
 	if parts[0] == "training-runs" && len(parts) > 1 {
