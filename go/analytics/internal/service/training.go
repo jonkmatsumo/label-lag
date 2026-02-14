@@ -10,7 +10,7 @@ import (
 )
 
 func (s *Service) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRunsRequest) (*pb.ListTrainingRunsResponse, error) {
-	limit, err := normalizeLimit(req.Limit, 20, 100, "limit")
+	limit, err := normalizeLimit(req.Limit, 50, 250, "limit")
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +47,7 @@ func (s *Service) ListModelVersions(ctx context.Context, req *pb.ListModelVersio
 		return nil, status.Error(codes.InvalidArgument, "model_name required")
 	}
 
-	limit, err := normalizeLimit(req.Limit, 20, 100, "limit")
+	limit, err := normalizeLimit(req.Limit, 50, 250, "limit")
 	if err != nil {
 		return nil, err
 	}
