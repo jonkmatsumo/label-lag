@@ -363,7 +363,11 @@ func (s *SQLStore) CancelJob(ctx context.Context, jobID string, tenantID string)
 		SET status = 'cancel_requested', cancel_requested_at = NOW()
 		WHERE job_id = $1 AND tenant_id = $2
 	`, jobID, tenantID)
-	return db.MapDBError(err)
+	if err != nil {
+		return db.MapDBError(err)
+	}
+
+	return s.emitJobEvent(queryCtx, jobID, "cancel_requested", `{"reason": "user_requested"}`)
 }
 
 func (s *SQLStore) RetryJob(ctx context.Context, jobID string, tenantID string) (string, error) {
@@ -390,5 +394,16 @@ func (s *SQLStore) RetryJob(ctx context.Context, jobID string, tenantID string) 
 		return "", db.MapDBError(err)
 	}
 
+	// Emit event on original job
+	_ = s.emitJobEvent(queryCtx, jobID, "retried", fmt.Sprintf(`{"new_job_id": %q}`, newJobID))
+
 	return newJobID, nil
+}
+
+func (s *SQLStore) emitJobEvent(ctx context.Context, jobID string, eventType string, details string) error {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO job_events (job_id, event_type, details)
+		VALUES ($1, $2, $3)
+	`, jobID, eventType, details)
+	return err
 }

@@ -193,6 +193,10 @@ func TestCancelJob(t *testing.T) {
 		WithArgs("job-1", "tenant-1").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
+	mock.ExpectExec("INSERT INTO job_events").
+		WithArgs("job-1", "cancel_requested", sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
 	err = s.CancelJob(context.Background(), "job-1", "tenant-1")
 	require.NoError(t, err)
 }
@@ -210,6 +214,10 @@ func TestRetryJob(t *testing.T) {
 
 	mock.ExpectExec("INSERT INTO jobs").
 		WithArgs(sqlmock.AnyArg(), "backfill", []byte("{}"), "tenant-1", "job-1").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	mock.ExpectExec("INSERT INTO job_events").
+		WithArgs("job-1", "retried", sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	newID, err := s.RetryJob(context.Background(), "job-1", "tenant-1")
