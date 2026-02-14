@@ -118,12 +118,37 @@ def orchestrator_ready() -> str:
     return ORCHESTRATOR_BASE_URL
 
 
-def test_jobs_tenant_header_required(orchestrator_ready: str) -> None:
-    resp = _get_without_tenant("/jobs", {"limit": 1, "offset": 0})
-    assert resp.status_code == 400, resp.text
-    payload = _as_object(resp)
-    detail = payload.get("detail")
-    assert isinstance(detail, str) and detail.strip()
+def test_all_endpoints_require_tenant(orchestrator_ready: str) -> None:
+    endpoints = [
+        ("/jobs", "GET"),
+        ("/training-runs", "GET"),
+        ("/dataset/profiles", "GET"),
+        ("/decisions", "GET"),
+        ("/analytics/transactions", "GET"),
+        ("/analytics/recent-alerts", "GET"),
+    ]
+    for path, method in endpoints:
+        if method == "GET":
+            resp = _get_without_tenant(path)
+        else:
+            resp = requests.request(method, f"{ORCHESTRATOR_BASE_URL}{path}")
+
+        assert resp.status_code == 400, (
+            f"{path} did not reject missing tenant header: {resp.text}"
+        )
+        payload = _as_object(resp)
+        assert "tenant" in payload.get("detail", "").lower()
+
+
+def test_pagination_mutual_exclusivity_smoke(orchestrator_ready: str) -> None:
+    # Test that providing both cursor and offset returns 400
+    endpoints = ["/decisions", "/jobs", "/dataset/profiles", "/training-runs"]
+    for ep in endpoints:
+        resp = _get(ep, {"cursor": "any-cursor", "offset": 10})
+        assert resp.status_code == 400, f"{ep} allowed both cursor and offset"
+        payload = _as_object(resp)
+        msg = "cannot provide both cursor and offset"
+        assert msg in payload.get("detail", "").lower()
 
 
 def test_job_events_cursor_pagination_smoke(orchestrator_ready: str) -> None:
