@@ -532,6 +532,12 @@ func (h *Handler) handleListDecisions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	cursor := r.URL.Query().Get("cursor")
+	if cursor != "" && r.URL.Query().Get("offset") != "" {
+		writeJSONError(w, http.StatusBadRequest, "cannot provide both cursor and offset")
+		return
+	}
+
 	req := &crudv1.ListDecisionsRequest{
 		Limit:    limit,
 		Offset:   offset,
@@ -540,7 +546,7 @@ func (h *Handler) handleListDecisions(w http.ResponseWriter, r *http.Request) {
 		TenantId: tenantID,
 	}
 
-	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
+	if cursor != "" {
 		req.Pagination = &commonv1.CursorPageRequest{
 			Cursor: cursor,
 			Limit:  limit,

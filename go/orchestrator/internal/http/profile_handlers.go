@@ -56,13 +56,19 @@ func (h *Handler) handleListDatasetProfiles(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	cursor := r.URL.Query().Get("cursor")
+	if cursor != "" && r.URL.Query().Get("offset") != "" {
+		writeJSONError(w, http.StatusBadRequest, "cannot provide both cursor and offset")
+		return
+	}
+
 	req := &crudv1.ListDatasetProfilesRequest{
 		Limit:    limit,
 		Offset:   offset,
 		TenantId: tenantID,
 	}
 
-	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
+	if cursor != "" {
 		req.Pagination = &commonv1.CursorPageRequest{
 			Cursor: cursor,
 			Limit:  limit,

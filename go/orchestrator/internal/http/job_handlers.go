@@ -30,6 +30,12 @@ func (h *Handler) handleListJobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	cursor := r.URL.Query().Get("cursor")
+	if cursor != "" && r.URL.Query().Get("offset") != "" {
+		writeJSONError(w, http.StatusBadRequest, "cannot provide both cursor and offset")
+		return
+	}
+
 	req := &crudv1.ListJobsRequest{
 		Limit:    limit,
 		Offset:   offset,
@@ -38,7 +44,7 @@ func (h *Handler) handleListJobs(w http.ResponseWriter, r *http.Request) {
 		TenantId: tenantID,
 	}
 
-	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
+	if cursor != "" {
 		req.Pagination = &commonv1.CursorPageRequest{
 			Cursor: cursor,
 			Limit:  limit,
@@ -122,6 +128,11 @@ func (h *Handler) handleGetJobEvents(w http.ResponseWriter, r *http.Request) {
 	tenantID, err := mustTenantID(r)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
+	if (r.URL.Query().Get("before_ts") != "" || r.URL.Query().Get("before_id") != "") && r.URL.Query().Get("offset") != "" {
+		writeJSONError(w, http.StatusBadRequest, "cannot provide both manual cursor (before_ts/id) and offset")
 		return
 	}
 

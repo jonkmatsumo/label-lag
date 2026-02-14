@@ -699,18 +699,23 @@ type stubAnalyticsClient struct {
 	getLatestDatasetProfileResp *crudv1.GetLatestDatasetProfileResponse
 	compareDatasetProfilesResp  *crudv1.CompareDatasetProfilesResponse
 
-	err                       error
-	lastReq                   *crudv1.SearchTransactionsRequest
-	lastDailyStatsReq         *crudv1.GetDailyStatsRequest
-	lastOverviewReq           *crudv1.GetOverviewMetricsRequest
-	lastTransactionDetailsReq *crudv1.GetTransactionDetailsRequest
-	lastRecentAlertsReq       *crudv1.GetRecentAlertsRequest
-	lastFeatureSampleReq      *crudv1.GetFeatureSampleRequest
-	lastDatasetSummaryReq     *crudv1.GetDatasetSummaryRequest
-	lastGetJobEventsReq       *crudv1.GetJobEventsRequest
-	lastBacktestResultsReq    *crudv1.ListBacktestResultsRequest
-	lastClearAllDataReq       *crudv1.ClearAllDataRequest
-	shadowComparisonResp      *crudv1.GetShadowComparisonResponse
+	err                        error
+	lastReq                    *crudv1.SearchTransactionsRequest
+	lastDailyStatsReq          *crudv1.GetDailyStatsRequest
+	lastOverviewReq            *crudv1.GetOverviewMetricsRequest
+	lastTransactionDetailsReq  *crudv1.GetTransactionDetailsRequest
+	lastRecentAlertsReq        *crudv1.GetRecentAlertsRequest
+	lastFeatureSampleReq       *crudv1.GetFeatureSampleRequest
+	lastDatasetSummaryReq      *crudv1.GetDatasetSummaryRequest
+	lastGetJobEventsReq        *crudv1.GetJobEventsRequest
+	lastBacktestResultsReq     *crudv1.ListBacktestResultsRequest
+	lastClearAllDataReq        *crudv1.ClearAllDataRequest
+	lastListDecisionsReq       *crudv1.ListDecisionsRequest
+	lastListJobsReq            *crudv1.ListJobsRequest
+	lastListDatasetProfilesReq *crudv1.ListDatasetProfilesRequest
+	lastListTrainingRunsReq    *crudv1.ListTrainingRunsRequest
+	lastListModelVersionsReq   *crudv1.ListModelVersionsRequest
+	shadowComparisonResp       *crudv1.GetShadowComparisonResponse
 }
 
 func (s *stubAnalyticsClient) SearchTransactions(ctx context.Context, req *crudv1.SearchTransactionsRequest) (*crudv1.SearchTransactionsResponse, error) {
@@ -823,6 +828,7 @@ func (s *stubAnalyticsClient) GetShadowComparison(ctx context.Context, req *crud
 }
 
 func (s *stubAnalyticsClient) ListDecisions(ctx context.Context, req *crudv1.ListDecisionsRequest) (*crudv1.ListDecisionsResponse, error) {
+	s.lastListDecisionsReq = req
 	if s.listDecisionsResp != nil {
 		return s.listDecisionsResp, s.err
 	}
@@ -857,6 +863,7 @@ func (s *stubAnalyticsClient) GetConfusionMatrix(ctx context.Context, req *crudv
 }
 
 func (s *stubAnalyticsClient) ListJobs(ctx context.Context, req *crudv1.ListJobsRequest) (*crudv1.ListJobsResponse, error) {
+	s.lastListJobsReq = req
 	if s.listJobsResp != nil {
 		return s.listJobsResp, s.err
 	}
@@ -887,6 +894,7 @@ func (s *stubAnalyticsClient) GetDatasetSummary(ctx context.Context, req *crudv1
 }
 
 func (s *stubAnalyticsClient) ListDatasetProfiles(ctx context.Context, req *crudv1.ListDatasetProfilesRequest) (*crudv1.ListDatasetProfilesResponse, error) {
+	s.lastListDatasetProfilesReq = req
 	if s.listDatasetProfilesResp != nil {
 		return s.listDatasetProfilesResp, s.err
 	}
@@ -901,6 +909,7 @@ func (s *stubAnalyticsClient) CompareDatasetProfiles(ctx context.Context, req *c
 }
 
 func (s *stubAnalyticsClient) ListTrainingRuns(ctx context.Context, req *crudv1.ListTrainingRunsRequest) (*crudv1.ListTrainingRunsResponse, error) {
+	s.lastListTrainingRunsReq = req
 	if s.listTrainingRunsResp != nil {
 		return s.listTrainingRunsResp, s.err
 	}
@@ -929,6 +938,7 @@ func (s *stubAnalyticsClient) GetJobSummary(ctx context.Context, req *crudv1.Get
 }
 
 func (s *stubAnalyticsClient) ListModelVersions(ctx context.Context, req *crudv1.ListModelVersionsRequest) (*crudv1.ListModelVersionsResponse, error) {
+	s.lastListModelVersionsReq = req
 	if s.listModelVersionsResp != nil {
 		return s.listModelVersionsResp, s.err
 	}

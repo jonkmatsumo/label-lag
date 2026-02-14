@@ -27,6 +27,12 @@ func (h *Handler) handleListTrainingRuns(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	cursor := r.URL.Query().Get("cursor")
+	if cursor != "" && r.URL.Query().Get("offset") != "" {
+		writeJSONError(w, http.StatusBadRequest, "cannot provide both cursor and offset")
+		return
+	}
+
 	req := &crudv1.ListTrainingRunsRequest{
 		ModelName: r.URL.Query().Get("model_name"),
 		Status:    r.URL.Query().Get("status"),
@@ -35,7 +41,7 @@ func (h *Handler) handleListTrainingRuns(w http.ResponseWriter, r *http.Request)
 		TenantId:  tenantID,
 	}
 
-	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
+	if cursor != "" {
 		req.Pagination = &commonv1.CursorPageRequest{
 			Cursor: cursor,
 			Limit:  limit,
@@ -92,6 +98,12 @@ func (h *Handler) handleListModelVersions(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	cursor := r.URL.Query().Get("cursor")
+	if cursor != "" && r.URL.Query().Get("offset") != "" {
+		writeJSONError(w, http.StatusBadRequest, "cannot provide both cursor and offset")
+		return
+	}
+
 	req := &crudv1.ListModelVersionsRequest{
 		ModelName: modelName,
 		Limit:     limit,
@@ -99,7 +111,7 @@ func (h *Handler) handleListModelVersions(w http.ResponseWriter, r *http.Request
 		TenantId:  tenantID,
 	}
 
-	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
+	if cursor != "" {
 		req.Pagination = &commonv1.CursorPageRequest{
 			Cursor: cursor,
 			Limit:  limit,
