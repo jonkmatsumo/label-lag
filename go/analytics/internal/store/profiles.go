@@ -163,14 +163,16 @@ func (s *SQLStore) ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetP
 	}
 
 	// Count
-	countQuery, countArgs := queryBuilder.BuildCount()
 	var total int64
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	err := s.db.QueryRowContext(queryCtx, countQuery, countArgs...).Scan(&total)
-	if err != nil {
-		return nil, 0, "", db.MapDBError(err)
+	if cursorObj == nil {
+		countQuery, countArgs := queryBuilder.BuildCount()
+		err := s.db.QueryRowContext(queryCtx, countQuery, countArgs...).Scan(&total)
+		if err != nil {
+			return nil, 0, "", db.MapDBError(err)
+		}
 	}
 
 	// List
