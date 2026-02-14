@@ -174,6 +174,7 @@ func InitDB(db *sql.DB) error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_jobs_type_status ON jobs(job_type, status)`,
 		`CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_jobs_pagination ON jobs(created_at DESC, job_id DESC)`,
 		`CREATE TABLE IF NOT EXISTS job_events (
 			event_id SERIAL PRIMARY KEY,
 			job_id TEXT NOT NULL,
@@ -182,6 +183,7 @@ func InitDB(db *sql.DB) error {
 			details JSONB
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_job_events_job_id ON job_events(job_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_job_events_pagination ON job_events(job_id, timestamp DESC, event_id DESC)`,
 		// A2: Dataset Profiles
 		`CREATE TABLE IF NOT EXISTS dataset_profiles (
 			profile_id TEXT PRIMARY KEY,
@@ -191,6 +193,7 @@ func InitDB(db *sql.DB) error {
 			feature_profiles JSONB NOT NULL
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_dataset_profiles_computed_at ON dataset_profiles(computed_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_dataset_profiles_pagination ON dataset_profiles(computed_at DESC, profile_id DESC)`,
 		// B: Training Runs
 		`CREATE TABLE IF NOT EXISTS training_runs (
 			run_id TEXT PRIMARY KEY,
@@ -205,6 +208,7 @@ func InitDB(db *sql.DB) error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_training_runs_model_name ON training_runs(model_name)`,
 		`CREATE INDEX IF NOT EXISTS idx_training_runs_started_at ON training_runs(started_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_training_runs_pagination ON training_runs(started_at DESC, run_id DESC)`,
 		`ALTER TABLE inference_events ADD COLUMN IF NOT EXISTS tenant_id TEXT DEFAULT ''`,
 		`CREATE INDEX IF NOT EXISTS idx_inference_events_tenant_id ON inference_events(tenant_id)`,
 		`ALTER TABLE rules ADD COLUMN IF NOT EXISTS tenant_id TEXT DEFAULT ''`,
