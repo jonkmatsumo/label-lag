@@ -532,11 +532,10 @@ func (h *Handler) handleListDecisions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cursor := r.URL.Query().Get("cursor")
-	if cursor != "" && r.URL.Query().Get("offset") != "" {
-		writeJSONError(w, http.StatusBadRequest, "cannot provide both cursor and offset")
+	if err := validatePaginationParams(w, r); err != nil {
 		return
 	}
+	cursor := r.URL.Query().Get("cursor")
 
 	req := &crudv1.ListDecisionsRequest{
 		Limit:    limit,

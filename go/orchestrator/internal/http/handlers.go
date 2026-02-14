@@ -647,6 +647,14 @@ func toFloat(value any) float64 {
 	}
 }
 
+func validatePaginationParams(w http.ResponseWriter, r *http.Request) error {
+	if r.URL.Query().Get("cursor") != "" && r.URL.Query().Get("offset") != "" {
+		writeJSONError(w, http.StatusBadRequest, "cannot provide both cursor and offset")
+		return errors.New("pagination contract violation")
+	}
+	return nil
+}
+
 func (h *Handler) handleTrain(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
