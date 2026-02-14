@@ -126,6 +126,10 @@ def test_all_endpoints_require_tenant(orchestrator_ready: str) -> None:
         ("/decisions", "GET"),
         ("/analytics/transactions", "GET"),
         ("/analytics/recent-alerts", "GET"),
+        ("/metrics/series", "GET"),
+        ("/models/versions", "GET"),
+        ("/dataset/summary", "GET"),
+        ("/jobs/dummy-id/events", "GET"),
     ]
     for path, method in endpoints:
         if method == "GET":
@@ -142,7 +146,14 @@ def test_all_endpoints_require_tenant(orchestrator_ready: str) -> None:
 
 def test_pagination_mutual_exclusivity_smoke(orchestrator_ready: str) -> None:
     # Test that providing both cursor and offset returns 400
-    endpoints = ["/decisions", "/jobs", "/dataset/profiles", "/training-runs"]
+    endpoints = [
+        "/decisions",
+        "/jobs",
+        "/dataset/profiles",
+        "/training-runs",
+        "/models/versions",
+        "/jobs/dummy-id/events",
+    ]
     for ep in endpoints:
         resp = _get(ep, {"cursor": "any-cursor", "offset": 10})
         assert resp.status_code == 400, f"{ep} allowed both cursor and offset"

@@ -121,6 +121,7 @@ export TENANT_ID="${TENANT_ID:-tenant-1}"
 The Analytics API follows a **cursor-first** pagination strategy. While legacy `offset` is supported for backwards compatibility, it is restricted by server-side limits and is **mutually exclusive** with `cursor`.
 
 - **Cursor Pagination (Recommended)**: Use the `cursor` parameter. If both `cursor` and `offset` are provided, the API returns a `400 Bad Request`.
+  - *Note*: When using `cursor`, the `total` count is intentionally omitted from the response to improve performance on large datasets.
 - **Global Limits**: All list endpoints have a default limit of 50 and a maximum of 250 (higher for transactions).
 - **Timeouts**: All queries are subject to a 30-second server-side timeout.
 

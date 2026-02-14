@@ -56,7 +56,7 @@ func (h *Handler) handleListDatasetProfiles(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := validatePaginationParams(w, r); err != nil {
+	if err := h.validatePaginationParams(w, r); err != nil {
 		return
 	}
 	cursor := r.URL.Query().Get("cursor")

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"log/slog"
 
 	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
 	commonv1 "github.com/jonkmatsumo/label-lag/go/common/proto/v1"
@@ -124,7 +125,11 @@ func (s *Service) ReportTrainingRun(ctx context.Context, req *pb.ReportTrainingR
 	}
 	req.Run.TenantId = tenantID
 
+	// Observability: Log receipt of report (helps track retries)
+	slog.Info("received training run report", "run_id", req.Run.RunId, "tenant_id", req.Run.TenantId)
+
 	if err := s.store.SaveTrainingRun(ctx, req.Run); err != nil {
+		slog.Error("failed to save training run", "error", err, "run_id", req.Run.RunId)
 		return nil, err
 	}
 
