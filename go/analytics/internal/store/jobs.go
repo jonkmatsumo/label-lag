@@ -340,3 +340,55 @@ func (s *SQLStore) GetJobSummary(ctx context.Context, req *pb.GetJobSummaryReque
 	}
 	return summaries, nil
 }
+func (s *SQLStore) CancelJob(ctx context.Context, jobID string, tenantID string) error {
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	// Check current status - only QUEUED or RUNNING jobs can be cancelled
+	var currentStatus string
+	err := s.db.QueryRowContext(queryCtx, "SELECT status FROM jobs WHERE job_id = $1 AND tenant_id = $2", jobID, tenantID).Scan(&currentStatus)
+	if err == sql.ErrNoRows {
+		return status.Errorf(codes.NotFound, "job not found: %s", jobID)
+	}
+	if err != nil {
+		return db.MapDBError(err)
+	}
+
+	if currentStatus != "queued" && currentStatus != "running" {
+		return status.Errorf(codes.FailedPrecondition, "cannot cancel job in state: %s", currentStatus)
+	}
+
+	_, err = s.db.ExecContext(queryCtx, `
+		UPDATE jobs
+		SET status = 'cancel_requested', cancel_requested_at = NOW()
+		WHERE job_id = $1 AND tenant_id = $2
+	`, jobID, tenantID)
+	return db.MapDBError(err)
+}
+
+func (s *SQLStore) RetryJob(ctx context.Context, jobID string, tenantID string) (string, error) {
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	// Get original job details
+	var jobType string
+	var paramsJSON []byte
+	err := s.db.QueryRowContext(queryCtx, "SELECT job_type, params FROM jobs WHERE job_id = $1 AND tenant_id = $2", jobID, tenantID).Scan(&jobType, &paramsJSON)
+	if err == sql.ErrNoRows {
+		return "", status.Errorf(codes.NotFound, "job not found: %s", jobID)
+	}
+	if err != nil {
+		return "", db.MapDBError(err)
+	}
+
+	newJobID := fmt.Sprintf("job-%d", time.Now().UnixNano())
+	_, err = s.db.ExecContext(queryCtx, `
+		INSERT INTO jobs (job_id, job_type, status, params, tenant_id, retry_of_job_id)
+		VALUES ($1, $2, 'queued', $3, $4, $5)
+	`, newJobID, jobType, paramsJSON, tenantID, jobID)
+	if err != nil {
+		return "", db.MapDBError(err)
+	}
+
+	return newJobID, nil
+}

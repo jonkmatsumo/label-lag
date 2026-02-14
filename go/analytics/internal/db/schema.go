@@ -215,6 +215,8 @@ func InitDB(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_jobs_tenant_id ON jobs(tenant_id)`,
 		`ALTER TABLE training_runs ADD COLUMN IF NOT EXISTS tenant_id TEXT DEFAULT ''`,
 		`CREATE INDEX IF NOT EXISTS idx_training_runs_tenant_id ON training_runs(tenant_id)`,
+		`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS cancel_requested_at TIMESTAMP`,
+		`CREATE INDEX IF NOT EXISTS idx_training_runs_tenant_model_started ON training_runs(tenant_id, model_name, started_at DESC)`,
 	}
 
 	for _, q := range queries {

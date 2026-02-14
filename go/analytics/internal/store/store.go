@@ -41,6 +41,8 @@ type Store interface {
 	GetJob(ctx context.Context, jobID string, tenantID string) (*pb.Job, error)
 	GetJobEvents(ctx context.Context, req *pb.GetJobEventsRequest) ([]*pb.JobEvent, error)
 	GetJobSummary(ctx context.Context, req *pb.GetJobSummaryRequest) ([]*pb.JobSummaryBucket, error)
+	CancelJob(ctx context.Context, jobID string, tenantID string) error
+	RetryJob(ctx context.Context, jobID string, tenantID string) (string, error)
 
 	// Dataset Profiles (Phase A2)
 	SaveDatasetProfile(ctx context.Context, profile *pb.DatasetProfile) error

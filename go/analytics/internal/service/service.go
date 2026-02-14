@@ -713,12 +713,12 @@ func (s *Service) ListDecisions(ctx context.Context, req *pb.ListDecisionsReques
 
 	resp := &pb.ListDecisionsResponse{
 		Decisions: decisions,
-		Total:     total,
-	}
-	if nextCursor != "" {
-		resp.Pagination = &commonv1.CursorPageResponse{
+		Pagination: &commonv1.CursorPageResponse{
 			NextCursor: nextCursor,
-		}
+		},
+	}
+	if req.Pagination == nil || req.Pagination.Cursor == "" {
+		resp.Pagination.Total = &total
 	}
 	return resp, nil
 }

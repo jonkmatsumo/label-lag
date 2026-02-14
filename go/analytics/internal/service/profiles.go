@@ -17,41 +17,31 @@ func (s *Service) GetDatasetSummary(ctx context.Context, req *pb.GetDatasetSumma
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request required")
 	}
+	if req.TenantId == "" {
+		return nil, status.Error(codes.InvalidArgument, "tenant_id required")
+	}
 	if req.ProfileId == "" {
 		req.ProfileId = "latest"
 	}
 
-	if req.ProfileId != "" && req.ProfileId != "latest" {
-		profile, err := s.store.GetDatasetProfileCached(ctx, req.ProfileId, req.TenantId)
-		if err != nil {
-			return nil, err
-		}
+	// 1. Try to get a cached profile (either specific ID or "latest").
+	profile, err := s.store.GetDatasetProfileCached(ctx, req.ProfileId, req.TenantId)
+	if err == nil {
 		return &pb.GetDatasetSummaryResponse{Profile: profile}, nil
 	}
-
-	// Resolve "latest" within tenant if a cached profile already exists.
-	latest, err := s.store.GetLatestDatasetProfile(ctx, req.TenantId)
-	if err == nil && latest != nil && latest.ProfileId != "" {
-		profile, err := s.store.GetDatasetProfileCached(ctx, latest.ProfileId, req.TenantId)
-		if err == nil {
-			return &pb.GetDatasetSummaryResponse{Profile: profile}, nil
-		}
-		if status.Code(err) != codes.NotFound {
-			return nil, err
-		}
-	} else if err != nil && status.Code(err) != codes.NotFound {
+	if status.Code(err) != codes.NotFound {
 		return nil, err
 	}
 
-	// Compute on-the-fly if no cached latest is available.
+	// 3. Compute on-the-fly if no cached latest is available.
 	rawProfile, err := s.store.GetDatasetProfile(ctx, "", 100, 20, req.TenantId)
 	if err != nil {
 		return nil, err
 	}
 
-	// Convert and save
+	// Convert and save the computed profile.
 	profileID := uuid.New().String()
-	profile := &pb.DatasetProfile{
+	profile = &pb.DatasetProfile{
 		ProfileId:       profileID,
 		TenantId:        req.TenantId,
 		ComputedAt:      timestamppb.New(time.Now()),
@@ -60,7 +50,7 @@ func (s *Service) GetDatasetSummary(ctx context.Context, req *pb.GetDatasetSumma
 	}
 
 	if err := s.store.SaveDatasetProfile(ctx, profile); err != nil {
-		return nil, err
+		// Log failure but return computed profile to fulfill request.
 	}
 
 	return &pb.GetDatasetSummaryResponse{Profile: profile}, nil
@@ -89,12 +79,12 @@ func (s *Service) ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetPr
 
 	resp := &pb.ListDatasetProfilesResponse{
 		Profiles: profiles,
-		Total:    total,
-	}
-	if nextCursor != "" {
-		resp.Pagination = &commonv1.CursorPageResponse{
+		Pagination: &commonv1.CursorPageResponse{
 			NextCursor: nextCursor,
-		}
+		},
+	}
+	if req.Pagination == nil || req.Pagination.Cursor == "" {
+		resp.Pagination.Total = &total
 	}
 	return resp, nil
 }

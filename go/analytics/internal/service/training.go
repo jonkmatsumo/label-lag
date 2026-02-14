@@ -31,13 +31,13 @@ func (s *Service) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRuns
 	}
 
 	resp := &pb.ListTrainingRunsResponse{
-		Runs:  runs,
-		Total: total,
-	}
-	if nextCursor != "" {
-		resp.Pagination = &commonv1.CursorPageResponse{
+		Runs: runs,
+		Pagination: &commonv1.CursorPageResponse{
 			NextCursor: nextCursor,
-		}
+		},
+	}
+	if req.Pagination == nil || req.Pagination.Cursor == "" {
+		resp.Pagination.Total = &total
 	}
 	return resp, nil
 }
@@ -65,12 +65,12 @@ func (s *Service) ListModelVersions(ctx context.Context, req *pb.ListModelVersio
 
 	resp := &pb.ListModelVersionsResponse{
 		Versions: versions,
-		Total:    total,
-	}
-	if nextCursor != "" {
-		resp.Pagination = &commonv1.CursorPageResponse{
+		Pagination: &commonv1.CursorPageResponse{
 			NextCursor: nextCursor,
-		}
+		},
+	}
+	if req.Pagination == nil || req.Pagination.Cursor == "" {
+		resp.Pagination.Total = &total
 	}
 	return resp, nil
 }

@@ -512,7 +512,7 @@ func (s *SQLStore) GetDatasetProfile(ctx context.Context, datasetID string, limi
 			resp.TruncatedKeys++
 			continue
 		}
-		profile, err := s.profileNumericFeature(ctx, "generated_records", feat, totalRecords, numBuckets)
+		profile, err := s.profileNumericFeature(ctx, "generated_records", feat, totalRecords, numBuckets, tenantID)
 		if err != nil {
 			continue
 		}
@@ -520,7 +520,7 @@ func (s *SQLStore) GetDatasetProfile(ctx context.Context, datasetID string, limi
 	}
 
 	// 3. Profile dynamic numeric features
-	dynamicNumericKeys, err := s.discoverJSONBKeys(ctx, "generated_records", "numerical_features", MaxNumericKeysProfiled)
+	dynamicNumericKeys, err := s.discoverJSONBKeys(ctx, "generated_records", "numerical_features", MaxNumericKeysProfiled, tenantID)
 	if err == nil {
 		for _, key := range dynamicNumericKeys {
 			if int32(len(resp.FeatureProfiles)) >= limitFeatures {
@@ -528,7 +528,7 @@ func (s *SQLStore) GetDatasetProfile(ctx context.Context, datasetID string, limi
 				resp.TruncatedKeys++
 				continue
 			}
-			profile, err := s.profileNumericJSONBKey(ctx, "generated_records", "numerical_features", key, totalRecords, numBuckets)
+			profile, err := s.profileNumericJSONBKey(ctx, "generated_records", "numerical_features", key, totalRecords, numBuckets, tenantID)
 			if err != nil {
 				continue
 			}
@@ -537,7 +537,7 @@ func (s *SQLStore) GetDatasetProfile(ctx context.Context, datasetID string, limi
 	}
 
 	// 4. Profile dynamic categorical features
-	dynamicCategoricalKeys, err := s.discoverJSONBKeys(ctx, "generated_records", "categorical_features", MaxCategoricalKeysProfiled)
+	dynamicCategoricalKeys, err := s.discoverJSONBKeys(ctx, "generated_records", "categorical_features", MaxCategoricalKeysProfiled, tenantID)
 	if err == nil {
 		for _, key := range dynamicCategoricalKeys {
 			if int32(len(resp.FeatureProfiles)) >= limitFeatures {
@@ -545,7 +545,7 @@ func (s *SQLStore) GetDatasetProfile(ctx context.Context, datasetID string, limi
 				resp.TruncatedKeys++
 				continue
 			}
-			profile, err := s.profileCategoricalJSONBKey(ctx, "generated_records", "categorical_features", key, totalRecords, DefaultTopK)
+			profile, err := s.profileCategoricalJSONBKey(ctx, "generated_records", "categorical_features", key, totalRecords, DefaultTopK, tenantID)
 			if err != nil {
 				continue
 			}
@@ -556,18 +556,26 @@ func (s *SQLStore) GetDatasetProfile(ctx context.Context, datasetID string, limi
 	return resp, nil
 }
 
-func (s *SQLStore) discoverJSONBKeys(ctx context.Context, table, column string, limit int) ([]string, error) {
-	// Use a subquery to avoid full table expansion before distinct/limit
+func (s *SQLStore) discoverJSONBKeys(ctx context.Context, table, column string, limit int, tenantID string) ([]string, error) {
+	from := table
+	where := fmt.Sprintf("%s IS NOT NULL AND %s != '{}'::jsonb", column, column)
+	args := []interface{}{}
+	if tenantID != "" {
+		from = fmt.Sprintf("%s gr INNER JOIN inference_events ie ON gr.record_id = ie.request_id", table)
+		where += " AND ie.tenant_id = $1"
+		args = append(args, tenantID)
+	}
+
 	query := fmt.Sprintf(`
 		SELECT DISTINCT key
 		FROM (
 			SELECT jsonb_object_keys(%[2]s) as key
-			FROM (SELECT %[2]s FROM %[1]s WHERE %[2]s IS NOT NULL AND %[2]s != '{}'::jsonb LIMIT 1000) as sub
+			FROM (SELECT %[2]s FROM %[1]s WHERE %[3]s LIMIT 1000) as sub
 		) as keys
-		LIMIT %[3]d
-	`, table, column, limit)
+		LIMIT %[4]d
+	`, from, column, where, limit)
 
-	rows, err := s.db.QueryContext(ctx, query)
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -584,16 +592,25 @@ func (s *SQLStore) discoverJSONBKeys(ctx context.Context, table, column string, 
 	return keys, nil
 }
 
-func (s *SQLStore) profileNumericJSONBKey(ctx context.Context, table, column, key string, totalRecords int64, numBuckets int32) (*pb.FeatureProfile, error) {
+func (s *SQLStore) profileNumericJSONBKey(ctx context.Context, table, column, key string, totalRecords int64, numBuckets int32, tenantID string) (*pb.FeatureProfile, error) {
 	columnExpr := fmt.Sprintf("(%s->>'%s')::numeric", column, key)
-	return s.profileNumericFeatureExpr(ctx, table, columnExpr, key, totalRecords, numBuckets)
+	return s.profileNumericFeatureExpr(ctx, table, columnExpr, key, totalRecords, numBuckets, tenantID)
 }
 
-func (s *SQLStore) profileNumericFeature(ctx context.Context, table, column string, totalRecords int64, numBuckets int32) (*pb.FeatureProfile, error) {
-	return s.profileNumericFeatureExpr(ctx, table, column, column, totalRecords, numBuckets)
+func (s *SQLStore) profileNumericFeature(ctx context.Context, table, column string, totalRecords int64, numBuckets int32, tenantID string) (*pb.FeatureProfile, error) {
+	return s.profileNumericFeatureExpr(ctx, table, column, column, totalRecords, numBuckets, tenantID)
 }
 
-func (s *SQLStore) profileNumericFeatureExpr(ctx context.Context, table, expr, name string, totalRecords int64, numBuckets int32) (*pb.FeatureProfile, error) {
+func (s *SQLStore) profileNumericFeatureExpr(ctx context.Context, table, expr, name string, totalRecords int64, numBuckets int32, tenantID string) (*pb.FeatureProfile, error) {
+	from := table
+	where := fmt.Sprintf("%s IS NOT NULL", expr)
+	args := []interface{}{}
+	if tenantID != "" {
+		from = fmt.Sprintf("%s gr INNER JOIN inference_events ie ON gr.record_id = ie.request_id", table)
+		where += " AND ie.tenant_id = $1"
+		args = append(args, tenantID)
+	}
+
 	query := fmt.Sprintf(`
 		SELECT
 			AVG(%[1]s) as mean,
@@ -602,11 +619,12 @@ func (s *SQLStore) profileNumericFeatureExpr(ctx context.Context, table, expr, n
 			MIN(%[1]s) as min_val,
 			MAX(%[1]s) as max_val
 		FROM %[2]s
-	`, expr, table)
+		WHERE %[3]s
+	`, expr, from, where)
 
 	var mean, stddev, minVal, maxVal sql.NullFloat64
 	var nullCount int64
-	err := s.db.QueryRowContext(ctx, query).Scan(&mean, &stddev, &nullCount, &minVal, &maxVal)
+	err := s.db.QueryRowContext(ctx, query, args...).Scan(&mean, &stddev, &nullCount, &minVal, &maxVal)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -637,11 +655,14 @@ func (s *SQLStore) profileNumericFeatureExpr(ctx context.Context, table, expr, n
 				COUNT(*) as count
 			FROM %[5]s
 			WHERE %[1]s IS NOT NULL
-			GROUP BY bucket
-			ORDER BY bucket
-		`, expr, minVal.Float64, upperBound, numBuckets, table)
+		`, expr, minVal.Float64, upperBound, numBuckets, from)
 
-		rows, err := s.db.QueryContext(ctx, histQuery)
+		if tenantID != "" {
+			histQuery += " AND ie.tenant_id = $1"
+		}
+		histQuery += " GROUP BY bucket ORDER BY bucket"
+
+		rows, err := s.db.QueryContext(ctx, histQuery, args...)
 		if err == nil {
 			defer rows.Close()
 			buckets := make(map[int]int64)
@@ -668,13 +689,23 @@ func (s *SQLStore) profileNumericFeatureExpr(ctx context.Context, table, expr, n
 	return profile, nil
 }
 
-func (s *SQLStore) profileCategoricalJSONBKey(ctx context.Context, table, column, key string, totalRecords int64, topK int) (*pb.FeatureProfile, error) {
+func (s *SQLStore) profileCategoricalJSONBKey(ctx context.Context, table, column, key string, totalRecords int64, topK int, tenantID string) (*pb.FeatureProfile, error) {
 	expr := fmt.Sprintf("%s->>'%s'", column, key)
+
+	from := table
+	args := []interface{}{}
+	if tenantID != "" {
+		from = fmt.Sprintf("%s gr INNER JOIN inference_events ie ON gr.record_id = ie.request_id", table)
+		args = append(args, tenantID)
+	}
 
 	// Get null rate
 	var nullCount int64
-	nullQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s IS NULL", table, expr)
-	err := s.db.QueryRowContext(ctx, nullQuery).Scan(&nullCount)
+	nullQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s IS NULL", from, expr)
+	if tenantID != "" {
+		nullQuery += " AND ie.tenant_id = $1"
+	}
+	err := s.db.QueryRowContext(ctx, nullQuery, args...).Scan(&nullCount)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -690,12 +721,14 @@ func (s *SQLStore) profileCategoricalJSONBKey(ctx context.Context, table, column
 		SELECT %[1]s as value, COUNT(*) as count
 		FROM %[2]s
 		WHERE %[1]s IS NOT NULL
-		GROUP BY value
-		ORDER BY count DESC, value
-		LIMIT %[3]d
-	`, expr, table, topK)
+	`, expr, from)
 
-	rows, err := s.db.QueryContext(ctx, topQuery)
+	if tenantID != "" {
+		topQuery += " AND ie.tenant_id = $1"
+	}
+	topQuery += fmt.Sprintf(" GROUP BY value ORDER BY count DESC, value LIMIT %d", topK)
+
+	rows, err := s.db.QueryContext(ctx, topQuery, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -1006,11 +1039,13 @@ func (s *SQLStore) ListDecisions(ctx context.Context, req *pb.ListDecisionsReque
 
 	whereStmt := strings.Join(whereClauses, " AND ")
 
-	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM inference_events WHERE %s", whereStmt)
 	var total int64
-	err := s.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
-	if err != nil {
-		return nil, 0, "", db.MapDBError(err)
+	if cursorObj == nil {
+		countQuery := fmt.Sprintf("SELECT COUNT(*) FROM inference_events WHERE %s", whereStmt)
+		err := s.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+		if err != nil {
+			return nil, 0, "", db.MapDBError(err)
+		}
 	}
 
 	limit := req.Limit

@@ -260,6 +260,23 @@ func (s *SQLStore) GetTrainingRun(ctx context.Context, runID string, tenantID st
 }
 
 func (s *SQLStore) GetMetricSeries(ctx context.Context, req *pb.GetMetricSeriesRequest) ([]*pb.MetricPoint, error) {
+	if req.ModelName == "" || req.MetricName == "" {
+		return nil, status.Error(codes.InvalidArgument, "model_name and metric_name required")
+	}
+
+	start := time.Now().AddDate(0, 0, -30)
+	if req.StartDate != nil {
+		start = req.StartDate.AsTime()
+	}
+	end := time.Now()
+	if req.EndDate != nil {
+		end = req.EndDate.AsTime()
+	}
+
+	if end.Sub(start) > 90*24*time.Hour {
+		return nil, status.Error(codes.InvalidArgument, "query window cannot exceed 90 days")
+	}
+
 	query := fmt.Sprintf(`
 		SELECT
 			started_at,
@@ -272,7 +289,7 @@ func (s *SQLStore) GetMetricSeries(ctx context.Context, req *pb.GetMetricSeriesR
 		  AND metrics ? $4
 	`, req.MetricName)
 
-	args := []interface{}{req.ModelName, req.StartDate.AsTime(), req.EndDate.AsTime(), req.MetricName}
+	args := []interface{}{req.ModelName, start, end, req.MetricName}
 	if req.TenantId != "" {
 		query += " AND tenant_id = $5"
 		args = append(args, req.TenantId)

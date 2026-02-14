@@ -193,3 +193,53 @@ func (h *Handler) handleGetJobSummary(w http.ResponseWriter, r *http.Request) {
 
 	writeAnalyticsJSON(w, resp)
 }
+
+func (h *Handler) handleCancelJob(w http.ResponseWriter, r *http.Request) {
+	jobID := r.PathValue("id")
+	if jobID == "" {
+		writeJSONError(w, http.StatusBadRequest, "job_id required")
+		return
+	}
+
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
+	resp, err := h.analyticsClient.CancelJob(r.Context(), &crudv1.CancelJobRequest{
+		JobId:    jobID,
+		TenantId: tenantID,
+	})
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	writeAnalyticsJSON(w, resp)
+}
+
+func (h *Handler) handleRetryJob(w http.ResponseWriter, r *http.Request) {
+	jobID := r.PathValue("id")
+	if jobID == "" {
+		writeJSONError(w, http.StatusBadRequest, "job_id required")
+		return
+	}
+
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
+	resp, err := h.analyticsClient.RetryJob(r.Context(), &crudv1.RetryJobRequest{
+		JobId:    jobID,
+		TenantId: tenantID,
+	})
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	writeAnalyticsJSON(w, resp)
+}

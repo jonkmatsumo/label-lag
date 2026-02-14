@@ -78,12 +78,21 @@ func (s *SQLStore) GetDatasetProfileCached(ctx context.Context, profileID string
 		SELECT
 			profile_id, tenant_id, computed_at, record_count, feature_profiles
 		FROM dataset_profiles
-		WHERE profile_id = $1
 	`
-	args := []interface{}{profileID}
-	if tenantID != "" {
-		query += " AND tenant_id = $2"
+	args := []interface{}{}
+	if profileID == "latest" {
+		if tenantID == "" {
+			return nil, status.Error(codes.InvalidArgument, "tenant_id required for latest profile lookup")
+		}
+		query += " WHERE tenant_id = $1 ORDER BY computed_at DESC LIMIT 1"
 		args = append(args, tenantID)
+	} else {
+		query += " WHERE profile_id = $1"
+		args = append(args, profileID)
+		if tenantID != "" {
+			query += " AND tenant_id = $2"
+			args = append(args, tenantID)
+		}
 	}
 
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)

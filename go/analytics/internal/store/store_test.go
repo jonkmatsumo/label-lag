@@ -184,7 +184,7 @@ func TestDiscoverJSONBKeys_DeterministicOrder(t *testing.T) {
 				AddRow("beta"),
 		)
 
-	keys, err := s.discoverJSONBKeys(context.Background(), "generated_records", "categorical_features", 10)
+	keys, err := s.discoverJSONBKeys(context.Background(), "generated_records", "categorical_features", 10, "")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"alpha", "beta", "zeta"}, keys)
 	require.NoError(t, mock.ExpectationsWereMet())

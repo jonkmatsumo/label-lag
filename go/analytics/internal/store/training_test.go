@@ -9,6 +9,8 @@ import (
 	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -96,4 +98,31 @@ func TestGetMetricSeries(t *testing.T) {
 	assert.Len(t, points, 2)
 	assert.Equal(t, 0.85, points[0].Value)
 	assert.Equal(t, 0.90, points[1].Value)
+}
+
+func TestGetMetricSeries_Guardrails(t *testing.T) {
+	db, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+
+	// Test > 90 days
+	start := time.Now().AddDate(0, 0, -100)
+	end := time.Now()
+	_, err = s.GetMetricSeries(context.Background(), &pb.GetMetricSeriesRequest{
+		ModelName:  "model-1",
+		MetricName: "accuracy",
+		StartDate:  timestamppb.New(start),
+		EndDate:    timestamppb.New(end),
+	})
+	assert.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+
+	// Test missing model_name
+	_, err = s.GetMetricSeries(context.Background(), &pb.GetMetricSeriesRequest{
+		MetricName: "accuracy",
+	})
+	assert.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }

@@ -62,10 +62,6 @@ func TestListDecisions_Cursor(t *testing.T) {
 		},
 	}
 
-	mock.ExpectQuery("SELECT COUNT").
-		WithArgs("tenant-1", now, "req-prev").
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
-
 	mock.ExpectQuery("SELECT request_id, user_id, ts, final_score, decision, rule_impacts").
 		WithArgs("tenant-1", now, "req-prev", int32(10)).
 		WillReturnRows(sqlmock.NewRows([]string{"request_id", "user_id", "ts", "final_score", "decision", "rule_impacts"}).
@@ -73,7 +69,7 @@ func TestListDecisions_Cursor(t *testing.T) {
 
 	decisions, total, nextCursor, err := s.ListDecisions(context.Background(), req)
 	require.NoError(t, err)
-	assert.Equal(t, int64(1), total)
+	assert.Equal(t, int64(0), total)
 	assert.Len(t, decisions, 1)
 	assert.Empty(t, nextCursor) // nextCursor only generated if len(decisions) == limit
 }

@@ -178,3 +178,41 @@ func TestListJobs_DateFilter(t *testing.T) {
 	_, _, _, err = s.ListJobs(context.Background(), req)
 	require.NoError(t, err)
 }
+func TestCancelJob(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+
+	mock.ExpectQuery("SELECT status FROM jobs").
+		WithArgs("job-1", "tenant-1").
+		WillReturnRows(sqlmock.NewRows([]string{"status"}).AddRow("queued"))
+
+	mock.ExpectExec("UPDATE jobs SET status = 'cancel_requested'").
+		WithArgs("job-1", "tenant-1").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	err = s.CancelJob(context.Background(), "job-1", "tenant-1")
+	require.NoError(t, err)
+}
+
+func TestRetryJob(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+
+	mock.ExpectQuery("SELECT job_type, params FROM jobs").
+		WithArgs("job-1", "tenant-1").
+		WillReturnRows(sqlmock.NewRows([]string{"job_type", "params"}).AddRow("backfill", []byte("{}")))
+
+	mock.ExpectExec("INSERT INTO jobs").
+		WithArgs(sqlmock.AnyArg(), "backfill", []byte("{}"), "tenant-1", "job-1").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	newID, err := s.RetryJob(context.Background(), "job-1", "tenant-1")
+	require.NoError(t, err)
+	assert.NotEmpty(t, newID)
+}

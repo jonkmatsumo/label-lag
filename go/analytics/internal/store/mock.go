@@ -336,9 +336,19 @@ func (m *MockStore) GetConfusionMatrix(ctx context.Context, req *pb.GetConfusion
 func (m *MockStore) ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb.Job, int64, string, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
-		return nil, 0, "", args.Error(2)
+		return nil, 0, "", args.Error(3)
 	}
 	return args.Get(0).([]*pb.Job), args.Get(1).(int64), args.String(2), args.Error(3)
+}
+
+func (m *MockStore) CancelJob(ctx context.Context, jobID string, tenantID string) error {
+	args := m.Called(ctx, jobID, tenantID)
+	return args.Error(0)
+}
+
+func (m *MockStore) RetryJob(ctx context.Context, jobID string, tenantID string) (string, error) {
+	args := m.Called(ctx, jobID, tenantID)
+	return args.String(0), args.Error(1)
 }
 
 func (m *MockStore) GetJob(ctx context.Context, jobID string, tenantID string) (*pb.Job, error) {

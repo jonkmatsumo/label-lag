@@ -195,6 +195,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /jobs/summary", h.handleGetJobSummary)
 	mux.HandleFunc("GET /jobs/{id}", h.handleGetJob)
 	mux.HandleFunc("GET /jobs/{id}/events", h.handleGetJobEvents)
+	mux.HandleFunc("POST /jobs/{id}/cancel", h.handleCancelJob)
+	mux.HandleFunc("POST /jobs/{id}/retry", h.handleRetryJob)
 
 	mux.HandleFunc("GET /dataset/summary", h.handleGetDatasetProfile) // Alias for latest/default
 	mux.HandleFunc("GET /dataset/latest", h.handleGetLatestDatasetProfile)
