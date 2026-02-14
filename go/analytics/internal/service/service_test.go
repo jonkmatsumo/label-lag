@@ -43,7 +43,7 @@ func TestListDecisions_Success(t *testing.T) {
 	resp, err := svc.ListDecisions(context.Background(), req)
 	assert.NoError(t, err)
 	assert.Len(t, resp.Decisions, 1)
-	assert.Equal(t, int64(1), resp.Total)
+	assert.Equal(t, int64(1), *resp.Pagination.Total)
 }
 
 func TestGetDecision_Validation(t *testing.T) {

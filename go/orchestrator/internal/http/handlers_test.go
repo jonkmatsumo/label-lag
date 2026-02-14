@@ -942,6 +942,14 @@ func (s *stubAnalyticsClient) GetLatestDatasetProfile(ctx context.Context, req *
 	return &crudv1.GetLatestDatasetProfileResponse{}, s.err
 }
 
+func (s *stubAnalyticsClient) CancelJob(ctx context.Context, req *crudv1.CancelJobRequest) (*crudv1.CancelJobResponse, error) {
+	return &crudv1.CancelJobResponse{Success: true}, s.err
+}
+
+func (s *stubAnalyticsClient) RetryJob(ctx context.Context, req *crudv1.RetryJobRequest) (*crudv1.RetryJobResponse, error) {
+	return &crudv1.RetryJobResponse{NewJobId: "new-job-id"}, s.err
+}
+
 func (s *stubAnalyticsClient) ReportTrainingRun(ctx context.Context, req *crudv1.ReportTrainingRunRequest) (*crudv1.ReportTrainingRunResponse, error) {
 	return &crudv1.ReportTrainingRunResponse{Success: true}, s.err
 }
