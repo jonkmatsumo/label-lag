@@ -426,7 +426,10 @@ func (s *SQLStore) GetGenerationJob(ctx context.Context, key string) (*pb.Genera
 	var total, fraud, materialized sql.NullInt64
 	var errMsg sql.NullString
 
-	err := s.db.QueryRowContext(ctx, query, key).Scan(&status, &total, &fraud, &materialized, &errMsg)
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	err := s.db.QueryRowContext(queryCtx, query, key).Scan(&status, &total, &fraud, &materialized, &errMsg)
 	if err == sql.ErrNoRows {
 		return nil, "", nil
 	}
@@ -450,7 +453,10 @@ func (s *SQLStore) CreateGenerationJob(ctx context.Context, key string) error {
 		INSERT INTO generation_jobs (idempotency_key, status, created_at)
 		VALUES ($1, 'in_progress', NOW())
 	`
-	_, err := s.db.ExecContext(ctx, query, key)
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	_, err := s.db.ExecContext(queryCtx, query, key)
 	return db.MapDBError(err)
 }
 
@@ -464,7 +470,10 @@ func (s *SQLStore) CompleteGenerationJob(ctx context.Context, key string, resp *
 		    completed_at = NOW()
 		WHERE idempotency_key = $4
 	`
-	_, err := s.db.ExecContext(ctx, query, resp.TotalRecords, resp.FraudRecords, resp.FeaturesMaterialized, key)
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	_, err := s.db.ExecContext(queryCtx, query, resp.TotalRecords, resp.FraudRecords, resp.FeaturesMaterialized, key)
 	return db.MapDBError(err)
 }
 
@@ -476,7 +485,10 @@ func (s *SQLStore) FailGenerationJob(ctx context.Context, key string, errMsg str
 		    completed_at = NOW()
 		WHERE idempotency_key = $2
 	`
-	_, err := s.db.ExecContext(ctx, query, errMsg, key)
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	_, err := s.db.ExecContext(queryCtx, query, errMsg, key)
 	return db.MapDBError(err)
 }
 

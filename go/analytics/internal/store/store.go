@@ -120,7 +120,10 @@ func NewSQLStore(db *sql.DB) *SQLStore {
 
 func (s *SQLStore) getEstimatedCount(ctx context.Context, tableName string) (int64, error) {
 	var estimate int64
-	err := s.db.QueryRowContext(ctx, "SELECT reltuples::bigint FROM pg_class WHERE relname = $1", tableName).Scan(&estimate)
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	err := s.db.QueryRowContext(queryCtx, "SELECT reltuples::bigint FROM pg_class WHERE relname = $1", tableName).Scan(&estimate)
 	if err != nil {
 		return 0, err
 	}

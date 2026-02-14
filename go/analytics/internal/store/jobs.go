@@ -404,7 +404,10 @@ func (s *SQLStore) RetryJob(ctx context.Context, jobID string, tenantID string) 
 }
 
 func (s *SQLStore) emitJobEvent(ctx context.Context, jobID string, eventType string, details string) error {
-	_, err := s.db.ExecContext(ctx, `
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	_, err := s.db.ExecContext(queryCtx, `
 		INSERT INTO job_events (job_id, event_type, details)
 		VALUES ($1, $2, $3)
 	`, jobID, eventType, details)
