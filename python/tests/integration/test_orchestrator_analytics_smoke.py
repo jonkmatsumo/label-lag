@@ -155,7 +155,10 @@ def test_pagination_mutual_exclusivity_smoke(orchestrator_ready: str) -> None:
         "/jobs/dummy-id/events",
     ]
     for ep in endpoints:
-        resp = _get(ep, {"cursor": "any-cursor", "offset": 10})
+        params: dict = {"cursor": "any-cursor", "offset": 10}
+        if ep == "/models/versions":
+            params["model_name"] = "test-model"
+        resp = _get(ep, params)
         assert resp.status_code == 400, f"{ep} allowed both cursor and offset"
         payload = _as_object(resp)
         msg = "cannot provide both cursor and offset"
