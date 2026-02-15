@@ -324,7 +324,6 @@ func TestAnalyticsDecisionsContract(t *testing.T) {
 					CreatedAt: timestamppb.Now(),
 				},
 			},
-			Total: 1,
 		},
 		getDecisionResp: &crudv1.GetDecisionResponse{
 			Decision: &crudv1.InferenceEvent{
@@ -403,7 +402,6 @@ func TestAnalyticsJobsContract(t *testing.T) {
 			Jobs: []*crudv1.Job{
 				{JobId: "job-1", JobType: "training", Status: "completed"},
 			},
-			Total: 1,
 		},
 		getJobEventsResp: &crudv1.GetJobEventsResponse{
 			Events: []*crudv1.JobEvent{
@@ -485,13 +483,11 @@ func TestAnalyticsTrainingRunsContract(t *testing.T) {
 			Runs: []*crudv1.TrainingRun{
 				{RunId: "run-1", ModelName: "xgboost", Status: "completed"},
 			},
-			Total: 1,
 		},
 		listModelVersionsResp: &crudv1.ListModelVersionsResponse{
 			Versions: []*crudv1.TrainingRun{
 				{RunId: "run-1", ModelName: "xgboost", Status: "completed"},
 			},
-			Total: 1,
 		},
 	}
 	handler := NewHandler(HandlerOptions{
@@ -550,7 +546,6 @@ func TestAnalyticsDatasetProfilesContract(t *testing.T) {
 			Profiles: []*crudv1.DatasetProfile{
 				{ProfileId: "prof-1", RecordCount: 1000},
 			},
-			Total: 1,
 		},
 		getLatestDatasetProfileResp: &crudv1.GetLatestDatasetProfileResponse{
 			ProfileId:   "prof-1",

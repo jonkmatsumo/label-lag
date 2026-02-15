@@ -180,6 +180,11 @@ proto-gen-go:
 
 proto-gen-python:
 	@echo "Generating Python stubs..."
+	# Common protos (pagination)
+	uv run python -m grpc_tools.protoc -I $(PROTO_DIR) \
+		--python_out=$(PYTHON_SRC_DIR) \
+		$(PROTO_DIR)/common/v1/pagination.proto
+
 	# Main Python stubs (Inference, Training, Analytics)
 	uv run python -m grpc_tools.protoc -I $(PROTO_DIR) \
 		--python_out=$(PYTHON_SRC_DIR) \
@@ -195,6 +200,8 @@ proto-gen-python:
 		$(PROTO_DIR)/forecast/v1/*.proto
 
 	# Ensure __init__.py files
+	@touch $(PYTHON_SRC_DIR)/common/__init__.py
+	@touch $(PYTHON_SRC_DIR)/common/v1/__init__.py
 	@touch $(PYTHON_SRC_DIR)/training/v1/__init__.py
 	@touch $(PYTHON_SRC_DIR)/analytics/__init__.py
 	@touch $(PYTHON_SRC_DIR)/analytics/v1/__init__.py
