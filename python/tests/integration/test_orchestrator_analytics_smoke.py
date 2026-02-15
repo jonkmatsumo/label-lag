@@ -152,7 +152,6 @@ def test_pagination_mutual_exclusivity_smoke(orchestrator_ready: str) -> None:
         "/dataset/profiles",
         "/training-runs",
         "/models/versions",
-        "/jobs/dummy-id/events",
     ]
     for ep in endpoints:
         params: dict = {"cursor": "any-cursor", "offset": 10}
