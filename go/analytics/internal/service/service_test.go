@@ -38,12 +38,12 @@ func TestListDecisions_Success(t *testing.T) {
 
 	mockStore.On("ListDecisions", mock.Anything, mock.MatchedBy(func(r *pb.ListDecisionsRequest) bool {
 		return r.Limit == 10 && r.Offset == 0
-	})).Return(expectedDecisions, int64(1), nil)
+	})).Return(expectedDecisions, int64(1), "", nil)
 
 	resp, err := svc.ListDecisions(context.Background(), req)
 	assert.NoError(t, err)
 	assert.Len(t, resp.Decisions, 1)
-	assert.Equal(t, int64(1), resp.Total)
+	assert.Equal(t, int64(1), *resp.Pagination.Total)
 }
 
 func TestGetDecision_Validation(t *testing.T) {
@@ -143,12 +143,8 @@ func TestGetDatasetSummary_UsesLatestCachedProfileByTenant(t *testing.T) {
 	mockStore := new(store.MockStore)
 	svc := NewService(mockStore, nil)
 
-	mockStore.On("GetLatestDatasetProfile", mock.Anything, "tenant-1").
-		Return(&pb.GetLatestDatasetProfileResponse{ProfileId: "prof-latest"}, nil).
-		Once()
-
 	expected := &pb.DatasetProfile{ProfileId: "prof-latest", TenantId: "tenant-1", RecordCount: 42}
-	mockStore.On("GetDatasetProfileCached", mock.Anything, "prof-latest", "tenant-1").
+	mockStore.On("GetDatasetProfileCached", mock.Anything, "latest", "tenant-1").
 		Return(expected, nil).
 		Once()
 
@@ -166,10 +162,7 @@ func TestGetDatasetSummary_DefaultsMissingProfileIDToLatest(t *testing.T) {
 	mockStore := new(store.MockStore)
 	svc := NewService(mockStore, nil)
 
-	mockStore.On("GetLatestDatasetProfile", mock.Anything, "tenant-1").
-		Return(&pb.GetLatestDatasetProfileResponse{ProfileId: "prof-latest"}, nil).
-		Once()
-	mockStore.On("GetDatasetProfileCached", mock.Anything, "prof-latest", "tenant-1").
+	mockStore.On("GetDatasetProfileCached", mock.Anything, "latest", "tenant-1").
 		Return(&pb.DatasetProfile{ProfileId: "prof-latest", TenantId: "tenant-1"}, nil).
 		Once()
 

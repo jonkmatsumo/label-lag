@@ -5,6 +5,7 @@ package crud.v1;
 option go_package = "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1;crudv1";
 
 import "google/protobuf/timestamp.proto";
+import "common/v1/pagination.proto";
 
 service AnalyticsService {
   rpc GetDailyStats(GetDailyStatsRequest) returns (GetDailyStatsResponse);
@@ -82,6 +83,8 @@ service AnalyticsService {
   rpc GetJob(GetJobRequest) returns (GetJobResponse);
   rpc GetJobEvents(GetJobEventsRequest) returns (GetJobEventsResponse);
   rpc GetJobSummary(GetJobSummaryRequest) returns (GetJobSummaryResponse);
+  rpc CancelJob(CancelJobRequest) returns (CancelJobResponse);
+  rpc RetryJob(RetryJobRequest) returns (RetryJobResponse);
 
   // Dataset Profiles (Phase A2)
   rpc GetDatasetSummary(GetDatasetSummaryRequest) returns (GetDatasetSummaryResponse);
@@ -390,6 +393,7 @@ message ListDatasetProfilesRequest {
   int32 limit = 3;
   int32 offset = 4;
   string tenant_id = 15;
+  common.v1.CursorPageRequest pagination = 16;
 }
 
 message ListBacktestResultsRequest {
@@ -719,11 +723,12 @@ message ListDecisionsRequest {
   int32 limit = 7;
   int32 offset = 8;
   string tenant_id = 15;
+  common.v1.CursorPageRequest pagination = 16;
 }
 
 message ListDecisionsResponse {
   repeated DecisionSummary decisions = 1;
-  int64 total = 2;
+  common.v1.CursorPageResponse pagination = 2;
 }
 
 message DecisionSummary {
@@ -883,11 +888,12 @@ message ListJobsRequest {
   int32 limit = 5;
   int32 offset = 6;
   string tenant_id = 15;
+  common.v1.CursorPageRequest pagination = 16;
 }
 
 message ListJobsResponse {
   repeated Job jobs = 1;
-  int64 total = 2;
+  common.v1.CursorPageResponse pagination = 2;
 }
 
 message GetJobRequest {
@@ -897,6 +903,24 @@ message GetJobRequest {
 
 message GetJobResponse {
   Job job = 1;
+}
+
+message CancelJobRequest {
+  string job_id = 1;
+  string tenant_id = 15;
+}
+
+message CancelJobResponse {
+  bool success = 1;
+}
+
+message RetryJobRequest {
+  string job_id = 1;
+  string tenant_id = 15;
+}
+
+message RetryJobResponse {
+  string new_job_id = 1;
 }
 
 message GetJobEventsRequest {
@@ -949,7 +973,7 @@ message GetDatasetSummaryResponse {
 
 message ListDatasetProfilesResponse {
   repeated DatasetProfile profiles = 1;
-  int64 total = 2;
+  common.v1.CursorPageResponse pagination = 2;
 }
 
 message GetLatestDatasetProfileRequest {
@@ -1001,11 +1025,12 @@ message ListTrainingRunsRequest {
   google.protobuf.Timestamp start_date = 5;
   google.protobuf.Timestamp end_date = 6;
   string tenant_id = 15;
+  common.v1.CursorPageRequest pagination = 16;
 }
 
 message ListTrainingRunsResponse {
   repeated TrainingRun runs = 1;
-  int64 total = 2;
+  common.v1.CursorPageResponse pagination = 2;
 }
 
 message ListModelVersionsRequest {
@@ -1013,11 +1038,12 @@ message ListModelVersionsRequest {
   int32 limit = 2;
   int32 offset = 3;
   string tenant_id = 15;
+  common.v1.CursorPageRequest pagination = 16;
 }
 
 message ListModelVersionsResponse {
   repeated TrainingRun versions = 1; // lightweight summary using TrainingRun
-  int64 total = 2;
+  common.v1.CursorPageResponse pagination = 2;
 }
 
 message GetTrainingRunRequest {

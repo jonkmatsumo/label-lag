@@ -26,7 +26,7 @@ type Store interface {
 	GetAttribution(ctx context.Context, cutoff time.Time, limit int32, tenantID string) ([]*pb.DailyAttribution, error)
 
 	// Decisions (Phase 2)
-	ListDecisions(ctx context.Context, req *pb.ListDecisionsRequest) ([]*pb.DecisionSummary, int64, error)
+	ListDecisions(ctx context.Context, req *pb.ListDecisionsRequest) ([]*pb.DecisionSummary, int64, string, error)
 	GetDecision(ctx context.Context, requestID string, tenantID string) (*pb.InferenceEvent, error)
 	GetDecisionTrace(ctx context.Context, requestID string, tenantID string) ([]*pb.RuleImpact, error)
 	GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactRequest) (*pb.GetRuleImpactResponse, error)
@@ -37,22 +37,24 @@ type Store interface {
 	GetConfusionMatrix(ctx context.Context, req *pb.GetConfusionMatrixRequest) (*pb.GetConfusionMatrixResponse, error)
 
 	// Jobs (Phase A1)
-	ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb.Job, int64, error)
+	ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb.Job, int64, string, error)
 	GetJob(ctx context.Context, jobID string, tenantID string) (*pb.Job, error)
 	GetJobEvents(ctx context.Context, req *pb.GetJobEventsRequest) ([]*pb.JobEvent, error)
 	GetJobSummary(ctx context.Context, req *pb.GetJobSummaryRequest) ([]*pb.JobSummaryBucket, error)
+	CancelJob(ctx context.Context, jobID string, tenantID string) error
+	RetryJob(ctx context.Context, jobID string, tenantID string) (string, error)
 
 	// Dataset Profiles (Phase A2)
 	SaveDatasetProfile(ctx context.Context, profile *pb.DatasetProfile) error
 	GetDatasetProfileCached(ctx context.Context, profileID string, tenantID string) (*pb.DatasetProfile, error)
-	ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetProfilesRequest) ([]*pb.DatasetProfile, int64, error)
+	ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetProfilesRequest) ([]*pb.DatasetProfile, int64, string, error)
 	GetLatestDatasetProfile(ctx context.Context, tenantID string) (*pb.GetLatestDatasetProfileResponse, error)
 
 	// Training Runs (Phase B)
 	SaveTrainingRun(ctx context.Context, run *pb.TrainingRun) error
-	ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRunsRequest) ([]*pb.TrainingRun, int64, error)
+	ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRunsRequest) ([]*pb.TrainingRun, int64, string, error)
 	GetTrainingRun(ctx context.Context, runID string, tenantID string) (*pb.TrainingRun, error)
-	ListModelVersions(ctx context.Context, req *pb.ListModelVersionsRequest) ([]*pb.TrainingRun, int64, error)
+	ListModelVersions(ctx context.Context, req *pb.ListModelVersionsRequest) ([]*pb.TrainingRun, int64, string, error)
 	GetMetricSeries(ctx context.Context, req *pb.GetMetricSeriesRequest) ([]*pb.MetricPoint, error)
 
 	// Feature Hydration
@@ -118,7 +120,10 @@ func NewSQLStore(db *sql.DB) *SQLStore {
 
 func (s *SQLStore) getEstimatedCount(ctx context.Context, tableName string) (int64, error) {
 	var estimate int64
-	err := s.db.QueryRowContext(ctx, "SELECT reltuples::bigint FROM pg_class WHERE relname = $1", tableName).Scan(&estimate)
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	err := s.db.QueryRowContext(queryCtx, "SELECT reltuples::bigint FROM pg_class WHERE relname = $1", tableName).Scan(&estimate)
 	if err != nil {
 		return 0, err
 	}

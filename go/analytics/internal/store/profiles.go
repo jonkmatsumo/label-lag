@@ -78,12 +78,21 @@ func (s *SQLStore) GetDatasetProfileCached(ctx context.Context, profileID string
 		SELECT
 			profile_id, tenant_id, computed_at, record_count, feature_profiles
 		FROM dataset_profiles
-		WHERE profile_id = $1
 	`
-	args := []interface{}{profileID}
-	if tenantID != "" {
-		query += " AND tenant_id = $2"
+	args := []interface{}{}
+	if profileID == "latest" {
+		if tenantID == "" {
+			return nil, status.Error(codes.InvalidArgument, "tenant_id required for latest profile lookup")
+		}
+		query += " WHERE tenant_id = $1 ORDER BY computed_at DESC LIMIT 1"
 		args = append(args, tenantID)
+	} else {
+		query += " WHERE profile_id = $1"
+		args = append(args, profileID)
+		if tenantID != "" {
+			query += " AND tenant_id = $2"
+			args = append(args, tenantID)
+		}
 	}
 
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
@@ -117,7 +126,7 @@ func (s *SQLStore) GetDatasetProfileCached(ctx context.Context, profileID string
 	return &p, nil
 }
 
-func (s *SQLStore) ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetProfilesRequest) ([]*pb.DatasetProfile, int64, error) {
+func (s *SQLStore) ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetProfilesRequest) ([]*pb.DatasetProfile, int64, string, error) {
 	queryBuilder := db.NewQueryBuilder(`
 		SELECT
 			profile_id, tenant_id, computed_at, record_count, feature_profiles
@@ -134,30 +143,56 @@ func (s *SQLStore) ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetP
 		queryBuilder.AddCondition("tenant_id = ?", req.TenantId)
 	}
 
+	limit := int32(20)
+	if req.Limit > 0 {
+		limit = req.Limit
+	}
+	if req.Pagination != nil && req.Pagination.Limit > 0 {
+		limit = req.Pagination.Limit
+	}
+
+	// Cursor pagination
+	var cursorObj *profileCursor
+	if req.Pagination != nil && req.Pagination.Cursor != "" {
+		var err error
+		cursorObj, err = decodeProfileCursor(req.Pagination.Cursor)
+		if err != nil {
+			return nil, 0, "", status.Errorf(codes.InvalidArgument, "invalid cursor: %v", err)
+		}
+		queryBuilder.AddCondition("(computed_at, profile_id) < (?, ?)", cursorObj.ComputedAt, cursorObj.ProfileId)
+	}
+
 	// Count
-	countQuery, countArgs := queryBuilder.BuildCount()
 	var total int64
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	err := s.db.QueryRowContext(queryCtx, countQuery, countArgs...).Scan(&total)
-	if err != nil {
-		return nil, 0, db.MapDBError(err)
+	if cursorObj == nil {
+		countQuery, countArgs := queryBuilder.BuildCount()
+		err := s.db.QueryRowContext(queryCtx, countQuery, countArgs...).Scan(&total)
+		if err != nil {
+			return nil, 0, "", db.MapDBError(err)
+		}
 	}
 
 	// List
 	queryBuilder.AddOrderBy("computed_at DESC, profile_id DESC")
-	queryBuilder.SetLimit(req.Limit)
-	queryBuilder.SetOffset(req.Offset)
+	queryBuilder.SetLimit(limit)
+	if cursorObj == nil {
+		queryBuilder.SetOffset(req.Offset)
+	}
 	selectQuery, selectArgs := queryBuilder.BuildSelect()
 
 	rows, err := s.db.QueryContext(queryCtx, selectQuery, selectArgs...)
 	if err != nil {
-		return nil, 0, db.MapDBError(err)
+		return nil, 0, "", db.MapDBError(err)
 	}
 	defer rows.Close()
 
 	var profiles []*pb.DatasetProfile
+	var lastComputedAt time.Time
+	var lastProfileID string
+
 	for rows.Next() {
 		var p pb.DatasetProfile
 		var computedAt time.Time
@@ -170,19 +205,26 @@ func (s *SQLStore) ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetP
 			&p.RecordCount,
 			&profilesJSON,
 		); err != nil {
-			return nil, 0, fmt.Errorf("failed to scan profile: %v", err)
+			return nil, 0, "", fmt.Errorf("failed to scan profile: %v", err)
 		}
 
 		p.ComputedAt = timestamppb.New(computedAt)
 		if len(profilesJSON) > 0 {
 			if err := json.Unmarshal(profilesJSON, &p.FeatureProfiles); err != nil {
-				return nil, 0, status.Errorf(codes.Internal, "failed to unmarshal feature profiles: %v", err)
+				return nil, 0, "", status.Errorf(codes.Internal, "failed to unmarshal feature profiles: %v", err)
 			}
 		}
 		profiles = append(profiles, &p)
+		lastComputedAt = computedAt
+		lastProfileID = p.ProfileId
 	}
 
-	return profiles, total, nil
+	var nextCursor string
+	if int32(len(profiles)) == limit && limit > 0 {
+		nextCursor = encodeProfileCursor(lastComputedAt, lastProfileID)
+	}
+
+	return profiles, total, nextCursor, nil
 }
 
 func (s *SQLStore) GetLatestDatasetProfile(ctx context.Context, tenantID string) (*pb.GetLatestDatasetProfileResponse, error) {

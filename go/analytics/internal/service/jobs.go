@@ -4,6 +4,7 @@ import (
 	"context"
 
 	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	commonv1 "github.com/jonkmatsumo/label-lag/go/common/proto/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -24,15 +25,21 @@ func (s *Service) ListJobs(ctx context.Context, req *pb.ListJobsRequest) (*pb.Li
 		return nil, status.Error(codes.InvalidArgument, "start_date must be <= end_date")
 	}
 
-	jobs, total, err := s.store.ListJobs(ctx, req)
+	jobs, total, nextCursor, err := s.store.ListJobs(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	return &pb.ListJobsResponse{
-		Jobs:  jobs,
-		Total: total,
-	}, nil
+	resp := &pb.ListJobsResponse{
+		Jobs: jobs,
+		Pagination: &commonv1.CursorPageResponse{
+			NextCursor: nextCursor,
+		},
+	}
+	if req.Pagination == nil || req.Pagination.Cursor == "" {
+		resp.Pagination.Total = &total
+	}
+	return resp, nil
 }
 
 func (s *Service) GetJob(ctx context.Context, req *pb.GetJobRequest) (*pb.GetJobResponse, error) {
@@ -98,4 +105,25 @@ func (s *Service) GetJobSummary(ctx context.Context, req *pb.GetJobSummaryReques
 	return &pb.GetJobSummaryResponse{
 		Summaries: summaries,
 	}, nil
+}
+
+func (s *Service) CancelJob(ctx context.Context, req *pb.CancelJobRequest) (*pb.CancelJobResponse, error) {
+	if req.JobId == "" {
+		return nil, status.Error(codes.InvalidArgument, "job_id required")
+	}
+	if err := s.store.CancelJob(ctx, req.JobId, req.TenantId); err != nil {
+		return nil, err
+	}
+	return &pb.CancelJobResponse{Success: true}, nil
+}
+
+func (s *Service) RetryJob(ctx context.Context, req *pb.RetryJobRequest) (*pb.RetryJobResponse, error) {
+	if req.JobId == "" {
+		return nil, status.Error(codes.InvalidArgument, "job_id required")
+	}
+	newJobID, err := s.store.RetryJob(ctx, req.JobId, req.TenantId)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.RetryJobResponse{NewJobId: newJobID}, nil
 }

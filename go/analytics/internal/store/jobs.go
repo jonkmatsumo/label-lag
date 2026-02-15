@@ -13,7 +13,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (s *SQLStore) ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb.Job, int64, error) {
+func (s *SQLStore) ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb.Job, int64, string, error) {
 	queryBuilder := db.NewQueryBuilder(`
 		SELECT
 			job_id,
@@ -45,30 +45,57 @@ func (s *SQLStore) ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb
 		queryBuilder.AddCondition("tenant_id = ?", req.TenantId)
 	}
 
+	limit := int32(20)
+	if req.Limit > 0 {
+		limit = req.Limit
+	}
+	if req.Pagination != nil && req.Pagination.Limit > 0 {
+		limit = req.Pagination.Limit
+	}
+
+	// Cursor pagination
+	var cursorObj *jobCursor
+	if req.Pagination != nil && req.Pagination.Cursor != "" {
+		var err error
+		cursorObj, err = decodeJobCursor(req.Pagination.Cursor)
+		if err != nil {
+			return nil, 0, "", status.Errorf(codes.InvalidArgument, "invalid cursor: %v", err)
+		}
+		queryBuilder.AddCondition("(created_at, job_id) < (?, ?)", cursorObj.CreatedAt, cursorObj.JobId)
+	}
+
 	// Get total count
-	countQuery, countArgs := queryBuilder.BuildCount()
+	// Get total count
 	var total int64
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	err := s.db.QueryRowContext(queryCtx, countQuery, countArgs...).Scan(&total)
-	if err != nil {
-		return nil, 0, db.MapDBError(err)
+	if cursorObj == nil {
+		countQuery, countArgs := queryBuilder.BuildCount()
+		err := s.db.QueryRowContext(queryCtx, countQuery, countArgs...).Scan(&total)
+		if err != nil {
+			return nil, 0, "", db.MapDBError(err)
+		}
 	}
 
 	// Get results
-	queryBuilder.AddOrderBy("created_at DESC")
-	queryBuilder.SetLimit(req.Limit)
-	queryBuilder.SetOffset(req.Offset)
+	queryBuilder.AddOrderBy("created_at DESC, job_id DESC")
+	queryBuilder.SetLimit(limit)
+	if cursorObj == nil {
+		queryBuilder.SetOffset(req.Offset)
+	}
 	selectQuery, selectArgs := queryBuilder.BuildSelect()
 
 	rows, err := s.db.QueryContext(queryCtx, selectQuery, selectArgs...)
 	if err != nil {
-		return nil, 0, db.MapDBError(err)
+		return nil, 0, "", db.MapDBError(err)
 	}
 	defer rows.Close()
 
 	var jobs []*pb.Job
+	var lastCreatedAt time.Time
+	var lastJobID string
+
 	for rows.Next() {
 		var j pb.Job
 		var createdAt time.Time
@@ -88,7 +115,7 @@ func (s *SQLStore) ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb
 			&paramsJSON,
 			&metricsJSON,
 		); err != nil {
-			return nil, 0, fmt.Errorf("failed to scan job: %v", err)
+			return nil, 0, "", fmt.Errorf("failed to scan job: %v", err)
 		}
 
 		j.CreatedAt = timestamppb.New(createdAt)
@@ -112,8 +139,16 @@ func (s *SQLStore) ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb
 		}
 
 		jobs = append(jobs, &j)
+		lastCreatedAt = createdAt
+		lastJobID = j.JobId
 	}
-	return jobs, total, nil
+
+	var nextCursor string
+	if int32(len(jobs)) == limit && limit > 0 {
+		nextCursor = encodeJobCursor(lastCreatedAt, lastJobID)
+	}
+
+	return jobs, total, nextCursor, nil
 }
 
 func (s *SQLStore) GetJob(ctx context.Context, jobID string, tenantID string) (*pb.Job, error) {
@@ -307,4 +342,74 @@ func (s *SQLStore) GetJobSummary(ctx context.Context, req *pb.GetJobSummaryReque
 		summaries = append(summaries, &b)
 	}
 	return summaries, nil
+}
+func (s *SQLStore) CancelJob(ctx context.Context, jobID string, tenantID string) error {
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	// Check current status - only QUEUED or RUNNING jobs can be cancelled
+	var currentStatus string
+	err := s.db.QueryRowContext(queryCtx, "SELECT status FROM jobs WHERE job_id = $1 AND tenant_id = $2", jobID, tenantID).Scan(&currentStatus)
+	if err == sql.ErrNoRows {
+		return status.Errorf(codes.NotFound, "job not found: %s", jobID)
+	}
+	if err != nil {
+		return db.MapDBError(err)
+	}
+
+	if currentStatus != "queued" && currentStatus != "running" {
+		return status.Errorf(codes.FailedPrecondition, "cannot cancel job in state: %s", currentStatus)
+	}
+
+	_, err = s.db.ExecContext(queryCtx, `
+		UPDATE jobs
+		SET status = 'cancel_requested', cancel_requested_at = NOW()
+		WHERE job_id = $1 AND tenant_id = $2
+	`, jobID, tenantID)
+	if err != nil {
+		return db.MapDBError(err)
+	}
+
+	return s.emitJobEvent(queryCtx, jobID, "cancel_requested", `{"reason": "user_requested"}`)
+}
+
+func (s *SQLStore) RetryJob(ctx context.Context, jobID string, tenantID string) (string, error) {
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	// Get original job details
+	var jobType string
+	var paramsJSON []byte
+	err := s.db.QueryRowContext(queryCtx, "SELECT job_type, params FROM jobs WHERE job_id = $1 AND tenant_id = $2", jobID, tenantID).Scan(&jobType, &paramsJSON)
+	if err == sql.ErrNoRows {
+		return "", status.Errorf(codes.NotFound, "job not found: %s", jobID)
+	}
+	if err != nil {
+		return "", db.MapDBError(err)
+	}
+
+	newJobID := fmt.Sprintf("job-%d", time.Now().UnixNano())
+	_, err = s.db.ExecContext(queryCtx, `
+		INSERT INTO jobs (job_id, job_type, status, params, tenant_id, retry_of_job_id)
+		VALUES ($1, $2, 'queued', $3, $4, $5)
+	`, newJobID, jobType, paramsJSON, tenantID, jobID)
+	if err != nil {
+		return "", db.MapDBError(err)
+	}
+
+	// Emit event on original job
+	_ = s.emitJobEvent(queryCtx, jobID, "retried", fmt.Sprintf(`{"new_job_id": %q}`, newJobID))
+
+	return newJobID, nil
+}
+
+func (s *SQLStore) emitJobEvent(ctx context.Context, jobID string, eventType string, details string) error {
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	_, err := s.db.ExecContext(queryCtx, `
+		INSERT INTO job_events (job_id, event_type, details)
+		VALUES ($1, $2, $3)
+	`, jobID, eventType, details)
+	return err
 }

@@ -73,6 +73,8 @@ type AnalyticsClient interface {
 	GetJobSummary(ctx context.Context, req *crudv1.GetJobSummaryRequest) (*crudv1.GetJobSummaryResponse, error)
 	ListModelVersions(ctx context.Context, req *crudv1.ListModelVersionsRequest) (*crudv1.ListModelVersionsResponse, error)
 	GetLatestDatasetProfile(ctx context.Context, req *crudv1.GetLatestDatasetProfileRequest) (*crudv1.GetLatestDatasetProfileResponse, error)
+	CancelJob(ctx context.Context, req *crudv1.CancelJobRequest) (*crudv1.CancelJobResponse, error)
+	RetryJob(ctx context.Context, req *crudv1.RetryJobRequest) (*crudv1.RetryJobResponse, error)
 }
 
 type searchTransactionsRequest struct {

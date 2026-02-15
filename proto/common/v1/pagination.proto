@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package common.v1;
+
+option go_package = "github.com/jonkmatsumo/label-lag/go/common/proto/v1;commonv1";
+
+message CursorPageRequest {
+  int32 limit = 1;
+  string cursor = 2; // Opaque base64-encoded cursor
+}
+
+message CursorPageResponse {
+  string next_cursor = 1;
+  optional int64 total = 2; // Optional total count
+}

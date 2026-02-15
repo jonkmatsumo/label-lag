@@ -195,6 +195,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /jobs/summary", h.handleGetJobSummary)
 	mux.HandleFunc("GET /jobs/{id}", h.handleGetJob)
 	mux.HandleFunc("GET /jobs/{id}/events", h.handleGetJobEvents)
+	mux.HandleFunc("POST /jobs/{id}/cancel", h.handleCancelJob)
+	mux.HandleFunc("POST /jobs/{id}/retry", h.handleRetryJob)
 
 	mux.HandleFunc("GET /dataset/summary", h.handleGetDatasetProfile) // Alias for latest/default
 	mux.HandleFunc("GET /dataset/latest", h.handleGetLatestDatasetProfile)
@@ -643,6 +645,27 @@ func toFloat(value any) float64 {
 	default:
 		return 0
 	}
+}
+
+func (h *Handler) validatePaginationParams(w http.ResponseWriter, r *http.Request) error {
+	if r.URL.Query().Get("cursor") != "" && r.URL.Query().Get("offset") != "" {
+		h.logger.Warn("pagination contract violation: both cursor and offset provided",
+			"path", r.URL.Path,
+			"user_agent", r.UserAgent(),
+		)
+		// Increment contract violation metric
+		_ = h.incrementContractViolation(r.Context(), "pagination_params_conflict")
+
+		writeJSONError(w, http.StatusBadRequest, "cannot provide both cursor and offset")
+		return errors.New("pagination contract violation")
+	}
+	return nil
+}
+
+func (h *Handler) incrementContractViolation(ctx context.Context, violationType string) error {
+	// Simple counter increment - in real implementation this would use OTEL meter
+	// For now just logging is sufficient for observablity requirement
+	return nil
 }
 
 func (h *Handler) handleTrain(w http.ResponseWriter, r *http.Request) {

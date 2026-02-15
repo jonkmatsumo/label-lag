@@ -474,6 +474,9 @@ const (
 )
 
 func (s *SQLStore) GetDatasetProfile(ctx context.Context, datasetID string, limitFeatures, numBuckets int32, tenantID string) (*pb.GetDatasetProfileResponse, error) {
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
 	// 1. Get total records
 	var totalRecords int64
 	query := "SELECT COUNT(*) FROM generated_records gr"
@@ -482,7 +485,7 @@ func (s *SQLStore) GetDatasetProfile(ctx context.Context, datasetID string, limi
 		query += " INNER JOIN inference_events ie ON gr.record_id = ie.request_id WHERE ie.tenant_id = $1"
 		args = append(args, tenantID)
 	}
-	err := s.db.QueryRowContext(ctx, query, args...).Scan(&totalRecords)
+	err := s.db.QueryRowContext(queryCtx, query, args...).Scan(&totalRecords)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -512,7 +515,7 @@ func (s *SQLStore) GetDatasetProfile(ctx context.Context, datasetID string, limi
 			resp.TruncatedKeys++
 			continue
 		}
-		profile, err := s.profileNumericFeature(ctx, "generated_records", feat, totalRecords, numBuckets)
+		profile, err := s.profileNumericFeature(ctx, "generated_records", feat, totalRecords, numBuckets, tenantID)
 		if err != nil {
 			continue
 		}
@@ -520,7 +523,7 @@ func (s *SQLStore) GetDatasetProfile(ctx context.Context, datasetID string, limi
 	}
 
 	// 3. Profile dynamic numeric features
-	dynamicNumericKeys, err := s.discoverJSONBKeys(ctx, "generated_records", "numerical_features", MaxNumericKeysProfiled)
+	dynamicNumericKeys, err := s.discoverJSONBKeys(ctx, "generated_records", "numerical_features", MaxNumericKeysProfiled, tenantID)
 	if err == nil {
 		for _, key := range dynamicNumericKeys {
 			if int32(len(resp.FeatureProfiles)) >= limitFeatures {
@@ -528,7 +531,7 @@ func (s *SQLStore) GetDatasetProfile(ctx context.Context, datasetID string, limi
 				resp.TruncatedKeys++
 				continue
 			}
-			profile, err := s.profileNumericJSONBKey(ctx, "generated_records", "numerical_features", key, totalRecords, numBuckets)
+			profile, err := s.profileNumericJSONBKey(ctx, "generated_records", "numerical_features", key, totalRecords, numBuckets, tenantID)
 			if err != nil {
 				continue
 			}
@@ -537,7 +540,7 @@ func (s *SQLStore) GetDatasetProfile(ctx context.Context, datasetID string, limi
 	}
 
 	// 4. Profile dynamic categorical features
-	dynamicCategoricalKeys, err := s.discoverJSONBKeys(ctx, "generated_records", "categorical_features", MaxCategoricalKeysProfiled)
+	dynamicCategoricalKeys, err := s.discoverJSONBKeys(ctx, "generated_records", "categorical_features", MaxCategoricalKeysProfiled, tenantID)
 	if err == nil {
 		for _, key := range dynamicCategoricalKeys {
 			if int32(len(resp.FeatureProfiles)) >= limitFeatures {
@@ -545,7 +548,7 @@ func (s *SQLStore) GetDatasetProfile(ctx context.Context, datasetID string, limi
 				resp.TruncatedKeys++
 				continue
 			}
-			profile, err := s.profileCategoricalJSONBKey(ctx, "generated_records", "categorical_features", key, totalRecords, DefaultTopK)
+			profile, err := s.profileCategoricalJSONBKey(ctx, "generated_records", "categorical_features", key, totalRecords, DefaultTopK, tenantID)
 			if err != nil {
 				continue
 			}
@@ -556,18 +559,29 @@ func (s *SQLStore) GetDatasetProfile(ctx context.Context, datasetID string, limi
 	return resp, nil
 }
 
-func (s *SQLStore) discoverJSONBKeys(ctx context.Context, table, column string, limit int) ([]string, error) {
-	// Use a subquery to avoid full table expansion before distinct/limit
+func (s *SQLStore) discoverJSONBKeys(ctx context.Context, table, column string, limit int, tenantID string) ([]string, error) {
+	from := table
+	where := fmt.Sprintf("%s IS NOT NULL AND %s != '{}'::jsonb", column, column)
+	args := []interface{}{}
+	if tenantID != "" {
+		from = fmt.Sprintf("%s gr INNER JOIN inference_events ie ON gr.record_id = ie.request_id", table)
+		where += " AND ie.tenant_id = $1"
+		args = append(args, tenantID)
+	}
+
 	query := fmt.Sprintf(`
 		SELECT DISTINCT key
 		FROM (
 			SELECT jsonb_object_keys(%[2]s) as key
-			FROM (SELECT %[2]s FROM %[1]s WHERE %[2]s IS NOT NULL AND %[2]s != '{}'::jsonb LIMIT 1000) as sub
+			FROM (SELECT %[2]s FROM %[1]s WHERE %[3]s LIMIT 1000) as sub
 		) as keys
-		LIMIT %[3]d
-	`, table, column, limit)
+		LIMIT %[4]d
+	`, from, column, where, limit)
 
-	rows, err := s.db.QueryContext(ctx, query)
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(queryCtx, query, args...)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -584,16 +598,25 @@ func (s *SQLStore) discoverJSONBKeys(ctx context.Context, table, column string, 
 	return keys, nil
 }
 
-func (s *SQLStore) profileNumericJSONBKey(ctx context.Context, table, column, key string, totalRecords int64, numBuckets int32) (*pb.FeatureProfile, error) {
+func (s *SQLStore) profileNumericJSONBKey(ctx context.Context, table, column, key string, totalRecords int64, numBuckets int32, tenantID string) (*pb.FeatureProfile, error) {
 	columnExpr := fmt.Sprintf("(%s->>'%s')::numeric", column, key)
-	return s.profileNumericFeatureExpr(ctx, table, columnExpr, key, totalRecords, numBuckets)
+	return s.profileNumericFeatureExpr(ctx, table, columnExpr, key, totalRecords, numBuckets, tenantID)
 }
 
-func (s *SQLStore) profileNumericFeature(ctx context.Context, table, column string, totalRecords int64, numBuckets int32) (*pb.FeatureProfile, error) {
-	return s.profileNumericFeatureExpr(ctx, table, column, column, totalRecords, numBuckets)
+func (s *SQLStore) profileNumericFeature(ctx context.Context, table, column string, totalRecords int64, numBuckets int32, tenantID string) (*pb.FeatureProfile, error) {
+	return s.profileNumericFeatureExpr(ctx, table, column, column, totalRecords, numBuckets, tenantID)
 }
 
-func (s *SQLStore) profileNumericFeatureExpr(ctx context.Context, table, expr, name string, totalRecords int64, numBuckets int32) (*pb.FeatureProfile, error) {
+func (s *SQLStore) profileNumericFeatureExpr(ctx context.Context, table, expr, name string, totalRecords int64, numBuckets int32, tenantID string) (*pb.FeatureProfile, error) {
+	from := table
+	where := fmt.Sprintf("%s IS NOT NULL", expr)
+	args := []interface{}{}
+	if tenantID != "" {
+		from = fmt.Sprintf("%s gr INNER JOIN inference_events ie ON gr.record_id = ie.request_id", table)
+		where += " AND ie.tenant_id = $1"
+		args = append(args, tenantID)
+	}
+
 	query := fmt.Sprintf(`
 		SELECT
 			AVG(%[1]s) as mean,
@@ -602,11 +625,15 @@ func (s *SQLStore) profileNumericFeatureExpr(ctx context.Context, table, expr, n
 			MIN(%[1]s) as min_val,
 			MAX(%[1]s) as max_val
 		FROM %[2]s
-	`, expr, table)
+		WHERE %[3]s
+	`, expr, from, where)
+
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
 
 	var mean, stddev, minVal, maxVal sql.NullFloat64
 	var nullCount int64
-	err := s.db.QueryRowContext(ctx, query).Scan(&mean, &stddev, &nullCount, &minVal, &maxVal)
+	err := s.db.QueryRowContext(queryCtx, query, args...).Scan(&mean, &stddev, &nullCount, &minVal, &maxVal)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -637,11 +664,17 @@ func (s *SQLStore) profileNumericFeatureExpr(ctx context.Context, table, expr, n
 				COUNT(*) as count
 			FROM %[5]s
 			WHERE %[1]s IS NOT NULL
-			GROUP BY bucket
-			ORDER BY bucket
-		`, expr, minVal.Float64, upperBound, numBuckets, table)
+		`, expr, minVal.Float64, upperBound, numBuckets, from)
 
-		rows, err := s.db.QueryContext(ctx, histQuery)
+		if tenantID != "" {
+			histQuery += " AND ie.tenant_id = $1"
+		}
+		histQuery += " GROUP BY bucket ORDER BY bucket"
+
+		histQueryCtx, histCancel := context.WithTimeout(ctx, defaultQueryTimeout)
+		defer histCancel()
+
+		rows, err := s.db.QueryContext(histQueryCtx, histQuery, args...)
 		if err == nil {
 			defer rows.Close()
 			buckets := make(map[int]int64)
@@ -668,13 +701,25 @@ func (s *SQLStore) profileNumericFeatureExpr(ctx context.Context, table, expr, n
 	return profile, nil
 }
 
-func (s *SQLStore) profileCategoricalJSONBKey(ctx context.Context, table, column, key string, totalRecords int64, topK int) (*pb.FeatureProfile, error) {
+func (s *SQLStore) profileCategoricalJSONBKey(ctx context.Context, table, column, key string, totalRecords int64, topK int, tenantID string) (*pb.FeatureProfile, error) {
 	expr := fmt.Sprintf("%s->>'%s'", column, key)
+
+	from := table
+	args := []interface{}{}
+	if tenantID != "" {
+		from = fmt.Sprintf("%s gr INNER JOIN inference_events ie ON gr.record_id = ie.request_id", table)
+		args = append(args, tenantID)
+	}
 
 	// Get null rate
 	var nullCount int64
-	nullQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s IS NULL", table, expr)
-	err := s.db.QueryRowContext(ctx, nullQuery).Scan(&nullCount)
+	nullQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s IS NULL", from, expr)
+	if tenantID != "" {
+		nullQuery += " AND ie.tenant_id = $1"
+	}
+	nullQueryCtx, nullCancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer nullCancel()
+	err := s.db.QueryRowContext(nullQueryCtx, nullQuery, args...).Scan(&nullCount)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -690,12 +735,16 @@ func (s *SQLStore) profileCategoricalJSONBKey(ctx context.Context, table, column
 		SELECT %[1]s as value, COUNT(*) as count
 		FROM %[2]s
 		WHERE %[1]s IS NOT NULL
-		GROUP BY value
-		ORDER BY count DESC, value
-		LIMIT %[3]d
-	`, expr, table, topK)
+	`, expr, from)
 
-	rows, err := s.db.QueryContext(ctx, topQuery)
+	if tenantID != "" {
+		topQuery += " AND ie.tenant_id = $1"
+	}
+	topQuery += fmt.Sprintf(" GROUP BY value ORDER BY count DESC, value LIMIT %d", topK)
+
+	topQueryCtx, topCancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer topCancel()
+	rows, err := s.db.QueryContext(topQueryCtx, topQuery, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -959,7 +1008,7 @@ func (s *SQLStore) BatchGetLatestUserFeatures(ctx context.Context, userIDs []str
 	return results, nil
 }
 
-func (s *SQLStore) ListDecisions(ctx context.Context, req *pb.ListDecisionsRequest) ([]*pb.DecisionSummary, int64, error) {
+func (s *SQLStore) ListDecisions(ctx context.Context, req *pb.ListDecisionsRequest) ([]*pb.DecisionSummary, int64, string, error) {
 	whereClauses := []string{"1=1"}
 	args := []interface{}{}
 
@@ -992,39 +1041,80 @@ func (s *SQLStore) ListDecisions(ctx context.Context, req *pb.ListDecisionsReque
 		whereClauses = append(whereClauses, fmt.Sprintf("tenant_id = $%d", len(args)))
 	}
 
-	whereStmt := strings.Join(whereClauses, " AND ")
-
-	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM inference_events WHERE %s", whereStmt)
-	var total int64
-	err := s.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
-	if err != nil {
-		return nil, 0, db.MapDBError(err)
+	// Cursor pagination
+	var cursorObj *decisionCursor
+	if req.Pagination != nil && req.Pagination.Cursor != "" {
+		var err error
+		cursorObj, err = decodeDecisionCursor(req.Pagination.Cursor)
+		if err != nil {
+			return nil, 0, "", status.Errorf(codes.InvalidArgument, "invalid cursor: %v", err)
+		}
+		args = append(args, cursorObj.CreatedAt, cursorObj.RequestId)
+		whereClauses = append(whereClauses, fmt.Sprintf("(ts, request_id) < ($%d, $%d)", len(args)-1, len(args)))
 	}
 
-	query := fmt.Sprintf("SELECT request_id, user_id, ts, final_score, decision, rule_impacts FROM inference_events WHERE %s ORDER BY ts DESC, request_id DESC LIMIT $%d OFFSET $%d",
-		whereStmt, len(args)+1, len(args)+2)
+	whereStmt := strings.Join(whereClauses, " AND ")
 
-	args = append(args, req.Limit, req.Offset)
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
 
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	var total int64
+	if cursorObj == nil {
+		countQuery := fmt.Sprintf("SELECT COUNT(*) FROM inference_events WHERE %s", whereStmt)
+		err := s.db.QueryRowContext(queryCtx, countQuery, args...).Scan(&total)
+		if err != nil {
+			return nil, 0, "", db.MapDBError(err)
+		}
+	}
+
+	limit := req.Limit
+	if req.Pagination != nil && req.Pagination.Limit > 0 {
+		limit = req.Pagination.Limit
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+
+	query := fmt.Sprintf("SELECT request_id, user_id, ts, final_score, decision, rule_impacts FROM inference_events WHERE %s ORDER BY ts DESC, request_id DESC LIMIT $%d",
+		whereStmt, len(args)+1)
+	args = append(args, limit)
+
+	// Add offset only if cursor is NOT provided (backward compatibility)
+	if cursorObj == nil && req.Offset > 0 {
+		query += fmt.Sprintf(" OFFSET $%d", len(args)+1)
+		args = append(args, req.Offset)
+	}
+
+	rows, err := s.db.QueryContext(queryCtx, query, args...)
 	if err != nil {
-		return nil, 0, db.MapDBError(err)
+		return nil, 0, "", db.MapDBError(err)
 	}
 	defer rows.Close()
 
 	var decisions []*pb.DecisionSummary
+	var lastCreatedAt time.Time
+	var lastRequestID string
+
 	for rows.Next() {
 		var d pb.DecisionSummary
 		var ts time.Time
 		var ruleImpactsJSON []byte
 		if err := rows.Scan(&d.RequestId, &d.UserId, &ts, &d.FinalScore, &d.Decision, &ruleImpactsJSON); err != nil {
-			return nil, 0, fmt.Errorf("failed to scan decision summary: %v", err)
+			return nil, 0, "", fmt.Errorf("failed to scan decision summary: %v", err)
 		}
 		d.CreatedAt = timestamppb.New(ts)
 		d.DecisionReason, d.Thresholds = populateExplainability(d.Decision, d.FinalScore, ruleImpactsJSON)
 		decisions = append(decisions, &d)
+		lastCreatedAt = ts
+		lastRequestID = d.RequestId
 	}
-	return decisions, total, nil
+
+	var nextCursor string
+	if len(decisions) > 0 && int32(len(decisions)) == limit {
+		nextCursor = encodeDecisionCursor(lastCreatedAt, lastRequestID)
+	}
+
+	return decisions, total, nextCursor, nil
 }
 
 func (s *SQLStore) GetDecision(ctx context.Context, requestID string, tenantID string) (*pb.InferenceEvent, error) {
@@ -1035,10 +1125,13 @@ func (s *SQLStore) GetDecision(ctx context.Context, requestID string, tenantID s
 		args = append(args, tenantID)
 	}
 
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
 	var ie pb.InferenceEvent
 	var ts time.Time
 	var ruleImpactsJSON []byte
-	err := s.db.QueryRowContext(ctx, query, args...).Scan(
+	err := s.db.QueryRowContext(queryCtx, query, args...).Scan(
 		&ie.RequestId, &ts, &ie.ModelVersion, &ie.RulesVersion,
 		&ie.ModelScore, &ie.FinalScore, &ruleImpactsJSON,
 		&ie.UserId, &ie.Decision,
@@ -1067,8 +1160,11 @@ func (s *SQLStore) GetDecisionTrace(ctx context.Context, requestID string, tenan
 	}
 	existsQuery += ")"
 
+	queryCtxExists, cancelExists := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancelExists()
+
 	var exists bool
-	err := s.db.QueryRowContext(ctx, existsQuery, args...).Scan(&exists)
+	err := s.db.QueryRowContext(queryCtxExists, existsQuery, args...).Scan(&exists)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -1081,7 +1177,10 @@ func (s *SQLStore) GetDecisionTrace(ctx context.Context, requestID string, tenan
 		query += " AND ie.tenant_id = $2"
 	}
 	query += " ORDER BY score_delta DESC, rule_id ASC"
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	queryCtxResults, cancelResults := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancelResults()
+
+	rows, err := s.db.QueryContext(queryCtxResults, query, args...)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -1099,9 +1198,11 @@ func (s *SQLStore) GetDecisionTrace(ctx context.Context, requestID string, tenan
 }
 
 func (s *SQLStore) GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactRequest) (*pb.GetRuleImpactResponse, error) {
-	// Check if rule exists
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
 	var exists bool
-	err := s.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM rules WHERE rule_id = $1)", req.RuleId).Scan(&exists)
+	err := s.db.QueryRowContext(queryCtx, "SELECT EXISTS(SELECT 1 FROM rules WHERE rule_id = $1)", req.RuleId).Scan(&exists)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -1137,7 +1238,7 @@ func (s *SQLStore) GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactReque
 		%s
 	`, baseWhere)
 
-	err = s.db.QueryRowContext(ctx, summaryQuery, args...).Scan(&resp.TotalTriggers, &resp.AvgScoreDelta)
+	err = s.db.QueryRowContext(queryCtx, summaryQuery, args...).Scan(&resp.TotalTriggers, &resp.AvgScoreDelta)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, db.MapDBError(err)
 	}
@@ -1155,7 +1256,7 @@ func (s *SQLStore) GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactReque
 		ORDER BY date DESC
 	`, baseWhere)
 
-	rows, err := s.db.QueryContext(ctx, bucketsQuery, args...)
+	rows, err := s.db.QueryContext(queryCtx, bucketsQuery, args...)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}

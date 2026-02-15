@@ -5,6 +5,7 @@ import (
 	"time"
 
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	commonv1 "github.com/jonkmatsumo/label-lag/go/common/proto/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -26,12 +27,24 @@ func (h *Handler) handleListTrainingRuns(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	if err := h.validatePaginationParams(w, r); err != nil {
+		return
+	}
+	cursor := r.URL.Query().Get("cursor")
+
 	req := &crudv1.ListTrainingRunsRequest{
 		ModelName: r.URL.Query().Get("model_name"),
 		Status:    r.URL.Query().Get("status"),
 		Limit:     limit,
 		Offset:    offset,
 		TenantId:  tenantID,
+	}
+
+	if cursor != "" {
+		req.Pagination = &commonv1.CursorPageRequest{
+			Cursor: cursor,
+			Limit:  limit,
+		}
 	}
 
 	if startStr := r.URL.Query().Get("start_date"); startStr != "" {
@@ -84,12 +97,26 @@ func (h *Handler) handleListModelVersions(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	resp, err := h.analyticsClient.ListModelVersions(r.Context(), &crudv1.ListModelVersionsRequest{
+	if err := h.validatePaginationParams(w, r); err != nil {
+		return
+	}
+	cursor := r.URL.Query().Get("cursor")
+
+	req := &crudv1.ListModelVersionsRequest{
 		ModelName: modelName,
 		Limit:     limit,
 		Offset:    offset,
 		TenantId:  tenantID,
-	})
+	}
+
+	if cursor != "" {
+		req.Pagination = &commonv1.CursorPageRequest{
+			Cursor: cursor,
+			Limit:  limit,
+		}
+	}
+
+	resp, err := h.analyticsClient.ListModelVersions(r.Context(), req)
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
 		return

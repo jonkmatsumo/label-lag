@@ -277,12 +277,12 @@ func (m *MockStore) BatchGetLatestUserFeatures(ctx context.Context, userIDs []st
 	return args.Get(0).(map[string]*pb.UserFeatures), args.Error(1)
 }
 
-func (m *MockStore) ListDecisions(ctx context.Context, req *pb.ListDecisionsRequest) ([]*pb.DecisionSummary, int64, error) {
+func (m *MockStore) ListDecisions(ctx context.Context, req *pb.ListDecisionsRequest) ([]*pb.DecisionSummary, int64, string, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
-		return nil, 0, args.Error(2)
+		return nil, 0, "", args.Error(2)
 	}
-	return args.Get(0).([]*pb.DecisionSummary), args.Get(1).(int64), args.Error(2)
+	return args.Get(0).([]*pb.DecisionSummary), args.Get(1).(int64), args.String(2), args.Error(3)
 }
 
 func (m *MockStore) GetDecision(ctx context.Context, requestID string, tenantID string) (*pb.InferenceEvent, error) {
@@ -333,12 +333,22 @@ func (m *MockStore) GetConfusionMatrix(ctx context.Context, req *pb.GetConfusion
 	return args.Get(0).(*pb.GetConfusionMatrixResponse), args.Error(1)
 }
 
-func (m *MockStore) ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb.Job, int64, error) {
+func (m *MockStore) ListJobs(ctx context.Context, req *pb.ListJobsRequest) ([]*pb.Job, int64, string, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
-		return nil, 0, args.Error(2)
+		return nil, 0, "", args.Error(3)
 	}
-	return args.Get(0).([]*pb.Job), args.Get(1).(int64), args.Error(2)
+	return args.Get(0).([]*pb.Job), args.Get(1).(int64), args.String(2), args.Error(3)
+}
+
+func (m *MockStore) CancelJob(ctx context.Context, jobID string, tenantID string) error {
+	args := m.Called(ctx, jobID, tenantID)
+	return args.Error(0)
+}
+
+func (m *MockStore) RetryJob(ctx context.Context, jobID string, tenantID string) (string, error) {
+	args := m.Called(ctx, jobID, tenantID)
+	return args.String(0), args.Error(1)
 }
 
 func (m *MockStore) GetJob(ctx context.Context, jobID string, tenantID string) (*pb.Job, error) {
@@ -370,12 +380,12 @@ func (m *MockStore) GetDatasetProfileCached(ctx context.Context, profileID strin
 	return args.Get(0).(*pb.DatasetProfile), args.Error(1)
 }
 
-func (m *MockStore) ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetProfilesRequest) ([]*pb.DatasetProfile, int64, error) {
+func (m *MockStore) ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetProfilesRequest) ([]*pb.DatasetProfile, int64, string, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
-		return nil, 0, args.Error(2)
+		return nil, 0, "", args.Error(2)
 	}
-	return args.Get(0).([]*pb.DatasetProfile), args.Get(1).(int64), args.Error(2)
+	return args.Get(0).([]*pb.DatasetProfile), args.Get(1).(int64), args.String(2), args.Error(3)
 }
 
 func (m *MockStore) GetLatestDatasetProfile(ctx context.Context, tenantID string) (*pb.GetLatestDatasetProfileResponse, error) {
@@ -399,20 +409,20 @@ func (m *MockStore) SaveTrainingRun(ctx context.Context, run *pb.TrainingRun) er
 	return args.Error(0)
 }
 
-func (m *MockStore) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRunsRequest) ([]*pb.TrainingRun, int64, error) {
+func (m *MockStore) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRunsRequest) ([]*pb.TrainingRun, int64, string, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
-		return nil, 0, args.Error(2)
+		return nil, 0, "", args.Error(3)
 	}
-	return args.Get(0).([]*pb.TrainingRun), args.Get(1).(int64), args.Error(2)
+	return args.Get(0).([]*pb.TrainingRun), args.Get(1).(int64), args.String(2), args.Error(3)
 }
 
-func (m *MockStore) ListModelVersions(ctx context.Context, req *pb.ListModelVersionsRequest) ([]*pb.TrainingRun, int64, error) {
+func (m *MockStore) ListModelVersions(ctx context.Context, req *pb.ListModelVersionsRequest) ([]*pb.TrainingRun, int64, string, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
-		return nil, 0, args.Error(2)
+		return nil, 0, "", args.Error(3)
 	}
-	return args.Get(0).([]*pb.TrainingRun), args.Get(1).(int64), args.Error(2)
+	return args.Get(0).([]*pb.TrainingRun), args.Get(1).(int64), args.String(2), args.Error(3)
 }
 
 func (m *MockStore) GetTrainingRun(ctx context.Context, runID string, tenantID string) (*pb.TrainingRun, error) {

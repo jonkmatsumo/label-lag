@@ -8,12 +8,14 @@ RUN apk add --no-cache build-base
 COPY go/analytics/go.mod go/analytics/
 COPY go/forecast/go.mod go/forecast/
 COPY go/training/go.mod go/training/
+COPY go/common/go.mod go/common/go.sum ./go/common/
 COPY go/orchestrator/go.mod go/orchestrator/go.sum ./go/orchestrator/
 
 WORKDIR /app/go/orchestrator
 RUN go mod download
 
 # Copy source code for all services
+COPY go/common /app/go/common
 COPY go/analytics /app/go/analytics
 COPY go/forecast /app/go/forecast
 COPY go/training /app/go/training

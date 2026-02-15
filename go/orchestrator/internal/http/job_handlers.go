@@ -6,6 +6,7 @@ import (
 	"time"
 
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	commonv1 "github.com/jonkmatsumo/label-lag/go/common/proto/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -29,12 +30,24 @@ func (h *Handler) handleListJobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := h.validatePaginationParams(w, r); err != nil {
+		return
+	}
+	cursor := r.URL.Query().Get("cursor")
+
 	req := &crudv1.ListJobsRequest{
 		Limit:    limit,
 		Offset:   offset,
 		JobType:  r.URL.Query().Get("job_type"),
 		Status:   r.URL.Query().Get("status"),
 		TenantId: tenantID,
+	}
+
+	if cursor != "" {
+		req.Pagination = &commonv1.CursorPageRequest{
+			Cursor: cursor,
+			Limit:  limit,
+		}
 	}
 
 	if startStr := r.URL.Query().Get("start_date"); startStr != "" {
@@ -117,6 +130,11 @@ func (h *Handler) handleGetJobEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if (r.URL.Query().Get("before_ts") != "" || r.URL.Query().Get("before_id") != "") && r.URL.Query().Get("offset") != "" {
+		writeJSONError(w, http.StatusBadRequest, "cannot provide both manual cursor (before_ts/id) and offset")
+		return
+	}
+
 	req := &crudv1.GetJobEventsRequest{
 		JobId:    jobID,
 		Limit:    limit,
@@ -178,6 +196,56 @@ func (h *Handler) handleGetJobSummary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp, err := h.analyticsClient.GetJobSummary(r.Context(), req)
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	writeAnalyticsJSON(w, resp)
+}
+
+func (h *Handler) handleCancelJob(w http.ResponseWriter, r *http.Request) {
+	jobID := r.PathValue("id")
+	if jobID == "" {
+		writeJSONError(w, http.StatusBadRequest, "job_id required")
+		return
+	}
+
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
+	resp, err := h.analyticsClient.CancelJob(r.Context(), &crudv1.CancelJobRequest{
+		JobId:    jobID,
+		TenantId: tenantID,
+	})
+	if err != nil {
+		writeAnalyticsRPCError(w, err)
+		return
+	}
+
+	writeAnalyticsJSON(w, resp)
+}
+
+func (h *Handler) handleRetryJob(w http.ResponseWriter, r *http.Request) {
+	jobID := r.PathValue("id")
+	if jobID == "" {
+		writeJSONError(w, http.StatusBadRequest, "job_id required")
+		return
+	}
+
+	tenantID, err := mustTenantID(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		return
+	}
+
+	resp, err := h.analyticsClient.RetryJob(r.Context(), &crudv1.RetryJobRequest{
+		JobId:    jobID,
+		TenantId: tenantID,
+	})
 	if err != nil {
 		writeAnalyticsRPCError(w, err)
 		return

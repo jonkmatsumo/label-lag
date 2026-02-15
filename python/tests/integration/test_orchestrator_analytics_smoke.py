@@ -42,6 +42,15 @@ def _get_without_tenant(
     )
 
 
+def _post(path: str, data: dict | None = None) -> requests.Response:
+    return requests.post(
+        f"{ORCHESTRATOR_BASE_URL}{path}",
+        json=data or {},
+        headers=_headers(),
+        timeout=TIMEOUT,
+    )
+
+
 def _as_object(resp: requests.Response) -> dict:
     payload = resp.json()
     assert isinstance(payload, dict), f"expected JSON object, got {type(payload)}"
@@ -109,12 +118,50 @@ def orchestrator_ready() -> str:
     return ORCHESTRATOR_BASE_URL
 
 
-def test_jobs_tenant_header_required(orchestrator_ready: str) -> None:
-    resp = _get_without_tenant("/jobs", {"limit": 1, "offset": 0})
-    assert resp.status_code == 400, resp.text
-    payload = _as_object(resp)
-    detail = payload.get("detail")
-    assert isinstance(detail, str) and detail.strip()
+def test_all_endpoints_require_tenant(orchestrator_ready: str) -> None:
+    endpoints = [
+        ("/jobs", "GET"),
+        ("/training-runs", "GET"),
+        ("/dataset/profiles", "GET"),
+        ("/decisions", "GET"),
+        ("/analytics/transactions", "GET"),
+        ("/analytics/recent-alerts", "GET"),
+        ("/metrics/series", "GET"),
+        ("/models/versions", "GET"),
+        ("/dataset/summary", "GET"),
+        ("/jobs/dummy-id/events", "GET"),
+    ]
+    for path, method in endpoints:
+        if method == "GET":
+            resp = _get_without_tenant(path)
+        else:
+            resp = requests.request(method, f"{ORCHESTRATOR_BASE_URL}{path}")
+
+        assert resp.status_code == 400, (
+            f"{path} did not reject missing tenant header: {resp.text}"
+        )
+        payload = _as_object(resp)
+        assert "tenant" in payload.get("detail", "").lower()
+
+
+def test_pagination_mutual_exclusivity_smoke(orchestrator_ready: str) -> None:
+    # Test that providing both cursor and offset returns 400
+    endpoints = [
+        "/decisions",
+        "/jobs",
+        "/dataset/profiles",
+        "/training-runs",
+        "/models/versions",
+    ]
+    for ep in endpoints:
+        params: dict = {"cursor": "any-cursor", "offset": 10}
+        if ep == "/models/versions":
+            params["model_name"] = "test-model"
+        resp = _get(ep, params)
+        assert resp.status_code == 400, f"{ep} allowed both cursor and offset"
+        payload = _as_object(resp)
+        msg = "cannot provide both cursor and offset"
+        assert msg in payload.get("detail", "").lower()
 
 
 def test_job_events_cursor_pagination_smoke(orchestrator_ready: str) -> None:
@@ -274,3 +321,72 @@ def test_profiles_endpoints_smoke(orchestrator_ready: str) -> None:
 
     summary = _get("/dataset/summary", {"profile_id": profile_id})
     assert summary.status_code in (200, 400, 404), summary.text
+
+
+def test_decisions_endpoints_smoke(orchestrator_ready: str) -> None:
+    resp = _get("/decisions", {"limit": 5})
+    assert resp.status_code == 200, resp.text
+    payload = _as_object(resp)
+    decisions = payload.get("decisions") or payload.get("items") or []
+    assert isinstance(decisions, list)
+
+    if len(decisions) >= 2:
+        cursor = payload.get("next_cursor") or payload.get("cursor")
+        if cursor:
+            # Test cursor page 2
+            resp2 = _get("/decisions", {"limit": 1, "cursor": cursor})
+            assert resp2.status_code == 200, resp2.text
+            payload2 = _as_object(resp2)
+            items2 = payload2.get("decisions") or payload2.get("items") or []
+            if items2:
+                # Page 2 should have data
+                pass
+
+
+def test_cursor_pagination_loops(orchestrator_ready: str) -> None:
+    """Generic check for cursor presence and basic usability on list endpoints."""
+    endpoints = ["/decisions", "/jobs", "/dataset/profiles", "/training-runs"]
+    for ep in endpoints:
+        resp = _get(ep, {"limit": 2})
+        assert resp.status_code == 200, f"{ep} failed: {resp.text}"
+        payload = _as_object(resp)
+        items = (
+            payload.get("items")
+            or payload.get("decisions")
+            or payload.get("jobs")
+            or payload.get("profiles")
+            or payload.get("runs")
+            or []
+        )
+        if len(items) >= 2:
+            cursor = (
+                payload.get("next_cursor")
+                or payload.get("cursor")
+                or payload.get("pagination", {}).get("next_cursor")
+            )
+            if cursor:
+                resp2 = _get(ep, {"limit": 1, "cursor": cursor})
+                assert resp2.status_code == 200, (
+                    f"{ep} cursor follow failed: {resp2.text}"
+                )
+
+
+def test_job_controls_smoke(orchestrator_ready: str) -> None:
+    resp = _get("/jobs", {"limit": 5})
+    payload = _as_object(resp)
+    jobs = payload.get("jobs") or payload.get("items") or []
+    if not jobs:
+        pytest.skip("No jobs available to test cancel/retry")
+
+    job_id = _first_id(jobs, "job_id", "id")
+
+    # Test Cancel (accept 200 or 409)
+    cancel_resp = _post(f"/jobs/{job_id}/cancel")
+    assert cancel_resp.status_code in (200, 409), cancel_resp.text
+
+    # Test Retry (accept 200 or 409)
+    retry_resp = _post(f"/jobs/{job_id}/retry")
+    assert retry_resp.status_code in (200, 409), retry_resp.text
+    if retry_resp.status_code == 200:
+        new_job = _as_object(retry_resp)
+        assert _first_id([new_job], "job_id", "id"), "Retry did not return new job id"

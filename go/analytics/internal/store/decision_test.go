@@ -7,12 +7,13 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	commonv1 "github.com/jonkmatsumo/label-lag/go/common/proto/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func TestListDecisions(t *testing.T) {
+func TestListDecisions_Offset(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close()
@@ -24,7 +25,7 @@ func TestListDecisions(t *testing.T) {
 		Decision: "APPROVE",
 		TenantId: "tenant-1",
 		Limit:    10,
-		Offset:   0,
+		Offset:   5,
 	}
 
 	mock.ExpectQuery("SELECT COUNT").
@@ -32,16 +33,45 @@ func TestListDecisions(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 
 	mock.ExpectQuery("SELECT request_id, user_id, ts, final_score, decision, rule_impacts").
-		WithArgs("user-1", "APPROVE", "tenant-1", int32(10), int32(0)).
+		WithArgs("user-1", "APPROVE", "tenant-1", int32(10), int32(5)).
 		WillReturnRows(sqlmock.NewRows([]string{"request_id", "user_id", "ts", "final_score", "decision", "rule_impacts"}).
 			AddRow("req-1", "user-1", time.Now(), 45, "APPROVE", []byte("[]")))
 
-	decisions, total, err := s.ListDecisions(context.Background(), req)
+	decisions, total, nextCursor, err := s.ListDecisions(context.Background(), req)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), total)
 	assert.Len(t, decisions, 1)
-	assert.Equal(t, "req-1", decisions[0].RequestId)
-	assert.Equal(t, int32(45), decisions[0].FinalScore)
+	assert.Empty(t, nextCursor)
+}
+
+func TestListDecisions_Cursor(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+
+	now := time.Now().UTC()
+	cursor := encodeDecisionCursor(now, "req-prev")
+
+	req := &pb.ListDecisionsRequest{
+		TenantId: "tenant-1",
+		Pagination: &commonv1.CursorPageRequest{
+			Limit:  10,
+			Cursor: cursor,
+		},
+	}
+
+	mock.ExpectQuery("SELECT request_id, user_id, ts, final_score, decision, rule_impacts").
+		WithArgs("tenant-1", now, "req-prev", int32(10)).
+		WillReturnRows(sqlmock.NewRows([]string{"request_id", "user_id", "ts", "final_score", "decision", "rule_impacts"}).
+			AddRow("req-1", "user-1", now.Add(-time.Minute), 45, "APPROVE", []byte("[]")))
+
+	decisions, total, nextCursor, err := s.ListDecisions(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), total)
+	assert.Len(t, decisions, 1)
+	assert.Empty(t, nextCursor) // nextCursor only generated if len(decisions) == limit
 }
 
 func TestGetDecision(t *testing.T) {

@@ -116,7 +116,16 @@ export BASE_URL="${BASE_URL:-http://localhost:8081}"
 export TENANT_ID="${TENANT_ID:-tenant-1}"
 ```
 
-Jobs list:
+### Pagination & Performance Guardrails
+
+The Analytics API follows a **cursor-first** pagination strategy. While legacy `offset` is supported for backwards compatibility, it is restricted by server-side limits and is **mutually exclusive** with `cursor`.
+
+- **Cursor Pagination (Recommended)**: Use the `cursor` parameter. If both `cursor` and `offset` are provided, the API returns a `400 Bad Request`.
+  - *Note*: When using `cursor`, the `total` count is intentionally omitted from the response to improve performance on large datasets.
+- **Global Limits**: All list endpoints have a default limit of 50 and a maximum of 250 (higher for transactions).
+- **Timeouts**: All queries are subject to a 30-second server-side timeout.
+
+### Jobs & Auditability
 
 ```bash
 curl -sS -H "X-Tenant-Id: ${TENANT_ID}" \
@@ -138,7 +147,10 @@ curl -sS -H "X-Tenant-Id: ${TENANT_ID}" \
   "${BASE_URL}/jobs/${JOB_ID}/events?limit=5&before_ts=2026-01-02T03:04:05Z&before_id=99"
 ```
 
-Dataset profiles list + latest profile resolution:
+**Job Control (Cancel/Retry)**:
+Modifying job state via `POST /jobs/{id}/cancel` or `POST /jobs/{id}/retry` emits structured audit events into the `job_events` table (types: `cancel_requested`, `retried`).
+
+### Dataset Profiles & Caching
 
 ```bash
 curl -sS -H "X-Tenant-Id: ${TENANT_ID}" \
@@ -148,7 +160,9 @@ curl -sS -H "X-Tenant-Id: ${TENANT_ID}" \
   "${BASE_URL}/dataset/summary?profile_id=latest"
 ```
 
-`profile_id=latest` is resolved within the provided tenant, not globally across tenants.
+`profile_id=latest` resolution:
+1. The service first attempts to find the most recent cached profile for the tenant in `dataset_profiles`.
+2. If no cached profile exists, a fresh one is computed on-the-fly (bounded to 100 features) and then cached for subsequent requests.
 
 KPI reads (`/kpis` + `/volume`):
 

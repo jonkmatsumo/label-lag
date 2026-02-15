@@ -2,26 +2,45 @@ package service
 
 import (
 	"context"
+	"log/slog"
 
 	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	commonv1 "github.com/jonkmatsumo/label-lag/go/common/proto/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 func (s *Service) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRunsRequest) (*pb.ListTrainingRunsResponse, error) {
+	limit, err := normalizeLimit(req.Limit, 50, 250, "limit")
+	if err != nil {
+		return nil, err
+	}
+	offset, err := normalizeOffset(req.Offset)
+	if err != nil {
+		return nil, err
+	}
+	req.Limit = limit
+	req.Offset = offset
+
 	if req.StartDate != nil && req.EndDate != nil && req.StartDate.AsTime().After(req.EndDate.AsTime()) {
 		return nil, status.Error(codes.InvalidArgument, "start_date must be <= end_date")
 	}
 
-	runs, total, err := s.store.ListTrainingRuns(ctx, req)
+	runs, total, nextCursor, err := s.store.ListTrainingRuns(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	return &pb.ListTrainingRunsResponse{
-		Runs:  runs,
-		Total: total,
-	}, nil
+	resp := &pb.ListTrainingRunsResponse{
+		Runs: runs,
+		Pagination: &commonv1.CursorPageResponse{
+			NextCursor: nextCursor,
+		},
+	}
+	if req.Pagination == nil || req.Pagination.Cursor == "" {
+		resp.Pagination.Total = &total
+	}
+	return resp, nil
 }
 
 func (s *Service) ListModelVersions(ctx context.Context, req *pb.ListModelVersionsRequest) (*pb.ListModelVersionsResponse, error) {
@@ -40,15 +59,21 @@ func (s *Service) ListModelVersions(ctx context.Context, req *pb.ListModelVersio
 	req.Limit = limit
 	req.Offset = offset
 
-	versions, total, err := s.store.ListModelVersions(ctx, req)
+	versions, total, nextCursor, err := s.store.ListModelVersions(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	return &pb.ListModelVersionsResponse{
+	resp := &pb.ListModelVersionsResponse{
 		Versions: versions,
-		Total:    total,
-	}, nil
+		Pagination: &commonv1.CursorPageResponse{
+			NextCursor: nextCursor,
+		},
+	}
+	if req.Pagination == nil || req.Pagination.Cursor == "" {
+		resp.Pagination.Total = &total
+	}
+	return resp, nil
 }
 
 func (s *Service) GetTrainingRun(ctx context.Context, req *pb.GetTrainingRunRequest) (*pb.GetTrainingRunResponse, error) {
@@ -100,7 +125,11 @@ func (s *Service) ReportTrainingRun(ctx context.Context, req *pb.ReportTrainingR
 	}
 	req.Run.TenantId = tenantID
 
+	// Observability: Log receipt of report (helps track retries)
+	slog.Info("received training run report", "run_id", req.Run.RunId, "tenant_id", req.Run.TenantId)
+
 	if err := s.store.SaveTrainingRun(ctx, req.Run); err != nil {
+		slog.Error("failed to save training run", "error", err, "run_id", req.Run.RunId)
 		return nil, err
 	}
 

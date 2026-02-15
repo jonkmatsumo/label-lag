@@ -63,7 +63,7 @@ func (s *SQLStore) SaveTrainingRun(ctx context.Context, run *pb.TrainingRun) err
 	return nil
 }
 
-func (s *SQLStore) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRunsRequest) ([]*pb.TrainingRun, int64, error) {
+func (s *SQLStore) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRunsRequest) ([]*pb.TrainingRun, int64, string, error) {
 	queryBuilder := db.NewQueryBuilder(`
 		SELECT
 			run_id, model_name, status, started_at, ended_at, metrics, params, dataset_id, mlflow_run_id, tenant_id
@@ -86,30 +86,56 @@ func (s *SQLStore) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRun
 		queryBuilder.AddCondition("tenant_id = ?", req.TenantId)
 	}
 
+	limit := int32(50)
+	if req.Limit > 0 {
+		limit = req.Limit
+	}
+	if req.Pagination != nil && req.Pagination.Limit > 0 {
+		limit = req.Pagination.Limit
+	}
+
+	// Cursor pagination
+	var cursorObj *trainingRunCursor
+	if req.Pagination != nil && req.Pagination.Cursor != "" {
+		var err error
+		cursorObj, err = decodeTrainingRunCursor(req.Pagination.Cursor)
+		if err != nil {
+			return nil, 0, "", status.Errorf(codes.InvalidArgument, "invalid cursor: %v", err)
+		}
+		queryBuilder.AddCondition("(started_at, run_id) < (?, ?)", cursorObj.StartedAt, cursorObj.RunId)
+	}
+
 	// Count
-	countQuery, countArgs := queryBuilder.BuildCount()
 	var total int64
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	err := s.db.QueryRowContext(queryCtx, countQuery, countArgs...).Scan(&total)
-	if err != nil {
-		return nil, 0, db.MapDBError(err)
+	if cursorObj == nil {
+		countQuery, countArgs := queryBuilder.BuildCount()
+		err := s.db.QueryRowContext(queryCtx, countQuery, countArgs...).Scan(&total)
+		if err != nil {
+			return nil, 0, "", db.MapDBError(err)
+		}
 	}
 
 	// List
 	queryBuilder.AddOrderBy("started_at DESC, run_id DESC")
-	queryBuilder.SetLimit(req.Limit)
-	queryBuilder.SetOffset(req.Offset)
+	queryBuilder.SetLimit(limit)
+	if cursorObj == nil {
+		queryBuilder.SetOffset(req.Offset)
+	}
 	selectQuery, selectArgs := queryBuilder.BuildSelect()
 
 	rows, err := s.db.QueryContext(queryCtx, selectQuery, selectArgs...)
 	if err != nil {
-		return nil, 0, db.MapDBError(err)
+		return nil, 0, "", db.MapDBError(err)
 	}
 	defer rows.Close()
 
 	var runs []*pb.TrainingRun
+	var lastStartedAt time.Time
+	var lastRunID string
+
 	for rows.Next() {
 		var r pb.TrainingRun
 		var startedAt time.Time
@@ -129,7 +155,7 @@ func (s *SQLStore) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRun
 			&mlflowID,
 			&r.TenantId,
 		); err != nil {
-			return nil, 0, fmt.Errorf("failed to scan run: %v", err)
+			return nil, 0, "", fmt.Errorf("failed to scan run: %v", err)
 		}
 
 		r.StartedAt = timestamppb.New(startedAt)
@@ -151,19 +177,27 @@ func (s *SQLStore) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRun
 		}
 
 		runs = append(runs, &r)
+		lastStartedAt = startedAt
+		lastRunID = r.RunId
 	}
 
-	return runs, total, nil
+	var nextCursor string
+	if int32(len(runs)) == limit && limit > 0 {
+		nextCursor = encodeTrainingRunCursor(lastStartedAt, lastRunID)
+	}
+
+	return runs, total, nextCursor, nil
 }
 
-func (s *SQLStore) ListModelVersions(ctx context.Context, req *pb.ListModelVersionsRequest) ([]*pb.TrainingRun, int64, error) {
+func (s *SQLStore) ListModelVersions(ctx context.Context, req *pb.ListModelVersionsRequest) ([]*pb.TrainingRun, int64, string, error) {
 	// For now, versions are just completed training runs for a model
 	return s.ListTrainingRuns(ctx, &pb.ListTrainingRunsRequest{
-		ModelName: req.ModelName,
-		Status:    "completed",
-		Limit:     req.Limit,
-		Offset:    req.Offset,
-		TenantId:  req.TenantId,
+		ModelName:  req.ModelName,
+		Status:     "completed",
+		Limit:      req.Limit,
+		Offset:     req.Offset,
+		TenantId:   req.TenantId,
+		Pagination: req.Pagination,
 	})
 }
 
@@ -228,6 +262,23 @@ func (s *SQLStore) GetTrainingRun(ctx context.Context, runID string, tenantID st
 }
 
 func (s *SQLStore) GetMetricSeries(ctx context.Context, req *pb.GetMetricSeriesRequest) ([]*pb.MetricPoint, error) {
+	if req.ModelName == "" || req.MetricName == "" {
+		return nil, status.Error(codes.InvalidArgument, "model_name and metric_name required")
+	}
+
+	start := time.Now().AddDate(0, 0, -30)
+	if req.StartDate != nil {
+		start = req.StartDate.AsTime()
+	}
+	end := time.Now()
+	if req.EndDate != nil {
+		end = req.EndDate.AsTime()
+	}
+
+	if end.Sub(start) > 90*24*time.Hour {
+		return nil, status.Error(codes.InvalidArgument, "query window cannot exceed 90 days")
+	}
+
 	query := fmt.Sprintf(`
 		SELECT
 			started_at,
@@ -240,7 +291,7 @@ func (s *SQLStore) GetMetricSeries(ctx context.Context, req *pb.GetMetricSeriesR
 		  AND metrics ? $4
 	`, req.MetricName)
 
-	args := []interface{}{req.ModelName, req.StartDate.AsTime(), req.EndDate.AsTime(), req.MetricName}
+	args := []interface{}{req.ModelName, start, end, req.MetricName}
 	if req.TenantId != "" {
 		query += " AND tenant_id = $5"
 		args = append(args, req.TenantId)

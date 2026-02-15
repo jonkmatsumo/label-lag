@@ -30,27 +30,33 @@ func TestGetDatasetProfile_DynamicFeatures(t *testing.T) {
 	}
 
 	// 3. Discover dynamic numeric keys
-	mock.ExpectQuery(`SELECT DISTINCT key FROM.*numerical_features`).
+	mock.ExpectQuery(`(?s)SELECT DISTINCT key FROM.*numerical_features`).
+		WithArgs("tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{"key"}).AddRow("dyn_num_1"))
 
 	// 4. Profile dynamic numeric key
-	mock.ExpectQuery(`SELECT AVG\(\(numerical_features->>'dyn_num_1'\)::numeric\)`).
+	mock.ExpectQuery(`(?s)SELECT.*AVG\(\(numerical_features->>'dyn_num_1'\)::numeric\)`).
+		WithArgs("tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{"mean", "stddev", "null_count", "min_val", "max_val"}).
 			AddRow(100.0, 5.0, 5, 80.0, 120.0))
-	mock.ExpectQuery(`SELECT WIDTH_BUCKET\(\(numerical_features->>'dyn_num_1'\)::numeric`).
+	mock.ExpectQuery(`(?s)SELECT WIDTH_BUCKET\(\(numerical_features->>'dyn_num_1'\)::numeric`).
+		WithArgs("tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{"bucket", "count"}).
 			AddRow(1, 95))
 
 	// 5. Discover dynamic categorical keys
-	mock.ExpectQuery(`SELECT DISTINCT key FROM.*categorical_features`).
+	mock.ExpectQuery(`(?s)SELECT DISTINCT key FROM.*categorical_features`).
+		WithArgs("tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{"key"}).AddRow("dyn_cat_1"))
 
 	// 6. Profile dynamic categorical key
 	// Null rate
-	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM generated_records WHERE categorical_features->>'dyn_cat_1' IS NULL`).
+	mock.ExpectQuery(`(?s)SELECT COUNT\(\*\) FROM.*categorical_features->>'dyn_cat_1' IS NULL`).
+		WithArgs("tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(10))
 	// Top-K
-	mock.ExpectQuery(`SELECT categorical_features->>'dyn_cat_1' as value, COUNT\(\*\) as count`).
+	mock.ExpectQuery(`(?s)SELECT.*categorical_features->>'dyn_cat_1' as value, COUNT\(\*\) as count`).
+		WithArgs("tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{"value", "count"}).
 			AddRow("val1", 50).
 			AddRow("val2", 30))
