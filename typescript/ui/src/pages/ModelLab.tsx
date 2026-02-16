@@ -13,6 +13,7 @@ import {
   Filter, Calendar, Image as ImageIcon, FileText as FileIcon
 } from 'lucide-react';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { useTenant } from '../context/TenantContext';
 
 export function ModelLab() {
   const [activeTab, setActiveTab] = useState<'train' | 'registry'>('train');
@@ -75,23 +76,24 @@ function TrainTab() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [trainResult, setTrainResult] = useState<TrainResponse | null>(null);
   const [deployResult, setDeployResult] = useState<DeployResponse | null>(null);
+  const { tenantId } = useTenant();
 
   // Fetch current model status
   const healthQuery = useQuery({
-    queryKey: ['health'],
+    queryKey: ['health', tenantId],
     queryFn: healthApi.getHealth,
     refetchInterval: 30000,
   });
 
   // Fetch dataset schema for feature selection
   const schemaQuery = useQuery({
-    queryKey: ['dataset', 'schema'],
+    queryKey: ['dataset', tenantId, 'schema'],
     queryFn: datasetApi.getSchema,
   });
 
   // Fetch drift status
   const driftQuery = useQuery({
-    queryKey: ['drift'],
+    queryKey: ['drift', tenantId],
     queryFn: () => monitoringApi.getDrift({ hours: 24 }),
     refetchInterval: 60000,
   });
@@ -519,16 +521,17 @@ import { Send, User, FileText } from 'lucide-react';
 import React from 'react'; // Ensure React is imported for Fragments if used
 
 function RegistryTab() {
+  const { tenantId } = useTenant();
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
-    queryKey: ['mlflow', 'versions'],
+    queryKey: ['mlflow', tenantId, 'versions'],
     queryFn: () => mlflowApi.searchModelVersions(),
   });
 
   const transitionMutation = useMutation({
     mutationFn: mlflowApi.transitionStage,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['mlflow', 'versions'] });
+      queryClient.invalidateQueries({ queryKey: ['mlflow', tenantId, 'versions'] });
     },
   });
 
@@ -678,9 +681,10 @@ function RegistryTab() {
 }
 
 function ModelCompareChart({ selectedVersions }: { selectedVersions: MlflowModelVersion[] }) {
+  const { tenantId } = useTenant();
   const runQueries = useQueries({
     queries: selectedVersions.map(v => ({
-      queryKey: ['run', v.run_id],
+      queryKey: ['run', tenantId, v.run_id],
       queryFn: () => mlflowApi.getRun(v.run_id),
       staleTime: 300000
     }))
@@ -729,20 +733,21 @@ function ModelCompareChart({ selectedVersions }: { selectedVersions: MlflowModel
 import { BarChart2 } from 'lucide-react';
 
 function RunDetail({ runId }: { runId: string }) {
+  const { tenantId } = useTenant();
   const { data: cvMetrics, isLoading: cvLoading } = useQuery({
-    queryKey: ['run', runId, 'cv-metrics'],
+    queryKey: ['run', tenantId, runId, 'cv-metrics'],
     queryFn: () => mlflowApi.getArtifact<CvMetricsArtifact>(runId, 'cv_fold_metrics.json'),
     retry: false
   });
 
   const { data: tuning, isLoading: tuningLoading } = useQuery({
-    queryKey: ['run', runId, 'tuning'],
+    queryKey: ['run', tenantId, runId, 'tuning'],
     queryFn: () => mlflowApi.getArtifact<TuningTrial[]>(runId, 'tuning_trials.json'),
     retry: false
   });
 
   const { data: split, isLoading: splitLoading } = useQuery({
-    queryKey: ['run', runId, 'split'],
+    queryKey: ['run', tenantId, runId, 'split'],
     queryFn: () => mlflowApi.getArtifact<SplitManifest>(runId, 'split_manifest.json'),
     retry: false
   });
@@ -847,8 +852,9 @@ function RunDetail({ runId }: { runId: string }) {
 }
 
 function ArtifactImage({ runId, path, title }: { runId: string, path: string, title: string }) {
+  const { tenantId } = useTenant();
   const { data: blob, isLoading, isError } = useQuery({
-    queryKey: ['run', runId, 'artifact', 'blob', path],
+    queryKey: ['run', tenantId, runId, 'artifact', 'blob', path],
     queryFn: async () => {
       const resp = await fetch(`/bff/v1/mlflow/runs/${runId}/artifacts?path=${encodeURIComponent(path)}`);
       if (!resp.ok) throw new Error('Failed to fetch artifact');
@@ -882,8 +888,9 @@ function ArtifactImage({ runId, path, title }: { runId: string, path: string, ti
 }
 
 function ArtifactMarkdown({ runId, path, title }: { runId: string, path: string, title: string }) {
+  const { tenantId } = useTenant();
   const { data: text, isLoading, isError } = useQuery({
-    queryKey: ['run', runId, 'artifact', 'text', path],
+    queryKey: ['run', tenantId, runId, 'artifact', 'text', path],
     queryFn: async () => {
       const resp = await fetch(`/bff/v1/mlflow/runs/${runId}/artifacts?path=${encodeURIComponent(path)}`);
       if (!resp.ok) throw new Error('Failed to fetch artifact');

@@ -8,6 +8,7 @@ import {
 } from 'recharts';
 import { AlertCircle, CheckCircle, RefreshCw, Trash2, Database, Activity } from 'lucide-react';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { useTenant } from '../context/TenantContext';
 
 export function Dataset() {
   const [activeTab, setActiveTab] = useState<'overview' | 'generate' | 'diagnostics' | 'drift'>('overview');
@@ -72,13 +73,14 @@ export function Dataset() {
 }
 
 function OverviewTab() {
+  const { tenantId } = useTenant();
   const { data: overview, isLoading, error } = useQuery({
-    queryKey: ['dataset', 'overview'],
+    queryKey: ['dataset', tenantId, 'overview'],
     queryFn: datasetApi.getOverview,
   });
 
   const { data: schemaData } = useQuery({
-    queryKey: ['dataset', 'schema'],
+    queryKey: ['dataset', tenantId, 'schema'],
     queryFn: datasetApi.getSchema,
   });
 
@@ -164,20 +166,21 @@ function GenerateTab() {
   const [numUsers, setNumUsers] = useState(500);
   const [fraudRate, setFraudRate] = useState(0.05);
   const [dropExisting, setDropExisting] = useState(true);
+  const { tenantId } = useTenant();
 
   const queryClient = useQueryClient();
 
   const generateMutation = useMutation({
     mutationFn: datasetApi.generateData,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dataset'] });
+      queryClient.invalidateQueries({ queryKey: ['dataset', tenantId] });
     },
   });
 
   const clearMutation = useMutation({
     mutationFn: datasetApi.clearData,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dataset'] });
+      queryClient.invalidateQueries({ queryKey: ['dataset', tenantId] });
     },
   });
 
@@ -299,12 +302,13 @@ function GenerateTab() {
 }
 
 function DiagnosticsTab() {
+  const { tenantId } = useTenant();
   const [diagMode, setDiagMode] = useState<'distributions' | 'missingness' | 'outliers' | 'relationships'>('distributions');
   const [selectedFeature, setSelectedFeature] = useState<string>('velocity_24h');
   const [stratify] = useState(true);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['dataset', 'sample', stratify],
+    queryKey: ['dataset', tenantId, 'sample', stratify],
     queryFn: () => datasetApi.getFeatureSample(2000, stratify),
   });
 
@@ -507,17 +511,18 @@ function DiagnosticsTab() {
 }
 
 function RelationshipsTab({ featureColumns }: { featureColumns: string[] }) {
+  const { tenantId } = useTenant();
   const [activeSubTab, setActiveSubTab] = useState<'target' | 'numeric' | 'categorical'>('target');
   const [targetColumn, setTargetColumn] = useState('is_fraudulent');
 
   const targetQuery = useQuery({
-    queryKey: ['dataset', 'relationships', targetColumn],
+    queryKey: ['dataset', tenantId, 'relationships', targetColumn],
     queryFn: () => datasetApi.getRelationships(1000, targetColumn),
     enabled: activeSubTab === 'target'
   });
 
   const matrixQuery = useQuery({
-    queryKey: ['dataset', 'correlations'],
+    queryKey: ['dataset', tenantId, 'correlations'],
     queryFn: () => datasetApi.getCorrelations(1000),
     enabled: activeSubTab !== 'target',
     staleTime: 300000 // 5 minutes cache
@@ -706,8 +711,9 @@ function CorrelationHeatmap({ title, data, columns, isLoading, baseColor = "13, 
 }
 
 function DriftTab() {
+  const { tenantId } = useTenant();
   const driftQuery = useQuery({
-    queryKey: ['drift', 'detailed'],
+    queryKey: ['drift', tenantId, 'detailed'],
     queryFn: () => monitoringApi.getDrift({ hours: 24, force_refresh: true })
   });
 
