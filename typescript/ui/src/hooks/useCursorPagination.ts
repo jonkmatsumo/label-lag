@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 
 export interface CursorPage<TItem> {
@@ -34,10 +34,14 @@ export function useCursorPagination<TItem>(
   const { queryKeyBase, fetchPage, limit = 25, filters, enabled = true } = options;
   const [cursor, setCursor] = useState<string | undefined>(undefined);
 
-  // Reset cursor when filters change
-  useEffect(() => {
+  // Track previous filters to reset cursor on change (state-from-props pattern)
+  const filtersKey = JSON.stringify(filters);
+  const [prevFiltersKey, setPrevFiltersKey] = useState(filtersKey);
+
+  if (filtersKey !== prevFiltersKey) {
+    setPrevFiltersKey(filtersKey);
     setCursor(undefined);
-  }, [JSON.stringify(filters)]);
+  }
 
   const queryKey = [...queryKeyBase, { cursor, limit, ...filters }];
 
@@ -54,11 +58,13 @@ export function useCursorPagination<TItem>(
     enabled,
   });
 
+  const nextCursor = query.data?.nextCursor;
+
   const loadNext = useCallback(() => {
-    if (query.data?.nextCursor) {
-      setCursor(query.data.nextCursor);
+    if (nextCursor) {
+      setCursor(nextCursor);
     }
-  }, [query.data?.nextCursor]);
+  }, [nextCursor]);
 
   const reset = useCallback(() => {
     setCursor(undefined);

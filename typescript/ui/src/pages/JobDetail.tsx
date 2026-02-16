@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { jobsApi } from '../api';
-import { useTenant } from '../context/TenantContext';
+import { useTenant } from '../hooks/useTenant';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { JobStatusBadge } from './Jobs';
 import { ArrowLeft } from 'lucide-react';

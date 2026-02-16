@@ -277,6 +277,7 @@ def train_model(
     feature_set_id: str | None = None,
     feature_resolution_mode: str = "strict",
     feature_groups: list[str] | None = None,
+    n_jobs: int | None = None,
 ) -> str:
     """Train an XGBoost model with MLflow tracking."""
     _mlflow = _get_mlflow()
@@ -512,6 +513,7 @@ def train_model(
             "random_state": random_state,
             "use_label_encoder": False,
             "eval_metric": "logloss",
+            "n_jobs": n_jobs,
         }
         if early_stopping_rounds:
             clf_kw["early_stopping_rounds"] = early_stopping_rounds

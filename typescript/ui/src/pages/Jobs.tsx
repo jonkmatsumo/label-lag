@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { jobsApi } from '../api';
-import { useTenant } from '../context/TenantContext';
+import { useTenant } from '../hooks/useTenant';
 import { useCursorPagination, type CursorPage } from '../hooks/useCursorPagination';
 import { CursorPaginationControls } from '../components/CursorPaginationControls';
 import { ErrorBanner } from '../components/ErrorBanner';

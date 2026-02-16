@@ -57,7 +57,7 @@ class TestExpandedMetricsComputed:
         mock_mlflow.start_run.return_value.__enter__.return_value = mock_run
         mock_mlflow.set_experiment.return_value = None
 
-        train_model()
+        train_model(n_jobs=1)
 
         assert mock_mlflow.log_metrics.called
         metrics = mock_mlflow.log_metrics.call_args[0][0]
@@ -110,7 +110,7 @@ class TestConfusionMatrixCountsCorrect:
         mock_mlflow.start_run.return_value.__enter__.return_value = mock_run
         mock_mlflow.set_experiment.return_value = None
 
-        train_model(feature_columns=["v", "a", "b"])
+        train_model(feature_columns=["v", "a", "b"], n_jobs=1)
 
         metrics = mock_mlflow.log_metrics.call_args[0][0]
         tp, fp, tn, fn = metrics["tp"], metrics["fp"], metrics["tn"], metrics["fn"]
@@ -231,7 +231,7 @@ class TestCVMetricsLogging:
         mock_mlflow.set_experiment.return_value = None
 
         split_config = SplitConfig(strategy=SplitStrategy.KFOLD_TEMPORAL, n_folds=5)
-        train_model(split_config=split_config)
+        train_model(split_config=split_config, n_jobs=1)
 
         # Check that log_metrics was called with min/max (may be in any call)
         assert mock_mlflow.log_metrics.called
@@ -288,7 +288,7 @@ class TestCVMetricsLogging:
         mock_mlflow.set_experiment.return_value = None
 
         split_config = SplitConfig(strategy=SplitStrategy.KFOLD_TEMPORAL, n_folds=5)
-        train_model(split_config=split_config)
+        train_model(split_config=split_config, n_jobs=1)
 
         # Check that set_tags was called with CV tags
         assert mock_mlflow.set_tags.called
@@ -345,7 +345,7 @@ class TestPerformanceMetricsLogging:
         mock_mlflow.start_run.return_value.__enter__.return_value = mock_run
         mock_mlflow.set_experiment.return_value = None
 
-        train_model()
+        train_model(n_jobs=1)
 
         log_metric_calls = [c for c in mock_mlflow.log_metric.call_args_list]
         names = [c[0][0] for c in log_metric_calls if c[0]]
@@ -391,7 +391,7 @@ class TestPerformanceMetricsLogging:
         mock_mlflow.start_run.return_value.__enter__.return_value = mock_run
         mock_mlflow.set_experiment.return_value = None
 
-        train_model()
+        train_model(n_jobs=1)
 
         log_metric_calls = mock_mlflow.log_metric.call_args_list
         for call in log_metric_calls:

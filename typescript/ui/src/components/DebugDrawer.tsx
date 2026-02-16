@@ -1,21 +1,25 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { useTenant } from '../context/TenantContext';
+import { useTenant } from '../hooks/useTenant';
 
 export function DebugDrawer() {
-    const [isOpen, setIsOpen] = useState(false);
     const [searchParams] = useSearchParams();
+    // Initialize state from URL param to avoid sync effect
+    const [isOpen, setIsOpen] = useState(() => searchParams.get('debug') === 'true');
     const location = useLocation();
     const { tenantId, setTenantId } = useTenant();
     const queryClient = useQueryClient();
 
-    // Auto-show if ?debug=true
+    // Sync if URL param changes later
     useEffect(() => {
-        if (searchParams.get('debug') === 'true') {
-            setIsOpen(true);
+        const shouldBeOpen = searchParams.get('debug') === 'true';
+        if (shouldBeOpen && !isOpen) {
+            // Defer update to avoid sync render warning
+            const timer = setTimeout(() => setIsOpen(true), 0);
+            return () => clearTimeout(timer);
         }
-    }, [searchParams]);
+    }, [searchParams, isOpen]);
 
     if (!isOpen && searchParams.get('debug') !== 'true') return null;
 

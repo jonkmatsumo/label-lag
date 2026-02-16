@@ -3,7 +3,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { Scale } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { decisionsApi } from '../../api';
-import { useTenant } from '../../context/TenantContext'; // Corrected import path
+import { useTenant } from '../../hooks/useTenant'; // Corrected import path
 import { useCursorPagination, type CursorPage } from '../../hooks/useCursorPagination'; // Corrected import path
 import { CursorPaginationControls } from '../../components/CursorPaginationControls'; // Corrected import path
 import { ErrorBanner } from '../../components/ErrorBanner'; // Corrected import path

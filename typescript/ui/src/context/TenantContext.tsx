@@ -1,15 +1,8 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import { useState, useCallback, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
-
-interface TenantContextValue {
-  tenantId: string;
-  setTenantId: (id: string) => void;
-}
-
-const TenantContext = createContext<TenantContextValue | null>(null);
-
-const DEFAULT_TENANT = import.meta.env.VITE_DEFAULT_TENANT ?? 'default';
+import { DEFAULT_TENANT } from './types';
+import { TenantContext } from './TenantContextDefinition';
 
 export function TenantProvider({ children }: { children: ReactNode }) {
   const [tenantId, setTenantIdState] = useState(DEFAULT_TENANT);
@@ -30,12 +23,4 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       {children}
     </TenantContext.Provider>
   );
-}
-
-export function useTenant(): TenantContextValue {
-  const ctx = useContext(TenantContext);
-  if (!ctx) {
-    throw new Error('useTenant must be used within a TenantProvider');
-  }
-  return ctx;
 }

@@ -8,7 +8,7 @@ import {
 } from 'recharts';
 import { AlertCircle, CheckCircle, RefreshCw, Trash2, Database, Activity } from 'lucide-react';
 import { ErrorBanner } from '../components/ErrorBanner';
-import { useTenant } from '../context/TenantContext';
+import { useTenant } from '../hooks/useTenant';
 
 export function Dataset() {
   const [activeTab, setActiveTab] = useState<'overview' | 'generate' | 'diagnostics' | 'drift'>('overview');

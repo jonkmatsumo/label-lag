@@ -19,7 +19,7 @@ import {
   Cell, ComposedChart, Line
 } from 'recharts';
 import { ErrorBanner } from '../components/ErrorBanner';
-import { useTenant } from '../context/TenantContext';
+import { useTenant } from '../hooks/useTenant';
 
 const ruleTabs = [
   { path: '/rules', label: 'Management', exact: true },

@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import { Search, ChevronDown, ChevronRight } from 'lucide-react';
 import { ErrorBanner } from '../components/ErrorBanner';
-import { useTenant } from '../context/TenantContext';
+import { useTenant } from '../hooks/useTenant';
 
 export function Analytics() {
   const [daysFilter] = useState(30);

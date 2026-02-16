@@ -3,7 +3,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { Dumbbell } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { trainingApi } from '../../api';
-import { useTenant } from '../../context/TenantContext';
+import { useTenant } from '../../hooks/useTenant';
 import { useCursorPagination, type CursorPage } from '../../hooks/useCursorPagination';
 import { CursorPaginationControls } from '../../components/CursorPaginationControls';
 import { ErrorBanner } from '../../components/ErrorBanner';

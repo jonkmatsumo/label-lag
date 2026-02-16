@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { trainingApi, monitoringApi } from '../../api'; // monitoringApi for series
@@ -25,38 +25,35 @@ export function TrainingRunDetail() {
     });
 
     // Extract available metrics from run.metrics_json
-    const availableMetrics = useMemo(() => {
-        if (!run?.metrics_json) return [];
+    // Extract available metrics from run.metrics_json
+    let availableMetrics: string[] = [];
+    if (run?.metrics_json) {
         try {
             const metrics = JSON.parse(run.metrics_json);
-            return Object.keys(metrics);
+            availableMetrics = Object.keys(metrics);
         } catch {
-            return [];
+            // ignore
         }
-    }, [run?.metrics_json]);
+    }
 
-    // Set default metric if needed
-    useMemo(() => {
-        if (availableMetrics.length > 0 && !selectedMetric) {
-            setSelectedMetric(availableMetrics[0]);
-        }
-    }, [availableMetrics, selectedMetric]);
+    // Derived state for metric selection (default to first available)
+    const metricToUse = selectedMetric || (availableMetrics.length > 0 ? availableMetrics[0] : '');
 
     const { data: seriesData, isLoading: isSeriesLoading } = useQuery({
-        queryKey: ['metric-series', selectedMetric, id],
+        queryKey: ['metric-series', metricToUse, id],
         queryFn: () => {
             const endDate = new Date();
             const startDate = new Date();
             startDate.setDate(endDate.getDate() - METRIC_WINDOW_DAYS);
 
             return monitoringApi.getSeries({
-                metric: selectedMetric,
+                metric: metricToUse,
                 start_date: startDate.toISOString(),
                 end_date: endDate.toISOString(),
                 tags: { run_id: id! },
             });
         },
-        enabled: !!id && !!selectedMetric,
+        enabled: !!id && !!metricToUse,
     });
 
     if (isRunLoading) {
@@ -137,7 +134,7 @@ export function TrainingRunDetail() {
                             <div className="col-auto">
                                 <select
                                     className="form-select form-select-sm"
-                                    value={selectedMetric}
+                                    value={metricToUse}
                                     onChange={(e) => setSelectedMetric(e.target.value)}
                                     disabled={availableMetrics.length === 0}
                                 >

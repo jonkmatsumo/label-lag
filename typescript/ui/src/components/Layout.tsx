@@ -1,5 +1,5 @@
 import { Link, useLocation, Outlet } from 'react-router-dom';
-import { useTenant } from '../context/TenantContext';
+import { useTenant } from '../hooks/useTenant';
 import { DebugDrawer, DebugToggle } from './DebugDrawer';
 
 interface NavItem {

@@ -13,7 +13,7 @@ import {
   Filter, Calendar, Image as ImageIcon, FileText as FileIcon
 } from 'lucide-react';
 import { ErrorBanner } from '../components/ErrorBanner';
-import { useTenant } from '../context/TenantContext';
+import { useTenant } from '../hooks/useTenant';
 
 export function ModelLab() {
   const [activeTab, setActiveTab] = useState<'train' | 'registry'>('train');
