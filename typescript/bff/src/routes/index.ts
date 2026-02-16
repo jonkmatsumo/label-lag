@@ -9,3 +9,7 @@ export * from './rules-detail.js';
 export * from './dataset.js';
 export * from './mlflow.js';
 export { jobsRoutes } from './jobs.js';
+export { decisionsRoutes } from './decisions.js';
+export { trainingRoutes } from './training.js';
+export { modelsRoutes } from './models.js';
+export { profilesRoutes } from './profiles.js';

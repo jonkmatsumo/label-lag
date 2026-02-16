@@ -602,3 +602,103 @@ export interface CancelJobResponse {
 export interface RetryJobResponse {
   new_job_id: string;
 }
+
+// Decisions types
+export interface Decision {
+  decision_id: string;
+  user_id: string;
+  decision: string;
+  score: number;
+  timestamp: string;
+  model_version: string;
+  label?: string; // ground truth
+}
+
+export interface DecisionDetail extends Decision {
+  features_json?: string; // reduced features used
+  rules_matched_json?: string;
+  trace_id?: string;
+}
+
+export interface DecisionTrace {
+  trace_id: string;
+  steps: unknown[]; // structured trace data
+}
+
+export interface ListDecisionsResponse {
+  decisions: Decision[];
+  pagination: CursorPageResponse;
+}
+
+// Training types (extended)
+export interface TrainingRun {
+  run_id: string;
+  model_name: string;
+  version: string;
+  status: string;
+  created_at: string;
+  started_at?: string;
+  completed_at?: string;
+  metrics_json?: string;
+  params_json?: string;
+  error?: string;
+}
+
+export interface MetricSeriesPoint {
+  timestamp: string;
+  value: number;
+}
+
+export interface ListTrainingRunsResponse {
+  runs: TrainingRun[];
+  pagination: CursorPageResponse;
+}
+
+// Model types (extended)
+export interface ModelVersion {
+  version: string;
+  model_name: string;
+  created_at: string;
+  status: string;
+  metrics_json?: string;
+  deployed_at?: string;
+  deployed_by?: string;
+}
+
+export interface ListModelVersionsResponse {
+  versions: ModelVersion[];
+  pagination: CursorPageResponse;
+}
+
+// Dataset Profile types
+export interface DatasetProfile {
+  profile_id: string;
+  created_at: string;
+  row_count: number;
+  column_count: number;
+  size_bytes?: number;
+  columns_json?: string; // summary of columns
+}
+
+export interface ListDatasetProfilesResponse {
+  profiles: DatasetProfile[];
+  pagination: CursorPageResponse;
+}
+
+export interface DatasetSummary {
+  profile_id: string;
+  total_rows: number;
+  columns: Record<string, { type: string; null_count: number; distinct_count: number }>;
+}
+
+export interface ProfilePsI {
+  feature: string;
+  psi: number;
+  severity: 'low' | 'medium' | 'high';
+}
+
+export interface CompareProfilesResponse {
+  base_id: string;
+  target_id: string;
+  features: ProfilePsI[];
+}
