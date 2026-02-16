@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { EmptyState } from '../../components/EmptyState';
+import { Dumbbell } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { trainingApi } from '../../api';
 import { useTenant } from '../../context/TenantContext';
@@ -85,7 +87,11 @@ export function TrainingRunsPage() {
                             <ErrorBanner error={pagination.error} title="Failed to load training runs" />
                         </div>
                     ) : pagination.data.length === 0 ? (
-                        <div className="text-center p-5 text-muted">No training runs found</div>
+                        <EmptyState
+                            title="No training runs found"
+                            description="Start a new training run or adjust filters."
+                            icon={<Dumbbell size={48} />}
+                        />
                     ) : (
                         <div className="table-responsive">
                             <table className="table table-hover align-middle mb-0">

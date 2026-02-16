@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { EmptyState } from '../../components/EmptyState';
+import { FileBarChart } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { profilesApi } from '../../api';
 import { useCursorPagination, type CursorPage } from '../../hooks/useCursorPagination';
@@ -76,7 +78,11 @@ export function ProfilesPage() {
                             <ErrorBanner error={pagination.error} title="Failed to load profiles" />
                         </div>
                     ) : pagination.data.length === 0 ? (
-                        <div className="text-center p-5 text-muted">No profiles found</div>
+                        <EmptyState
+                            title="No profiles found"
+                            description="Generate a dataset profile to see it here."
+                            icon={<FileBarChart size={48} />}
+                        />
                     ) : (
                         <div className="table-responsive">
                             <table className="table table-hover align-middle mb-0">

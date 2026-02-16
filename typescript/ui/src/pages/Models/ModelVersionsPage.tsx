@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { EmptyState } from '../../components/EmptyState';
+import { Box } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { modelVersionsApi } from '../../api';
 import { useCursorPagination, type CursorPage } from '../../hooks/useCursorPagination';
@@ -66,7 +68,11 @@ export function ModelVersionsPage() {
                             <ErrorBanner error={pagination.error} title="Failed to load model versions" />
                         </div>
                     ) : pagination.data.length === 0 ? (
-                        <div className="text-center p-5 text-muted">No model versions found</div>
+                        <EmptyState
+                            title="No model versions found"
+                            description="Train a model to see versions here."
+                            icon={<Box size={48} />}
+                        />
                     ) : (
                         <div className="table-responsive">
                             <table className="table table-hover align-middle mb-0">

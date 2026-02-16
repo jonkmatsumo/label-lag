@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { EmptyState } from '../../components/EmptyState';
+import { Scale } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { decisionsApi } from '../../api';
 import { useTenant } from '../../context/TenantContext'; // Corrected import path
@@ -83,7 +85,11 @@ export function DecisionsPage() {
                             <ErrorBanner error={pagination.error} title="Failed to load decisions" />
                         </div>
                     ) : pagination.data.length === 0 ? (
-                        <div className="text-center p-5 text-muted">No decisions found</div>
+                        <EmptyState
+                            title="No decisions found"
+                            description="Adjust filters or check back later."
+                            icon={<Scale size={48} />}
+                        />
                     ) : (
                         <div className="table-responsive">
                             <table className="table table-hover align-middle mb-0">
