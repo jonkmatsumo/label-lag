@@ -1,6 +1,7 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import pino from 'pino';
+import { v4 as uuidv4 } from 'uuid';
 import { loadConfig } from './config.js';
 import { requestIdMiddleware } from './middleware/request-id.js';
 import { createTenantMiddleware } from './middleware/tenant.js';
@@ -36,7 +37,15 @@ async function main(): Promise<void> {
   const fastify = Fastify({
     loggerInstance: logger,
     disableRequestLogging: false,
+    requestIdHeader: 'x-request-id',
+    genReqId: (req) => (req.headers['x-request-id'] as string) || uuidv4(),
   });
+
+  if (config.debugRequests) {
+    fastify.addHook('onRequest', async (request) => {
+      request.log.info({ headers: request.headers }, 'Debug: Incoming Request Headers');
+    });
+  }
 
   // Register CORS
   await fastify.register(cors, {

@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { ErrorResponse } from '../types/api';
 
 const BFF_BASE_URL = import.meta.env.VITE_BFF_BASE_URL ?? '/api';
+const DEBUG_REQUESTS = import.meta.env.VITE_DEBUG_REQUESTS === 'true';
 
 export class ApiClient {
   private baseUrl: string;
@@ -12,6 +13,9 @@ export class ApiClient {
 
   constructor(baseUrl: string = BFF_BASE_URL) {
     this.baseUrl = baseUrl;
+    if (DEBUG_REQUESTS) {
+      console.debug('[ApiClient] Initialized', { baseUrl });
+    }
   }
 
   setTenantId(id: string): void {
@@ -35,6 +39,10 @@ export class ApiClient {
       ...(this.tenantId ? { 'X-Tenant-Id': this.tenantId } : {}),
       ...options.headers,
     };
+
+    if (DEBUG_REQUESTS) {
+      console.debug('[ApiClient] Request', { requestId, method: options.method ?? 'GET', url, headers });
+    }
 
     try {
       const response = await fetch(url, {

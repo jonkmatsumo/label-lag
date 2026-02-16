@@ -22,6 +22,7 @@ export interface Config {
   enableGoRulesControlPlane: boolean;
   shadowModeEnabled: boolean;
   defaultTenantId: string;
+  debugRequests: boolean;
 }
 
 function getEnvOrDefault(key: string, defaultValue: string): string {
@@ -61,5 +62,6 @@ export function loadConfig(): Config {
     enableGoRulesControlPlane: getEnvAsBool('ENABLE_GO_RULES_CONTROL_PLANE', false),
     shadowModeEnabled: getEnvAsBool('SHADOW_MODE_ENABLED', false),
     defaultTenantId: getEnvOrDefault('BFF_DEFAULT_TENANT_ID', ''),
+    debugRequests: getEnvAsBool('BFF_DEBUG_REQUESTS', false),
   };
 }
