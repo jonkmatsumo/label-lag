@@ -17,6 +17,11 @@ import {
   rulesDetailRoutes,
   datasetRoutes,
   mlflowRoutes,
+  jobsRoutes,
+  decisionsRoutes,
+  trainingRoutes,
+  modelsRoutes,
+  profilesRoutes,
 } from '../src/routes/index.js';
 import pino from 'pino';
 
@@ -93,6 +98,11 @@ export async function createTestApp(config?: Config): Promise<TestContext> {
   await app.register(rulesDetailRoutes, { httpClient });
   await app.register(datasetRoutes, { httpClient });
   await app.register(mlflowRoutes, { httpClient });
+  await app.register(jobsRoutes, { httpClient });
+  await app.register(decisionsRoutes, { httpClient });
+  await app.register(trainingRoutes, { httpClient });
+  await app.register(modelsRoutes, { httpClient });
+  await app.register(profilesRoutes, { httpClient });
 
   return { app, config: testConfig, mockAgent, mockPool, mockApiPool, mockGatewayPool, originalDispatcher };
 }
