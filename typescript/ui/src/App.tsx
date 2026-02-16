@@ -23,6 +23,9 @@ import {
   TrainingRunDetail,
   ModelVersionsPage,
   ModelVersionDetail,
+  ProfilesPage,
+  ProfileDetail,
+  CompareProfiles,
 } from './pages';
 
 const queryClient = new QueryClient({
@@ -62,6 +65,9 @@ function App() {
                 <Route path="training-runs/:id" element={<TrainingRunDetail />} />
                 <Route path="models" element={<ModelVersionsPage />} />
                 <Route path="models/:version" element={<ModelVersionDetail />} />
+                <Route path="dataset/profiles" element={<ProfilesPage />} />
+                <Route path="dataset/profiles/compare" element={<CompareProfiles />} />
+                <Route path="dataset/profiles/:id" element={<ProfileDetail />} />
               </Route>
             </Routes>
           </BrowserRouter>

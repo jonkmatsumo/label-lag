@@ -19,3 +19,6 @@ export { TrainingRunsPage } from './Training/TrainingRunsPage';
 export { TrainingRunDetail } from './Training/TrainingRunDetail';
 export { ModelVersionsPage } from './Models/ModelVersionsPage';
 export { ModelVersionDetail } from './Models/ModelVersionDetail';
+export { ProfilesPage } from './DatasetProfiles/ProfilesPage';
+export { ProfileDetail } from './DatasetProfiles/ProfileDetail';
+export { CompareProfiles } from './DatasetProfiles/CompareProfiles';
