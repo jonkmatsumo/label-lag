@@ -16,6 +16,7 @@ export interface RequestOptions {
   timeout?: number;
   target?: 'python' | 'gateway' | 'mlflow';
   query?: Record<string, string | number | boolean | undefined>;
+  tenantId?: string;
 }
 
 export interface HttpResponse<T> {
@@ -106,6 +107,10 @@ export class HttpClient {
         'Content-Type': 'application/json',
         'X-Request-Id': requestId,
       };
+
+      if (options.tenantId) {
+        headers['X-Tenant-Id'] = options.tenantId;
+      }
 
       const response = await request(url, {
         method,

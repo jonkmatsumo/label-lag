@@ -7,19 +7,21 @@ import {
 } from 'recharts';
 import { Search, ChevronDown, ChevronRight } from 'lucide-react';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { useTenant } from '../hooks/useTenant';
 
 export function Analytics() {
   const [daysFilter] = useState(30);
+  const { tenantId } = useTenant();
 
   // Fetch overview metrics
   const overviewQuery = useQuery({
-    queryKey: ['analytics', 'overview'],
+    queryKey: ['analytics', tenantId, 'overview'],
     queryFn: analyticsApi.getOverview,
   });
 
   // Fetch daily stats
   const dailyStatsQuery = useQuery({
-    queryKey: ['analytics', 'daily-stats', daysFilter],
+    queryKey: ['analytics', tenantId, 'daily-stats', daysFilter],
     queryFn: () => analyticsApi.getDailyStats(daysFilter),
   });
 
@@ -29,7 +31,7 @@ export function Analytics() {
 
   // Fetch recent alerts for metric only
   const alertsQuery = useQuery({
-    queryKey: ['analytics', 'alerts'],
+    queryKey: ['analytics', tenantId, 'alerts'],
     queryFn: () => analyticsApi.getRecentAlerts(20),
   });
 
@@ -157,13 +159,14 @@ function FraudTypeChart() {
 }
 
 function TransactionExplorer() {
+  const { tenantId } = useTenant();
   const [filters, setFilters] = useState<TransactionSearchRequest>({
     limit: 20,
     offset: 0
   });
 
   const searchQuery = useQuery({
-    queryKey: ['analytics', 'search', filters],
+    queryKey: ['analytics', tenantId, 'search', filters],
     queryFn: () => analyticsApi.searchTransactions(filters),
     placeholderData: keepPreviousData,
   });

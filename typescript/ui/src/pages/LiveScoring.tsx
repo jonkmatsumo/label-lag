@@ -4,6 +4,7 @@ import { signalApi, healthApi } from '../api';
 import type { SignalRequest, SignalResponse, HealthResponse } from '../types/api';
 import { Clock, Cpu, AlertTriangle, Shield, ChevronDown, ChevronRight } from 'lucide-react';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { useTenant } from '../hooks/useTenant';
 
 export function LiveScoring() {
   const [formData, setFormData] = useState<SignalRequest>({
@@ -14,10 +15,11 @@ export function LiveScoring() {
   });
 
   const [result, setResult] = useState<SignalResponse | null>(null);
+  const { tenantId } = useTenant();
 
   // Fetch model health status
   const healthQuery = useQuery({
-    queryKey: ['health'],
+    queryKey: ['health', tenantId],
     queryFn: healthApi.getHealth,
     refetchInterval: 30000, // Refresh every 30 seconds
   });

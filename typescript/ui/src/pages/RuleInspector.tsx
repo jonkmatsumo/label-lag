@@ -19,6 +19,7 @@ import {
   Cell, ComposedChart, Line
 } from 'recharts';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { useTenant } from '../hooks/useTenant';
 
 const ruleTabs = [
   { path: '/rules', label: 'Management', exact: true },
@@ -68,11 +69,12 @@ export function RuleInspector() {
 }
 
 export function RuleManagement() {
+  const { tenantId } = useTenant();
   const [expandedRule, setExpandedRule] = useState<string | null>(null);
 
   // Fetch draft rules
   const rulesQuery = useQuery({
-    queryKey: ['rules', 'draft'],
+    queryKey: ['rules', tenantId, 'draft'],
     queryFn: rulesApi.getDraftRules,
   });
 
@@ -217,14 +219,15 @@ function RuleDetail({ rule, onPublished }: { rule: DraftRule, onPublished: () =>
 }
 
 function RuleOverviewTab({ rule, onShowPublish }: { rule: DraftRule, onShowPublish: () => void }) {
+  const { tenantId } = useTenant();
   const readinessQuery = useQuery({
-    queryKey: ['rules', rule.id, 'readiness'],
+    queryKey: ['rules', tenantId, rule.id, 'readiness'],
     queryFn: () => rulesApi.getReadiness(rule.id),
     enabled: !!rule.id
   });
 
   const signalsQuery = useQuery({
-    queryKey: ['rules', rule.id, 'signals'],
+    queryKey: ['rules', tenantId, rule.id, 'signals'],
     queryFn: () => rulesApi.getApprovalSignals(rule.id),
     enabled: !!rule.id && (rule.status === 'pending_approval' || rule.status === 'approved')
   });
@@ -309,15 +312,16 @@ function RuleOverviewTab({ rule, onShowPublish }: { rule: DraftRule, onShowPubli
 }
 
 function RuleHistoryTab({ ruleId }: { ruleId: string }) {
+  const { tenantId } = useTenant();
   const [selectedVersions, setSelectedVersions] = useState<string[]>([]);
 
   const versionsQuery = useQuery({
-    queryKey: ['rules', ruleId, 'versions'],
+    queryKey: ['rules', tenantId, ruleId, 'versions'],
     queryFn: () => rulesApi.getVersions(ruleId)
   });
 
   const diffQuery = useQuery({
-    queryKey: ['rules', ruleId, 'diff', selectedVersions],
+    queryKey: ['rules', tenantId, ruleId, 'diff', selectedVersions],
     queryFn: () => rulesApi.getDiff(ruleId, selectedVersions[0], selectedVersions[1]),
     enabled: selectedVersions.length === 2
   });
@@ -415,8 +419,9 @@ function RuleHistoryTab({ ruleId }: { ruleId: string }) {
 }
 
 function RuleImpactTab({ ruleId }: { ruleId: string }) {
+  const { tenantId } = useTenant();
   const attributionQuery = useQuery({
-    queryKey: ['analytics', 'attribution', ruleId],
+    queryKey: ['analytics', tenantId, 'attribution', ruleId],
     queryFn: () => analyticsApi.getAttribution(ruleId)
   });
 
@@ -767,6 +772,7 @@ function SliderInput({ label, value, min, max, step, onChange }: { label: string
 }
 
 export function RuleShadow() {
+  const { tenantId } = useTenant();
   const [dateRange, setDateRange] = useState(() => {
     const end = new Date();
     const start = new Date();
@@ -778,7 +784,7 @@ export function RuleShadow() {
   });
 
   const shadowQuery = useQuery({
-    queryKey: ['shadow-comparison', dateRange.start, dateRange.end],
+    queryKey: ['shadow-comparison', tenantId, dateRange.start, dateRange.end],
     queryFn: () => monitoringApi.getShadowComparison(dateRange.start, dateRange.end),
   });
 
@@ -877,13 +883,14 @@ export function RuleShadow() {
 }
 
 export function RuleBacktests() {
+  const { tenantId } = useTenant();
   const [searchParams, setSearchParams] = useSearchParams();
   const ruleFilter = searchParams.get('rule_id') || '';
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
   const backtestsQuery = useQuery({
-    queryKey: ['backtest-results', ruleFilter],
+    queryKey: ['backtest-results', tenantId, ruleFilter],
     queryFn: () => backtestApi.listResults({ rule_id: ruleFilter || undefined, limit: 100 }),
   });
 
@@ -897,7 +904,6 @@ export function RuleBacktests() {
   */
 
   const handleFilterChange = (val: string) => {
-    const newParams = new URLSearchParams(searchParams);
     const newParams = new URLSearchParams(searchParams);
     if (val) newParams.set('rule_id', val);
     else newParams.delete('rule_id');
@@ -1035,11 +1041,12 @@ export function RuleBacktests() {
 }
 
 export function RuleSuggestions() {
+  const { tenantId } = useTenant();
   const [minConfidence, setMinConfidence] = useState(0.7);
   const queryClient = useQueryClient();
 
   const suggestionsQuery = useQuery({
-    queryKey: ['suggestions', minConfidence],
+    queryKey: ['suggestions', tenantId, minConfidence],
     queryFn: () => suggestionsApi.getHeuristic({ min_confidence: minConfidence }),
   });
 
@@ -1048,7 +1055,7 @@ export function RuleSuggestions() {
     onSuccess: () => {
       alert('Suggestion accepted! A draft rule has been created.');
       // Refresh draft rules if we were showing them
-      queryClient.invalidateQueries({ queryKey: ['rules', 'draft'] });
+      queryClient.invalidateQueries({ queryKey: ['rules', tenantId, 'draft'] });
     },
     onError: (err) => {
       alert(`Failed to accept: ${err instanceof Error ? err.message : 'Unknown error'}`);

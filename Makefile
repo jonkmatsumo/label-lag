@@ -98,6 +98,10 @@ bff-test:
 bff-dev:
 	cd typescript/bff && npm run dev
 
+# Fullstack smoke tests (staging/E2E)
+test-fullstack-smoke:
+	cd typescript/bff && npm run test:smoke:e2e
+
 # Web (React UI) targets
 rebuild-web:
 	docker compose -f docker-compose.infra.yml -f docker-compose.app.yml build web

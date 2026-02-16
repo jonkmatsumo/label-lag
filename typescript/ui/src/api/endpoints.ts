@@ -33,6 +33,23 @@ import type {
   FeatureSampleResponse,
   RuleSuggestion,
   AcceptSuggestionRequest,
+  ListJobsResponse,
+  Job,
+  ListJobEventsResponse,
+  CancelJobResponse,
+  RetryJobResponse,
+  ListDecisionsResponse,
+  DecisionDetail,
+  DecisionTrace,
+  ListTrainingRunsResponse,
+  TrainingRun,
+  ModelVersion,
+  ListModelVersionsResponse,
+  ListDatasetProfilesResponse,
+  DatasetProfile,
+  DatasetSummary,
+  CompareProfilesResponse,
+  MetricSeriesPoint,
 } from '../types/api';
 
 // Health endpoints
@@ -143,6 +160,16 @@ export const monitoringApi = {
     if (ruleIds) searchParams.set('rule_ids', ruleIds);
     return apiClient.get<ShadowComparisonResponse>(`/bff/v1/metrics/shadow/comparison?${searchParams.toString()}`);
   },
+  getSeries: (params: { metric: string; start_date: string; end_date: string; interval?: string; tags?: Record<string, string> }) => {
+    const searchParams = new URLSearchParams({
+      metric: params.metric,
+      start_date: params.start_date,
+      end_date: params.end_date,
+    });
+    if (params.interval) searchParams.set('interval', params.interval);
+    if (params.tags) searchParams.set('tags', JSON.stringify(params.tags));
+    return apiClient.get<{ series: MetricSeriesPoint[] }>(`/bff/v1/metrics/series?${searchParams.toString()}`);
+  },
 };
 
 // Rules detail endpoints
@@ -151,4 +178,91 @@ export const rulesDetailApi = {
     apiClient.get<ReadinessReportResponse>(`/bff/v1/rules/${encodeURIComponent(ruleId)}/readiness`),
   getVersions: (ruleId: string) =>
     apiClient.get<RuleVersionListResponse>(`/bff/v1/rules/${encodeURIComponent(ruleId)}/versions`),
+};
+
+// Jobs endpoints
+export const jobsApi = {
+  list: (params?: { job_type?: string; status?: string; limit?: number; cursor?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.job_type) searchParams.set('job_type', params.job_type);
+    if (params?.status) searchParams.set('status', params.status);
+    if (params?.limit) searchParams.set('limit', String(params.limit));
+    if (params?.cursor) searchParams.set('cursor', params.cursor);
+    const query = searchParams.toString();
+    return apiClient.get<ListJobsResponse>(`/bff/v1/jobs${query ? `?${query}` : ''}`);
+  },
+  get: (jobId: string) =>
+    apiClient.get<{ job: Job }>(`/bff/v1/jobs/${encodeURIComponent(jobId)}`),
+  getEvents: (jobId: string) =>
+    apiClient.get<ListJobEventsResponse>(`/bff/v1/jobs/${encodeURIComponent(jobId)}/events`),
+  cancel: (jobId: string) =>
+    apiClient.post<CancelJobResponse>(`/bff/v1/jobs/${encodeURIComponent(jobId)}/cancel`),
+  retry: (jobId: string) =>
+    apiClient.post<RetryJobResponse>(`/bff/v1/jobs/${encodeURIComponent(jobId)}/retry`),
+};
+
+// Decisions endpoints
+export const decisionsApi = {
+  list: (params?: { user_id?: string; decision?: string; start_time?: string; end_time?: string; limit?: number; cursor?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.user_id) searchParams.set('user_id', params.user_id);
+    if (params?.decision) searchParams.set('decision', params.decision);
+    if (params?.start_time) searchParams.set('start_time', params.start_time);
+    if (params?.end_time) searchParams.set('end_time', params.end_time);
+    if (params?.limit) searchParams.set('limit', String(params.limit));
+    if (params?.cursor) searchParams.set('cursor', params.cursor);
+    const query = searchParams.toString();
+    return apiClient.get<ListDecisionsResponse>(`/bff/v1/decisions${query ? `?${query}` : ''}`);
+  },
+  get: (id: string) => apiClient.get<DecisionDetail>(`/bff/v1/decisions/${encodeURIComponent(id)}`),
+  getTrace: (id: string) => apiClient.get<DecisionTrace>(`/bff/v1/decisions/${encodeURIComponent(id)}/trace`),
+};
+
+// Training endpoints
+export const trainingApi = {
+  list: (params?: { model_name?: string; status?: string; limit?: number; cursor?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.model_name) searchParams.set('model_name', params.model_name);
+    if (params?.status) searchParams.set('status', params.status);
+    if (params?.limit) searchParams.set('limit', String(params.limit));
+    if (params?.cursor) searchParams.set('cursor', params.cursor);
+    const query = searchParams.toString();
+    return apiClient.get<ListTrainingRunsResponse>(`/bff/v1/training-runs${query ? `?${query}` : ''}`);
+  },
+  get: (id: string) => apiClient.get<TrainingRun>(`/bff/v1/training-runs/${encodeURIComponent(id)}`),
+};
+
+// Model versions endpoints
+export const modelVersionsApi = {
+  list: (params?: { model_name?: string; limit?: number; cursor?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.model_name) searchParams.set('model_name', params.model_name);
+    if (params?.limit) searchParams.set('limit', String(params.limit));
+    if (params?.cursor) searchParams.set('cursor', params.cursor);
+    const query = searchParams.toString();
+    return apiClient.get<ListModelVersionsResponse>(`/bff/v1/models/versions${query ? `?${query}` : ''}`);
+  },
+  get: (version: string) => apiClient.get<ModelVersion>(`/bff/v1/models/versions/${encodeURIComponent(version)}`),
+};
+
+// Profiles endpoints
+export const profilesApi = {
+  list: (params?: { limit?: number; cursor?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.limit) searchParams.set('limit', String(params.limit));
+    if (params?.cursor) searchParams.set('cursor', params.cursor);
+    const query = searchParams.toString();
+    return apiClient.get<ListDatasetProfilesResponse>(`/bff/v1/dataset/profiles${query ? `?${query}` : ''}`);
+  },
+  get: (id: string) => apiClient.get<DatasetProfile>(`/bff/v1/dataset/profiles/${encodeURIComponent(id)}`),
+  getSummary: (profileId?: string) => {
+    const searchParams = new URLSearchParams();
+    if (profileId) searchParams.set('profile_id', profileId);
+    const query = searchParams.toString();
+    return apiClient.get<DatasetSummary>(`/bff/v1/dataset/summary${query ? `?${query}` : ''}`);
+  },
+  compare: (baseId: string, targetId: string) => {
+    const searchParams = new URLSearchParams({ base_id: baseId, target_id: targetId });
+    return apiClient.get<CompareProfilesResponse>(`/bff/v1/dataset/profiles/compare?${searchParams.toString()}`);
+  },
 };

@@ -66,7 +66,9 @@ export async function analyticsRoutes(
     '/bff/v1/analytics/overview',
     async (request: FastifyRequest, reply: FastifyReply) => {
       const cacheKey = 'analytics:overview';
-      const cached = cache.get<AnalyticsOverviewResponse>(cacheKey);
+      // @ts-ignore - tenantId is added by middleware
+      const tenantId = request.tenantId || 'default';
+      const cached = cache.get<AnalyticsOverviewResponse>(cacheKey, tenantId);
       if (cached) return reply.send(cached);
 
       try {
@@ -76,17 +78,19 @@ export async function analyticsRoutes(
             method: 'GET',
             path: '/analytics/overview',
             requestId: request.requestId,
+            tenantId: request.tenantId,
             target: 'gateway',
           },
           shadow: {
             method: 'GET',
             path: '/analytics/overview',
             requestId: request.requestId,
+            tenantId: request.tenantId,
             target: 'python',
           },
         });
 
-        cache.set(cacheKey, response.data);
+        cache.set(cacheKey, response.data, tenantId);
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
         if (error instanceof UpstreamError) {
@@ -117,17 +121,20 @@ export async function analyticsRoutes(
       try {
         const { days = 30 } = request.query;
         const cacheKey = `analytics:daily-stats:${days}`;
-        const cached = cache.get<DailyStatsResponse>(cacheKey);
+        // @ts-ignore - tenantId is added by middleware
+        const tenantId = request.tenantId || 'default';
+        const cached = cache.get<DailyStatsResponse>(cacheKey, tenantId);
         if (cached) return reply.send(cached);
 
         const response = await httpClient.request<DailyStatsResponse>({
           method: 'GET',
           path: `/analytics/daily-stats?days=${days}`,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'gateway',
         });
 
-        cache.set(cacheKey, response.data);
+        cache.set(cacheKey, response.data, tenantId);
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
         if (error instanceof UpstreamError) {
@@ -163,6 +170,7 @@ export async function analyticsRoutes(
           method: 'GET',
           path: `/analytics/transactions?days=${days}&limit=${limit}`,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'gateway',
         });
 
@@ -200,6 +208,7 @@ export async function analyticsRoutes(
           method: 'GET',
           path: `/analytics/recent-alerts?limit=${limit}`,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'gateway',
         });
 
@@ -222,6 +231,7 @@ export async function analyticsRoutes(
           method: 'GET',
           path: '/analytics/fingerprint',
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'gateway',
         });
 
@@ -260,6 +270,7 @@ export async function analyticsRoutes(
           method: 'GET',
           path: `/analytics/feature-sample?sample_size=${sample_size}&stratify=${stratify}`,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'gateway',
         });
 
@@ -305,6 +316,7 @@ export async function analyticsRoutes(
           method: 'GET',
           path: `/analytics/rules/${encodeURIComponent(rule_id)}?days=${days}`,
           requestId: request.requestId,
+          tenantId: request.tenantId,
         };
 
         if (httpClient.config.enableGoRulesControlPlane) {
@@ -351,6 +363,7 @@ export async function analyticsRoutes(
           method: 'GET',
           path: `/analytics/attribution?rule_id=${encodeURIComponent(rule_id)}&days=${days}`,
           requestId: request.requestId,
+          tenantId: request.tenantId,
         };
 
         if (httpClient.config.enableGoRulesControlPlane) {
@@ -405,6 +418,7 @@ export async function analyticsRoutes(
           body: request.body,
           target: 'gateway',
           requestId: request.requestId,
+          tenantId: request.tenantId,
         });
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {

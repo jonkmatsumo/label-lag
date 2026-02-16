@@ -10,6 +10,7 @@
     "start": "node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:smoke:e2e": "SMOKE_E2E=true vitest run tests/smoke/explorer-smoke.test.ts",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix"
   },

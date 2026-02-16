@@ -21,6 +21,8 @@ export interface Config {
   enableGoRulesSandbox: boolean;
   enableGoRulesControlPlane: boolean;
   shadowModeEnabled: boolean;
+  defaultTenantId: string;
+  debugRequests: boolean;
 }
 
 function getEnvOrDefault(key: string, defaultValue: string): string {
@@ -48,7 +50,7 @@ export function loadConfig(): Config {
     mlflowTrackingUri: getEnvOrDefault('BFF_MLFLOW_TRACKING_URI', 'http://mlflow:5005'),
     gatewayBaseUrl: getEnvOrDefault('BFF_GATEWAY_BASE_URL', 'http://orchestrator:8081'),
     requestTimeout: getEnvAsInt('BFF_REQUEST_TIMEOUT', 30000),
-    upstreamTimeout: getEnvAsInt('BFF_UPSTREAM_TIMEOUT_MS', 5000),
+    upstreamTimeout: getEnvAsInt('BFF_UPSTREAM_TIMEOUT_MS', 30000),
     cacheEnabled: getEnvAsBool('BFF_CACHE_ENABLED', true),
     cacheTtlMs: getEnvAsInt('BFF_CACHE_TTL_MS', 30000),
     corsOrigin: getEnvOrDefault('BFF_CORS_ORIGIN', 'true'), // 'true' means reflect origin (dev), or comma-separated list
@@ -59,5 +61,7 @@ export function loadConfig(): Config {
     enableGoRulesSandbox: getEnvAsBool('ENABLE_GO_RULES_SANDBOX', false),
     enableGoRulesControlPlane: getEnvAsBool('ENABLE_GO_RULES_CONTROL_PLANE', false),
     shadowModeEnabled: getEnvAsBool('SHADOW_MODE_ENABLED', false),
+    defaultTenantId: getEnvOrDefault('BFF_DEFAULT_TENANT_ID', ''),
+    debugRequests: getEnvAsBool('BFF_DEBUG_REQUESTS', false),
   };
 }

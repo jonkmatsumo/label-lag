@@ -63,6 +63,7 @@ export async function backtestRoutes(
           path: '/backtest/results',
           query,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'gateway',
         });
 
@@ -106,6 +107,7 @@ export async function backtestRoutes(
           path: '/backtest/compare',
           body: compareRequest,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           timeout: 120000, // 2 minutes for backtest
           target: 'python',
         });

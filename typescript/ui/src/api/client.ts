@@ -5,12 +5,25 @@ import { v4 as uuidv4 } from 'uuid';
 import type { ErrorResponse } from '../types/api';
 
 const BFF_BASE_URL = import.meta.env.VITE_BFF_BASE_URL ?? '/api';
+const DEBUG_REQUESTS = import.meta.env.VITE_DEBUG_REQUESTS === 'true';
 
 export class ApiClient {
   private baseUrl: string;
+  private tenantId = '';
 
   constructor(baseUrl: string = BFF_BASE_URL) {
     this.baseUrl = baseUrl;
+    if (DEBUG_REQUESTS) {
+      console.debug('[ApiClient] Initialized', { baseUrl });
+    }
+  }
+
+  setTenantId(id: string): void {
+    this.tenantId = id;
+  }
+
+  getTenantId(): string {
+    return this.tenantId;
   }
 
   private async request<T>(
@@ -23,8 +36,13 @@ export class ApiClient {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       'X-Request-Id': requestId,
+      ...(this.tenantId ? { 'X-Tenant-Id': this.tenantId } : {}),
       ...options.headers,
     };
+
+    if (DEBUG_REQUESTS) {
+      console.debug('[ApiClient] Request', { requestId, method: options.method ?? 'GET', url, headers });
+    }
 
     try {
       const response = await fetch(url, {
@@ -111,3 +129,13 @@ export class ApiError extends Error {
 
 // Singleton instance
 export const apiClient = new ApiClient();
+
+/**
+ * Guard against sending both cursor and offset in pagination params.
+ * Call this before building query strings for paginated endpoints.
+ */
+export function assertNoPaginationConflict(params: Record<string, unknown>): void {
+  if (params.cursor && params.offset !== undefined) {
+    throw new Error('Cannot provide both cursor and offset — pagination conflict');
+  }
+}

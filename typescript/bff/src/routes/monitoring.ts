@@ -62,6 +62,7 @@ export async function monitoringRoutes(
           method: 'GET',
           path: `/monitoring/drift?${queryParams.toString()}`,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'gateway',
         });
 
@@ -111,6 +112,59 @@ export async function monitoringRoutes(
           method: 'GET',
           path: `/metrics/shadow/comparison?${queryParams.toString()}`,
           requestId: request.requestId,
+          tenantId: request.tenantId,
+          target: 'gateway',
+        });
+
+        return reply.status(response.statusCode).send(response.data);
+      } catch (error) {
+        if (error instanceof UpstreamError) {
+          return reply.status(error.statusCode).send(error.toResponse());
+        }
+        throw error;
+      }
+    }
+  );
+
+  // GET /bff/v1/metrics/series - Get metric series data
+  fastify.get<{ Querystring: { metric: string; start_date: string; end_date: string; interval?: string; tags?: string } }>(
+    '/bff/v1/metrics/series',
+    {
+      schema: {
+        querystring: {
+          type: 'object',
+          required: ['metric', 'start_date', 'end_date'],
+          properties: {
+            metric: { type: 'string' },
+            start_date: { type: 'string', format: 'date-time' },
+            end_date: { type: 'string', format: 'date-time' },
+            interval: { type: 'string' },
+            tags: { type: 'string' }, // JSON string of tags
+          },
+        },
+      },
+    },
+    async (
+      request: FastifyRequest<{ Querystring: { metric: string; start_date: string; end_date: string; interval?: string; tags?: string } }>,
+      reply: FastifyReply
+    ) => {
+      try {
+        const { metric, start_date, end_date, interval, tags } = request.query;
+
+        const queryParams = new URLSearchParams({
+          metric,
+          start_date,
+          end_date,
+        });
+
+        if (interval) queryParams.set('interval', interval);
+        if (tags) queryParams.set('tags', tags);
+
+        const response = await httpClient.request({
+          method: 'GET',
+          path: `/metrics/series?${queryParams.toString()}`,
+          requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'gateway',
         });
 
