@@ -16,34 +16,46 @@ export class SimpleCache {
     this.logger = logger.child({ service: 'cache' });
   }
 
-  get<T>(key: string): T | undefined {
+  get<T>(key: string, tenantId: string): T | undefined {
     if (!this.config.cacheEnabled) return undefined;
 
-    const entry = this.cache.get(key);
+    const compositeKey = `${tenantId}:${key}`;
+    const entry = this.cache.get(compositeKey);
     if (!entry) return undefined;
 
     if (Date.now() > entry.expiry) {
-      this.cache.delete(key);
-      this.logger.debug({ key }, 'Cache miss (expired)');
+      this.cache.delete(compositeKey);
+      this.logger.debug({ key: compositeKey }, 'Cache miss (expired)');
       return undefined;
     }
 
-    this.logger.debug({ key }, 'Cache hit');
+    // LRU: Move to end (most recently used)
+    this.cache.delete(compositeKey);
+    this.cache.set(compositeKey, entry);
+
+    this.logger.debug({ key: compositeKey }, 'Cache hit');
     return entry.data as T;
   }
 
-  set<T>(key: string, data: T, ttlMs?: number): void {
+  set<T>(key: string, data: T, tenantId: string, ttlMs?: number): void {
     if (!this.config.cacheEnabled) return;
 
     const ttl = ttlMs ?? this.config.cacheTtlMs;
     const expiry = Date.now() + ttl;
+    const compositeKey = `${tenantId}:${key}`;
 
-    // Simple LRU-like safety: if too big, clear it
-    if (this.cache.size > 1000) {
-      this.cache.clear();
-      this.logger.warn('Cache cleared due to size limit');
+    // LRU: If key exists, delete it first so it moves to end
+    if (this.cache.has(compositeKey)) {
+      this.cache.delete(compositeKey);
+    } else if (this.cache.size >= 1000) {
+      // Evict oldest (first in Map)
+      const oldestKey = this.cache.keys().next().value;
+      if (oldestKey) {
+        this.cache.delete(oldestKey);
+        this.logger.debug({ evictedKey: oldestKey }, 'Cache evicted usage limit');
+      }
     }
 
-    this.cache.set(key, { data, expiry });
+    this.cache.set(compositeKey, { data, expiry });
   }
 }
