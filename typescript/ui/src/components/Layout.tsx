@@ -1,4 +1,5 @@
 import { Link, useLocation, Outlet } from 'react-router-dom';
+import { useTenant } from '../context/TenantContext';
 
 interface NavItem {
   path: string;
@@ -17,6 +18,7 @@ const navItems: NavItem[] = [
 
 export function Layout() {
   const location = useLocation();
+  const { tenantId } = useTenant();
 
   return (
     <div className="layout">
@@ -24,6 +26,9 @@ export function Layout() {
         <div className="sidebar-header">
           <h1>Label Lag</h1>
           <span className="subtitle">Fraud Detection Platform</span>
+          <span className="badge bg-secondary mt-1" style={{ fontSize: '0.7rem' }}>
+            Tenant: {tenantId}
+          </span>
         </div>
         <ul className="nav-list">
           {navItems.map((item) => {

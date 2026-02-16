@@ -8,9 +8,18 @@ const BFF_BASE_URL = import.meta.env.VITE_BFF_BASE_URL ?? '/api';
 
 export class ApiClient {
   private baseUrl: string;
+  private tenantId = '';
 
   constructor(baseUrl: string = BFF_BASE_URL) {
     this.baseUrl = baseUrl;
+  }
+
+  setTenantId(id: string): void {
+    this.tenantId = id;
+  }
+
+  getTenantId(): string {
+    return this.tenantId;
   }
 
   private async request<T>(
@@ -23,6 +32,7 @@ export class ApiClient {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       'X-Request-Id': requestId,
+      ...(this.tenantId ? { 'X-Tenant-Id': this.tenantId } : {}),
       ...options.headers,
     };
 

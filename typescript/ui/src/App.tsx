@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Layout } from './components';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { TenantProvider } from './context/TenantContext';
 import {
   LiveScoring,
   Analytics,
@@ -28,6 +29,7 @@ const queryClient = new QueryClient({
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <TenantProvider>
       <ErrorBoundary>
         <BrowserRouter>
           <Routes>
@@ -48,6 +50,7 @@ function App() {
           </Routes>
         </BrowserRouter>
       </ErrorBoundary>
+      </TenantProvider>
     </QueryClientProvider>
   );
 }
