@@ -11,3 +11,4 @@ export {
   RuleSuggestions,
 } from './RuleInspector';
 export { WhatIf } from './WhatIf';
+export { Jobs } from './Jobs';

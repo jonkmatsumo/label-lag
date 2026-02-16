@@ -15,6 +15,7 @@ import {
   RuleBacktests,
   RuleSuggestions,
   WhatIf,
+  Jobs,
 } from './pages';
 
 const queryClient = new QueryClient({
@@ -46,6 +47,7 @@ function App() {
                 <Route path="suggestions" element={<RuleSuggestions />} />
               </Route>
               <Route path="what-if" element={<WhatIf />} />
+              <Route path="jobs" element={<Jobs />} />
             </Route>
           </Routes>
         </BrowserRouter>

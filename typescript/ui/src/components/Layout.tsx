@@ -14,6 +14,7 @@ const navItems: NavItem[] = [
   { path: '/model-lab', label: 'Model Lab', icon: '🧪' },
   { path: '/rules', label: 'Rule Inspector', icon: '📋' },
   { path: '/what-if', label: 'What-If Simulation', icon: '🔮' },
+  { path: '/jobs', label: 'Jobs', icon: '⚙️' },
 ];
 
 export function Layout() {
