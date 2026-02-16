@@ -12,3 +12,4 @@ export {
 } from './RuleInspector';
 export { WhatIf } from './WhatIf';
 export { Jobs } from './Jobs';
+export { JobDetail } from './JobDetail';
