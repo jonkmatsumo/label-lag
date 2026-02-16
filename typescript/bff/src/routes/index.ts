@@ -8,3 +8,4 @@ export * from './monitoring.js';
 export * from './rules-detail.js';
 export * from './dataset.js';
 export * from './mlflow.js';
+export { jobsRoutes } from './jobs.js';

@@ -18,6 +18,7 @@ import {
   rulesDetailRoutes,
   datasetRoutes,
   mlflowRoutes,
+  jobsRoutes,
 } from './routes/index.js';
 import { ErrorResponse } from './types/api.js';
 
@@ -113,6 +114,7 @@ async function main(): Promise<void> {
   await fastify.register(rulesDetailRoutes, { httpClient });
   await fastify.register(datasetRoutes, { httpClient, shadowService });
   await fastify.register(mlflowRoutes, { httpClient });
+  await fastify.register(jobsRoutes, { httpClient });
 
   // Start server
   try {
