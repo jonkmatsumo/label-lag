@@ -49,7 +49,7 @@ export function loadConfig(): Config {
     mlflowTrackingUri: getEnvOrDefault('BFF_MLFLOW_TRACKING_URI', 'http://mlflow:5005'),
     gatewayBaseUrl: getEnvOrDefault('BFF_GATEWAY_BASE_URL', 'http://orchestrator:8081'),
     requestTimeout: getEnvAsInt('BFF_REQUEST_TIMEOUT', 30000),
-    upstreamTimeout: getEnvAsInt('BFF_UPSTREAM_TIMEOUT_MS', 5000),
+    upstreamTimeout: getEnvAsInt('BFF_UPSTREAM_TIMEOUT_MS', 30000),
     cacheEnabled: getEnvAsBool('BFF_CACHE_ENABLED', true),
     cacheTtlMs: getEnvAsInt('BFF_CACHE_TTL_MS', 30000),
     corsOrigin: getEnvOrDefault('BFF_CORS_ORIGIN', 'true'), // 'true' means reflect origin (dev), or comma-separated list
