@@ -121,3 +121,13 @@ export class ApiError extends Error {
 
 // Singleton instance
 export const apiClient = new ApiClient();
+
+/**
+ * Guard against sending both cursor and offset in pagination params.
+ * Call this before building query strings for paginated endpoints.
+ */
+export function assertNoPaginationConflict(params: Record<string, unknown>): void {
+  if (params.cursor && params.offset !== undefined) {
+    throw new Error('Cannot provide both cursor and offset — pagination conflict');
+  }
+}
