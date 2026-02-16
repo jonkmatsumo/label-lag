@@ -47,6 +47,7 @@ export async function rulesDetailRoutes(
             path: '/rules',
             query: { status: 'ACTIVE' },
             requestId: request.requestId,
+          tenantId: request.tenantId,
             target: 'gateway',
           });
         } else {
@@ -54,6 +55,7 @@ export async function rulesDetailRoutes(
             method: 'GET',
             path: '/rules',
             requestId: request.requestId,
+          tenantId: request.tenantId,
           });
         }
 
@@ -92,6 +94,7 @@ export async function rulesDetailRoutes(
           method: 'GET',
           path: `/rules/${encodeURIComponent(rule_id)}/readiness`,
           requestId: request.requestId,
+          tenantId: request.tenantId,
         };
 
         if (httpClient.config.enableGoRulesControlPlane) {
@@ -135,6 +138,7 @@ export async function rulesDetailRoutes(
           method: 'GET',
           path: `/rules/${encodeURIComponent(rule_id)}/versions`,
           requestId: request.requestId,
+          tenantId: request.tenantId,
         };
 
         if (httpClient.config.enableGoRulesControlPlane) {
@@ -179,6 +183,7 @@ export async function rulesDetailRoutes(
           method: 'GET',
           path: `/rules/${encodeURIComponent(rule_id)}/versions/${encodeURIComponent(version_id)}`,
           requestId: request.requestId,
+          tenantId: request.tenantId,
         };
 
         if (httpClient.config.enableGoRulesControlPlane) {
@@ -241,6 +246,7 @@ export async function rulesDetailRoutes(
           method: 'GET',
           path,
           requestId: request.requestId,
+          tenantId: request.tenantId,
         };
 
         if (httpClient.config.enableGoRulesControlPlane) {

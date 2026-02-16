@@ -36,6 +36,7 @@ export async function healthRoutes(
           method: 'GET',
           path: '/health',
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'python',
         });
 

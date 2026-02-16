@@ -78,6 +78,7 @@ export async function modelRoutes(
           path: '/train',
           body: trainRequest,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'gateway',
           timeout: 300000, // 5 minutes for training
         });
@@ -118,6 +119,7 @@ export async function modelRoutes(
           path: '/models/deploy',
           body: deployRequest,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'gateway',
         });
 

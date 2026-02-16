@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import pino from 'pino';
 import { loadConfig } from './config.js';
 import { requestIdMiddleware } from './middleware/request-id.js';
+import { createTenantMiddleware } from './middleware/tenant.js';
 import { HttpClient, UpstreamError } from './services/http-client.js';
 import { ShadowService } from './services/shadow.js';
 import { SimpleCache } from './services/cache.js';
@@ -60,6 +61,9 @@ async function main(): Promise<void> {
 
   // Register request ID middleware
   fastify.addHook('onRequest', requestIdMiddleware);
+
+  // Register tenant middleware
+  fastify.addHook('onRequest', createTenantMiddleware(config));
 
   // Create HTTP client for upstream calls
   const httpClient = new HttpClient({ config, logger });

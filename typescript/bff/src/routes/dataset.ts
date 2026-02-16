@@ -22,6 +22,7 @@ export async function datasetRoutes(
           method: 'GET',
           path: '/analytics/overview',
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'gateway',
         });
         return reply.status(response.statusCode).send(response.data);
@@ -43,6 +44,7 @@ export async function datasetRoutes(
           method: 'GET',
           path: '/analytics/schema',
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'gateway',
         });
         return reply.status(response.statusCode).send(response.data);
@@ -80,6 +82,7 @@ export async function datasetRoutes(
           path: '/analytics/generate',
           body: request.body,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           timeout: 300000, // 5 min timeout for generation
           target: 'gateway',
         });
@@ -102,6 +105,7 @@ export async function datasetRoutes(
           method: 'DELETE',
           path: '/data/clear',
           requestId: request.requestId,
+          tenantId: request.tenantId,
           timeout: 60000,
           target: 'gateway',
         };
@@ -110,6 +114,7 @@ export async function datasetRoutes(
           method: 'DELETE',
           path: '/data/clear',
           requestId: request.requestId,
+          tenantId: request.tenantId,
           timeout: 60000,
           target: 'python',
         };
@@ -156,6 +161,7 @@ export async function datasetRoutes(
           path: '/analytics/feature-sample',
           query: request.query as Record<string, string | number | boolean>,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'gateway',
         });
         return reply.status(response.statusCode).send(response.data);
@@ -189,6 +195,7 @@ export async function datasetRoutes(
           path: '/analytics/relationships',
           query: request.query as Record<string, string | number | boolean>,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'python',
         });
         return reply.status(response.statusCode).send(response.data);
@@ -224,6 +231,7 @@ export async function datasetRoutes(
           path: '/analytics/correlations',
           query: request.query as Record<string, string | number | boolean>,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'python',
         });
         return reply.status(response.statusCode).send(response.data);

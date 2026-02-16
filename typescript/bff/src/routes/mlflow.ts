@@ -21,6 +21,7 @@ export async function mlflowRoutes(
           path: '/api/2.0/mlflow/experiments/search',
           query: request.query as Record<string, string>,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'mlflow',
         });
         return reply.status(response.statusCode).send(response.data);
@@ -43,6 +44,7 @@ export async function mlflowRoutes(
           path: '/api/2.0/mlflow/runs/search',
           body: request.body,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'mlflow',
         });
         return reply.status(response.statusCode).send(response.data);
@@ -65,6 +67,7 @@ export async function mlflowRoutes(
           path: '/api/2.0/mlflow/model-versions/search',
           query: request.query as Record<string, string>,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'mlflow',
         });
         return reply.status(response.statusCode).send(response.data);
@@ -109,6 +112,7 @@ export async function mlflowRoutes(
             run_uuid: run_id,
           },
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'mlflow',
         });
 
@@ -148,6 +152,7 @@ export async function mlflowRoutes(
           path: '/api/2.0/mlflow/model-versions/transition-stage',
           body: request.body,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'mlflow',
         });
         return reply.status(response.statusCode).send(response.data);
@@ -174,6 +179,7 @@ export async function mlflowRoutes(
           path: '/api/2.0/mlflow/runs/get',
           query: { run_id },
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'mlflow',
         });
         return reply.status(response.statusCode).send(response.data);

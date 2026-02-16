@@ -48,6 +48,7 @@ export async function evaluateRoutes(
           path: '/evaluate/signal',
           body: signalRequest,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'gateway',
         });
 

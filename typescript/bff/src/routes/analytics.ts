@@ -76,12 +76,14 @@ export async function analyticsRoutes(
             method: 'GET',
             path: '/analytics/overview',
             requestId: request.requestId,
+            tenantId: request.tenantId,
             target: 'gateway',
           },
           shadow: {
             method: 'GET',
             path: '/analytics/overview',
             requestId: request.requestId,
+            tenantId: request.tenantId,
             target: 'python',
           },
         });
@@ -124,6 +126,7 @@ export async function analyticsRoutes(
           method: 'GET',
           path: `/analytics/daily-stats?days=${days}`,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'gateway',
         });
 
@@ -163,6 +166,7 @@ export async function analyticsRoutes(
           method: 'GET',
           path: `/analytics/transactions?days=${days}&limit=${limit}`,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'gateway',
         });
 
@@ -200,6 +204,7 @@ export async function analyticsRoutes(
           method: 'GET',
           path: `/analytics/recent-alerts?limit=${limit}`,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'gateway',
         });
 
@@ -222,6 +227,7 @@ export async function analyticsRoutes(
           method: 'GET',
           path: '/analytics/fingerprint',
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'gateway',
         });
 
@@ -260,6 +266,7 @@ export async function analyticsRoutes(
           method: 'GET',
           path: `/analytics/feature-sample?sample_size=${sample_size}&stratify=${stratify}`,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'gateway',
         });
 
@@ -305,6 +312,7 @@ export async function analyticsRoutes(
           method: 'GET',
           path: `/analytics/rules/${encodeURIComponent(rule_id)}?days=${days}`,
           requestId: request.requestId,
+          tenantId: request.tenantId,
         };
 
         if (httpClient.config.enableGoRulesControlPlane) {
@@ -351,6 +359,7 @@ export async function analyticsRoutes(
           method: 'GET',
           path: `/analytics/attribution?rule_id=${encodeURIComponent(rule_id)}&days=${days}`,
           requestId: request.requestId,
+          tenantId: request.tenantId,
         };
 
         if (httpClient.config.enableGoRulesControlPlane) {
@@ -405,6 +414,7 @@ export async function analyticsRoutes(
           body: request.body,
           target: 'gateway',
           requestId: request.requestId,
+          tenantId: request.tenantId,
         });
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {

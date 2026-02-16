@@ -62,6 +62,7 @@ export async function monitoringRoutes(
           method: 'GET',
           path: `/monitoring/drift?${queryParams.toString()}`,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'gateway',
         });
 
@@ -111,6 +112,7 @@ export async function monitoringRoutes(
           method: 'GET',
           path: `/metrics/shadow/comparison?${queryParams.toString()}`,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'gateway',
         });
 

@@ -51,6 +51,7 @@ export async function rulesRoutes(
             path: '/rules',
             query: { status: 'DRAFT' },
             requestId: request.requestId,
+          tenantId: request.tenantId,
             target: 'gateway',
           });
         } else {
@@ -58,6 +59,7 @@ export async function rulesRoutes(
             method: 'GET',
             path: '/rules/draft',
             requestId: request.requestId,
+          tenantId: request.tenantId,
           });
         }
 
@@ -92,6 +94,7 @@ export async function rulesRoutes(
           method: 'GET',
           path: `/rules/draft/${encodeURIComponent(id)}/signals`,
           requestId: request.requestId,
+          tenantId: request.tenantId,
         });
 
         return reply.status(response.statusCode).send(response.data);
@@ -139,6 +142,7 @@ export async function rulesRoutes(
           path: `/rules/${id}/publish`,
           body: publishRequest,
           requestId: request.requestId,
+          tenantId: request.tenantId,
         };
 
         if (httpClient.config.enableGoRulesControlPlane) {
@@ -186,6 +190,7 @@ export async function rulesRoutes(
           path: '/rules/sandbox/evaluate',
           body: sandboxRequest,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'gateway',
         };
 
@@ -194,6 +199,7 @@ export async function rulesRoutes(
           path: '/rules/sandbox/evaluate',
           body: sandboxRequest,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'python',
         };
 
@@ -248,6 +254,7 @@ export async function rulesRoutes(
           path: '/rules/sandbox/diff',
           body: diffRequest,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'gateway',
         };
 
@@ -256,6 +263,7 @@ export async function rulesRoutes(
           path: '/rules/sandbox/diff',
           body: diffRequest,
           requestId: request.requestId,
+          tenantId: request.tenantId,
           target: 'python',
         };
 
@@ -290,6 +298,7 @@ export async function rulesRoutes(
           path: '/suggestions/heuristic',
           query: request.query as Record<string, string | number>,
           requestId: request.requestId,
+          tenantId: request.tenantId,
         });
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
@@ -311,6 +320,7 @@ export async function rulesRoutes(
           path: '/suggestions/accept',
           body: request.body,
           requestId: request.requestId,
+          tenantId: request.tenantId,
         });
         return reply.status(response.statusCode).send(response.data);
       } catch (error) {
