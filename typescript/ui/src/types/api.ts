@@ -558,3 +558,47 @@ export interface AcceptSuggestionRequest {
   actor: string;
   custom_id: string;
 }
+
+// Jobs types
+export interface Job {
+  job_id: string;
+  job_type: string;
+  status: string;
+  created_at: string;
+  started_at?: string;
+  ended_at?: string;
+  error_code?: string;
+  error_message?: string;
+  params_json?: string;
+  metrics_json?: string;
+}
+
+export interface JobEvent {
+  event_id: number;
+  job_id: string;
+  event_type: string;
+  timestamp: string;
+  details_json?: string;
+}
+
+export interface CursorPageResponse {
+  next_cursor?: string;
+  total?: number;
+}
+
+export interface ListJobsResponse {
+  jobs: Job[];
+  pagination: CursorPageResponse;
+}
+
+export interface ListJobEventsResponse {
+  events: JobEvent[];
+}
+
+export interface CancelJobResponse {
+  success: boolean;
+}
+
+export interface RetryJobResponse {
+  new_job_id: string;
+}

@@ -33,6 +33,11 @@ import type {
   FeatureSampleResponse,
   RuleSuggestion,
   AcceptSuggestionRequest,
+  ListJobsResponse,
+  Job,
+  ListJobEventsResponse,
+  CancelJobResponse,
+  RetryJobResponse,
 } from '../types/api';
 
 // Health endpoints
@@ -151,4 +156,25 @@ export const rulesDetailApi = {
     apiClient.get<ReadinessReportResponse>(`/bff/v1/rules/${encodeURIComponent(ruleId)}/readiness`),
   getVersions: (ruleId: string) =>
     apiClient.get<RuleVersionListResponse>(`/bff/v1/rules/${encodeURIComponent(ruleId)}/versions`),
+};
+
+// Jobs endpoints
+export const jobsApi = {
+  list: (params?: { job_type?: string; status?: string; limit?: number; cursor?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.job_type) searchParams.set('job_type', params.job_type);
+    if (params?.status) searchParams.set('status', params.status);
+    if (params?.limit) searchParams.set('limit', String(params.limit));
+    if (params?.cursor) searchParams.set('cursor', params.cursor);
+    const query = searchParams.toString();
+    return apiClient.get<ListJobsResponse>(`/bff/v1/jobs${query ? `?${query}` : ''}`);
+  },
+  get: (jobId: string) =>
+    apiClient.get<{ job: Job }>(`/bff/v1/jobs/${encodeURIComponent(jobId)}`),
+  getEvents: (jobId: string) =>
+    apiClient.get<ListJobEventsResponse>(`/bff/v1/jobs/${encodeURIComponent(jobId)}/events`),
+  cancel: (jobId: string) =>
+    apiClient.post<CancelJobResponse>(`/bff/v1/jobs/${encodeURIComponent(jobId)}/cancel`),
+  retry: (jobId: string) =>
+    apiClient.post<RetryJobResponse>(`/bff/v1/jobs/${encodeURIComponent(jobId)}/retry`),
 };
