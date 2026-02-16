@@ -43,11 +43,13 @@ import type {
   DecisionTrace,
   ListTrainingRunsResponse,
   TrainingRun,
+  ModelVersion,
   ListModelVersionsResponse,
   ListDatasetProfilesResponse,
   DatasetProfile,
   DatasetSummary,
   CompareProfilesResponse,
+  MetricSeriesPoint,
 } from '../types/api';
 
 // Health endpoints
@@ -158,6 +160,16 @@ export const monitoringApi = {
     if (ruleIds) searchParams.set('rule_ids', ruleIds);
     return apiClient.get<ShadowComparisonResponse>(`/bff/v1/metrics/shadow/comparison?${searchParams.toString()}`);
   },
+  getSeries: (params: { metric: string; start_date: string; end_date: string; interval?: string; tags?: Record<string, string> }) => {
+    const searchParams = new URLSearchParams({
+      metric: params.metric,
+      start_date: params.start_date,
+      end_date: params.end_date,
+    });
+    if (params.interval) searchParams.set('interval', params.interval);
+    if (params.tags) searchParams.set('tags', JSON.stringify(params.tags));
+    return apiClient.get<{ series: MetricSeriesPoint[] }>(`/bff/v1/metrics/series?${searchParams.toString()}`);
+  },
 };
 
 // Rules detail endpoints
@@ -230,6 +242,7 @@ export const modelVersionsApi = {
     const query = searchParams.toString();
     return apiClient.get<ListModelVersionsResponse>(`/bff/v1/models/versions${query ? `?${query}` : ''}`);
   },
+  get: (version: string) => apiClient.get<ModelVersion>(`/bff/v1/models/versions/${encodeURIComponent(version)}`),
 };
 
 // Profiles endpoints

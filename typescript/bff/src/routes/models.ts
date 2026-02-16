@@ -63,4 +63,41 @@ export async function modelsRoutes(
             }
         }
     );
+
+    // GET /bff/v1/models/versions/:version - Get model version details
+    fastify.get<{ Params: { version: string } }>(
+        '/bff/v1/models/versions/:version',
+        {
+            schema: {
+                params: {
+                    type: 'object',
+                    required: ['version'],
+                    properties: {
+                        version: { type: 'string' },
+                    },
+                },
+            },
+        },
+        async (
+            request: FastifyRequest<{ Params: { version: string } }>,
+            reply: FastifyReply
+        ) => {
+            try {
+                const { version } = request.params;
+                const response = await httpClient.request({
+                    method: 'GET',
+                    path: `/models/versions/${encodeURIComponent(version)}`,
+                    requestId: request.requestId,
+                    tenantId: request.tenantId,
+                    target: 'gateway',
+                });
+                return reply.status(response.statusCode).send(response.data);
+            } catch (error) {
+                if (error instanceof UpstreamError) {
+                    return reply.status(error.statusCode).send(error.toResponse());
+                }
+                throw error;
+            }
+        }
+    );
 }

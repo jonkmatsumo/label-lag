@@ -17,6 +17,12 @@ import {
   WhatIf,
   Jobs,
   JobDetail,
+  DecisionsPage,
+  DecisionDetail,
+  TrainingRunsPage,
+  TrainingRunDetail,
+  ModelVersionsPage,
+  ModelVersionDetail,
 } from './pages';
 
 const queryClient = new QueryClient({
@@ -32,28 +38,34 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TenantProvider>
-      <ErrorBoundary>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Layout />}>
-              <Route index element={<LiveScoring />} />
-              <Route path="analytics" element={<Analytics />} />
-              <Route path="dataset" element={<Dataset />} />
-              <Route path="model-lab" element={<ModelLab />} />
-              <Route path="rules" element={<RuleInspector />}>
-                <Route index element={<RuleManagement />} />
-                <Route path="sandbox" element={<RuleSandbox />} />
-                <Route path="shadow" element={<RuleShadow />} />
-                <Route path="backtests" element={<RuleBacktests />} />
-                <Route path="suggestions" element={<RuleSuggestions />} />
+        <ErrorBoundary>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Layout />}>
+                <Route index element={<LiveScoring />} />
+                <Route path="analytics" element={<Analytics />} />
+                <Route path="dataset" element={<Dataset />} />
+                <Route path="model-lab" element={<ModelLab />} />
+                <Route path="rules" element={<RuleInspector />}>
+                  <Route index element={<RuleManagement />} />
+                  <Route path="sandbox" element={<RuleSandbox />} />
+                  <Route path="shadow" element={<RuleShadow />} />
+                  <Route path="backtests" element={<RuleBacktests />} />
+                  <Route path="suggestions" element={<RuleSuggestions />} />
+                </Route>
+                <Route path="what-if" element={<WhatIf />} />
+                <Route path="jobs" element={<Jobs />} />
+                <Route path="jobs/:id" element={<JobDetail />} />
+                <Route path="decisions" element={<DecisionsPage />} />
+                <Route path="decisions/:id" element={<DecisionDetail />} />
+                <Route path="training" element={<TrainingRunsPage />} />
+                <Route path="training-runs/:id" element={<TrainingRunDetail />} />
+                <Route path="models" element={<ModelVersionsPage />} />
+                <Route path="models/:version" element={<ModelVersionDetail />} />
               </Route>
-              <Route path="what-if" element={<WhatIf />} />
-              <Route path="jobs" element={<Jobs />} />
-              <Route path="jobs/:id" element={<JobDetail />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
-      </ErrorBoundary>
+            </Routes>
+          </BrowserRouter>
+        </ErrorBoundary>
       </TenantProvider>
     </QueryClientProvider>
   );
