@@ -898,7 +898,6 @@ export function RuleBacktests() {
 
   const handleFilterChange = (val: string) => {
     const newParams = new URLSearchParams(searchParams);
-    const newParams = new URLSearchParams(searchParams);
     if (val) newParams.set('rule_id', val);
     else newParams.delete('rule_id');
     setSearchParams(newParams);
