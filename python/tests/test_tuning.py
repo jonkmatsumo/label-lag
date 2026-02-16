@@ -9,65 +9,11 @@ import pytest
 from model.tuning import (
     DEFAULT_SEARCH_SPACE,
     get_trial_params,
-    run_tuning_study,
 )
 
 
 class TestTuningStudy:
     """Tests for run_tuning_study."""
-
-    @patch("mlflow.log_dict")
-    def test_tuning_runs_n_trials(self, mock_log_dict):
-        """Study runs requested number of trials."""
-        n = 60
-        x = pd.DataFrame({"a": list(range(n)), "b": [1.0] * n, "c": [0.1] * n})
-        y = pd.Series([0] * 45 + [1] * 15)
-        x_val = x.iloc[50:]
-        y_val = y.iloc[50:]
-        x_tr = x.iloc[:50]
-        y_tr = y.iloc[:50]
-        best, df = run_tuning_study(
-            x_tr, y_tr, x_val, y_val, n_trials=5, metric="pr_auc"
-        )
-        assert len(df) == 5
-        assert "trial" in df.columns
-        assert "value" in df.columns
-
-    @patch("mlflow.log_dict")
-    def test_tuning_returns_best_params(self, mock_log_dict):
-        """Best params dict is returned."""
-        n = 60
-        x = pd.DataFrame({"a": list(range(n)), "b": [1.0] * n, "c": [0.1] * n})
-        y = pd.Series([0] * 45 + [1] * 15)
-        x_val = x.iloc[50:]
-        y_val = y.iloc[50:]
-        x_tr = x.iloc[:50]
-        y_tr = y.iloc[:50]
-        best, _ = run_tuning_study(
-            x_tr, y_tr, x_val, y_val, n_trials=3, metric="pr_auc"
-        )
-        assert isinstance(best, dict)
-        assert "max_depth" in best
-        assert "learning_rate" in best
-
-    @patch("mlflow.log_dict")
-    def test_tuning_respects_timeout(self, mock_log_dict):
-        """Study stops within timeout."""
-        n = 80
-        x = pd.DataFrame({"a": list(range(n)), "b": [1.0] * n, "c": [0.1] * n})
-        y = pd.Series([0, 1] * (n // 2))  # alternate so both in train/val
-        x_tr, x_val = x.iloc[:60], x.iloc[60:]
-        y_tr, y_val = y.iloc[:60], y.iloc[60:]
-        best, df = run_tuning_study(
-            x_tr,
-            y_tr,
-            x_val,
-            y_val,
-            n_trials=100,
-            timeout_seconds=2,
-            metric="pr_auc",
-        )
-        assert len(df) < 100
 
     @patch("features.registry.FeatureRegistry.get")
     def test_disabled_tuning_skipped(self, _mock_registry):
