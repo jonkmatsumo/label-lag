@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -64,8 +65,20 @@ func TestTenancyMiddlewareRejectsMissingTenantHeaderForAnalyticsRoutes(t *testin
 	if err != nil {
 		t.Fatalf("failed to read response body: %v", err)
 	}
-	if string(body) != `{"detail":"missing X-Tenant-Id"}` {
-		t.Fatalf("unexpected response body: %s", string(body))
+	var resp map[string]any
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	errObj, ok := resp["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected error object in response, got %v", resp)
+	}
+	if errObj["code"] != "BAD_REQUEST" {
+		t.Fatalf("expected code BAD_REQUEST, got %v", errObj["code"])
+	}
+	if errObj["message"] != "missing X-Tenant-Id" {
+		t.Fatalf("expected message 'missing X-Tenant-Id', got %v", errObj["message"])
 	}
 }
 

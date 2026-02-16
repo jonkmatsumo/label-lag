@@ -311,28 +311,28 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
-			writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			writeJSONError(w, r, http.StatusRequestEntityTooLarge, "request body too large")
 			return
 		}
-		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		writeJSONError(w, r, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	defer r.Body.Close()
 
 	var req inferencev1.SignalRequest
 	if err := (protojson.UnmarshalOptions{}).Unmarshal(body, &req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
+		writeJSONError(w, r, http.StatusBadRequest, "invalid json payload")
 		return
 	}
 
 	normalizeSignalRequest(&req)
 	if err := validateSignalRequest(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if h.forecastClient == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "forecast backend unavailable")
+		writeJSONError(w, r, http.StatusServiceUnavailable, "forecast backend unavailable")
 		return
 	}
 
@@ -344,7 +344,7 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 		TenantId:            tenantIDFromRequest(r),
 	})
 	if err != nil {
-		writeRPCError(w, err)
+		writeRPCError(w, r, err)
 		return
 	}
 
@@ -383,7 +383,7 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 
 	ruleResult, err := rules.EvaluateRules(features, int(rawScore), &ruleset, rules.EvalOptions{Debug: false})
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "rule evaluation failed")
+		writeJSONError(w, r, http.StatusInternalServerError, "rule evaluation failed")
 		return
 	}
 
@@ -516,7 +516,7 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 		response.RulesVersion = wrapperspb.String(ruleResult.RulesVersion)
 	}
 
-	writeProtoJSON(w, response)
+	writeProtoJSON(w, r, response)
 }
 
 func normalizeSignalRequest(req *inferencev1.SignalRequest) {
@@ -569,40 +569,73 @@ func buildMatchedRules(explanations []rules.Explanation) []*inferencev1.MatchedR
 	return matched
 }
 
-func writeProtoJSON(w http.ResponseWriter, msg *inferencev1.SignalResponse) {
+func writeProtoJSON(w http.ResponseWriter, r *http.Request, msg *inferencev1.SignalResponse) {
 	w.Header().Set("Content-Type", "application/json")
 	payload, err := protojson.MarshalOptions{
 		EmitUnpopulated: true,
 		UseProtoNames:   true,
 	}.Marshal(msg)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "failed to serialize response")
+		writeJSONError(w, r, http.StatusInternalServerError, "failed to serialize response")
 		return
 	}
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(payload)
 }
 
-func writeJSONError(w http.ResponseWriter, status int, message string) {
+func writeError(w http.ResponseWriter, r *http.Request, status int, code string, message string, details any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_, _ = w.Write([]byte(`{"detail":"` + message + `"}`))
+
+	requestID := requestid.FromContext(r.Context())
+	if requestID == "" {
+		requestID = "unknown"
+	}
+
+	resp := map[string]any{
+		"error": map[string]any{
+			"code":       code,
+			"message":    message,
+			"details":    details,
+			"request_id": requestID,
+		},
+	}
+
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		// Fallback if JSON fails, though unlikely for map[string]any
+		slog.Error("failed to encode error response", "error", err)
+	}
 }
 
-func writeRPCError(w http.ResponseWriter, err error) {
+func writeJSONError(w http.ResponseWriter, r *http.Request, status int, message string) {
+	// Map status to a generic code if possible, or use status text
+	code := http.StatusText(status)
+	code = strings.ToUpper(strings.ReplaceAll(code, " ", "_"))
+	writeError(w, r, status, code, message, nil)
+}
+
+func writeRPCError(w http.ResponseWriter, r *http.Request, err error) {
 	var rpcErr *grpcclient.RPCError
 	if errors.As(err, &rpcErr) {
 		switch rpcErr.Code {
 		case codes.InvalidArgument:
-			writeJSONError(w, http.StatusBadRequest, rpcErr.Message)
+			writeError(w, r, http.StatusBadRequest, "INVALID_ARGUMENT", rpcErr.Message, nil)
 		case codes.DeadlineExceeded, codes.Unavailable:
-			writeJSONError(w, http.StatusServiceUnavailable, "inference backend timeout")
+			writeError(w, r, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "inference backend timeout", nil)
+		case codes.AlreadyExists:
+			writeError(w, r, http.StatusConflict, "ALREADY_EXISTS", rpcErr.Message, nil)
+		case codes.NotFound:
+			writeError(w, r, http.StatusNotFound, "NOT_FOUND", rpcErr.Message, nil)
+		case codes.PermissionDenied:
+			writeError(w, r, http.StatusForbidden, "PERMISSION_DENIED", rpcErr.Message, nil)
+		case codes.Unauthenticated:
+			writeError(w, r, http.StatusUnauthorized, "UNAUTHENTICATED", rpcErr.Message, nil)
 		default:
-			writeJSONError(w, http.StatusBadGateway, rpcErr.Message)
+			writeError(w, r, http.StatusBadGateway, "UPSTREAM_ERROR", rpcErr.Message, nil)
 		}
 		return
 	}
-	writeJSONError(w, http.StatusBadGateway, "inference backend error")
+	writeError(w, r, http.StatusBadGateway, "INTERNAL_ERROR", "inference backend error", nil)
 }
 
 func buildRiskComponents(features map[string]any) []*inferencev1.RiskComponent {
@@ -656,7 +689,7 @@ func (h *Handler) validatePaginationParams(w http.ResponseWriter, r *http.Reques
 		// Increment contract violation metric
 		_ = h.incrementContractViolation(r.Context(), "pagination_params_conflict")
 
-		writeJSONError(w, http.StatusBadRequest, "cannot provide both cursor and offset")
+		writeJSONError(w, r, http.StatusBadRequest, "cannot provide both cursor and offset")
 		return errors.New("pagination contract violation")
 	}
 	return nil
@@ -675,33 +708,33 @@ func (h *Handler) handleTrain(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.trainingClient == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "training backend unavailable")
+		writeJSONError(w, r, http.StatusServiceUnavailable, "training backend unavailable")
 		return
 	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, h.maxBodyBytes)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		writeJSONError(w, r, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	defer r.Body.Close()
 
 	var req trainingv1.TrainRequest
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(body, &req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
+		writeJSONError(w, r, http.StatusBadRequest, "invalid json payload")
 		return
 	}
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 	req.TenantId = tenantID
 
 	resp, err := h.trainingClient.Train(r.Context(), &req)
 	if err != nil {
-		writeRPCError(w, err)
+		writeRPCError(w, r, err)
 		return
 	}
 
@@ -717,33 +750,33 @@ func (h *Handler) handleDeployModel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.forecastClient == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "forecast backend unavailable")
+		writeJSONError(w, r, http.StatusServiceUnavailable, "forecast backend unavailable")
 		return
 	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, h.maxBodyBytes)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		writeJSONError(w, r, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	defer r.Body.Close()
 
 	var req forecastv1.DeployModelRequest
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(body, &req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
+		writeJSONError(w, r, http.StatusBadRequest, "invalid json payload")
 		return
 	}
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 	req.TenantId = tenantID
 
 	resp, err := h.forecastClient.DeployModel(r.Context(), &req)
 	if err != nil {
-		writeRPCError(w, err)
+		writeRPCError(w, r, err)
 		return
 	}
 
@@ -797,31 +830,31 @@ func (h *Handler) handleDatasetGenerate(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if h.analyticsClient == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "analytics backend unavailable")
+		writeJSONError(w, r, http.StatusServiceUnavailable, "analytics backend unavailable")
 		return
 	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, h.maxBodyBytes)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		writeJSONError(w, r, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	defer r.Body.Close()
 
 	var req generateDataRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
+		writeJSONError(w, r, http.StatusBadRequest, "invalid json payload")
 		return
 	}
 
 	// Validate (basic)
 	if req.NumUsers <= 0 {
-		writeJSONError(w, http.StatusBadRequest, "num_users must be > 0")
+		writeJSONError(w, r, http.StatusBadRequest, "num_users must be > 0")
 		return
 	}
 	if req.FraudRate < 0 || req.FraudRate > 1.0 {
-		writeJSONError(w, http.StatusBadRequest, "fraud_rate must be between 0 and 1")
+		writeJSONError(w, r, http.StatusBadRequest, "fraud_rate must be between 0 and 1")
 		return
 	}
 
@@ -841,7 +874,7 @@ func (h *Handler) handleDatasetGenerate(w http.ResponseWriter, r *http.Request) 
 
 	resp, err := h.analyticsClient.GenerateData(r.Context(), grpcReq)
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 

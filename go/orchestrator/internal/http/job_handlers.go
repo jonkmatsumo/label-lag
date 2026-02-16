@@ -15,18 +15,18 @@ import (
 func (h *Handler) handleListJobs(w http.ResponseWriter, r *http.Request) {
 	limit, err := parseIntQuery(r, "limit", 50, 1, 100)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	offset, err := parseIntQuery(r, "offset", 0, 0, 10000)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -54,7 +54,7 @@ func (h *Handler) handleListJobs(w http.ResponseWriter, r *http.Request) {
 		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
 			req.StartDate = timestamppb.New(t)
 		} else {
-			writeJSONError(w, http.StatusBadRequest, "invalid start_date format (RFC3339 required)")
+			writeJSONError(w, r, http.StatusBadRequest, "invalid start_date format (RFC3339 required)")
 			return
 		}
 	}
@@ -62,19 +62,19 @@ func (h *Handler) handleListJobs(w http.ResponseWriter, r *http.Request) {
 		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
 			req.EndDate = timestamppb.New(t)
 		} else {
-			writeJSONError(w, http.StatusBadRequest, "invalid end_date format (RFC3339 required)")
+			writeJSONError(w, r, http.StatusBadRequest, "invalid end_date format (RFC3339 required)")
 			return
 		}
 	}
 
 	if req.StartDate != nil && req.EndDate != nil && req.StartDate.AsTime().After(req.EndDate.AsTime()) {
-		writeJSONError(w, http.StatusBadRequest, "start_date must be <= end_date")
+		writeJSONError(w, r, http.StatusBadRequest, "start_date must be <= end_date")
 		return
 	}
 
 	resp, err := h.analyticsClient.ListJobs(r.Context(), req)
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
@@ -84,13 +84,13 @@ func (h *Handler) handleListJobs(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetJob(w http.ResponseWriter, r *http.Request) {
 	jobID := r.PathValue("id")
 	if jobID == "" {
-		writeJSONError(w, http.StatusBadRequest, "job_id required")
+		writeJSONError(w, r, http.StatusBadRequest, "job_id required")
 		return
 	}
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -99,7 +99,7 @@ func (h *Handler) handleGetJob(w http.ResponseWriter, r *http.Request) {
 		TenantId: tenantID,
 	})
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
@@ -109,29 +109,29 @@ func (h *Handler) handleGetJob(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetJobEvents(w http.ResponseWriter, r *http.Request) {
 	jobID := r.PathValue("id")
 	if jobID == "" {
-		writeJSONError(w, http.StatusBadRequest, "job_id required")
+		writeJSONError(w, r, http.StatusBadRequest, "job_id required")
 		return
 	}
 
 	limit, err := parseIntQuery(r, "limit", 100, 1, 1000)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	offset, err := parseIntQuery(r, "offset", 0, 0, 10000)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
 	if (r.URL.Query().Get("before_ts") != "" || r.URL.Query().Get("before_id") != "") && r.URL.Query().Get("offset") != "" {
-		writeJSONError(w, http.StatusBadRequest, "cannot provide both manual cursor (before_ts/id) and offset")
+		writeJSONError(w, r, http.StatusBadRequest, "cannot provide both manual cursor (before_ts/id) and offset")
 		return
 	}
 
@@ -144,7 +144,7 @@ func (h *Handler) handleGetJobEvents(w http.ResponseWriter, r *http.Request) {
 	if beforeTS := r.URL.Query().Get("before_ts"); beforeTS != "" {
 		parsed, err := time.Parse(time.RFC3339, beforeTS)
 		if err != nil {
-			writeJSONError(w, http.StatusBadRequest, "invalid before_ts format (RFC3339 required)")
+			writeJSONError(w, r, http.StatusBadRequest, "invalid before_ts format (RFC3339 required)")
 			return
 		}
 		req.BeforeTs = timestamppb.New(parsed)
@@ -152,7 +152,7 @@ func (h *Handler) handleGetJobEvents(w http.ResponseWriter, r *http.Request) {
 	if beforeID := r.URL.Query().Get("before_id"); beforeID != "" {
 		parsed, err := strconv.ParseInt(beforeID, 10, 64)
 		if err != nil || parsed < 0 {
-			writeJSONError(w, http.StatusBadRequest, "invalid before_id (integer >= 0 required)")
+			writeJSONError(w, r, http.StatusBadRequest, "invalid before_id (integer >= 0 required)")
 			return
 		}
 		req.BeforeId = parsed
@@ -160,7 +160,7 @@ func (h *Handler) handleGetJobEvents(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := h.analyticsClient.GetJobEvents(r.Context(), req)
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
@@ -170,7 +170,7 @@ func (h *Handler) handleGetJobEvents(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetJobSummary(w http.ResponseWriter, r *http.Request) {
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -182,7 +182,7 @@ func (h *Handler) handleGetJobSummary(w http.ResponseWriter, r *http.Request) {
 		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
 			req.StartTime = timestamppb.New(t)
 		} else {
-			writeJSONError(w, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
+			writeJSONError(w, r, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
 			return
 		}
 	}
@@ -190,14 +190,14 @@ func (h *Handler) handleGetJobSummary(w http.ResponseWriter, r *http.Request) {
 		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
 			req.EndTime = timestamppb.New(t)
 		} else {
-			writeJSONError(w, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
+			writeJSONError(w, r, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
 			return
 		}
 	}
 
 	resp, err := h.analyticsClient.GetJobSummary(r.Context(), req)
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
@@ -207,13 +207,13 @@ func (h *Handler) handleGetJobSummary(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleCancelJob(w http.ResponseWriter, r *http.Request) {
 	jobID := r.PathValue("id")
 	if jobID == "" {
-		writeJSONError(w, http.StatusBadRequest, "job_id required")
+		writeJSONError(w, r, http.StatusBadRequest, "job_id required")
 		return
 	}
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -222,7 +222,7 @@ func (h *Handler) handleCancelJob(w http.ResponseWriter, r *http.Request) {
 		TenantId: tenantID,
 	})
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
@@ -232,13 +232,13 @@ func (h *Handler) handleCancelJob(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleRetryJob(w http.ResponseWriter, r *http.Request) {
 	jobID := r.PathValue("id")
 	if jobID == "" {
-		writeJSONError(w, http.StatusBadRequest, "job_id required")
+		writeJSONError(w, r, http.StatusBadRequest, "job_id required")
 		return
 	}
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -247,7 +247,7 @@ func (h *Handler) handleRetryJob(w http.ResponseWriter, r *http.Request) {
 		TenantId: tenantID,
 	})
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 

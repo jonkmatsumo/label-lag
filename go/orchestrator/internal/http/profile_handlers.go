@@ -20,7 +20,7 @@ func (h *Handler) handleGetDatasetProfile(w http.ResponseWriter, r *http.Request
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -31,7 +31,7 @@ func (h *Handler) handleGetDatasetProfile(w http.ResponseWriter, r *http.Request
 
 	resp, err := h.analyticsClient.GetDatasetSummary(r.Context(), req)
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
@@ -41,18 +41,18 @@ func (h *Handler) handleGetDatasetProfile(w http.ResponseWriter, r *http.Request
 func (h *Handler) handleListDatasetProfiles(w http.ResponseWriter, r *http.Request) {
 	limit, err := parseIntQuery(r, "limit", 20, 1, 100)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	offset, err := parseIntQuery(r, "offset", 0, 0, 10000)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -78,7 +78,7 @@ func (h *Handler) handleListDatasetProfiles(w http.ResponseWriter, r *http.Reque
 		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
 			req.StartDate = timestamppb.New(t)
 		} else {
-			writeJSONError(w, http.StatusBadRequest, "invalid start_date format (RFC3339 required)")
+			writeJSONError(w, r, http.StatusBadRequest, "invalid start_date format (RFC3339 required)")
 			return
 		}
 	}
@@ -86,14 +86,14 @@ func (h *Handler) handleListDatasetProfiles(w http.ResponseWriter, r *http.Reque
 		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
 			req.EndDate = timestamppb.New(t)
 		} else {
-			writeJSONError(w, http.StatusBadRequest, "invalid end_date format (RFC3339 required)")
+			writeJSONError(w, r, http.StatusBadRequest, "invalid end_date format (RFC3339 required)")
 			return
 		}
 	}
 
 	resp, err := h.analyticsClient.ListDatasetProfiles(r.Context(), req)
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
@@ -103,7 +103,7 @@ func (h *Handler) handleListDatasetProfiles(w http.ResponseWriter, r *http.Reque
 func (h *Handler) handleGetLatestDatasetProfile(w http.ResponseWriter, r *http.Request) {
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -111,7 +111,7 @@ func (h *Handler) handleGetLatestDatasetProfile(w http.ResponseWriter, r *http.R
 		TenantId: tenantID,
 	})
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
@@ -121,7 +121,7 @@ func (h *Handler) handleGetLatestDatasetProfile(w http.ResponseWriter, r *http.R
 func (h *Handler) handleCompareDatasetProfiles(w http.ResponseWriter, r *http.Request) {
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -132,13 +132,13 @@ func (h *Handler) handleCompareDatasetProfiles(w http.ResponseWriter, r *http.Re
 	}
 
 	if req.BaselineProfileId == "" || req.CandidateProfileId == "" {
-		writeJSONError(w, http.StatusBadRequest, "baseline_id and candidate_id required")
+		writeJSONError(w, r, http.StatusBadRequest, "baseline_id and candidate_id required")
 		return
 	}
 
 	resp, err := h.analyticsClient.CompareDatasetProfiles(r.Context(), req)
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 

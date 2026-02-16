@@ -119,7 +119,7 @@ func (h *Handler) handleSearchTransactions(w http.ResponseWriter, r *http.Reques
 	}
 
 	if h.analyticsClient == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "analytics backend unavailable")
+		writeJSONError(w, r, http.StatusServiceUnavailable, "analytics backend unavailable")
 		return
 	}
 
@@ -128,17 +128,17 @@ func (h *Handler) handleSearchTransactions(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
-			writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			writeJSONError(w, r, http.StatusRequestEntityTooLarge, "request body too large")
 			return
 		}
-		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		writeJSONError(w, r, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	defer r.Body.Close()
 
 	var req searchTransactionsRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
+		writeJSONError(w, r, http.StatusBadRequest, "invalid json payload")
 		return
 	}
 
@@ -161,14 +161,14 @@ func (h *Handler) handleSearchTransactions(w http.ResponseWriter, r *http.Reques
 	}
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 	grpcReq.TenantId = tenantID
 
 	resp, err := h.analyticsClient.SearchTransactions(r.Context(), grpcReq)
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
@@ -203,20 +203,20 @@ func (h *Handler) handleSearchTransactions(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-func writeAnalyticsRPCError(w http.ResponseWriter, err error) {
+func writeAnalyticsRPCError(w http.ResponseWriter, r *http.Request, err error) {
 	var rpcErr *grpcclient.RPCError
 	if errors.As(err, &rpcErr) {
 		switch rpcErr.Code {
 		case codes.InvalidArgument:
-			writeJSONError(w, http.StatusBadRequest, rpcErr.Message)
+			writeJSONError(w, r, http.StatusBadRequest, rpcErr.Message)
 		case codes.NotFound:
-			writeJSONError(w, http.StatusNotFound, rpcErr.Message)
+			writeJSONError(w, r, http.StatusNotFound, rpcErr.Message)
 		case codes.DeadlineExceeded, codes.Unavailable:
-			writeJSONError(w, http.StatusServiceUnavailable, "analytics backend timeout")
+			writeJSONError(w, r, http.StatusServiceUnavailable, "analytics backend timeout")
 		default:
-			writeJSONError(w, http.StatusBadGateway, rpcErr.Message)
+			writeJSONError(w, r, http.StatusBadGateway, rpcErr.Message)
 		}
 		return
 	}
-	writeJSONError(w, http.StatusBadGateway, "analytics backend error")
+	writeJSONError(w, r, http.StatusBadGateway, "analytics backend error")
 }

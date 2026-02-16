@@ -17,7 +17,7 @@ func tenancyMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tenantID := r.Header.Get("X-Tenant-Id")
 		if requiresTenantHeader(r.URL.Path) && tenantID == "" {
-			writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+			writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 			return
 		}
 		if tenantID == "" {

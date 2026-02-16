@@ -12,18 +12,18 @@ import (
 func (h *Handler) handleListTrainingRuns(w http.ResponseWriter, r *http.Request) {
 	limit, err := parseIntQuery(r, "limit", 20, 1, 100)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	offset, err := parseIntQuery(r, "offset", 0, 0, 10000)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -51,7 +51,7 @@ func (h *Handler) handleListTrainingRuns(w http.ResponseWriter, r *http.Request)
 		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
 			req.StartDate = timestamppb.New(t)
 		} else {
-			writeJSONError(w, http.StatusBadRequest, "invalid start_date format (RFC3339 required)")
+			writeJSONError(w, r, http.StatusBadRequest, "invalid start_date format (RFC3339 required)")
 			return
 		}
 	}
@@ -59,14 +59,14 @@ func (h *Handler) handleListTrainingRuns(w http.ResponseWriter, r *http.Request)
 		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
 			req.EndDate = timestamppb.New(t)
 		} else {
-			writeJSONError(w, http.StatusBadRequest, "invalid end_date format (RFC3339 required)")
+			writeJSONError(w, r, http.StatusBadRequest, "invalid end_date format (RFC3339 required)")
 			return
 		}
 	}
 
 	resp, err := h.analyticsClient.ListTrainingRuns(r.Context(), req)
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
@@ -76,24 +76,24 @@ func (h *Handler) handleListTrainingRuns(w http.ResponseWriter, r *http.Request)
 func (h *Handler) handleListModelVersions(w http.ResponseWriter, r *http.Request) {
 	modelName := r.URL.Query().Get("model_name")
 	if modelName == "" {
-		writeJSONError(w, http.StatusBadRequest, "model_name required")
+		writeJSONError(w, r, http.StatusBadRequest, "model_name required")
 		return
 	}
 
 	limit, err := parseIntQuery(r, "limit", 50, 1, 100)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	offset, err := parseIntQuery(r, "offset", 0, 0, 10000)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -118,7 +118,7 @@ func (h *Handler) handleListModelVersions(w http.ResponseWriter, r *http.Request
 
 	resp, err := h.analyticsClient.ListModelVersions(r.Context(), req)
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
@@ -128,13 +128,13 @@ func (h *Handler) handleListModelVersions(w http.ResponseWriter, r *http.Request
 func (h *Handler) handleGetTrainingRun(w http.ResponseWriter, r *http.Request) {
 	runID := r.PathValue("id")
 	if runID == "" {
-		writeJSONError(w, http.StatusBadRequest, "run_id required")
+		writeJSONError(w, r, http.StatusBadRequest, "run_id required")
 		return
 	}
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -143,7 +143,7 @@ func (h *Handler) handleGetTrainingRun(w http.ResponseWriter, r *http.Request) {
 		TenantId: tenantID,
 	})
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
@@ -153,7 +153,7 @@ func (h *Handler) handleGetTrainingRun(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetMetricSeries(w http.ResponseWriter, r *http.Request) {
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -166,7 +166,7 @@ func (h *Handler) handleGetMetricSeries(w http.ResponseWriter, r *http.Request) 
 	if startStr := r.URL.Query().Get("start_date"); startStr != "" {
 		t, err := time.Parse(time.RFC3339, startStr)
 		if err != nil {
-			writeJSONError(w, http.StatusBadRequest, "invalid start_date format (RFC3339 required)")
+			writeJSONError(w, r, http.StatusBadRequest, "invalid start_date format (RFC3339 required)")
 			return
 		}
 		req.StartDate = timestamppb.New(t)
@@ -174,20 +174,20 @@ func (h *Handler) handleGetMetricSeries(w http.ResponseWriter, r *http.Request) 
 	if endStr := r.URL.Query().Get("end_date"); endStr != "" {
 		t, err := time.Parse(time.RFC3339, endStr)
 		if err != nil {
-			writeJSONError(w, http.StatusBadRequest, "invalid end_date format (RFC3339 required)")
+			writeJSONError(w, r, http.StatusBadRequest, "invalid end_date format (RFC3339 required)")
 			return
 		}
 		req.EndDate = timestamppb.New(t)
 	}
 
 	if req.ModelName == "" || req.MetricName == "" {
-		writeJSONError(w, http.StatusBadRequest, "model_name and metric_name required")
+		writeJSONError(w, r, http.StatusBadRequest, "model_name and metric_name required")
 		return
 	}
 
 	resp, err := h.analyticsClient.GetMetricSeries(r.Context(), req)
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 

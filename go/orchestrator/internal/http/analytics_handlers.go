@@ -21,13 +21,13 @@ func (h *Handler) handleAnalyticsOverview(w http.ResponseWriter, r *http.Request
 	}
 
 	if h.analyticsClient == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "analytics backend unavailable")
+		writeJSONError(w, r, http.StatusServiceUnavailable, "analytics backend unavailable")
 		return
 	}
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -35,7 +35,7 @@ func (h *Handler) handleAnalyticsOverview(w http.ResponseWriter, r *http.Request
 		TenantId: tenantID,
 	})
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
@@ -62,19 +62,19 @@ func (h *Handler) handleAnalyticsDailyStats(w http.ResponseWriter, r *http.Reque
 	}
 
 	if h.analyticsClient == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "analytics backend unavailable")
+		writeJSONError(w, r, http.StatusServiceUnavailable, "analytics backend unavailable")
 		return
 	}
 
 	days, err := parseIntQuery(r, "days", 30, 1, 90)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -83,7 +83,7 @@ func (h *Handler) handleAnalyticsDailyStats(w http.ResponseWriter, r *http.Reque
 		TenantId: tenantID,
 	})
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
@@ -109,31 +109,31 @@ func (h *Handler) handleAnalyticsTransactions(w http.ResponseWriter, r *http.Req
 	}
 
 	if h.analyticsClient == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "analytics backend unavailable")
+		writeJSONError(w, r, http.StatusServiceUnavailable, "analytics backend unavailable")
 		return
 	}
 
 	days, err := parseIntQuery(r, "days", 7, 1, 30)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	limit, err := parseIntQuery(r, "limit", 1000, 1, 5000)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	offset, err := parseIntQuery(r, "offset", 0, 0, 100000)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -144,7 +144,7 @@ func (h *Handler) handleAnalyticsTransactions(w http.ResponseWriter, r *http.Req
 		TenantId: tenantID,
 	})
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
@@ -181,25 +181,25 @@ func (h *Handler) handleAnalyticsRecentAlerts(w http.ResponseWriter, r *http.Req
 	}
 
 	if h.analyticsClient == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "analytics backend unavailable")
+		writeJSONError(w, r, http.StatusServiceUnavailable, "analytics backend unavailable")
 		return
 	}
 
 	limit, err := parseIntQuery(r, "limit", 50, 1, 200)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	offset, err := parseIntQuery(r, "offset", 0, 0, 100000)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -209,7 +209,7 @@ func (h *Handler) handleAnalyticsRecentAlerts(w http.ResponseWriter, r *http.Req
 		TenantId: tenantID,
 	})
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
@@ -244,25 +244,25 @@ func (h *Handler) handleAnalyticsFeatureSample(w http.ResponseWriter, r *http.Re
 	}
 
 	if h.analyticsClient == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "analytics backend unavailable")
+		writeJSONError(w, r, http.StatusServiceUnavailable, "analytics backend unavailable")
 		return
 	}
 
 	sampleSize, err := parseIntQuery(r, "sample_size", 100, 1, 1000)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	stratify, err := parseBoolQuery(r, "stratify", true)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -272,7 +272,7 @@ func (h *Handler) handleAnalyticsFeatureSample(w http.ResponseWriter, r *http.Re
 		TenantId:   tenantID,
 	})
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
@@ -297,13 +297,13 @@ func (h *Handler) handleDatasetClear(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.analyticsClient == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "analytics backend unavailable")
+		writeJSONError(w, r, http.StatusServiceUnavailable, "analytics backend unavailable")
 		return
 	}
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -311,7 +311,7 @@ func (h *Handler) handleDatasetClear(w http.ResponseWriter, r *http.Request) {
 		TenantId: tenantID,
 	})
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
@@ -329,24 +329,24 @@ func (h *Handler) handleAnalyticsRuleStats(w http.ResponseWriter, r *http.Reques
 
 	ruleID := r.PathValue("rule_id")
 	if ruleID == "" {
-		writeJSONError(w, http.StatusBadRequest, "rule_id required")
+		writeJSONError(w, r, http.StatusBadRequest, "rule_id required")
 		return
 	}
 
 	days, err := parseIntQuery(r, "days", 30, 1, 90)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if h.analyticsClient == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "analytics backend unavailable")
+		writeJSONError(w, r, http.StatusServiceUnavailable, "analytics backend unavailable")
 		return
 	}
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -356,7 +356,7 @@ func (h *Handler) handleAnalyticsRuleStats(w http.ResponseWriter, r *http.Reques
 		TenantId: tenantID,
 	})
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
@@ -371,24 +371,24 @@ func (h *Handler) handleAnalyticsAttribution(w http.ResponseWriter, r *http.Requ
 
 	days, err := parseIntQuery(r, "days", 7, 1, 90)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	limit, err := parseIntQuery(r, "limit", 100, 1, 1000)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if h.analyticsClient == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "analytics backend unavailable")
+		writeJSONError(w, r, http.StatusServiceUnavailable, "analytics backend unavailable")
 		return
 	}
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -398,7 +398,7 @@ func (h *Handler) handleAnalyticsAttribution(w http.ResponseWriter, r *http.Requ
 		TenantId: tenantID,
 	})
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
@@ -517,18 +517,18 @@ type clearDataResponse struct {
 func (h *Handler) handleListDecisions(w http.ResponseWriter, r *http.Request) {
 	limit, err := parseIntQuery(r, "limit", 50, 1, 250)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	offset, err := parseIntQuery(r, "offset", 0, 0, 10000)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -564,7 +564,7 @@ func (h *Handler) handleListDecisions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.MinScore > 0 && req.MaxScore > 0 && req.MinScore > req.MaxScore {
-		writeJSONError(w, http.StatusBadRequest, "min_score must be <= max_score")
+		writeJSONError(w, r, http.StatusBadRequest, "min_score must be <= max_score")
 		return
 	}
 
@@ -572,7 +572,7 @@ func (h *Handler) handleListDecisions(w http.ResponseWriter, r *http.Request) {
 		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
 			req.StartDate = timestamppb.New(t)
 		} else {
-			writeJSONError(w, http.StatusBadRequest, "invalid start_date format (RFC3339 required)")
+			writeJSONError(w, r, http.StatusBadRequest, "invalid start_date format (RFC3339 required)")
 			return
 		}
 	}
@@ -580,19 +580,19 @@ func (h *Handler) handleListDecisions(w http.ResponseWriter, r *http.Request) {
 		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
 			req.EndDate = timestamppb.New(t)
 		} else {
-			writeJSONError(w, http.StatusBadRequest, "invalid end_date format (RFC3339 required)")
+			writeJSONError(w, r, http.StatusBadRequest, "invalid end_date format (RFC3339 required)")
 			return
 		}
 	}
 
 	if req.StartDate != nil && req.EndDate != nil && req.StartDate.AsTime().After(req.EndDate.AsTime()) {
-		writeJSONError(w, http.StatusBadRequest, "start_date must be <= end_date")
+		writeJSONError(w, r, http.StatusBadRequest, "start_date must be <= end_date")
 		return
 	}
 
 	resp, err := h.analyticsClient.ListDecisions(r.Context(), req)
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
@@ -602,13 +602,13 @@ func (h *Handler) handleListDecisions(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetDecision(w http.ResponseWriter, r *http.Request) {
 	requestID := r.PathValue("request_id")
 	if requestID == "" {
-		writeJSONError(w, http.StatusBadRequest, "request_id required")
+		writeJSONError(w, r, http.StatusBadRequest, "request_id required")
 		return
 	}
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -617,7 +617,7 @@ func (h *Handler) handleGetDecision(w http.ResponseWriter, r *http.Request) {
 		TenantId:  tenantID,
 	})
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
@@ -627,13 +627,13 @@ func (h *Handler) handleGetDecision(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetDecisionTrace(w http.ResponseWriter, r *http.Request) {
 	requestID := r.PathValue("request_id")
 	if requestID == "" {
-		writeJSONError(w, http.StatusBadRequest, "request_id required")
+		writeJSONError(w, r, http.StatusBadRequest, "request_id required")
 		return
 	}
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -642,7 +642,7 @@ func (h *Handler) handleGetDecisionTrace(w http.ResponseWriter, r *http.Request)
 		TenantId:  tenantID,
 	})
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
@@ -654,13 +654,13 @@ func (h *Handler) handleGetDecisionTrace(w http.ResponseWriter, r *http.Request)
 func (h *Handler) handleGetRuleImpact(w http.ResponseWriter, r *http.Request) {
 	ruleID := r.PathValue("rule_id")
 	if ruleID == "" {
-		writeJSONError(w, http.StatusBadRequest, "rule_id required")
+		writeJSONError(w, r, http.StatusBadRequest, "rule_id required")
 		return
 	}
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -673,7 +673,7 @@ func (h *Handler) handleGetRuleImpact(w http.ResponseWriter, r *http.Request) {
 		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
 			req.StartDate = timestamppb.New(t)
 		} else {
-			writeJSONError(w, http.StatusBadRequest, "invalid start_date format (RFC3339 required)")
+			writeJSONError(w, r, http.StatusBadRequest, "invalid start_date format (RFC3339 required)")
 			return
 		}
 	}
@@ -681,19 +681,19 @@ func (h *Handler) handleGetRuleImpact(w http.ResponseWriter, r *http.Request) {
 		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
 			req.EndDate = timestamppb.New(t)
 		} else {
-			writeJSONError(w, http.StatusBadRequest, "invalid end_date format (RFC3339 required)")
+			writeJSONError(w, r, http.StatusBadRequest, "invalid end_date format (RFC3339 required)")
 			return
 		}
 	}
 
 	if req.StartDate != nil && req.EndDate != nil && req.StartDate.AsTime().After(req.EndDate.AsTime()) {
-		writeJSONError(w, http.StatusBadRequest, "start_date must be <= end_date")
+		writeJSONError(w, r, http.StatusBadRequest, "start_date must be <= end_date")
 		return
 	}
 
 	resp, err := h.analyticsClient.GetRuleImpact(r.Context(), req)
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
@@ -705,7 +705,7 @@ func (h *Handler) handleGetRuleImpact(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetKpis(w http.ResponseWriter, r *http.Request) {
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -718,7 +718,7 @@ func (h *Handler) handleGetKpis(w http.ResponseWriter, r *http.Request) {
 		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
 			req.StartTime = timestamppb.New(t)
 		} else {
-			writeJSONError(w, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
+			writeJSONError(w, r, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
 			return
 		}
 	}
@@ -726,24 +726,24 @@ func (h *Handler) handleGetKpis(w http.ResponseWriter, r *http.Request) {
 		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
 			req.EndTime = timestamppb.New(t)
 		} else {
-			writeJSONError(w, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
+			writeJSONError(w, r, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
 			return
 		}
 	}
 
 	if req.GroupBy != "" && req.GroupBy != "day" && req.GroupBy != "hour" {
-		writeJSONError(w, http.StatusBadRequest, "invalid group_by (day|hour required)")
+		writeJSONError(w, r, http.StatusBadRequest, "invalid group_by (day|hour required)")
 		return
 	}
 
 	if req.StartTime != nil && req.EndTime != nil && req.StartTime.AsTime().After(req.EndTime.AsTime()) {
-		writeJSONError(w, http.StatusBadRequest, "start_time must be <= end_time")
+		writeJSONError(w, r, http.StatusBadRequest, "start_time must be <= end_time")
 		return
 	}
 
 	resp, err := h.analyticsClient.GetKpis(r.Context(), req)
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
@@ -755,7 +755,7 @@ func (h *Handler) handleGetKpis(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetVolumeSeries(w http.ResponseWriter, r *http.Request) {
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -768,7 +768,7 @@ func (h *Handler) handleGetVolumeSeries(w http.ResponseWriter, r *http.Request) 
 		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
 			req.StartTime = timestamppb.New(t)
 		} else {
-			writeJSONError(w, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
+			writeJSONError(w, r, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
 			return
 		}
 	}
@@ -776,24 +776,24 @@ func (h *Handler) handleGetVolumeSeries(w http.ResponseWriter, r *http.Request) 
 		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
 			req.EndTime = timestamppb.New(t)
 		} else {
-			writeJSONError(w, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
+			writeJSONError(w, r, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
 			return
 		}
 	}
 
 	if req.Granularity != "" && req.Granularity != "day" && req.Granularity != "hour" {
-		writeJSONError(w, http.StatusBadRequest, "invalid granularity (day|hour required)")
+		writeJSONError(w, r, http.StatusBadRequest, "invalid granularity (day|hour required)")
 		return
 	}
 
 	if req.StartTime != nil && req.EndTime != nil && req.StartTime.AsTime().After(req.EndTime.AsTime()) {
-		writeJSONError(w, http.StatusBadRequest, "start_time must be <= end_time")
+		writeJSONError(w, r, http.StatusBadRequest, "start_time must be <= end_time")
 		return
 	}
 
 	resp, err := h.analyticsClient.GetVolumeSeries(r.Context(), req)
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
@@ -805,7 +805,7 @@ func (h *Handler) handleGetVolumeSeries(w http.ResponseWriter, r *http.Request) 
 func (h *Handler) handleGetConfusionMatrix(w http.ResponseWriter, r *http.Request) {
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -818,7 +818,7 @@ func (h *Handler) handleGetConfusionMatrix(w http.ResponseWriter, r *http.Reques
 		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
 			req.StartTime = timestamppb.New(t)
 		} else {
-			writeJSONError(w, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
+			writeJSONError(w, r, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
 			return
 		}
 	}
@@ -826,7 +826,7 @@ func (h *Handler) handleGetConfusionMatrix(w http.ResponseWriter, r *http.Reques
 		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
 			req.EndTime = timestamppb.New(t)
 		} else {
-			writeJSONError(w, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
+			writeJSONError(w, r, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
 			return
 		}
 	}
@@ -835,19 +835,19 @@ func (h *Handler) handleGetConfusionMatrix(w http.ResponseWriter, r *http.Reques
 		if val, err := strconv.Atoi(threshStr); err == nil {
 			req.Threshold = int32(val)
 		} else {
-			writeJSONError(w, http.StatusBadRequest, "invalid threshold (integer required)")
+			writeJSONError(w, r, http.StatusBadRequest, "invalid threshold (integer required)")
 			return
 		}
 	}
 
 	if req.StartTime != nil && req.EndTime != nil && req.StartTime.AsTime().After(req.EndTime.AsTime()) {
-		writeJSONError(w, http.StatusBadRequest, "start_time must be <= end_time")
+		writeJSONError(w, r, http.StatusBadRequest, "start_time must be <= end_time")
 		return
 	}
 
 	resp, err := h.analyticsClient.GetConfusionMatrix(r.Context(), req)
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
