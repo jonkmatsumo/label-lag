@@ -24,17 +24,17 @@ import (
 )
 
 var (
-	circuitBreakerState = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "orchestrator_circuit_breaker_state",
+	breakerState = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "orchestrator_breaker_state",
 		Help: "Current circuit breaker state: 0=closed, 1=open, 2=half-open.",
-	}, []string{"client"})
+	}, []string{"breaker"})
 
-	circuitBreakerTransitions = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "orchestrator_circuit_breaker_transitions_total",
+	breakerTransitions = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "orchestrator_breaker_transitions_total",
 		Help: "Total circuit breaker state transitions.",
-	}, []string{"client", "from_state", "to_state"})
+	}, []string{"breaker", "from", "to"})
 
-	circuitBreakerFailures = promauto.NewCounterVec(prometheus.CounterOpts{
+	breakerFailures = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "orchestrator_breaker_failures_total",
 		Help: "Total failures recorded by each circuit breaker.",
 	}, []string{"breaker"})
@@ -101,7 +101,7 @@ func NewCircuitBreakerWithPrefix(prefix string) *CircuitBreaker {
 }
 
 func NewCircuitBreaker() *CircuitBreaker {
-	return NewCircuitBreakerWithPrefix("INFERENCE")
+	return NewCircuitBreakerWithPrefix("inference")
 }
 
 func (cb *CircuitBreaker) State() BreakerState {
@@ -116,10 +116,11 @@ func (cb *CircuitBreaker) Allow() error {
 
 	if cb.state == StateOpen {
 		if time.Since(cb.lastFailureTime) > cb.resetTimeout {
+			prevState := cb.state
 			cb.state = StateHalfOpen
 			slog.Info(cb.name+" circuit breaker: half-open", "reason", "cooldown elapsed")
-			circuitBreakerState.WithLabelValues(cb.name).Set(float64(StateHalfOpen))
-			circuitBreakerTransitions.WithLabelValues(cb.name, StateOpen.String(), StateHalfOpen.String()).Inc()
+			breakerState.WithLabelValues(cb.name).Set(float64(StateHalfOpen))
+			breakerTransitions.WithLabelValues(cb.name, prevState.String(), StateHalfOpen.String()).Inc()
 			return nil
 		}
 		return status.Error(codes.Unavailable, "circuit breaker is open")
@@ -134,36 +135,35 @@ func (cb *CircuitBreaker) RecordResult(err error) {
 	// 1. Success case
 	if err == nil {
 		if cb.state == StateHalfOpen {
+			prevState := cb.state
+			cb.state = StateClosed
 			slog.Info(cb.name+" circuit breaker: closed", "reason", "success in half-open")
-			circuitBreakerState.WithLabelValues(cb.name).Set(float64(StateClosed))
-			circuitBreakerTransitions.WithLabelValues(cb.name, StateHalfOpen.String(), StateClosed.String()).Inc()
+			breakerState.WithLabelValues(cb.name).Set(float64(StateClosed))
+			breakerTransitions.WithLabelValues(cb.name, prevState.String(), StateClosed.String()).Inc()
+		} else if cb.state != StateClosed {
+			prevState := cb.state
+			cb.state = StateClosed
+			breakerState.WithLabelValues(cb.name).Set(float64(StateClosed))
+			breakerTransitions.WithLabelValues(cb.name, prevState.String(), StateClosed.String()).Inc()
 		}
-		cb.state = StateClosed
 		cb.failureCount = 0
 		return
 	}
 
 	// 2. Filter non-failure errors (Application errors)
-	// We only want to trip the breaker on connectivity/availability issues.
-	// We explicitly ignore NotFound, InvalidArgument, etc.
 	st, _ := status.FromError(err)
 	switch st.Code() {
 	case codes.Unavailable, codes.DeadlineExceeded:
 		// These are failures
 	default:
-		// Treat other errors as "success" for breaker purposes (reset failure count if closed?)
-		// Actually, if we are Closed, and get InvalidArgument, we should probably NOT reset failure count (it's neutral),
-		// OR we treat it as success. If the service replied "InvalidArgument", it IS up.
-		// So treating it as success is correct for "Is the service reachable?".
 		if cb.state == StateHalfOpen {
-			slog.Info(cb.name+" circuit breaker: closed", "reason", "application error in half-open")
-			circuitBreakerState.WithLabelValues(cb.name).Set(float64(StateClosed))
-			circuitBreakerTransitions.WithLabelValues(cb.name, StateHalfOpen.String(), StateClosed.String()).Inc()
+			prevState := cb.state
 			cb.state = StateClosed
+			slog.Info(cb.name+" circuit breaker: closed", "reason", "application error in half-open")
+			breakerState.WithLabelValues(cb.name).Set(float64(StateClosed))
+			breakerTransitions.WithLabelValues(cb.name, prevState.String(), StateClosed.String()).Inc()
 			cb.failureCount = 0
 		}
-		// If Closed, we don't reset failureCount on app error?
-		// Actually, if we get a response, the service is healthy. We should reset.
 		cb.failureCount = 0
 		return
 	}
@@ -173,15 +173,15 @@ func (cb *CircuitBreaker) RecordResult(err error) {
 
 	cb.failureCount++
 	cb.lastFailureTime = time.Now()
-	circuitBreakerFailures.WithLabelValues(cb.name).Inc()
+	breakerFailures.WithLabelValues(cb.name).Inc()
 
 	if cb.state == StateHalfOpen || cb.failureCount >= cb.failureThreshold {
 		if cb.state != StateOpen {
 			slog.Warn(cb.name+" circuit breaker: open", "failures", cb.failureCount, "error", err)
-			circuitBreakerState.WithLabelValues(cb.name).Set(float64(StateOpen))
-			circuitBreakerTransitions.WithLabelValues(cb.name, prevState.String(), StateOpen.String()).Inc()
+			cb.state = StateOpen
+			breakerState.WithLabelValues(cb.name).Set(float64(StateOpen))
+			breakerTransitions.WithLabelValues(cb.name, prevState.String(), StateOpen.String()).Inc()
 		}
-		cb.state = StateOpen
 	}
 }
 

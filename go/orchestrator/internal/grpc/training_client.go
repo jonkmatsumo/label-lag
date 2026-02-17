@@ -55,7 +55,7 @@ func NewTrainingClient(target string, timeout time.Duration) (*TrainingClient, e
 		timeout: timeout,
 		conn:    conn,
 		stub:    trainingv1.NewTrainingServiceClient(conn),
-		breaker: NewCircuitBreakerWithPrefix("TRAINING"),
+		breaker: NewCircuitBreakerWithPrefix("training"),
 	}, nil
 }
 

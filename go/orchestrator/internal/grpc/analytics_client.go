@@ -80,7 +80,7 @@ func NewAnalyticsClient(target string, timeout time.Duration) (*AnalyticsClient,
 		timeout:  timeout,
 		conn:     conn,
 		stub:     crudv1.NewAnalyticsServiceClient(conn),
-		breaker:  NewCircuitBreakerWithPrefix("ANALYTICS"),
+		breaker:  NewCircuitBreakerWithPrefix("analytics"),
 		logQueue: make(chan *crudv1.LogInferenceEventRequest, defaultQueueSize),
 		stop:     make(chan struct{}),
 	}

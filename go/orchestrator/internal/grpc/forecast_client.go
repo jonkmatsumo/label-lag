@@ -55,7 +55,7 @@ func NewForecastClient(target string, timeout time.Duration) (*ForecastClient, e
 		timeout: timeout,
 		conn:    conn,
 		stub:    forecastv1.NewForecastServiceClient(conn),
-		breaker: NewCircuitBreakerWithPrefix("FORECAST"),
+		breaker: NewCircuitBreakerWithPrefix("forecast"),
 	}, nil
 }
 
