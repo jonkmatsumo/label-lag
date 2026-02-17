@@ -18,6 +18,24 @@ from analytics.v1 import analytics_pb2, analytics_pb2_grpc
 
 logger = structlog.get_logger(__name__)
 
+_RETRYABLE_READ_CODES = {grpc.StatusCode.UNAVAILABLE, grpc.StatusCode.DEADLINE_EXCEEDED}
+
+
+def _is_retryable_read(exception):
+    return (
+        isinstance(exception, grpc.RpcError)
+        and exception.code() in _RETRYABLE_READ_CODES
+    )
+
+
+_retryable_read = retry(
+    retry=retry_if_exception(_is_retryable_read),
+    wait=wait_exponential_jitter(initial=0.5, max=3),
+    stop=stop_after_delay(10),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+    reraise=True,
+)
+
 
 def _parse_timeout(value: str | None, default: float) -> float:
     if value is None:
@@ -50,6 +68,7 @@ class AnalyticsCRUDClient:
             request_id = str(uuid.uuid4())
         return [("x-request-id", request_id)]
 
+    @_retryable_read
     def get_daily_stats(self, days: int = 30, request_id: str | None = None):
         request = analytics_pb2.GetDailyStatsRequest(days=days)
         return self.stub.GetDailyStats(
@@ -58,6 +77,7 @@ class AnalyticsCRUDClient:
             metadata=self._get_metadata(request_id),
         )
 
+    @_retryable_read
     def get_transaction_details(
         self, days: int = 7, limit: int = 1000, request_id: str | None = None
     ):
@@ -68,6 +88,7 @@ class AnalyticsCRUDClient:
             metadata=self._get_metadata(request_id),
         )
 
+    @_retryable_read
     def get_recent_alerts(self, limit: int = 50, request_id: str | None = None):
         request = analytics_pb2.GetRecentAlertsRequest(limit=limit)
         return self.stub.GetRecentAlerts(
@@ -76,6 +97,7 @@ class AnalyticsCRUDClient:
             metadata=self._get_metadata(request_id),
         )
 
+    @_retryable_read
     def search_transactions(
         self,
         user_id: str = "",
@@ -115,6 +137,7 @@ class AnalyticsCRUDClient:
             return response.transactions[0]
         return None
 
+    @_retryable_read
     def get_training_data(self, cutoff_date, request_id: str | None = None):
         """Fetch training and test data via GetTrainingData."""
         request = analytics_pb2.GetTrainingDataRequest(cutoff_date=cutoff_date)
@@ -190,6 +213,7 @@ class AnalyticsCRUDClient:
             metadata=self._get_metadata(request_id),
         )
 
+    @_retryable_read
     def get_drift_window(self, hours: int = 24, request_id: str | None = None):
         """Fetch drift window data via GetDriftWindow."""
         request = analytics_pb2.GetDriftWindowRequest(hours=hours)
@@ -199,6 +223,7 @@ class AnalyticsCRUDClient:
             metadata=self._get_metadata(request_id),
         )
 
+    @_retryable_read
     def get_inference_scores(self, hours: int = 24, request_id: str | None = None):
         """Fetch inference scores via GetInferenceScores."""
         request = analytics_pb2.GetInferenceScoresRequest(hours=hours)
@@ -208,6 +233,7 @@ class AnalyticsCRUDClient:
             metadata=self._get_metadata(request_id),
         )
 
+    @_retryable_read
     def get_overview_metrics(self, request_id: str | None = None):
         request = analytics_pb2.GetOverviewMetricsRequest()
         return self.stub.GetOverviewMetrics(
@@ -216,6 +242,7 @@ class AnalyticsCRUDClient:
             metadata=self._get_metadata(request_id),
         )
 
+    @_retryable_read
     def get_dataset_fingerprint(self, request_id: str | None = None):
         request = analytics_pb2.GetDatasetFingerprintRequest()
         return self.stub.GetDatasetFingerprint(
@@ -224,6 +251,7 @@ class AnalyticsCRUDClient:
             metadata=self._get_metadata(request_id),
         )
 
+    @_retryable_read
     def get_feature_sample(
         self,
         sample_size: int = 100,
@@ -240,6 +268,7 @@ class AnalyticsCRUDClient:
             metadata=self._get_metadata(request_id),
         )
 
+    @_retryable_read
     def get_schema_summary(
         self, table_names: list[str] = None, request_id: str | None = None
     ):
