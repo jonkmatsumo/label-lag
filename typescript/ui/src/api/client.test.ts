@@ -22,7 +22,7 @@ describe('ApiClient', () => {
             },
         };
 
-        (global.fetch as any).mockResolvedValue({
+        vi.mocked(global.fetch).mockResolvedValue({
             ok: false,
             status: 400,
             json: async () => errorResponse,
@@ -43,7 +43,7 @@ describe('ApiClient', () => {
     });
 
     it('should include request_id from header if missing in error body', async () => {
-        (global.fetch as any).mockResolvedValue({
+        vi.mocked(global.fetch).mockResolvedValue({
             ok: false,
             status: 500,
             json: async () => ({}),

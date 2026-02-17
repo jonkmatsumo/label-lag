@@ -63,12 +63,12 @@ export function CompareProfiles() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {data.features.map((f: any) => (
-                                    <tr key={f.feature}>
-                                        <td className="font-monospace small">{f.feature}</td>
+                                {data.drift.map((f: { feature_name: string; psi: number; drift_severity: string }) => (
+                                    <tr key={f.feature_name}>
+                                        <td className="font-monospace small">{f.feature_name}</td>
                                         <td>{f.psi.toFixed(4)}</td>
                                         <td>
-                                            <SeverityBadge severity={f.severity} />
+                                            <SeverityBadge severity={f.drift_severity as 'low' | 'medium' | 'high'} />
                                         </td>
                                     </tr>
                                 ))}

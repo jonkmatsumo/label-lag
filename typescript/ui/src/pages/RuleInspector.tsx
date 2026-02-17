@@ -10,6 +10,7 @@ import type {
   RuleSuggestion,
   Rule,
   ReadinessCheck,
+  BacktestResult,
 } from '../types/api';
 import {
   AlertTriangle, CheckCircle, Info, Shield,
@@ -258,7 +259,7 @@ function RuleOverviewTab({ rule, onShowPublish }: { rule: DraftRule, onShowPubli
                   <span className="fw-medium">{check.name}</span>
                   <div className="d-flex align-items-center">
                     <span className="text-muted me-2" style={{ fontSize: '0.9em' }}>{check.message}</span>
-                    <StatusDot status={(check as any).status} />
+                    <StatusDot status={check.passed ? 'pass' : 'fail'} />
                   </div>
                 </li>
               ))}
@@ -402,7 +403,7 @@ function RuleHistoryTab({ ruleId }: { ruleId: string }) {
                 </tr>
               </thead>
               <tbody>
-                {diffQuery.data.changes.map((c: any, i: number) => (
+                {diffQuery.data.changes.map((c: { field_name: string; change_type: string; old_value: unknown; new_value: unknown }, i: number) => (
                   <tr key={i} className={c.change_type === 'modified' ? 'table-warning bg-opacity-10' : ''}>
                     <td className="fw-bold text-muted">{c.field_name}</td>
                     <td className="text-decoration-line-through text-muted">{JSON.stringify(c.old_value)}</td>
@@ -831,47 +832,13 @@ export function RuleShadow() {
         <div className="loading">Loading shadow metrics...</div>
       ) : shadowQuery.isError ? (
         <ErrorBanner error={shadowQuery.error} title="Failed to load shadow metrics" className="alert alert-danger" />
-      ) : shadowQuery.data && shadowQuery.data.rule_metrics.length > 0 ? (
+      ) : shadowQuery.data && shadowQuery.data.metrics ? (
         <div className="card">
           <div className="card-header">
             <h4 className="card-title">Rule Comparison</h4>
             <span className="text-muted">
-              {shadowQuery.data.total_requests.toLocaleString()} total requests
+              {(shadowQuery.data.metrics?.total_evaluations || 0).toLocaleString()} total evaluations
             </span>
-          </div>
-          <div className="table-container">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Rule ID</th>
-                  <th style={{ textAlign: 'right' }}>Production</th>
-                  <th style={{ textAlign: 'right' }}>Shadow</th>
-                  <th style={{ textAlign: 'right' }}>Overlap</th>
-                  <th style={{ textAlign: 'right' }}>Prod Only</th>
-                  <th style={{ textAlign: 'right' }}>Shadow Only</th>
-                </tr>
-              </thead>
-              <tbody>
-                {shadowQuery.data.rule_metrics.map((metric: any) => (
-                  <tr key={metric.rule_id}>
-                    <td><code>{metric.rule_id}</code></td>
-                    <td style={{ textAlign: 'right' }}>{metric.production_matches.toLocaleString()}</td>
-                    <td style={{ textAlign: 'right' }}>{metric.shadow_matches.toLocaleString()}</td>
-                    <td style={{ textAlign: 'right' }}>{metric.overlap_count.toLocaleString()}</td>
-                    <td style={{ textAlign: 'right' }}>
-                      <span className={metric.production_only_count > 0 ? 'text-warning' : ''}>
-                        {metric.production_only_count.toLocaleString()}
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'right' }}>
-                      <span className={metric.shadow_only_count > 0 ? 'text-info' : ''}>
-                        {metric.shadow_only_count.toLocaleString()}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
         </div>
       ) : (
@@ -983,24 +950,24 @@ export function RuleBacktests() {
                 </tr>
               </thead>
               <tbody>
-                {paginatedResults.map((result: any) => (
+                {paginatedResults.map((result: BacktestResult) => (
                   <tr key={result.job_id}>
                     <td><code>{result.job_id.slice(0, 8)}</code></td>
                     <td><code>{result.rule_id}</code></td>
                     <td>
-                      <span className={`status-badge ${getStatusBadgeClass(result.status)}`}>
-                        {result.status}
+                      <span className={`status-badge ${getStatusBadgeClass('completed')}`}>
+                        Completed
                       </span>
                     </td>
-                    <td>{new Date(result.created_at).toLocaleString()}</td>
+                    <td>{new Date(result.completed_at || 0).toLocaleString()}</td>
                     <td style={{ textAlign: 'right' }}>
-                      {result.metrics?.precision?.toFixed(3) ?? '-'}
+                      {(result.metrics?.match_rate || 0).toFixed(3)}
                     </td>
                     <td style={{ textAlign: 'right' }}>
-                      {result.metrics?.recall?.toFixed(3) ?? '-'}
+                      -
                     </td>
                     <td style={{ textAlign: 'right' }}>
-                      {result.metrics?.f1_score?.toFixed(3) ?? '-'}
+                      -
                     </td>
                   </tr>
                 ))}

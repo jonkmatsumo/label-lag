@@ -197,7 +197,7 @@ export function JobDetail() {
             <div className="text-center p-3 text-muted small">No events recorded yet</div>
           ) : (
             <div className="timeline">
-              {eventsQuery.data.events.map((event: any) => (
+              {eventsQuery.data.events.map((event: { event_id: string; event_type: string; timestamp: string; details_json: string }) => (
                 <div key={event.event_id} className="d-flex gap-3 mb-3 pb-3 border-bottom">
                   <div className="flex-shrink-0">
                     <span className="badge bg-secondary-subtle text-secondary border rounded-pill">

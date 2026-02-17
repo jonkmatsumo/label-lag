@@ -50,14 +50,14 @@ export function ProfileDetail() {
                             <dl className="row mb-0">
                                 <dt className="col-sm-5">Created</dt>
                                 <dd className="col-sm-7 small">
-                                    {new Date(profile.created_at).toLocaleString()}
+                                    {new Date(profile.computed_at || 0).toLocaleString()}
                                 </dd>
 
                                 <dt className="col-sm-5">Rows</dt>
-                                <dd className="col-sm-7">{profile.row_count.toLocaleString()}</dd>
+                                <dd className="col-sm-7">{(profile.record_count || 0).toLocaleString()}</dd>
 
                                 <dt className="col-sm-5">Columns</dt>
-                                <dd className="col-sm-7">{profile.column_count}</dd>
+                                <dd className="col-sm-7">{profile.feature_profiles?.length || 0}</dd>
 
                                 <dt className="col-sm-5">Size</dt>
                                 <dd className="col-sm-7">
@@ -86,12 +86,12 @@ export function ProfileDetail() {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {Object.entries(summary.columns).map(([col, stats]: [string, any]) => (
-                                                <tr key={col}>
-                                                    <td className="font-monospace small">{col}</td>
+                                            {summary.profile?.feature_profiles.map((stats) => (
+                                                <tr key={stats.name}>
+                                                    <td className="font-monospace small">{stats.name}</td>
                                                     <td><code>{stats.type}</code></td>
-                                                    <td>{stats.null_count}</td>
-                                                    <td>{stats.distinct_count}</td>
+                                                    <td>{(stats.null_rate * 100).toFixed(1)}%</td>
+                                                    <td>{stats.mean.toFixed(2)}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
