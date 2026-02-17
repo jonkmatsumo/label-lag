@@ -3,7 +3,10 @@ package httpserver
 import (
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
+
+	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/tenant"
 )
@@ -34,11 +37,16 @@ func TestStatusResponseWriterTracksStatusAndBytes(t *testing.T) {
 	}
 }
 
+// resetLimiterMap clears the sync.Map for test isolation.
+func resetLimiterMap() {
+	limiterMap.Range(func(key, _ any) bool {
+		limiterMap.Delete(key)
+		return true
+	})
+}
+
 func TestRateLimitMiddleware(t *testing.T) {
-	// Reset limiters for test
-	limitMu.Lock()
-	limiters = make(map[string]*tenantLimiter)
-	limitMu.Unlock()
+	resetLimiterMap()
 
 	handler := rateLimitMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -97,4 +105,120 @@ func TestRateLimitMiddleware(t *testing.T) {
 			t.Fatalf("expected tenant B to be OK, got %d", recB.Code)
 		}
 	})
+}
+
+func TestRateLimitMetricIncrements(t *testing.T) {
+	resetLimiterMap()
+
+	handler := rateLimitMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	tenantID := "rate-limit-metric-test"
+
+	// Exhaust burst (20 requests)
+	for i := 0; i < 20; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req = req.WithContext(tenant.WithTenantID(req.Context(), tenantID))
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+	}
+
+	// Record baseline
+	before := testutil.ToFloat64(rateLimitedTotal.WithLabelValues("true"))
+
+	// This request should be rate-limited
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req = req.WithContext(tenant.WithTenantID(req.Context(), tenantID))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d", rec.Code)
+	}
+
+	after := testutil.ToFloat64(rateLimitedTotal.WithLabelValues("true"))
+	if after-before != 1 {
+		t.Errorf("expected rate_limited_total to increment by 1, got delta %v", after-before)
+	}
+}
+
+func TestRateLimitNoTenantLabel(t *testing.T) {
+	resetLimiterMap()
+
+	handler := rateLimitMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Exhaust burst for "default" tenant (no tenant header)
+	for i := 0; i < 20; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		// No tenant in context — will use "default"
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+	}
+
+	before := testutil.ToFloat64(rateLimitedTotal.WithLabelValues("false"))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d", rec.Code)
+	}
+
+	after := testutil.ToFloat64(rateLimitedTotal.WithLabelValues("false"))
+	if after-before != 1 {
+		t.Errorf("expected rate_limited_total(false) to increment by 1, got delta %v", after-before)
+	}
+}
+
+func TestCleanupStaleLimiters(t *testing.T) {
+	resetLimiterMap()
+
+	// Insert a "stale" limiter with lastSeen well in the past
+	tl := &tenantLimiter{
+		limiter: nil,
+	}
+	tl.lastSeen.Store(0) // epoch = very old
+	limiterMap.Store("stale-tenant", tl)
+
+	// Insert a "fresh" limiter
+	fresh := &tenantLimiter{
+		limiter: nil,
+	}
+	fresh.lastSeen.Store(int64(^uint64(0) >> 1)) // far future
+	limiterMap.Store("fresh-tenant", fresh)
+
+	cleanupStaleLimiters()
+
+	if _, ok := limiterMap.Load("stale-tenant"); ok {
+		t.Error("expected stale-tenant to be cleaned up")
+	}
+	if _, ok := limiterMap.Load("fresh-tenant"); !ok {
+		t.Error("expected fresh-tenant to survive cleanup")
+	}
+}
+
+func TestRateLimitConcurrentAccess(t *testing.T) {
+	resetLimiterMap()
+
+	handler := rateLimitMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func(tid string) {
+			defer wg.Done()
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req = req.WithContext(tenant.WithTenantID(req.Context(), tid))
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+		}("concurrent-tenant")
+	}
+	wg.Wait()
+	// If we reach here without a race/panic, the test passes
 }
