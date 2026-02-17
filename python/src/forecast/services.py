@@ -1,6 +1,5 @@
 """Business logic for signal forecasting."""
 
-import logging
 import os
 import uuid
 from dataclasses import dataclass
@@ -8,13 +7,15 @@ from decimal import Decimal
 from typing import Any
 
 import numpy as np
+import structlog
 
+from forecast.metrics import heuristic_fallback_total, zero_fallback_total
 from training.crud_client import get_crud_client
 from training.schemas import (
     SignalRequest,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Feature thresholds for risk component detection (based on percentiles)
 VELOCITY_HIGH_THRESHOLD = 5  # 24h transaction count threshold
@@ -80,6 +81,7 @@ class SignalForecaster:
         manager = get_model_manager()
 
         fallback_used = False
+        fallback_reason = None
         if manager.model_loaded and features.has_history:
             raw_probability = self._predict_with_model(manager, features)
             model_version = manager.model_version
@@ -89,22 +91,31 @@ class SignalForecaster:
             fallback_mode = request.fallback_mode or os.getenv(
                 "FORECASTER_FALLBACK_MODE", "probability"
             )
+            fallback_reason = (
+                "model_not_loaded" if not manager.model_loaded else "no_history"
+            )
 
             if fallback_mode == "error":
-                reason = (
-                    "model not loaded" if not manager.model_loaded else "no history"
-                )
                 raise RuntimeError(
-                    f"Forecaster fallback triggered (mode=error): {reason}"
+                    f"Forecaster fallback triggered (mode=error): {fallback_reason}"
                 )
 
             fallback_used = True
             if fallback_mode == "zero":
                 raw_probability = 0.0
+                zero_fallback_total.inc(
+                    {"reason": fallback_reason, "request_id": request_id}
+                )
             elif os.getenv("DISABLE_HEURISTIC_FALLBACK") == "true":
                 raw_probability = 0.05
+                heuristic_fallback_total.inc(
+                    {"reason": "heuristic_disabled", "request_id": request_id}
+                )
             else:
                 raw_probability = self._calculate_probability(features)
+                heuristic_fallback_total.inc(
+                    {"reason": fallback_reason, "request_id": request_id}
+                )
 
             model_version = self.model_version
             model_loaded = False
@@ -149,6 +160,20 @@ class SignalForecaster:
                 response["feature_importance"] = importance
             else:
                 diagnostics["importance_unavailable"] = True
+
+        # Structured log for every prediction with key diagnostic fields
+        logger.info(
+            "prediction_complete",
+            request_id=request_id,
+            user_id=request.user_id,
+            model_version=model_version,
+            model_loaded=model_loaded,
+            fallback=fallback_used,
+            fallback_reason=fallback_reason,
+            model_source=manager.model_source,
+            score=score,
+            latency_ms=round(latency_ms, 2),
+        )
 
         return response
 

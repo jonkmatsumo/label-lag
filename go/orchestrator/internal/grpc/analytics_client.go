@@ -23,6 +23,16 @@ var (
 		Name: "orchestrator_inference_events_dropped_total",
 		Help: "Total number of inference events dropped due to full queue.",
 	})
+
+	analyticsQueueDepth = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "orchestrator_analytics_log_queue_depth",
+		Help: "Current number of pending events in the analytics log queue.",
+	})
+
+	analyticsQueueCapacity = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "orchestrator_analytics_log_queue_capacity",
+		Help: "Maximum capacity of the analytics log queue.",
+	})
 )
 
 const (
@@ -70,10 +80,11 @@ func NewAnalyticsClient(target string, timeout time.Duration) (*AnalyticsClient,
 		timeout:  timeout,
 		conn:     conn,
 		stub:     crudv1.NewAnalyticsServiceClient(conn),
-		breaker:  NewCircuitBreaker(),
+		breaker:  NewCircuitBreakerWithPrefix("ANALYTICS"),
 		logQueue: make(chan *crudv1.LogInferenceEventRequest, defaultQueueSize),
 		stop:     make(chan struct{}),
 	}
+	analyticsQueueCapacity.Set(float64(defaultQueueSize))
 	client.startWorker()
 
 	return client, nil
@@ -94,6 +105,7 @@ func (c *AnalyticsClient) startWorker() {
 		for {
 			select {
 			case req := <-c.logQueue:
+				analyticsQueueDepth.Set(float64(len(c.logQueue)))
 				// Use context.Background() since the original request context may have been cancelled
 				ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 				_, _ = c.stub.LogInferenceEvent(ctx, req)
@@ -806,6 +818,25 @@ func (c *AnalyticsClient) GetAttribution(ctx context.Context, req *crudv1.GetAtt
 	return resp, nil
 }
 
+func (c *AnalyticsClient) DirectLogInferenceEvent(ctx context.Context, req *crudv1.LogInferenceEventRequest) (*crudv1.LogInferenceEventResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	callCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	resp, err := c.stub.LogInferenceEvent(c.withMetadata(callCtx), req)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
 func (c *AnalyticsClient) LogInferenceEvent(ctx context.Context, req *crudv1.LogInferenceEventRequest) (*crudv1.LogInferenceEventResponse, error) {
 	if req == nil {
 		return nil, fmt.Errorf("nil request")
@@ -814,7 +845,7 @@ func (c *AnalyticsClient) LogInferenceEvent(ctx context.Context, req *crudv1.Log
 	// Push to queue non-blocking
 	select {
 	case c.logQueue <- req:
-		// Queued successfully
+		analyticsQueueDepth.Set(float64(len(c.logQueue)))
 	default:
 		// Queue full, drop event and increment counter
 		inferenceEventsDropped.Inc()

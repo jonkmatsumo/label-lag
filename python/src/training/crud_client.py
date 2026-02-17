@@ -18,6 +18,32 @@ from analytics.v1 import analytics_pb2, analytics_pb2_grpc
 
 logger = structlog.get_logger(__name__)
 
+_RETRYABLE_READ_CODES = {grpc.StatusCode.UNAVAILABLE, grpc.StatusCode.DEADLINE_EXCEEDED}
+
+# Minimum remaining budget required to attempt a retry.  If the caller's
+# deadline is closer than this, we stop retrying to avoid wasted work.
+_MIN_RETRY_BUDGET_SECONDS = 0.3
+
+# Maximum total retry window — kept short to fit within typical Go
+# orchestrator budgets (5s default) minus safety margin.
+_MAX_RETRY_DELAY_SECONDS = 4
+
+
+def _is_retryable_read(exception):
+    return (
+        isinstance(exception, grpc.RpcError)
+        and exception.code() in _RETRYABLE_READ_CODES
+    )
+
+
+_retryable_read = retry(
+    retry=retry_if_exception(_is_retryable_read),
+    wait=wait_exponential_jitter(initial=0.5, max=2),
+    stop=stop_after_delay(_MAX_RETRY_DELAY_SECONDS),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+    reraise=True,
+)
+
 
 def _parse_timeout(value: str | None, default: float) -> float:
     if value is None:
@@ -44,38 +70,66 @@ class AnalyticsCRUDClient:
         self.timeout_seconds = timeout_seconds
         self.channel = grpc.insecure_channel(self.target)
         self.stub = analytics_pb2_grpc.AnalyticsServiceStub(self.channel)
+        # Optional: caller-set deadline (epoch timestamp). When set, all RPC
+        # timeouts are clamped so they don't outlive the caller's budget.
+        self._caller_deadline: float | None = None
+
+    def set_caller_deadline(self, deadline_epoch: float) -> None:
+        """Propagate the caller's deadline so RPCs don't exceed it."""
+        self._caller_deadline = deadline_epoch
+
+    def clear_caller_deadline(self) -> None:
+        self._caller_deadline = None
+
+    def _effective_timeout(self) -> float:
+        """Return the timeout to use for the next RPC call.
+
+        If a caller deadline is set, the effective timeout is the minimum
+        of (remaining budget minus safety margin) and the configured default.
+        """
+        if self._caller_deadline is not None:
+            remaining = self._caller_deadline - time.time()
+            if remaining < _MIN_RETRY_BUDGET_SECONDS:
+                # Almost no budget left — use minimum to get one fast attempt
+                return _MIN_RETRY_BUDGET_SECONDS
+            return min(remaining, self.timeout_seconds)
+        return self.timeout_seconds
 
     def _get_metadata(self, request_id: str | None = None):
         if request_id is None:
             request_id = str(uuid.uuid4())
         return [("x-request-id", request_id)]
 
+    @_retryable_read
     def get_daily_stats(self, days: int = 30, request_id: str | None = None):
         request = analytics_pb2.GetDailyStatsRequest(days=days)
         return self.stub.GetDailyStats(
             request,
-            timeout=self.timeout_seconds,
+            timeout=self._effective_timeout(),
             metadata=self._get_metadata(request_id),
         )
 
+    @_retryable_read
     def get_transaction_details(
         self, days: int = 7, limit: int = 1000, request_id: str | None = None
     ):
         request = analytics_pb2.GetTransactionDetailsRequest(days=days, limit=limit)
         return self.stub.GetTransactionDetails(
             request,
-            timeout=self.timeout_seconds,
+            timeout=self._effective_timeout(),
             metadata=self._get_metadata(request_id),
         )
 
+    @_retryable_read
     def get_recent_alerts(self, limit: int = 50, request_id: str | None = None):
         request = analytics_pb2.GetRecentAlertsRequest(limit=limit)
         return self.stub.GetRecentAlerts(
             request,
-            timeout=self.timeout_seconds,
+            timeout=self._effective_timeout(),
             metadata=self._get_metadata(request_id),
         )
 
+    @_retryable_read
     def search_transactions(
         self,
         user_id: str = "",
@@ -102,7 +156,7 @@ class AnalyticsCRUDClient:
         )
         return self.stub.SearchTransactions(
             request,
-            timeout=self.timeout_seconds,
+            timeout=self._effective_timeout(),
             metadata=self._get_metadata(request_id),
         )
 
@@ -115,12 +169,13 @@ class AnalyticsCRUDClient:
             return response.transactions[0]
         return None
 
+    @_retryable_read
     def get_training_data(self, cutoff_date, request_id: str | None = None):
         """Fetch training and test data via GetTrainingData."""
         request = analytics_pb2.GetTrainingDataRequest(cutoff_date=cutoff_date)
         return self.stub.GetTrainingData(
             request,
-            timeout=self.timeout_seconds,
+            timeout=self._effective_timeout(),
             metadata=self._get_metadata(request_id),
         )
 
@@ -131,7 +186,7 @@ class AnalyticsCRUDClient:
         )
         return self.stub.StoreGeneratedData(
             request,
-            timeout=self.timeout_seconds,
+            timeout=self._effective_timeout(),
             metadata=self._get_metadata(request_id),
         )
 
@@ -175,7 +230,7 @@ class AnalyticsCRUDClient:
         request = analytics_pb2.ClearAllDataRequest()
         return self.stub.ClearAllData(
             request,
-            timeout=self.timeout_seconds,
+            timeout=self._effective_timeout(),
             metadata=self._get_metadata(request_id),
         )
 
@@ -186,44 +241,49 @@ class AnalyticsCRUDClient:
         request = analytics_pb2.MaterializeFeaturesRequest(batch_size=batch_size)
         return self.stub.MaterializeFeatures(
             request,
-            timeout=self.timeout_seconds,
+            timeout=self._effective_timeout(),
             metadata=self._get_metadata(request_id),
         )
 
+    @_retryable_read
     def get_drift_window(self, hours: int = 24, request_id: str | None = None):
         """Fetch drift window data via GetDriftWindow."""
         request = analytics_pb2.GetDriftWindowRequest(hours=hours)
         return self.stub.GetDriftWindow(
             request,
-            timeout=self.timeout_seconds,
+            timeout=self._effective_timeout(),
             metadata=self._get_metadata(request_id),
         )
 
+    @_retryable_read
     def get_inference_scores(self, hours: int = 24, request_id: str | None = None):
         """Fetch inference scores via GetInferenceScores."""
         request = analytics_pb2.GetInferenceScoresRequest(hours=hours)
         return self.stub.GetInferenceScores(
             request,
-            timeout=self.timeout_seconds,
+            timeout=self._effective_timeout(),
             metadata=self._get_metadata(request_id),
         )
 
+    @_retryable_read
     def get_overview_metrics(self, request_id: str | None = None):
         request = analytics_pb2.GetOverviewMetricsRequest()
         return self.stub.GetOverviewMetrics(
             request,
-            timeout=self.timeout_seconds,
+            timeout=self._effective_timeout(),
             metadata=self._get_metadata(request_id),
         )
 
+    @_retryable_read
     def get_dataset_fingerprint(self, request_id: str | None = None):
         request = analytics_pb2.GetDatasetFingerprintRequest()
         return self.stub.GetDatasetFingerprint(
             request,
-            timeout=self.timeout_seconds,
+            timeout=self._effective_timeout(),
             metadata=self._get_metadata(request_id),
         )
 
+    @_retryable_read
     def get_feature_sample(
         self,
         sample_size: int = 100,
@@ -236,10 +296,11 @@ class AnalyticsCRUDClient:
         )
         return self.stub.GetFeatureSample(
             request,
-            timeout=self.timeout_seconds,
+            timeout=self._effective_timeout(),
             metadata=self._get_metadata(request_id),
         )
 
+    @_retryable_read
     def get_schema_summary(
         self, table_names: list[str] = None, request_id: str | None = None
     ):
@@ -248,7 +309,7 @@ class AnalyticsCRUDClient:
         request = analytics_pb2.GetSchemaSummaryRequest(table_names=table_names)
         return self.stub.GetSchemaSummary(
             request,
-            timeout=self.timeout_seconds,
+            timeout=self._effective_timeout(),
             metadata=self._get_metadata(request_id),
         )
 

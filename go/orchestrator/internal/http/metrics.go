@@ -26,6 +26,21 @@ var (
 		Help:    "Duration of HTTP requests in seconds.",
 		Buckets: prometheus.DefBuckets,
 	}, []string{"method", "route", "tenant"})
+
+	rulesFallbackTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "orchestrator_rules_fallback_total",
+		Help: "Total number of times the rules provider failed and fallback was used.",
+	})
+
+	handlerLogQueueDepth = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "orchestrator_log_queue_depth",
+		Help: "Current number of pending events in the handler inference log queue.",
+	})
+
+	handlerLogQueueCapacity = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "orchestrator_log_queue_capacity",
+		Help: "Maximum capacity of the handler inference log queue.",
+	})
 )
 
 type responseWriter struct {

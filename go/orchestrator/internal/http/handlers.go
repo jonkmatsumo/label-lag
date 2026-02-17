@@ -63,6 +63,12 @@ type Handler struct {
 	logQueue        chan inferenceLogEvent
 	logWg           sync.WaitGroup
 	droppedLogs     atomic.Int64
+	workerCtx       context.Context
+	workerCancel    context.CancelFunc
+
+	// Last-known-good ruleset cache for fallback on provider failure.
+	lastGoodRuleset *rules.RuleSet
+	rulesetMu       sync.RWMutex
 }
 
 type inferenceLogEvent struct {
@@ -89,6 +95,7 @@ func NewHandler(opts HandlerOptions) *Handler {
 	if opts.MaxBodyBytes <= 0 {
 		opts.MaxBodyBytes = 1 << 20
 	}
+	workerCtx, workerCancel := context.WithCancel(context.Background())
 	h := &Handler{
 		logger:          opts.Logger,
 		inferenceClient: opts.InferenceClient,
@@ -100,7 +107,10 @@ func NewHandler(opts HandlerOptions) *Handler {
 		pythonURL:       opts.PythonURL,
 		mlflowURL:       opts.MlflowURL,
 		logQueue:        make(chan inferenceLogEvent, 100),
+		workerCtx:       workerCtx,
+		workerCancel:    workerCancel,
 	}
+	handlerLogQueueCapacity.Set(100)
 	h.startWorkers()
 	return h
 }
@@ -115,6 +125,7 @@ func (h *Handler) startWorkers() {
 func (h *Handler) logWorker() {
 	defer h.logWg.Done()
 	for event := range h.logQueue {
+		handlerLogQueueDepth.Set(float64(len(h.logQueue)))
 		ctx := event.ctx
 		// Create a link to the parent trace
 		opts := []trace.SpanStartOption{
@@ -132,12 +143,18 @@ func (h *Handler) logWorker() {
 		} else {
 			ctx, span = otel.Tracer("async-logger").Start(ctx, "async_log_inference")
 		}
-		defer span.End()
 
-		_, err := h.analyticsClient.LogInferenceEvent(ctx, event.req)
+		rpcCtx, rpcCancel := context.WithTimeout(h.workerCtx, 5*time.Second)
+		// Preserve span context from the trace-aware ctx
+		rpcCtx = trace.ContextWithSpan(rpcCtx, span)
+
+		_, err := h.analyticsClient.DirectLogInferenceEvent(rpcCtx, event.req)
+		rpcCancel()
 		if err != nil {
 			h.logger.Warn("failed to log inference event to CRUD", "error", err, "request_id", event.requestID)
 		}
+
+		span.End()
 	}
 }
 
@@ -152,8 +169,27 @@ func (h *Handler) Shutdown(ctx context.Context) error {
 	case <-done:
 		return nil
 	case <-ctx.Done():
+		// Cancel in-flight RPCs so workers can exit
+		h.workerCancel()
+		// Give workers a brief grace period to finish
+		select {
+		case <-done:
+		case <-time.After(500 * time.Millisecond):
+		}
 		return ctx.Err()
 	}
+}
+
+func (h *Handler) cacheRuleset(rs *rules.RuleSet) {
+	h.rulesetMu.Lock()
+	defer h.rulesetMu.Unlock()
+	h.lastGoodRuleset = rs
+}
+
+func (h *Handler) getLastGoodRuleset() *rules.RuleSet {
+	h.rulesetMu.RLock()
+	defer h.rulesetMu.RUnlock()
+	return h.lastGoodRuleset
 }
 
 func (h *Handler) Register(mux *http.ServeMux) {

@@ -8,6 +8,8 @@ import (
 
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/requestid"
 	trainingv1 "github.com/jonkmatsumo/label-lag/go/training/proto/trainingv1"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
@@ -19,6 +21,7 @@ type TrainingClient struct {
 	timeout time.Duration
 	conn    *grpc.ClientConn
 	stub    trainingv1.TrainingServiceClient
+	breaker *CircuitBreaker
 }
 
 func NewTrainingClient(target string, timeout time.Duration) (*TrainingClient, error) {
@@ -52,6 +55,7 @@ func NewTrainingClient(target string, timeout time.Duration) (*TrainingClient, e
 		timeout: timeout,
 		conn:    conn,
 		stub:    trainingv1.NewTrainingServiceClient(conn),
+		breaker: NewCircuitBreakerWithPrefix("TRAINING"),
 	}, nil
 }
 
@@ -74,6 +78,15 @@ func (c *TrainingClient) Train(ctx context.Context, req *trainingv1.TrainRequest
 		return nil, fmt.Errorf("nil request")
 	}
 
+	span := trace.SpanFromContext(ctx)
+	if err := c.breaker.Allow(); err != nil {
+		span.SetAttributes(
+			attribute.String("training.breaker_state", c.breaker.State().String()),
+			attribute.String("training.breaker_open_reason", "cooldown"),
+		)
+		return nil, mapRPCError(err)
+	}
+
 	callCtx := ctx
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
@@ -82,6 +95,12 @@ func (c *TrainingClient) Train(ctx context.Context, req *trainingv1.TrainRequest
 	}
 
 	resp, err := c.stub.Train(c.withMetadata(callCtx), req)
+	c.breaker.RecordResult(err)
+
+	span.SetAttributes(
+		attribute.String("training.breaker_state", c.breaker.State().String()),
+	)
+
 	if err != nil {
 		return nil, mapRPCError(err)
 	}
@@ -93,6 +112,15 @@ func (c *TrainingClient) ClearData(ctx context.Context, req *trainingv1.ClearDat
 		return nil, fmt.Errorf("nil request")
 	}
 
+	span := trace.SpanFromContext(ctx)
+	if err := c.breaker.Allow(); err != nil {
+		span.SetAttributes(
+			attribute.String("training.breaker_state", c.breaker.State().String()),
+			attribute.String("training.breaker_open_reason", "cooldown"),
+		)
+		return nil, mapRPCError(err)
+	}
+
 	callCtx := ctx
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
@@ -101,6 +129,12 @@ func (c *TrainingClient) ClearData(ctx context.Context, req *trainingv1.ClearDat
 	}
 
 	resp, err := c.stub.ClearData(c.withMetadata(callCtx), req)
+	c.breaker.RecordResult(err)
+
+	span.SetAttributes(
+		attribute.String("training.breaker_state", c.breaker.State().String()),
+	)
+
 	if err != nil {
 		return nil, mapRPCError(err)
 	}
@@ -112,6 +146,15 @@ func (c *TrainingClient) GetHealth(ctx context.Context, req *trainingv1.GetHealt
 		return nil, fmt.Errorf("nil request")
 	}
 
+	span := trace.SpanFromContext(ctx)
+	if err := c.breaker.Allow(); err != nil {
+		span.SetAttributes(
+			attribute.String("training.breaker_state", c.breaker.State().String()),
+			attribute.String("training.breaker_open_reason", "cooldown"),
+		)
+		return nil, mapRPCError(err)
+	}
+
 	callCtx := ctx
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
@@ -120,6 +163,12 @@ func (c *TrainingClient) GetHealth(ctx context.Context, req *trainingv1.GetHealt
 	}
 
 	resp, err := c.stub.GetHealth(c.withMetadata(callCtx), req)
+	c.breaker.RecordResult(err)
+
+	span.SetAttributes(
+		attribute.String("training.breaker_state", c.breaker.State().String()),
+	)
+
 	if err != nil {
 		return nil, mapRPCError(err)
 	}

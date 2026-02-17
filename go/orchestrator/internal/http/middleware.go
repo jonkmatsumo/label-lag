@@ -4,10 +4,13 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/requestid"
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/tenant"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -15,52 +18,61 @@ import (
 	"golang.org/x/time/rate"
 )
 
+var (
+	rateLimitedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "orchestrator_rate_limited_total",
+		Help: "Total requests rejected by the rate limiter.",
+	}, []string{"tenant_present"})
+)
+
 type tenantLimiter struct {
 	limiter  *rate.Limiter
-	lastSeen time.Time
+	lastSeen atomic.Int64 // Unix nanoseconds
 }
 
-var (
-	limiters = make(map[string]*tenantLimiter)
-	limitMu  sync.Mutex
-)
+// limiterMap uses sync.Map to avoid holding a global mutex on the hot
+// path. Keys are tenant ID strings, values are *tenantLimiter.
+var limiterMap sync.Map
 
 func init() {
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)
 		for range ticker.C {
-			limitMu.Lock()
-			for tid, l := range limiters {
-				if time.Since(l.lastSeen) > 1*time.Hour {
-					delete(limiters, tid)
-				}
-			}
-			limitMu.Unlock()
+			cleanupStaleLimiters()
 		}
 	}()
+}
+
+// cleanupStaleLimiters iterates without holding a global lock; each
+// delete is lock-free on the sync.Map.
+func cleanupStaleLimiters() {
+	now := time.Now().UnixNano()
+	limiterMap.Range(func(key, value any) bool {
+		tl := value.(*tenantLimiter)
+		if now-tl.lastSeen.Load() > int64(1*time.Hour) {
+			limiterMap.Delete(key)
+		}
+		return true
+	})
 }
 
 func rateLimitMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tenantID := tenant.FromContext(r.Context())
+		tenantPresent := "true"
 		if tenantID == "" {
 			tenantID = "default"
+			tenantPresent = "false"
 		}
 
-		limitMu.Lock()
-		l, ok := limiters[tenantID]
-		if !ok {
-			// Default: 10 req/s, burst 20
-			l = &tenantLimiter{
-				limiter:  rate.NewLimiter(rate.Limit(10), 20),
-				lastSeen: time.Now(),
-			}
-			limiters[tenantID] = l
-		}
-		l.lastSeen = time.Now()
-		limitMu.Unlock()
+		val, _ := limiterMap.LoadOrStore(tenantID, &tenantLimiter{
+			limiter: rate.NewLimiter(rate.Limit(10), 20),
+		})
+		tl := val.(*tenantLimiter)
+		tl.lastSeen.Store(time.Now().UnixNano())
 
-		if !l.limiter.Allow() {
+		if !tl.limiter.Allow() {
+			rateLimitedTotal.WithLabelValues(tenantPresent).Inc()
 			writeJSONError(w, r, http.StatusTooManyRequests, "rate limit exceeded")
 			return
 		}
