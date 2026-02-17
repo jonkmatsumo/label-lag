@@ -126,7 +126,10 @@ class ModelManager:
             return True
 
         # Fall back to local model
+        from forecast.metrics import model_fallback_total
+
         if self._load_fallback_model():
+            model_fallback_total.inc({"reason": "mlflow_unavailable"})
             return True
 
         logger.error("No model available - both MLflow and fallback failed")
