@@ -57,6 +57,17 @@ def _as_object(resp: requests.Response) -> dict:
     return payload
 
 
+def _get_error_message(payload: dict) -> str:
+    """Extracts error message from either FastAPI (detail) or
+    Go Orchestrator (error.message) style responses.
+    """
+    if "detail" in payload:
+        return str(payload["detail"])
+    if "error" in payload and isinstance(payload["error"], dict):
+        return str(payload["error"].get("message", ""))
+    return ""
+
+
 def _first_id(items: list[dict], *keys: str) -> str | None:
     for item in items:
         if not isinstance(item, dict):
@@ -141,7 +152,7 @@ def test_all_endpoints_require_tenant(orchestrator_ready: str) -> None:
             f"{path} did not reject missing tenant header: {resp.text}"
         )
         payload = _as_object(resp)
-        assert "tenant" in payload.get("detail", "").lower()
+        assert "tenant" in _get_error_message(payload).lower()
 
 
 def test_pagination_mutual_exclusivity_smoke(orchestrator_ready: str) -> None:
@@ -161,7 +172,7 @@ def test_pagination_mutual_exclusivity_smoke(orchestrator_ready: str) -> None:
         assert resp.status_code == 400, f"{ep} allowed both cursor and offset"
         payload = _as_object(resp)
         msg = "cannot provide both cursor and offset"
-        assert msg in payload.get("detail", "").lower()
+        assert msg in _get_error_message(payload).lower()
 
 
 def test_job_events_cursor_pagination_smoke(orchestrator_ready: str) -> None:
