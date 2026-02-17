@@ -35,7 +35,13 @@ export function Analytics() {
     queryFn: () => analyticsApi.getRecentAlerts(20),
   });
 
-  const formatNumber = (n: number) => {
+  const toNumber = (value: number | string | undefined | null) => {
+    const parsed = typeof value === 'string' ? Number(value) : value ?? 0;
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const formatNumber = (value: number | string | undefined | null) => {
+    const n = toNumber(value);
     if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
     if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
     return n.toLocaleString();
@@ -75,7 +81,7 @@ export function Analytics() {
               <div className="metric-label">Est. FPR</div>
               <div className="metric-value text-warning">
                 {alertsQuery.data?.alerts && overviewQuery.data ?
-                  `${((alertsQuery.data.alerts.filter((a: RecentAlert) => a.computed_risk_score >= 80).length / Math.max(overviewQuery.data.total_records * 0.05, 1)) * 100).toFixed(1)}%`
+                  `${((alertsQuery.data.alerts.filter((a: RecentAlert) => a.computed_risk_score >= 80).length / Math.max(toNumber(overviewQuery.data.total_records) * 0.05, 1)) * 100).toFixed(1)}%`
                   : '--'}
               </div>
               <div className="small text-muted mt-1" style={{ fontSize: '0.7em' }}>False Positive Rate (Est)</div>
@@ -84,7 +90,11 @@ export function Analytics() {
         ) : null}
         {overviewQuery.data && (
           <div className="date-range-info px-4 pb-3 small text-muted">
-            Data range: {new Date(overviewQuery.data.min_transaction_timestamp).toLocaleDateString()} - {new Date(overviewQuery.data.max_transaction_timestamp).toLocaleDateString()}
+            Data range: {overviewQuery.data.min_transaction_timestamp
+              ? new Date(overviewQuery.data.min_transaction_timestamp).toLocaleDateString()
+              : '--'} - {overviewQuery.data.max_transaction_timestamp
+              ? new Date(overviewQuery.data.max_transaction_timestamp).toLocaleDateString()
+              : '--'}
           </div>
         )}
       </div>
@@ -161,19 +171,25 @@ function FraudTypeChart() {
 function TransactionExplorer() {
   const { tenantId } = useTenant();
   const [filters, setFilters] = useState<TransactionSearchRequest>({
+    user_id: '',
+    transaction_id: '',
+    start_date: '',
+    end_date: '',
     limit: 20,
-    offset: 0
+    offset: 0,
+    tenant_id: tenantId,
   });
 
   const searchQuery = useQuery({
     queryKey: ['analytics', tenantId, 'search', filters],
-    queryFn: () => analyticsApi.searchTransactions(filters),
+    queryFn: () => analyticsApi.searchTransactions({ ...filters, tenant_id: tenantId }),
     placeholderData: keepPreviousData,
   });
 
   const handlePageChange = (newOffset: number) => {
     setFilters((prev: TransactionSearchRequest) => ({ ...prev, offset: newOffset }));
   };
+  const totalTransactions = Number(searchQuery.data?.total ?? 0);
 
   return (
     <div className="card shadow-sm border-0 mt-4 mb-5">
@@ -194,20 +210,20 @@ function TransactionExplorer() {
             {/* Pagination Controls */}
             <div className="d-flex justify-content-between align-items-center mt-3">
               <div className="small text-muted">
-                Showing {filters.offset! + 1} to {Math.min(filters.offset! + (searchQuery.data?.transactions.length || 0), searchQuery.data?.total || 0)} of {searchQuery.data?.total || 0}
+                Showing {totalTransactions === 0 ? 0 : filters.offset + 1} to {Math.min(filters.offset + (searchQuery.data?.transactions.length || 0), totalTransactions)} of {totalTransactions}
               </div>
               <div className="btn-group btn-group-sm">
                 <button
                   className="btn btn-outline-secondary"
                   disabled={filters.offset === 0}
-                  onClick={() => handlePageChange(Math.max(0, filters.offset! - filters.limit!))}
+                  onClick={() => handlePageChange(Math.max(0, filters.offset - filters.limit))}
                 >
                   Previous
                 </button>
                 <button
                   className="btn btn-outline-secondary"
-                  disabled={(filters.offset! + filters.limit!) >= (searchQuery.data?.total || 0)}
-                  onClick={() => handlePageChange(filters.offset! + filters.limit!)}
+                  disabled={(filters.offset + filters.limit) >= totalTransactions}
+                  onClick={() => handlePageChange(filters.offset + filters.limit)}
                 >
                   Next
                 </button>
@@ -237,7 +253,7 @@ function TransactionFilters({ filters, onChange }: { filters: TransactionSearchR
           <input
             type="text" className="form-control form-control-sm"
             value={localFilters.user_id || ''}
-            onChange={e => setLocalFilters({ ...localFilters, user_id: e.target.value || undefined })}
+            onChange={e => setLocalFilters({ ...localFilters, user_id: e.target.value })}
             placeholder="Search User..."
           />
         </div>
@@ -246,7 +262,7 @@ function TransactionFilters({ filters, onChange }: { filters: TransactionSearchR
           <input
             type="text" className="form-control form-control-sm"
             value={localFilters.transaction_id || ''}
-            onChange={e => setLocalFilters({ ...localFilters, transaction_id: e.target.value || undefined })}
+            onChange={e => setLocalFilters({ ...localFilters, transaction_id: e.target.value })}
             placeholder="Search Txn ID..."
           />
         </div>
