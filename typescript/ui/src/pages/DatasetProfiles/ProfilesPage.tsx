@@ -116,10 +116,10 @@ export function ProfilesPage() {
                                                 </Link>
                                             </td>
                                             <td className="small text-muted">
-                                                {p.computed_at ? new Date(p.computed_at).toLocaleString() : '--'}
+                                                {new Date(p.computed_at || 0).toLocaleString()}
                                             </td>
-                                            <td>{parseInt(p.record_count || '0').toLocaleString()}</td>
-                                            <td>{p.feature_profiles?.length || 0}</td>
+                                            <td>{(p.record_count || 0).toLocaleString()}</td>
+                                            <td>{p.column_count}</td>
                                             <td className="small text-muted">
                                                 {p.size_bytes ? (p.size_bytes / 1024 / 1024).toFixed(2) + ' MB' : '--'}
                                             </td>

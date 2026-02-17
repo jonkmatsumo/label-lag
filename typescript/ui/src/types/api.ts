@@ -3,8 +3,8 @@
  * Re-exported from generated protos where available.
  */
 
-// Import all generated types for local use and re-export
-import type {
+// Analytics Service
+export type {
   GetKpisRequest,
   GetKpisResponse,
   KpiBucket,
@@ -44,7 +44,6 @@ import type {
   SaveBacktestResultRequest,
   SaveBacktestResultResponse,
   ListDatasetProfilesRequest,
-  ListDatasetProfilesResponse,
   ListBacktestResultsRequest,
   ListBacktestResultsResponse,
   GetBacktestResultRequest,
@@ -129,8 +128,10 @@ import type {
   GetJobEventsResponse,
   GetJobSummaryRequest,
   GetJobSummaryResponse,
+  DatasetProfile as AnalyticsDatasetProfile,
   GetDatasetSummaryRequest,
   GetDatasetSummaryResponse,
+  ListDatasetProfilesResponse as AnalyticsListDatasetProfilesResponse,
   GetLatestDatasetProfileRequest,
   GetLatestDatasetProfileResponse,
   CompareDatasetProfilesRequest,
@@ -147,154 +148,17 @@ import type {
   GetMetricSeriesRequest,
   GetMetricSeriesResponse,
   ReportTrainingRunRequest,
-  ReportTrainingRunResponse,
+  ReportTrainingRunResponse
 } from './generated/analytics/v1/analytics';
 
-export type {
-  GetKpisRequest,
-  GetKpisResponse,
-  KpiBucket,
-  GetVolumeSeriesRequest,
-  GetVolumeSeriesResponse,
-  VolumePoint,
-  GetConfusionMatrixRequest,
-  GetConfusionMatrixResponse,
-  GetDatasetProfileRequest,
-  GetDatasetProfileResponse,
-  Bucket,
-  FeatureProfile,
-  ValueCount,
-  GetDailyStatsRequest,
-  GetDailyStatsResponse,
-  DailyStat,
-  GetTransactionDetailsRequest,
-  GetTransactionDetailsResponse,
-  TransactionDetail,
-  SearchTransactionsRequest,
-  SearchTransactionsResponse,
-  GetRecentAlertsRequest,
-  GetRecentAlertsResponse,
-  RecentAlert,
-  GetOverviewMetricsRequest,
-  GetOverviewMetricsResponse,
-  GetFeatureSampleRequest,
-  GetFeatureSampleResponse,
-  FeatureSample,
-  GetTrainingDataRequest,
-  GetTrainingDataResponse,
-  GetBacktestFeaturesRequest,
-  GetBacktestFeaturesResponse,
-  BacktestFeatureVector,
-  BacktestMetrics,
-  BacktestResult,
-  SaveBacktestResultRequest,
-  SaveBacktestResultResponse,
-  ListDatasetProfilesRequest,
-  ListDatasetProfilesResponse,
-  ListBacktestResultsRequest,
-  ListBacktestResultsResponse,
-  GetBacktestResultRequest,
-  GetBacktestResultResponse,
-  GetDriftWindowRequest,
-  GetDriftWindowResponse,
-  GetInferenceScoresRequest,
-  GetInferenceScoresResponse,
-  StoreGeneratedDataRequest,
-  StoreGeneratedDataResponse,
-  GeneratedRecord,
-  EvaluationMetadata,
-  ClearAllDataRequest,
-  ClearAllDataResponse,
-  MaterializeFeaturesRequest,
-  MaterializeFeaturesResponse,
-  GenerateDataRequest,
-  GenerateDataResponse,
-  Rule,
-  SaveRuleRequest,
-  SaveRuleResponse,
-  GetRuleRequest,
-  GetRuleResponse,
-  ListRulesRequest,
-  ListRulesResponse,
-  DeleteRuleRequest,
-  DeleteRuleResponse,
-  RuleImpact,
-  InferenceEvent,
-  DecisionThresholds,
-  LogInferenceEventRequest,
-  LogInferenceEventResponse,
-  ListRuleVersionsRequest,
-  ListRuleVersionsResponse,
-  GetRuleVersionRequest,
-  GetRuleVersionResponse,
-  PublishRuleVersionRequest,
-  PublishRuleVersionResponse,
-  GetRuleReadinessRequest,
-  GetRuleReadinessResponse,
-  ReadinessCheck,
-  DiffRuleVersionsRequest,
-  DiffRuleVersionsResponse,
-  RuleStats,
-  GetRuleStatsRequest,
-  GetRuleStatsResponse,
-  GetAttributionRequest,
-  GetAttributionResponse,
-  DailyAttribution,
-  ListDecisionsRequest,
-  ListDecisionsResponse,
-  DecisionSummary,
-  GetDecisionRequest,
-  GetDecisionResponse,
-  GetDecisionTraceRequest,
-  GetDecisionTraceResponse,
-  GetRuleImpactRequest,
-  GetRuleImpactResponse,
-  RuleImpactBucket,
-  UserFeatures,
-  GetLatestUserFeaturesRequest,
-  GetLatestUserFeaturesResponse,
-  BatchGetLatestUserFeaturesRequest,
-  BatchGetLatestUserFeaturesResponse,
-  CompareBacktestsRequest,
-  CompareBacktestsResponse,
-  BacktestMetricsDelta,
-  GetShadowComparisonRequest,
-  GetShadowComparisonResponse,
-  ShadowModeMetrics,
-  Job,
-  JobEvent,
-  ListJobsRequest,
-  ListJobsResponse,
-  GetJobRequest,
-  GetJobResponse,
-  CancelJobRequest,
-  CancelJobResponse,
-  RetryJobRequest,
-  RetryJobResponse,
-  GetJobEventsRequest,
-  GetJobEventsResponse,
-  GetJobSummaryRequest,
-  GetJobSummaryResponse,
-  GetDatasetSummaryRequest,
-  GetDatasetSummaryResponse,
-  GetLatestDatasetProfileRequest,
-  GetLatestDatasetProfileResponse,
-  CompareDatasetProfilesRequest,
-  CompareDatasetProfilesResponse,
-  FeatureDrift,
-  TrainingRun,
-  ListTrainingRunsRequest,
-  ListTrainingRunsResponse,
-  ListModelVersionsRequest,
-  ListModelVersionsResponse,
-  GetTrainingRunRequest,
-  GetTrainingRunResponse,
-  MetricPoint,
-  GetMetricSeriesRequest,
-  GetMetricSeriesResponse,
-  ReportTrainingRunRequest,
-  ReportTrainingRunResponse,
-};
+// Import for aliases to avoid "not in scope" errors
+import type {
+  SearchTransactionsRequest as GenSearchTransactionsRequest,
+  SearchTransactionsResponse as GenSearchTransactionsResponse,
+  CompareBacktestsResponse as GenCompareBacktestsResponse,
+  GetShadowComparisonResponse as GenGetShadowComparisonResponse,
+  ListBacktestResultsResponse as GenListBacktestResultsResponse
+} from './generated/analytics/v1/analytics';
 
 // Common types
 export type {
@@ -397,6 +261,14 @@ export interface HealthResponse {
   }>;
 }
 
+import type {
+  Rule,
+  TrainingRun,
+  GetDailyStatsResponse,
+  CompareBacktestsRequest,
+  DecisionSummary
+} from './generated/analytics/v1/analytics';
+
 // Aliases for compatibility
 export type DailyStatsResponse = GetDailyStatsResponse;
 export type DraftRule = Rule;
@@ -404,9 +276,9 @@ export type DashboardStats = DailyStatsResponse;
 
 // Backtest aliases
 export type BacktestCompareRequest = CompareBacktestsRequest;
-export type BacktestCompareResponse = CompareBacktestsResponse;
-export type BacktestResultsListResponse = ListBacktestResultsResponse;
-export type ShadowComparisonResponse = GetShadowComparisonResponse;
+export type BacktestCompareResponse = GenCompareBacktestsResponse;
+export type BacktestResultsListResponse = GenListBacktestResultsResponse;
+export type ShadowComparisonResponse = GenGetShadowComparisonResponse;
 
 export type Decision = DecisionSummary;
 
@@ -574,6 +446,9 @@ export interface DeployResponse {
   previous_version?: string;
   deployed_by?: string;
 }
+// Note: added deployed_by to DeployResponse based on likely usage
+
+export type DatasetProfile = GenDatasetProfile;
 
 export interface DriftStatusResponse {
   status: 'ok' | 'warn' | 'fail';
@@ -586,6 +461,8 @@ export interface DriftStatusResponse {
     status: string;
   }>;
 }
+
+export type ListDatasetProfilesResponse = GetListDatasetProfilesResponse;
 
 export type DatasetSummary = GetDatasetSummaryResponse;
 
