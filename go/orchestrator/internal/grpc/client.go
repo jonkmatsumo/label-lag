@@ -33,6 +33,11 @@ var (
 		Name: "orchestrator_circuit_breaker_transitions_total",
 		Help: "Total circuit breaker state transitions.",
 	}, []string{"client", "from_state", "to_state"})
+
+	circuitBreakerFailures = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "orchestrator_breaker_failures_total",
+		Help: "Total failures recorded by each circuit breaker.",
+	}, []string{"breaker"})
 )
 
 const (
@@ -168,6 +173,7 @@ func (cb *CircuitBreaker) RecordResult(err error) {
 
 	cb.failureCount++
 	cb.lastFailureTime = time.Now()
+	circuitBreakerFailures.WithLabelValues(cb.name).Inc()
 
 	if cb.state == StateHalfOpen || cb.failureCount >= cb.failureThreshold {
 		if cb.state != StateOpen {

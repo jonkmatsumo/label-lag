@@ -180,3 +180,32 @@ func TestCircuitBreaker_PrometheusMetrics(t *testing.T) {
 		t.Errorf("expected 1 half-open->closed transition, got %v", transVal)
 	}
 }
+
+func TestCircuitBreaker_FailuresCounter(t *testing.T) {
+	cb := NewCircuitBreakerWithPrefix("TEST_FAILURES")
+	cb.failureThreshold = 10 // High threshold so we stay closed
+
+	// Record 3 failures
+	for i := 0; i < 3; i++ {
+		cb.RecordResult(status.Error(codes.Unavailable, "fail"))
+	}
+
+	failVal := testutil.ToFloat64(circuitBreakerFailures.WithLabelValues("TEST_FAILURES"))
+	if failVal != 3 {
+		t.Errorf("expected 3 failures, got %v", failVal)
+	}
+
+	// App errors should NOT increment failures
+	cb.RecordResult(status.Error(codes.NotFound, "not found"))
+	failVal = testutil.ToFloat64(circuitBreakerFailures.WithLabelValues("TEST_FAILURES"))
+	if failVal != 3 {
+		t.Errorf("expected still 3 failures after app error, got %v", failVal)
+	}
+
+	// DeadlineExceeded should also count
+	cb.RecordResult(status.Error(codes.DeadlineExceeded, "timeout"))
+	failVal = testutil.ToFloat64(circuitBreakerFailures.WithLabelValues("TEST_FAILURES"))
+	if failVal != 4 {
+		t.Errorf("expected 4 failures after DeadlineExceeded, got %v", failVal)
+	}
+}

@@ -110,6 +110,7 @@ func NewHandler(opts HandlerOptions) *Handler {
 		workerCtx:       workerCtx,
 		workerCancel:    workerCancel,
 	}
+	handlerLogQueueCapacity.Set(100)
 	h.startWorkers()
 	return h
 }
@@ -124,6 +125,7 @@ func (h *Handler) startWorkers() {
 func (h *Handler) logWorker() {
 	defer h.logWg.Done()
 	for event := range h.logQueue {
+		handlerLogQueueDepth.Set(float64(len(h.logQueue)))
 		ctx := event.ctx
 		// Create a link to the parent trace
 		opts := []trace.SpanStartOption{

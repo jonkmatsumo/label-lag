@@ -23,6 +23,16 @@ var (
 		Name: "orchestrator_inference_events_dropped_total",
 		Help: "Total number of inference events dropped due to full queue.",
 	})
+
+	analyticsQueueDepth = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "orchestrator_analytics_log_queue_depth",
+		Help: "Current number of pending events in the analytics log queue.",
+	})
+
+	analyticsQueueCapacity = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "orchestrator_analytics_log_queue_capacity",
+		Help: "Maximum capacity of the analytics log queue.",
+	})
 )
 
 const (
@@ -74,6 +84,7 @@ func NewAnalyticsClient(target string, timeout time.Duration) (*AnalyticsClient,
 		logQueue: make(chan *crudv1.LogInferenceEventRequest, defaultQueueSize),
 		stop:     make(chan struct{}),
 	}
+	analyticsQueueCapacity.Set(float64(defaultQueueSize))
 	client.startWorker()
 
 	return client, nil
@@ -94,6 +105,7 @@ func (c *AnalyticsClient) startWorker() {
 		for {
 			select {
 			case req := <-c.logQueue:
+				analyticsQueueDepth.Set(float64(len(c.logQueue)))
 				// Use context.Background() since the original request context may have been cancelled
 				ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 				_, _ = c.stub.LogInferenceEvent(ctx, req)
@@ -833,7 +845,7 @@ func (c *AnalyticsClient) LogInferenceEvent(ctx context.Context, req *crudv1.Log
 	// Push to queue non-blocking
 	select {
 	case c.logQueue <- req:
-		// Queued successfully
+		analyticsQueueDepth.Set(float64(len(c.logQueue)))
 	default:
 		// Queue full, drop event and increment counter
 		inferenceEventsDropped.Inc()

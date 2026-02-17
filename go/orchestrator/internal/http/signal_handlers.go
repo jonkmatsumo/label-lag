@@ -204,7 +204,7 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 
 		select {
 		case h.logQueue <- evt:
-			// Enqueued successfully
+			handlerLogQueueDepth.Set(float64(len(h.logQueue)))
 		default:
 			dropped := h.droppedLogs.Add(1)
 			if dropped%100 == 1 {
