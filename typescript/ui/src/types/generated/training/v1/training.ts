@@ -9,56 +9,56 @@
 export const protobufPackage = "training.v1";
 
 export interface ClearDataRequest {
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface ClearDataResponse {
   success: boolean;
-  tablesCleared: string[];
+  tables_cleared: string[];
 }
 
 export interface TrainRequest {
-  maxDepth: number;
-  trainingWindowDays: number;
+  max_depth: number;
+  training_window_days: number;
   /** Explicit list of feature names. */
-  selectedFeatureColumns: string[];
+  selected_feature_columns: string[];
   /** Versioned feature set identifier. */
-  featureSetId?:
+  feature_set_id?:
     | string
     | undefined;
   /**
    * Feature groups to expand (e.g. "transaction", "user", "merchant", "network").
    * Case-insensitive, whitespace is stripped.
    */
-  featureGroups: string[];
+  feature_groups: string[];
   /**
    * Resolution mode:
    * "strict" (default): Fail if any feature/group is unknown or group is empty.
    * "best_effort": Drop unknown features/groups and proceed with what's found.
    */
-  featureResolutionMode: string;
-  splitConfig?: SplitConfig | undefined;
-  tuningConfig?: TuningConfig | undefined;
-  nEstimators: number;
-  learningRate: number;
-  minChildWeight: number;
+  feature_resolution_mode: string;
+  split_config?: SplitConfig | undefined;
+  tuning_config?: TuningConfig | undefined;
+  n_estimators: number;
+  learning_rate: number;
+  min_child_weight: number;
   subsample: number;
-  colsampleBytree: number;
+  colsample_bytree: number;
   gamma: number;
-  regAlpha: number;
-  regLambda: number;
-  randomState: number;
-  earlyStoppingRounds?: number | undefined;
-  tenantId: string;
+  reg_alpha: number;
+  reg_lambda: number;
+  random_state: number;
+  early_stopping_rounds?: number | undefined;
+  tenant_id: string;
 }
 
 export interface SplitConfig {
   /** temporal, temporal_stratified, etc. */
   strategy: string;
-  nFolds: number;
-  stratifyColumn?: string | undefined;
-  groupColumn: string;
-  validationFraction: number;
+  n_folds: number;
+  stratify_column?: string | undefined;
+  group_column: string;
+  validation_fraction: number;
   seed: number;
 }
 
@@ -66,16 +66,16 @@ export interface TuningConfig {
   enabled: boolean;
   /** grid, random, bayesian */
   strategy: string;
-  nTrials: number;
-  timeoutMinutes: number;
+  n_trials: number;
+  timeout_minutes: number;
   metric: string;
   /** maximize, minimize */
   direction: string;
-  selectedTrialNumber?:
+  selected_trial_number?:
     | number
     | undefined;
   /** JSON-encoded range, e.g. "[2, 12]" */
-  searchSpace: { [key: string]: string };
+  search_space: { [key: string]: string };
 }
 
 export interface TuningConfig_SearchSpaceEntry {
@@ -85,91 +85,91 @@ export interface TuningConfig_SearchSpaceEntry {
 
 export interface TrainResponse {
   success: boolean;
-  runId: string;
+  run_id: string;
   status: string;
-  modelVersion: string;
+  model_version: string;
   error: string;
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface GetTrainingRunInfoRequest {
-  runId: string;
-  tenantId: string;
+  run_id: string;
+  tenant_id: string;
 }
 
 export interface GetTrainingRunInfoResponse {
   /** JSON-serialized TrainingRunSpec */
-  runSpecJson: string;
+  run_spec_json: string;
 }
 
 export interface GetModelInfoRequest {
   /** Optional: model name, defaults to production if empty. */
-  modelName: string;
-  tenantId: string;
+  model_name: string;
+  tenant_id: string;
 }
 
 export interface GetModelInfoResponse {
-  modelName: string;
-  modelVersion: string;
-  requiredFeatures: string[];
-  featureSetHash: string;
-  trainingConfigHash: string;
-  runId: string;
+  model_name: string;
+  model_version: string;
+  required_features: string[];
+  feature_set_hash: string;
+  training_config_hash: string;
+  run_id: string;
 }
 
 export interface ValidateTrainRequestResponse {
   valid: boolean;
-  resolvedFeatures: string[];
-  featureSetHash: string;
-  trainingConfigHash: string;
+  resolved_features: string[];
+  feature_set_hash: string;
+  training_config_hash: string;
   warnings: string[];
 }
 
 export interface ListFeatureSetsRequest {
   limit: number;
   cursor: string;
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface ListFeatureSetsResponse {
-  featureSets: ListFeatureSetsResponse_FeatureSetSummary[];
-  nextCursor: string;
+  feature_sets: ListFeatureSetsResponse_FeatureSetSummary[];
+  next_cursor: string;
 }
 
 export interface ListFeatureSetsResponse_FeatureSetSummary {
   id: string;
   hash: string;
-  featureCount: number;
-  createdAt: string;
-  createdBy: string;
+  feature_count: number;
+  created_at: string;
+  created_by: string;
 }
 
 export interface StartTuningJobResponse {
-  jobId: string;
+  job_id: string;
   status: string;
-  mlflowRunId: string;
+  mlflow_run_id: string;
 }
 
 export interface GetTuningStatusRequest {
-  jobId: string;
-  tenantId: string;
+  job_id: string;
+  tenant_id: string;
 }
 
 export interface TuningJobStatusResponse {
-  jobId: string;
+  job_id: string;
   status: string;
-  completedTrials: number;
-  totalTrials: number;
-  prunedTrials: number;
-  bestValue: number;
-  bestParams: { [key: string]: string };
-  mlflowRunId: string;
-  errorMessage: string;
-  createdAt: string;
-  startedAt: string;
-  updatedAt: string;
-  endedAt: string;
-  heartbeatAt: string;
+  completed_trials: number;
+  total_trials: number;
+  pruned_trials: number;
+  best_value: number;
+  best_params: { [key: string]: string };
+  mlflow_run_id: string;
+  error_message: string;
+  created_at: string;
+  started_at: string;
+  updated_at: string;
+  ended_at: string;
+  heartbeat_at: string;
 }
 
 export interface TuningJobStatusResponse_BestParamsEntry {
@@ -181,34 +181,34 @@ export interface ListTuningJobsRequest {
   statuses: string[];
   limit: number;
   cursor: string;
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface TuningJobSummary {
-  jobId: string;
+  job_id: string;
   status: string;
-  createdAt: string;
-  startedAt: string;
-  updatedAt: string;
-  endedAt: string;
-  mlflowRunId: string;
-  totalTrials: number;
-  completedTrials: number;
-  prunedTrials: number;
-  bestValue?: number | undefined;
+  created_at: string;
+  started_at: string;
+  updated_at: string;
+  ended_at: string;
+  mlflow_run_id: string;
+  total_trials: number;
+  completed_trials: number;
+  pruned_trials: number;
+  best_value?: number | undefined;
   metric: string;
   direction: string;
-  requestedBy?: string | undefined;
-  errorMessage?: string | undefined;
+  requested_by?: string | undefined;
+  error_message?: string | undefined;
 }
 
 export interface ListTuningJobsResponse {
   jobs: TuningJobSummary[];
-  nextCursor: string;
+  next_cursor: string;
 }
 
 export interface GetQueueDepthRequest {
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface GetQueueDepthResponse {
@@ -216,36 +216,36 @@ export interface GetQueueDepthResponse {
 }
 
 export interface PromoteTrialRequest {
-  jobId: string;
-  trialNumber: number;
-  modelName: string;
-  dryRun: boolean;
-  tenantId: string;
+  job_id: string;
+  trial_number: number;
+  model_name: string;
+  dry_run: boolean;
+  tenant_id: string;
 }
 
 export interface PromoteTrialResponse {
   status: string;
-  mlflowRunId: string;
-  modelVersion: string;
-  errorMessage: string;
+  mlflow_run_id: string;
+  model_version: string;
+  error_message: string;
 }
 
 export interface GetTuningJobInfoRequest {
-  jobId: string;
-  trialsLimit: number;
-  trialsCursor: string;
-  sortBy: string;
-  tenantId: string;
+  job_id: string;
+  trials_limit: number;
+  trials_cursor: string;
+  sort_by: string;
+  tenant_id: string;
 }
 
 export interface TrialResult {
-  trialNumber: number;
+  trial_number: number;
   state: string;
   value: number;
   params: { [key: string]: string };
-  startedAt: string;
-  endedAt: string;
-  durationMs: number;
+  started_at: string;
+  ended_at: string;
+  duration_ms: number;
 }
 
 export interface TrialResult_ParamsEntry {
@@ -256,8 +256,8 @@ export interface TrialResult_ParamsEntry {
 export interface GetTuningJobInfoResponse {
   job?: TuningJobSummary | undefined;
   trials: TrialResult[];
-  nextCursor: string;
-  mlflowLinks: { [key: string]: string };
+  next_cursor: string;
+  mlflow_links: { [key: string]: string };
 }
 
 export interface GetTuningJobInfoResponse_MlflowLinksEntry {
@@ -266,22 +266,22 @@ export interface GetTuningJobInfoResponse_MlflowLinksEntry {
 }
 
 export interface ListTrialsRequest {
-  jobId: string;
+  job_id: string;
   limit: number;
   /** "value" or "trial_number" */
-  sortBy: string;
-  tenantId: string;
+  sort_by: string;
+  tenant_id: string;
   cursor: string;
 }
 
 export interface TrialRecord {
-  trialNumber: number;
+  trial_number: number;
   state: string;
   value: number;
   params: { [key: string]: string };
-  startedAt: string;
-  endedAt: string;
-  durationMs: number;
+  started_at: string;
+  ended_at: string;
+  duration_ms: number;
 }
 
 export interface TrialRecord_ParamsEntry {
@@ -291,36 +291,36 @@ export interface TrialRecord_ParamsEntry {
 
 export interface ListTrialsResponse {
   trials: TrialRecord[];
-  nextCursor: string;
+  next_cursor: string;
 }
 
 export interface CancelTuningJobRequest {
-  jobId: string;
-  tenantId: string;
+  job_id: string;
+  tenant_id: string;
 }
 
 export interface RequeueTuningJobRequest {
-  jobId: string;
-  tenantId: string;
+  job_id: string;
+  tenant_id: string;
 }
 
 export interface RequeueTuningJobResponse {
-  jobId: string;
+  job_id: string;
   status: string;
   message: string;
 }
 
 export interface FinalizeTuningJobRequest {
-  jobId: string;
-  finalStatus: string;
+  job_id: string;
+  final_status: string;
   reason: string;
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface FinalizeTuningJobResponse {
-  jobId: string;
+  job_id: string;
   status: string;
-  errorMessage: string;
+  error_message: string;
 }
 
 export interface GetHealthRequest {
@@ -329,7 +329,7 @@ export interface GetHealthRequest {
 export interface GetHealthResponse {
   ready: boolean;
   components: { [key: string]: string };
-  spooledReportsCount: number;
+  spooled_reports_count: number;
 }
 
 export interface GetHealthResponse_ComponentsEntry {

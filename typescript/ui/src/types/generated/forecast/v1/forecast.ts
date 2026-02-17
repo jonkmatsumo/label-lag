@@ -24,27 +24,27 @@ export interface GetHealthResponse_ComponentsEntry {
 export interface GetDriftMonitoringRequest {
   hours: number;
   threshold: number;
-  forceRefresh: boolean;
-  tenantId: string;
+  force_refresh: boolean;
+  tenant_id: string;
 }
 
 export interface GetDriftMonitoringResponse {
-  driftDetected: boolean;
-  driftScore: number;
+  drift_detected: boolean;
+  drift_score: number;
   metrics?: { [key: string]: any } | undefined;
 }
 
 export interface GetScoreDistributionRequest {
   hours: number;
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface GetScoreDistributionResponse {
   scores: number[];
   distribution: { [key: string]: number };
   divergence: number;
-  divergenceMetric: string;
-  shiftDetected: boolean;
+  divergence_metric: string;
+  shift_detected: boolean;
 }
 
 export interface GetScoreDistributionResponse_DistributionEntry {
@@ -53,42 +53,42 @@ export interface GetScoreDistributionResponse_DistributionEntry {
 }
 
 export interface ReloadModelRequest {
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface ReloadModelResponse {
   success: boolean;
-  modelVersion: string;
+  model_version: string;
 }
 
 export interface DeployModelRequest {
-  modelVersion: string;
+  model_version: string;
   /** e.g., "Production", "Staging" */
   stage: string;
   actor: string;
   reason: string;
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface DeployModelResponse {
   success: boolean;
   message: string;
-  modelVersion: string;
-  deployedAt: string;
+  model_version: string;
+  deployed_at: string;
 }
 
 export interface PredictSignalRequest {
-  userId: string;
+  user_id: string;
   amount: number;
   currency: string;
-  clientTransactionId: string;
-  tenantId: string;
+  client_transaction_id: string;
+  tenant_id: string;
 }
 
 export interface PredictSignalResponse {
   probability: number;
-  modelVersion: string;
-  runId: string;
+  model_version: string;
+  run_id: string;
 }
 
 export interface ForecastService {

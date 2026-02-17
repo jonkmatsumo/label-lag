@@ -58,19 +58,36 @@ export function ModelLab() {
 
 function TrainTab() {
   const [trainForm, setTrainForm] = useState<TrainRequest>({
-    name: '',
-    test_size: 0.2,
-    random_seed: 42,
+    max_depth: 6,
     training_window_days: 30,
     selected_feature_columns: [],
-    max_depth: 6,
-    learning_rate: 0.1,
+    feature_groups: ['transaction', 'user', 'merchant'],
+    feature_resolution_mode: 'best_effort',
+    split_config: {
+      strategy: 'temporal',
+      n_folds: 5,
+      group_column: 'user_id',
+      validation_fraction: 0.2,
+      seed: 42,
+    },
     n_estimators: 100,
+    learning_rate: 0.1,
+    min_child_weight: 1,
+    subsample: 0.8,
+    colsample_bytree: 0.8,
+    gamma: 0,
+    reg_alpha: 0,
+    reg_lambda: 1,
+    random_state: 42,
+    tenant_id: '',
     tuning_config: {
       enabled: false,
+      strategy: 'grid',
       n_trials: 20,
       timeout_minutes: 30,
-      metric: 'pr_auc'
+      metric: 'pr_auc',
+      direction: 'maximize',
+      search_space: {}
     }
   });
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -215,25 +232,20 @@ function TrainTab() {
           <div className="card-body">
             <form onSubmit={handleTrainSubmit}>
               <div className="row g-3">
-                <div className="col-md-6">
-                  <label className="form-label">Experiment Name</label>
-                  <input
-                    type="text"
-                    name="name"
-                    className="form-control"
-                    value={trainForm.name}
-                    onChange={e => setTrainForm({ ...trainForm, name: e.target.value })}
-                    placeholder="fraud-model-vX"
-                  />
-                </div>
+                {/* Name removed */}<div className="col-md-6" style={{ display: 'none' }}></div>
                 <div className="col-md-3">
-                  <label className="form-label">Test Size</label>
+                  <label className="form-label">Validation Fraction</label>
                   <input
                     type="number"
-                    name="test_size"
                     className="form-control"
-                    value={trainForm.test_size}
-                    onChange={e => setTrainForm({ ...trainForm, test_size: parseFloat(e.target.value) })}
+                    value={trainForm.split_config?.validation_fraction ?? 0.2}
+                    onChange={e => setTrainForm({
+                      ...trainForm,
+                      split_config: {
+                        ...(trainForm.split_config!),
+                        validation_fraction: parseFloat(e.target.value)
+                      }
+                    })}
                     step="0.05" min="0.1" max="0.5"
                   />
                 </div>
@@ -257,8 +269,8 @@ function TrainTab() {
                     type="number"
                     name="random_seed"
                     className="form-control"
-                    value={trainForm.random_seed}
-                    onChange={e => setTrainForm({ ...trainForm, random_seed: parseInt(e.target.value) })}
+                    value={trainForm.random_state}
+                    onChange={e => setTrainForm({ ...trainForm, random_state: parseInt(e.target.value) })}
                   />
                 </div>
 

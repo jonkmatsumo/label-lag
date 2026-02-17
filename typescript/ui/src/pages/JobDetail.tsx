@@ -135,7 +135,7 @@ export function JobDetail() {
                 <dt className="small text-muted">Job ID</dt>
                 <dd className="font-monospace small">{job.job_id}</dd>
                 <dt className="small text-muted">Created</dt>
-                <dd className="small">{new Date(job.created_at).toLocaleString()}</dd>
+                <dd className="small">{job.created_at ? new Date(job.created_at).toLocaleString() : '-'}</dd>
                 {job.started_at && (
                   <>
                     <dt className="small text-muted">Started</dt>
@@ -197,7 +197,7 @@ export function JobDetail() {
             <div className="text-center p-3 text-muted small">No events recorded yet</div>
           ) : (
             <div className="timeline">
-              {eventsQuery.data.events.map((event) => (
+              {eventsQuery.data.events.map((event: any) => (
                 <div key={event.event_id} className="d-flex gap-3 mb-3 pb-3 border-bottom">
                   <div className="flex-shrink-0">
                     <span className="badge bg-secondary-subtle text-secondary border rounded-pill">

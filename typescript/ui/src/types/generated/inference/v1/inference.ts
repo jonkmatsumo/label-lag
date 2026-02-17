@@ -9,23 +9,23 @@
 export const protobufPackage = "inference.v1";
 
 export interface ScoreRequest {
-  requestId: string;
-  userId: string;
+  request_id: string;
+  user_id: string;
   amount: number;
   currency: string;
-  clientTransactionId: string;
+  client_transaction_id: string;
   context?: { [key: string]: any } | undefined;
-  fallbackMode?: string | undefined;
-  tenantId: string;
+  fallback_mode?: string | undefined;
+  tenant_id: string;
 }
 
 export interface ScoreResponse {
-  requestId: string;
-  modelScore: number;
-  modelVersion: string;
-  modelLoaded: boolean;
-  featuresUsed?: { [key: string]: any } | undefined;
-  fallbackUsed: boolean;
+  request_id: string;
+  model_score: number;
+  model_version: string;
+  model_loaded: boolean;
+  features_used?: { [key: string]: any } | undefined;
+  fallback_used: boolean;
 }
 
 export interface ErrorDetail {

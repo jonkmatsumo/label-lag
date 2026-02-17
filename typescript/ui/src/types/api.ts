@@ -1,6 +1,230 @@
 /**
  * API types shared with BFF
+ * Re-exported from generated protos where available.
  */
+
+// Analytics Service
+export type {
+  GetKpisRequest,
+  GetKpisResponse,
+  KpiBucket,
+  GetVolumeSeriesRequest,
+  GetVolumeSeriesResponse,
+  VolumePoint,
+  GetConfusionMatrixRequest,
+  GetConfusionMatrixResponse,
+  GetDatasetProfileRequest,
+  GetDatasetProfileResponse,
+  Bucket,
+  FeatureProfile,
+  ValueCount,
+  GetDailyStatsRequest,
+  GetDailyStatsResponse,
+  DailyStat,
+  GetTransactionDetailsRequest,
+  GetTransactionDetailsResponse,
+  TransactionDetail,
+  SearchTransactionsRequest,
+  SearchTransactionsResponse,
+  GetRecentAlertsRequest,
+  GetRecentAlertsResponse,
+  Alert as RecentAlert,
+  GetOverviewMetricsRequest,
+  GetOverviewMetricsResponse,
+  GetFeatureSampleRequest,
+  GetFeatureSampleResponse,
+  FeatureSample,
+  GetTrainingDataRequest,
+  GetTrainingDataResponse,
+  GetBacktestFeaturesRequest,
+  GetBacktestFeaturesResponse,
+  BacktestFeatureVector,
+  BacktestMetrics,
+  BacktestResult,
+  SaveBacktestResultRequest,
+  SaveBacktestResultResponse,
+  ListDatasetProfilesRequest,
+  ListBacktestResultsRequest,
+  ListBacktestResultsResponse,
+  GetBacktestResultRequest,
+  GetBacktestResultResponse,
+  GetDriftWindowRequest,
+  GetDriftWindowResponse,
+  GetInferenceScoresRequest,
+  GetInferenceScoresResponse,
+  StoreGeneratedDataRequest,
+  StoreGeneratedDataResponse,
+  GeneratedRecord,
+  EvaluationMetadata,
+  ClearAllDataRequest,
+  ClearAllDataResponse,
+  MaterializeFeaturesRequest,
+  MaterializeFeaturesResponse,
+  GenerateDataRequest,
+  GenerateDataResponse,
+  Rule,
+  SaveRuleRequest,
+  SaveRuleResponse,
+  GetRuleRequest,
+  GetRuleResponse,
+  ListRulesRequest,
+  ListRulesResponse,
+  DeleteRuleRequest,
+  DeleteRuleResponse,
+  RuleImpact,
+  InferenceEvent,
+  DecisionThresholds,
+  LogInferenceEventRequest,
+  LogInferenceEventResponse,
+  ListRuleVersionsRequest,
+  ListRuleVersionsResponse,
+  GetRuleVersionRequest,
+  GetRuleVersionResponse,
+  PublishRuleVersionRequest,
+  PublishRuleVersionResponse,
+  GetRuleReadinessRequest,
+  GetRuleReadinessResponse,
+  ReadinessCheck,
+  DiffRuleVersionsRequest,
+  DiffRuleVersionsResponse,
+  RuleStats,
+  GetRuleStatsRequest,
+  GetRuleStatsResponse,
+  GetAttributionRequest,
+  GetAttributionResponse,
+  DailyAttribution,
+  ListDecisionsRequest,
+  ListDecisionsResponse,
+  DecisionSummary,
+  GetDecisionRequest,
+  GetDecisionResponse,
+  GetDecisionTraceRequest,
+  GetDecisionTraceResponse,
+  GetRuleImpactRequest,
+  GetRuleImpactResponse,
+  RuleImpactBucket,
+  UserFeatures,
+  GetLatestUserFeaturesRequest,
+  GetLatestUserFeaturesResponse,
+  BatchGetLatestUserFeaturesRequest,
+  BatchGetLatestUserFeaturesResponse,
+  CompareBacktestsRequest,
+  CompareBacktestsResponse,
+  BacktestMetricsDelta,
+  GetShadowComparisonRequest,
+  GetShadowComparisonResponse,
+  ShadowModeMetrics,
+  Job,
+  JobEvent,
+  ListJobsRequest,
+  ListJobsResponse,
+  GetJobRequest,
+  GetJobResponse,
+  CancelJobRequest,
+  CancelJobResponse,
+  RetryJobRequest,
+  RetryJobResponse,
+  GetJobEventsRequest,
+  GetJobEventsResponse,
+  GetJobSummaryRequest,
+  GetJobSummaryResponse,
+  DatasetProfile as AnalyticsDatasetProfile,
+  GetDatasetSummaryRequest,
+  GetDatasetSummaryResponse,
+  ListDatasetProfilesResponse as AnalyticsListDatasetProfilesResponse,
+  GetLatestDatasetProfileRequest,
+  GetLatestDatasetProfileResponse,
+  CompareDatasetProfilesRequest,
+  CompareDatasetProfilesResponse,
+  FeatureDrift,
+  TrainingRun,
+  ListTrainingRunsRequest,
+  ListTrainingRunsResponse,
+  ListModelVersionsRequest,
+  ListModelVersionsResponse,
+  GetTrainingRunRequest,
+  GetTrainingRunResponse,
+  MetricPoint,
+  GetMetricSeriesRequest,
+  GetMetricSeriesResponse,
+  ReportTrainingRunRequest,
+  ReportTrainingRunResponse
+} from './generated/analytics/v1/analytics';
+
+// Common types
+export type {
+  CursorPageRequest,
+  CursorPageResponse
+} from './generated/common/v1/pagination';
+
+// Inference Service
+export type {
+  ScoreRequest,
+  ScoreResponse,
+  ErrorDetail,
+  InferenceService
+} from './generated/inference/v1/inference';
+
+// Gateway Service
+export type {
+  EvaluateRulesRequest,
+  EvaluateRulesResponse,
+  EvaluateRulesDiffRequest,
+  EvaluateRulesDiffResponse,
+  RulesDiffSummary,
+  RuleSet,
+  Explanation,
+  Conflict,
+  ReloadRulesRequest,
+  ReloadRulesResponse,
+  ExplainEvaluationRequest,
+  ExplainEvaluationResponse,
+  RuleTrace,
+  ConditionTrace,
+  GatewayService
+} from './generated/inference/v1/gateway';
+
+export {
+  ReloadRulesRequest_Source
+} from './generated/inference/v1/gateway';
+
+// Training Service
+export type {
+  TrainRequest,
+  TuningConfig,
+  TrainResponse,
+  GetTrainingRunInfoRequest,
+  GetTrainingRunInfoResponse,
+  GetModelInfoRequest,
+  GetModelInfoResponse,
+  ValidateTrainRequestResponse,
+  ListFeatureSetsRequest,
+  ListFeatureSetsResponse,
+  StartTuningJobResponse,
+  GetTuningStatusRequest,
+  TuningJobStatusResponse,
+  ListTuningJobsRequest,
+  TuningJobSummary,
+  ListTuningJobsResponse,
+  GetQueueDepthRequest,
+  GetQueueDepthResponse,
+  PromoteTrialRequest,
+  PromoteTrialResponse,
+  GetTuningJobInfoRequest,
+  TrialResult,
+  GetTuningJobInfoResponse,
+  ListTrialsRequest,
+  TrialRecord,
+  ListTrialsResponse,
+  CancelTuningJobRequest,
+  RequeueTuningJobRequest,
+  RequeueTuningJobResponse,
+  FinalizeTuningJobRequest,
+  FinalizeTuningJobResponse,
+  GetHealthRequest,
+  GetHealthResponse as TrainingGetHealthResponse,
+  TrainingService
+} from './generated/training/v1/training';
 
 // Standard error envelope for all API responses
 export interface ApiError {
@@ -15,7 +239,7 @@ export interface ErrorResponse {
   error: ApiError;
 }
 
-// Health check response
+// Health check response (not in protos yet)
 export interface HealthResponse {
   status: 'healthy' | 'degraded' | 'unhealthy';
   version?: string;
@@ -28,103 +252,27 @@ export interface HealthResponse {
   }>;
 }
 
-// Signal evaluation types
-export interface SignalRequest {
-  user_id: string;
-  amount: number;
-  currency: string;
-  client_transaction_id: string;
-}
+import type {
+  Rule,
+  TrainingRun,
+  GetDailyStatsResponse,
+  CompareBacktestsRequest,
+  CompareBacktestsResponse,
+  DecisionSummary
+} from './generated/analytics/v1/analytics';
 
-export interface RiskComponent {
-  key: string;
-  label: string;
-}
+// Aliases for compatibility
+export type DailyStatsResponse = GetDailyStatsResponse;
+export type DraftRule = Rule;
+export interface DashboardStats extends DailyStatsResponse { }
 
-export interface MatchedRule {
-  rule_id: string;
-  severity: string;
-  reason: string;
-  explanation?: string;
-  name?: string;
-  action?: string;
-  score_adjustment?: number;
-}
+// Backtest aliases
+export type BacktestCompareRequest = CompareBacktestsRequest;
+export type BacktestCompareResponse = CompareBacktestsResponse;
 
-export interface SignalResponse {
-  request_id: string;
-  score: number;
-  risk_label: 'LOW' | 'MEDIUM' | 'HIGH';
-  latency_ms: number;
-  risk_components: RiskComponent[];
-  model_version: string;
-  rules_version?: string;
-  matched_rules: MatchedRule[];
-  shadow_matched_rules?: MatchedRule[];
-  debug?: Record<string, unknown>;
-  model_score?: number;
-}
+export type Decision = DecisionSummary;
 
-// Training types
-export interface TuningConfig {
-  enabled: boolean;
-  n_trials?: number;
-  timeout_minutes?: number;
-  metric?: 'pr_auc' | 'roc_auc' | 'f1';
-}
-
-export interface TrainRequest {
-  name?: string;
-  test_size?: number;
-  random_seed?: number;
-  selected_feature_columns?: string[];
-  training_window_days?: number;
-  max_depth?: number;
-  learning_rate?: number;
-  n_estimators?: number;
-  tuning_config?: TuningConfig;
-}
-
-export interface TrainResponse {
-  run_id?: string;
-  status: string;
-  message?: string;
-  metrics?: Record<string, number>;
-  success?: boolean;
-  error?: string;
-}
-
-// Model deployment types
-export interface DeployRequest {
-  model_version?: string;
-  run_id?: string;
-  actor: string;
-  reason: string;
-}
-
-export interface DeployResponse {
-  status: string;
-  message: string;
-  model_version?: string;
-  success?: boolean;
-  error?: string;
-  deployed_at?: string;
-  previous_version?: string;
-}
-
-// Rule types
-export interface DraftRule {
-  id: string;
-  name: string;
-  description: string;
-  condition: string;
-  action: string;
-  score_adjustment?: number;
-  status: 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'published';
-  created_at: string;
-  updated_at: string;
-  created_by?: string;
-}
+export type ModelVersion = TrainingRun;
 
 export interface ApprovalSignalItem {
   signal_id: string;
@@ -134,14 +282,12 @@ export interface ApprovalSignalItem {
   label: string;
   description: string;
 }
-
 export interface ApprovalSignalsSummary {
   risk_count: number;
   warning_count: number;
   info_count: number;
   has_blockers: boolean;
 }
-
 export interface ApprovalSignalsResponse {
   rule_id: string;
   computed_at: string;
@@ -151,11 +297,6 @@ export interface ApprovalSignalsResponse {
   unavailable_signals: string[];
 }
 
-export interface DraftRulesResponse {
-  rules: DraftRule[];
-  total: number;
-}
-
 export interface ApprovalSignal {
   type: string;
   label: string;
@@ -163,7 +304,6 @@ export interface ApprovalSignal {
   description: string;
   value?: unknown;
 }
-
 export interface RuleGovernance {
   actor?: string;
   reason?: string;
@@ -177,188 +317,50 @@ export interface RuleGovernance {
   };
   approval_signals?: ApprovalSignal[];
 }
-
 export interface PublishRuleRequest {
   actor: string;
   reason: string;
 }
-
 export interface PublishRuleResponse {
   status: string;
   message: string;
   rule_id: string;
   version?: number;
 }
-
-// Sandbox evaluation types
+// Sandbox types
 export interface SandboxEvaluateRequest {
   base_score: number;
   features: Record<string, unknown>;
   rule_ids?: string[];
   custom_ruleset?: unknown;
 }
-
 export interface SandboxEvaluateResponse {
   final_score: number;
   risk_label: 'LOW' | 'MEDIUM' | 'HIGH';
-  matched_rules: MatchedRule[];
-  shadow_matched_rules: MatchedRule[];
+  matched_rules: any[];
+  shadow_matched_rules: any[];
   evaluation_details: Record<string, unknown>;
 }
 
-// Backtest comparison types
-export interface BacktestCompareRequest {
-  base_version: string;
-  candidate_version: string;
-  start_date: string;
-  end_date: string;
-  rule_id?: string;
+export interface MatchedRule {
+  rule_id: string;
+  severity: string;
+  reason: string;
+  explanation?: string;
+  name?: string;
+  action?: string;
+  score_adjustment?: number;
 }
 
-export interface BacktestMetrics {
-  precision: number;
-  recall: number;
-  f1_score: number;
-  total_records: number;
-  flagged_transactions: number;
-  true_positives: number;
-  false_positives: number;
-  match_rate: number;
-  rejected_count: number;
-}
-
-export interface BacktestCompareResponse {
-  base: BacktestMetrics;
-  candidate: BacktestMetrics;
-  delta: {
-    precision: number;
-    recall: number;
-    f1_score: number;
-    flagged_rate_change: number;
-    match_rate_delta: number;
-    rejected_count_delta: number;
-  };
-  job_id?: string;
-}
-
-// Analytics types
-export interface AnalyticsOverviewResponse {
-  total_records: number;
-  fraud_records: number;
-  fraud_rate: number;
-  unique_users: number;
-  min_transaction_timestamp: string;
-  max_transaction_timestamp: string;
-  min_created_at: string;
-  max_created_at: string;
-  total_amount: number;
-  fraud_amount: number;
-}
-
-export interface DailyStat {
-  date: string;
-  total_transactions: number;
-  fraud_count: number;
-  fraud_rate: number;
-  total_amount: number;
-  avg_z_score: number;
-}
-
-export interface DailyStatsResponse {
-  stats: DailyStat[];
-}
-
-export interface TransactionDetail {
-  record_id: string;
-  user_id: string;
-  created_at: string;
-  is_train_eligible: boolean;
-  is_pre_fraud: boolean;
-  amount: number;
-  is_fraudulent: boolean;
-  fraud_type: string;
-  is_off_hours_txn: boolean;
-  merchant_risk_score: number;
-  velocity_24h: number;
-  amount_to_avg_ratio_30d: number;
-  balance_volatility_z_score: number;
-}
-
-export interface TransactionDetailsResponse {
-  transactions: TransactionDetail[];
-}
-
-export interface TransactionSearchRequest {
-  user_id?: string;
-  transaction_id?: string;
-  min_amount?: number;
-  max_amount?: number;
-  start_date?: string;
-  end_date?: string;
-  is_fraudulent?: boolean;
-  min_score?: number;
-  max_score?: number;
-  limit?: number;
-  offset?: number;
-}
-
-export interface TransactionSearchResponse {
-  transactions: TransactionDetail[];
-  total: number;
-}
-
-export interface RecentAlert {
-  record_id: string;
-  user_id: string;
-  created_at: string;
-  amount: number;
-  is_fraudulent: boolean;
-  fraud_type: string;
-  merchant_risk_score: number;
-  velocity_24h: number;
-  amount_to_avg_ratio_30d: number;
-  balance_volatility_z_score: number;
-  computed_risk_score: number;
-}
-
-export interface RecentAlertsResponse {
-  alerts: RecentAlert[];
-}
-
-export interface TableFingerprint {
-  count: number;
-  max_created_at: string;
-  max_timestamp: string;
-  max_id: number;
-}
-
-export interface DatasetFingerprintResponse {
-  generated_records: TableFingerprint;
-  feature_snapshots: TableFingerprint;
-}
-
-export interface FeatureSample {
-  record_id: string;
-  is_fraudulent: boolean;
-  velocity_24h: number;
-  amount_to_avg_ratio_30d: number;
-  balance_volatility_z_score: number;
-}
-
-export interface FeatureSampleResponse {
-  samples: FeatureSample[];
-}
-
+// Correlation types
 export interface CorrelationPair {
   feature_a: string;
   feature_b: string;
   value: number;
 }
-
 export interface RelationshipMetric extends CorrelationPair {
   metric_type: string;
 }
-
 export interface DatasetCorrelationsResponse {
   pearson: CorrelationPair[];
   spearman: CorrelationPair[];
@@ -367,176 +369,7 @@ export interface DatasetCorrelationsResponse {
   categorical_columns: string[];
 }
 
-export interface RuleHealthMetrics {
-  period_start: string;
-  period_end: string;
-  production_matches: number;
-  shadow_matches: number;
-  production_only_count: number;
-  shadow_only_count: number;
-  mean_score_delta: number;
-  mean_execution_time_ms: number;
-}
-
-export interface RuleHealthResponse {
-  rule_id: string;
-  status: string;
-  reason: string;
-  metrics: RuleHealthMetrics;
-}
-
-export interface RuleAnalyticsResponse {
-  rule_id: string;
-  health: RuleHealthResponse;
-  statistics: {
-    mean_score_delta: number;
-    mean_latency_ms: number;
-    total_matches: number;
-  };
-  history_summary: unknown[];
-}
-
-export interface RuleAttributionResponse {
-  rule_id: string;
-  total_matches: number;
-  mean_model_score: number;
-  mean_final_score: number;
-  mean_impact: number;
-  net_impact: number;
-}
-
-// Monitoring types
-export interface FeatureDriftDetail {
-  feature: string;
-  psi: number;
-  status: 'OK' | 'WARN' | 'FAIL';
-  reference_mean?: number;
-  live_mean?: number;
-}
-
-export interface DriftStatusResponse {
-  status: 'ok' | 'warn' | 'fail' | 'error';
-  message: string;
-  drift_detected: boolean;
-  cached: boolean;
-  computed_at?: string;
-  hours_analyzed?: number;
-  live_size: number;
-  reference_size: number;
-  threshold?: number;
-  top_features?: FeatureDriftDetail[];
-}
-
-export interface RuleMetricsItem {
-  rule_id: string;
-  production_matches: number;
-  shadow_matches: number;
-  overlap_count: number;
-  production_only_count: number;
-  shadow_only_count: number;
-}
-
-export interface ShadowComparisonResponse {
-  period_start: string;
-  period_end: string;
-  rule_metrics: RuleMetricsItem[];
-  total_requests: number;
-}
-
-export interface BacktestResult {
-  job_id: string;
-  rule_id: string | null;
-  ruleset_version: string;
-  created_at: string;
-  completed_at?: string;
-  status: string;
-  metrics?: BacktestMetrics;
-  error?: string;
-}
-
-export interface BacktestResultsListResponse {
-  results: BacktestResult[];
-  total: number;
-}
-
-// Rules detail types
-export interface ReadinessCheck {
-  name: string;
-  status: 'pass' | 'warn' | 'fail';
-  message: string;
-}
-
-export interface ReadinessReportResponse {
-  rule_id: string;
-  timestamp: string;
-  overall_status: 'pass' | 'warn' | 'fail';
-  checks: ReadinessCheck[];
-}
-
-export interface RuleVersionDetail {
-  rule_id: string;
-  field: string;
-  op: string;
-  value: unknown;
-  action: string;
-  score?: number;
-  severity: string;
-  reason: string;
-  status: string;
-  created_at?: string;
-}
-
-export interface RuleVersionResponse {
-  rule_id: string;
-  version_id: string;
-  rule: RuleVersionDetail;
-  timestamp: string;
-  created_by: string;
-  reason?: string;
-}
-
-export interface RuleVersionListResponse {
-  versions: RuleVersionResponse[];
-  total: number;
-}
-
-export interface FieldChange {
-  field_name: string;
-  change_type: 'modified' | 'unchanged';
-  old_value: unknown;
-  new_value: unknown;
-}
-
-export interface RuleDiffResponse {
-  rule_id: string;
-  version_a_id: string;
-  version_b_id: string;
-  changes: FieldChange[];
-  is_breaking: boolean;
-  version_a_timestamp?: string;
-  version_a_created_by?: string;
-  version_b_timestamp?: string;
-  version_b_created_by?: string;
-}
-
-export interface ProductionRule {
-  id: string;
-  field: string;
-  op: string;
-  value: unknown;
-  action: string;
-  score?: number;
-  severity: string;
-  reason: string;
-  status: string;
-}
-
-export interface ProductionRulesResponse {
-  version: string;
-  rules: ProductionRule[];
-}
-
-// Suggestion types
+// Suggestion types - manual
 export interface RuleEvidence {
   mean?: number;
   sample_count?: number;
@@ -559,89 +392,91 @@ export interface AcceptSuggestionRequest {
   custom_id: string;
 }
 
-// Jobs types
-export interface Job {
-  job_id: string;
-  job_type: string;
-  status: string;
-  created_at: string;
-  started_at?: string;
-  ended_at?: string;
-  error_code?: string;
-  error_message?: string;
-  params_json?: string;
-  metrics_json?: string;
-}
-
-export interface JobEvent {
-  event_id: number;
-  job_id: string;
-  event_type: string;
-  timestamp: string;
-  details_json?: string;
-}
-
-export interface CursorPageResponse {
-  next_cursor?: string;
-  total?: number;
-}
-
-export interface ListJobsResponse {
-  jobs: Job[];
-  pagination: CursorPageResponse;
-}
-
-export interface ListJobEventsResponse {
-  events: JobEvent[];
-}
-
-export interface CancelJobResponse {
-  success: boolean;
-}
-
-export interface RetryJobResponse {
-  new_job_id: string;
-}
-
-// Decisions types
-export interface Decision {
-  decision_id: string;
+// Restoring missing manual types
+export interface SignalRequest {
   user_id: string;
-  decision: string;
+  amount: number;
+  currency: string;
+  client_transaction_id: string;
+}
+
+export interface RiskComponent {
+  key: string;
+  label: string;
+}
+
+export interface SignalResponse {
+  request_id: string;
   score: number;
-  timestamp: string;
+  risk_label: 'LOW' | 'MEDIUM' | 'HIGH';
+  latency_ms: number;
+  risk_components: RiskComponent[];
   model_version: string;
-  label?: string; // ground truth
+  rules_version?: string;
+  matched_rules: MatchedRule[];
+  shadow_matched_rules?: MatchedRule[];
+  debug?: Record<string, unknown>;
+  model_score?: number;
 }
 
-export interface DecisionDetail extends Decision {
-  features_json?: string; // reduced features used
-  rules_matched_json?: string;
-  trace_id?: string;
+export interface DeployRequest {
+  model_version?: string;
+  run_id?: string;
+  actor: string;
+  reason: string;
 }
 
-export interface DecisionTrace {
-  trace_id: string;
-  steps: unknown[]; // structured trace data
-}
-
-export interface ListDecisionsResponse {
-  decisions: Decision[];
-  pagination: CursorPageResponse;
-}
-
-// Training types (extended)
-export interface TrainingRun {
-  run_id: string;
-  model_name: string;
-  version: string;
+export interface DeployResponse {
   status: string;
-  created_at: string;
-  started_at?: string;
-  completed_at?: string;
-  metrics_json?: string;
-  params_json?: string;
+  message: string;
+  model_version?: string;
+  success?: boolean;
   error?: string;
+  deployed_at?: string;
+  previous_version?: string;
+  deployed_by?: string;
+}
+// Note: added deployed_by to DeployResponse based on likely usage
+
+export interface DatasetProfile {
+  profile_id: string;
+  created_at: string;
+  row_count: number;
+  column_count: number;
+  size_bytes?: number;
+  columns_json?: string;
+}
+
+export interface DriftStatusResponse {
+  status: 'ok' | 'warn' | 'fail';
+  cached: boolean;
+  hours_analyzed: number;
+  live_size: number;
+  top_features: Array<{
+    feature: string;
+    psi: number;
+    status: string;
+  }>;
+}
+
+export interface ListDatasetProfilesResponse {
+  profiles: DatasetProfile[];
+}
+
+export interface DatasetSummary {
+  columns: Record<string, {
+    type: string;
+    null_count: number;
+    distinct_count: number;
+  }>;
+}
+
+export interface CompareProfilesResponse {
+  features: Array<{
+    feature: string;
+    psi: number;
+    severity: 'low' | 'medium' | 'high';
+  }>;
 }
 
 export interface MetricSeriesPoint {
@@ -649,56 +484,4 @@ export interface MetricSeriesPoint {
   value: number;
 }
 
-export interface ListTrainingRunsResponse {
-  runs: TrainingRun[];
-  pagination: CursorPageResponse;
-}
-
-// Model types (extended)
-export interface ModelVersion {
-  version: string;
-  model_name: string;
-  created_at: string;
-  status: string;
-  metrics_json?: string;
-  deployed_at?: string;
-  deployed_by?: string;
-}
-
-export interface ListModelVersionsResponse {
-  versions: ModelVersion[];
-  pagination: CursorPageResponse;
-}
-
-// Dataset Profile types
-export interface DatasetProfile {
-  profile_id: string;
-  created_at: string;
-  row_count: number;
-  column_count: number;
-  size_bytes?: number;
-  columns_json?: string; // summary of columns
-}
-
-export interface ListDatasetProfilesResponse {
-  profiles: DatasetProfile[];
-  pagination: CursorPageResponse;
-}
-
-export interface DatasetSummary {
-  profile_id: string;
-  total_rows: number;
-  columns: Record<string, { type: string; null_count: number; distinct_count: number }>;
-}
-
-export interface ProfilePsI {
-  feature: string;
-  psi: number;
-  severity: 'low' | 'medium' | 'high';
-}
-
-export interface CompareProfilesResponse {
-  base_id: string;
-  target_id: string;
-  features: ProfilePsI[];
-}
+export type TransactionSearchRequest = SearchTransactionsRequest;

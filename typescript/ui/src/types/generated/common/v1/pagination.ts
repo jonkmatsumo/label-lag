@@ -15,7 +15,7 @@ export interface CursorPageRequest {
 }
 
 export interface CursorPageResponse {
-  nextCursor: string;
+  next_cursor: string;
   /** Optional total count */
   total?: string | undefined;
 }

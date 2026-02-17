@@ -10,39 +10,39 @@ import type { CursorPageRequest, CursorPageResponse } from "../../common/v1/pagi
 export const protobufPackage = "crud.v1";
 
 export interface GetKpisRequest {
-  startTime?: Date | undefined;
-  endTime?:
+  start_time?: Date | undefined;
+  end_time?:
     | Date
     | undefined;
   /** "hour" | "day" */
-  groupBy: string;
-  tenantId: string;
+  group_by: string;
+  tenant_id: string;
 }
 
 export interface KpiBucket {
   timestamp?: Date | undefined;
-  totalDecisions: string;
-  totalAlerts: string;
-  avgScore: number;
+  total_decisions: string;
+  total_alerts: string;
+  avg_score: number;
 }
 
 export interface GetKpisResponse {
-  totalDecisions: string;
-  totalAlerts: string;
-  alertRate: number;
-  avgScore: number;
-  rulesFiredTotal: string;
+  total_decisions: string;
+  total_alerts: string;
+  alert_rate: number;
+  avg_score: number;
+  rules_fired_total: string;
   buckets: KpiBucket[];
 }
 
 export interface GetVolumeSeriesRequest {
-  startTime?: Date | undefined;
-  endTime?:
+  start_time?: Date | undefined;
+  end_time?:
     | Date
     | undefined;
   /** "hour" | "day" */
   granularity: string;
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface VolumePoint {
@@ -56,32 +56,32 @@ export interface GetVolumeSeriesResponse {
 }
 
 export interface GetConfusionMatrixRequest {
-  startTime?: Date | undefined;
-  endTime?: Date | undefined;
-  modelVersion: string;
+  start_time?: Date | undefined;
+  end_time?: Date | undefined;
+  model_version: string;
   /** Optional: custom score threshold */
   threshold: number;
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface GetConfusionMatrixResponse {
-  truePositives: string;
-  falsePositives: string;
-  trueNegatives: string;
-  falseNegatives: string;
+  true_positives: string;
+  false_positives: string;
+  true_negatives: string;
+  false_negatives: string;
   precision: number;
   recall: number;
-  f1Score: number;
-  insufficientLabels: boolean;
+  f1_score: number;
+  insufficient_labels: boolean;
 }
 
 export interface GetDatasetProfileRequest {
   /** can be run_id or name */
-  datasetId: string;
+  dataset_id: string;
   /** default server-side if 0 */
-  limitFeatures: number;
+  limit_features: number;
   /** default 10 */
-  numBuckets: number;
+  num_buckets: number;
 }
 
 export interface Bucket {
@@ -94,13 +94,13 @@ export interface FeatureProfile {
   name: string;
   /** "numeric" | "categorical" */
   type: string;
-  nullRate: number;
+  null_rate: number;
   /** Numeric stats */
   mean: number;
-  stdDev: number;
+  std_dev: number;
   histogram: Bucket[];
   /** Categorical stats */
-  topValues: ValueCount[];
+  top_values: ValueCount[];
 }
 
 export interface ValueCount {
@@ -109,25 +109,25 @@ export interface ValueCount {
 }
 
 export interface GetDatasetProfileResponse {
-  totalRecords: string;
-  featureProfiles: FeatureProfile[];
-  isPartial: boolean;
-  truncatedKeys: number;
+  total_records: string;
+  feature_profiles: FeatureProfile[];
+  is_partial: boolean;
+  truncated_keys: number;
 }
 
 export interface GetDailyStatsRequest {
   days: number;
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface DailyStat {
   /** YYYY-MM-DD */
   date: string;
-  totalTransactions: string;
-  fraudCount: string;
-  fraudRate: number;
-  totalAmount: number;
-  avgZScore: number;
+  total_transactions: string;
+  fraud_count: string;
+  fraud_rate: number;
+  total_amount: number;
+  avg_z_score: number;
 }
 
 export interface GetDailyStatsResponse {
@@ -138,26 +138,26 @@ export interface GetTransactionDetailsRequest {
   days: number;
   limit: number;
   offset: number;
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface TransactionDetail {
-  recordId: string;
-  userId: string;
-  createdAt?: Date | undefined;
-  isTrainEligible: boolean;
-  isPreFraud: boolean;
+  record_id: string;
+  user_id: string;
+  created_at?: Date | undefined;
+  is_train_eligible: boolean;
+  is_pre_fraud: boolean;
   amount: number;
-  isFraudulent: boolean;
-  fraudType: string;
-  isOffHoursTxn: boolean;
-  merchantRiskScore: number;
-  velocity24h: number;
-  amountToAvgRatio30d: number;
-  balanceVolatilityZScore: number;
+  is_fraudulent: boolean;
+  fraud_type: string;
+  is_off_hours_txn: boolean;
+  merchant_risk_score: number;
+  velocity_24h: number;
+  amount_to_avg_ratio_30d: number;
+  balance_volatility_z_score: number;
   /** Dynamic features */
-  numericalFeatures: { [key: string]: number };
-  categoricalFeatures: { [key: string]: string };
+  numerical_features: { [key: string]: number };
+  categorical_features: { [key: string]: string };
 }
 
 export interface TransactionDetail_NumericalFeaturesEntry {
@@ -175,18 +175,18 @@ export interface GetTransactionDetailsResponse {
 }
 
 export interface SearchTransactionsRequest {
-  userId: string;
-  transactionId: string;
-  startDate: string;
-  endDate: string;
-  minAmount?: number | undefined;
-  maxAmount?: number | undefined;
-  isFraudulent?: boolean | undefined;
-  minScore?: number | undefined;
-  maxScore?: number | undefined;
+  user_id: string;
+  transaction_id: string;
+  start_date: string;
+  end_date: string;
+  min_amount?: number | undefined;
+  max_amount?: number | undefined;
+  is_fraudulent?: boolean | undefined;
+  min_score?: number | undefined;
+  max_score?: number | undefined;
   limit: number;
   offset: number;
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface SearchTransactionsResponse {
@@ -197,21 +197,21 @@ export interface SearchTransactionsResponse {
 export interface GetRecentAlertsRequest {
   limit: number;
   offset: number;
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface Alert {
-  recordId: string;
-  userId: string;
-  createdAt?: Date | undefined;
+  record_id: string;
+  user_id: string;
+  created_at?: Date | undefined;
   amount: number;
-  isFraudulent: boolean;
-  fraudType: string;
-  merchantRiskScore: number;
-  velocity24h: number;
-  amountToAvgRatio30d: number;
-  balanceVolatilityZScore: number;
-  computedRiskScore: number;
+  is_fraudulent: boolean;
+  fraud_type: string;
+  merchant_risk_score: number;
+  velocity_24h: number;
+  amount_to_avg_ratio_30d: number;
+  balance_volatility_z_score: number;
+  computed_risk_score: number;
 }
 
 export interface GetRecentAlertsResponse {
@@ -219,34 +219,34 @@ export interface GetRecentAlertsResponse {
 }
 
 export interface GetOverviewMetricsRequest {
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface GetOverviewMetricsResponse {
-  totalRecords: string;
-  fraudRecords: string;
-  fraudRate: number;
-  uniqueUsers: string;
-  minTransactionTimestamp?: Date | undefined;
-  maxTransactionTimestamp?: Date | undefined;
-  minCreatedAt?: Date | undefined;
-  maxCreatedAt?: Date | undefined;
-  totalAmount: number;
-  fraudAmount: number;
+  total_records: string;
+  fraud_records: string;
+  fraud_rate: number;
+  unique_users: string;
+  min_transaction_timestamp?: Date | undefined;
+  max_transaction_timestamp?: Date | undefined;
+  min_created_at?: Date | undefined;
+  max_created_at?: Date | undefined;
+  total_amount: number;
+  fraud_amount: number;
 }
 
 export interface GetFeatureSampleRequest {
-  sampleSize: number;
+  sample_size: number;
   stratify: boolean;
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface FeatureSample {
-  recordId: string;
-  isFraudulent: boolean;
-  velocity24h: number;
-  amountToAvgRatio30d: number;
-  balanceVolatilityZScore: number;
+  record_id: string;
+  is_fraudulent: boolean;
+  velocity_24h: number;
+  amount_to_avg_ratio_30d: number;
+  balance_volatility_z_score: number;
 }
 
 export interface GetFeatureSampleResponse {
@@ -254,27 +254,27 @@ export interface GetFeatureSampleResponse {
 }
 
 export interface GetTrainingDataRequest {
-  cutoffDate?: Date | undefined;
-  tenantId: string;
+  cutoff_date?: Date | undefined;
+  tenant_id: string;
 }
 
 export interface GetTrainingDataResponse {
-  trainRecords: TransactionDetail[];
-  testRecords: TransactionDetail[];
+  train_records: TransactionDetail[];
+  test_records: TransactionDetail[];
 }
 
 export interface GetBacktestFeaturesRequest {
-  startDate?: Date | undefined;
-  endDate?: Date | undefined;
-  tenantId: string;
+  start_date?: Date | undefined;
+  end_date?: Date | undefined;
+  tenant_id: string;
 }
 
 export interface BacktestFeatureVector {
-  recordId: string;
-  velocity24h: number;
-  amountToAvgRatio30d: number;
-  balanceVolatilityZScore: number;
-  experimentalSignalsJson: string;
+  record_id: string;
+  velocity_24h: number;
+  amount_to_avg_ratio_30d: number;
+  balance_volatility_z_score: number;
+  experimental_signals_json: string;
 }
 
 export interface GetBacktestFeaturesResponse {
@@ -282,16 +282,16 @@ export interface GetBacktestFeaturesResponse {
 }
 
 export interface BacktestMetrics {
-  totalRecords: string;
-  matchedCount: string;
-  matchRate: number;
-  scoreDistribution: { [key: string]: number };
-  scoreMean: number;
-  scoreStd: number;
-  scoreMin: number;
-  scoreMax: number;
-  rejectedCount: string;
-  rejectedRate: number;
+  total_records: string;
+  matched_count: string;
+  match_rate: number;
+  score_distribution: { [key: string]: number };
+  score_mean: number;
+  score_std: number;
+  score_min: number;
+  score_max: number;
+  rejected_count: string;
+  rejected_rate: number;
 }
 
 export interface BacktestMetrics_ScoreDistributionEntry {
@@ -300,13 +300,13 @@ export interface BacktestMetrics_ScoreDistributionEntry {
 }
 
 export interface BacktestResult {
-  jobId: string;
-  ruleId: string;
-  rulesetVersion: string;
-  startDate?: Date | undefined;
-  endDate?: Date | undefined;
+  job_id: string;
+  rule_id: string;
+  ruleset_version: string;
+  start_date?: Date | undefined;
+  end_date?: Date | undefined;
   metrics?: BacktestMetrics | undefined;
-  completedAt?: Date | undefined;
+  completed_at?: Date | undefined;
   error: string;
 }
 
@@ -319,21 +319,21 @@ export interface SaveBacktestResultResponse {
 }
 
 export interface ListDatasetProfilesRequest {
-  startDate?: Date | undefined;
-  endDate?: Date | undefined;
+  start_date?: Date | undefined;
+  end_date?: Date | undefined;
   limit: number;
   offset: number;
-  tenantId: string;
+  tenant_id: string;
   pagination?: CursorPageRequest | undefined;
 }
 
 export interface ListBacktestResultsRequest {
-  ruleId: string;
-  startDate?: Date | undefined;
-  endDate?: Date | undefined;
+  rule_id: string;
+  start_date?: Date | undefined;
+  end_date?: Date | undefined;
   limit: number;
   offset: number;
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface ListBacktestResultsResponse {
@@ -341,7 +341,7 @@ export interface ListBacktestResultsResponse {
 }
 
 export interface GetBacktestResultRequest {
-  jobId: string;
+  job_id: string;
 }
 
 export interface GetBacktestResultResponse {
@@ -350,7 +350,7 @@ export interface GetBacktestResultResponse {
 
 export interface GetDriftWindowRequest {
   hours: number;
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface GetDriftWindowResponse {
@@ -359,7 +359,7 @@ export interface GetDriftWindowResponse {
 
 export interface GetInferenceScoresRequest {
   hours: number;
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface GetInferenceScoresResponse {
@@ -377,31 +377,31 @@ export interface StoreGeneratedDataRequest {
  * Do not add, remove, or renumber fields without coordinating with both implementations.
  */
 export interface GeneratedRecord {
-  recordId: string;
-  userId: string;
-  fullName: string;
+  record_id: string;
+  user_id: string;
+  full_name: string;
   email: string;
   phone: string;
-  transactionTimestamp?: Date | undefined;
-  isOffHoursTxn: boolean;
-  availableBalance: number;
-  balanceToTransactionRatio: number;
-  avgAvailableBalance30d: number;
-  balanceVolatilityZScore: number;
-  bankConnectionsCount24h: number;
-  bankConnectionsCount7d: number;
-  bankConnectionsAvg30d: number;
+  transaction_timestamp?: Date | undefined;
+  is_off_hours_txn: boolean;
+  available_balance: number;
+  balance_to_transaction_ratio: number;
+  avg_available_balance_30d: number;
+  balance_volatility_z_score: number;
+  bank_connections_count_24h: number;
+  bank_connections_count_7d: number;
+  bank_connections_avg_30d: number;
   amount: number;
-  amountToAvgRatio: number;
-  merchantRiskScore: number;
-  isReturned: boolean;
-  emailChangedAt?: Date | undefined;
-  phoneChangedAt?: Date | undefined;
-  isFraudulent: boolean;
-  fraudType: string;
+  amount_to_avg_ratio: number;
+  merchant_risk_score: number;
+  is_returned: boolean;
+  email_changed_at?: Date | undefined;
+  phone_changed_at?: Date | undefined;
+  is_fraudulent: boolean;
+  fraud_type: string;
   /** Dynamic features */
-  numericalFeatures: { [key: string]: number };
-  categoricalFeatures: { [key: string]: string };
+  numerical_features: { [key: string]: number };
+  categorical_features: { [key: string]: string };
 }
 
 export interface GeneratedRecord_NumericalFeaturesEntry {
@@ -420,36 +420,36 @@ export interface GeneratedRecord_CategoricalFeaturesEntry {
  * Do not add, remove, or renumber fields without coordinating with both implementations.
  */
 export interface EvaluationMetadata {
-  userId: string;
-  recordId: string;
-  sequenceNumber: number;
-  fraudConfirmedAt?: Date | undefined;
-  isPreFraud: boolean;
-  daysToFraud: number;
-  isTrainEligible: boolean;
+  user_id: string;
+  record_id: string;
+  sequence_number: number;
+  fraud_confirmed_at?: Date | undefined;
+  is_pre_fraud: boolean;
+  days_to_fraud: number;
+  is_train_eligible: boolean;
 }
 
 export interface StoreGeneratedDataResponse {
   success: boolean;
-  recordsSaved: string;
+  records_saved: string;
 }
 
 export interface ClearAllDataRequest {
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface ClearAllDataResponse {
   success: boolean;
-  tablesCleared: string[];
+  tables_cleared: string[];
 }
 
 export interface MaterializeFeaturesRequest {
-  batchSize: number;
+  batch_size: number;
 }
 
 export interface MaterializeFeaturesResponse {
   success: boolean;
-  totalProcessed: string;
+  total_processed: string;
 }
 
 /**
@@ -458,27 +458,27 @@ export interface MaterializeFeaturesResponse {
  */
 export interface GenerateDataRequest {
   /** Number of users to generate */
-  numUsers: number;
+  num_users: number;
   /** Fraction of fraudulent users (0.0 to 1.0) */
-  fraudRate: number;
+  fraud_rate: number;
   /** Clear existing data before generating */
-  dropExisting: boolean;
+  drop_existing: boolean;
   /** Optional seed for deterministic generation */
   seed?:
     | string
     | undefined;
   /** Prevent duplicate generation */
-  idempotencyKey: string;
+  idempotency_key: string;
 }
 
 export interface GenerateDataResponse {
   success: boolean;
   /** Total records generated */
-  totalRecords: string;
+  total_records: string;
   /** Number of fraud records */
-  fraudRecords: string;
+  fraud_records: string;
   /** Number of feature rows materialized */
-  featuresMaterialized: string;
+  features_materialized: string;
   /** Error message if !success */
   error: string;
 }
@@ -487,7 +487,7 @@ export interface Rule {
   id: string;
   field: string;
   op: string;
-  valueJson: string;
+  value_json: string;
   action: string;
   score: number;
   severity: string;
@@ -497,7 +497,7 @@ export interface Rule {
 
 export interface SaveRuleRequest {
   rule?: Rule | undefined;
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface SaveRuleResponse {
@@ -505,8 +505,8 @@ export interface SaveRuleResponse {
 }
 
 export interface GetRuleRequest {
-  ruleId: string;
-  tenantId: string;
+  rule_id: string;
+  tenant_id: string;
 }
 
 export interface GetRuleResponse {
@@ -515,8 +515,8 @@ export interface GetRuleResponse {
 
 export interface ListRulesRequest {
   status: string;
-  includeArchived: boolean;
-  tenantId: string;
+  include_archived: boolean;
+  tenant_id: string;
 }
 
 export interface ListRulesResponse {
@@ -524,8 +524,8 @@ export interface ListRulesResponse {
 }
 
 export interface DeleteRuleRequest {
-  ruleId: string;
-  tenantId: string;
+  rule_id: string;
+  tenant_id: string;
 }
 
 export interface DeleteRuleResponse {
@@ -533,29 +533,29 @@ export interface DeleteRuleResponse {
 }
 
 export interface RuleImpact {
-  ruleId: string;
-  isShadow: boolean;
-  scoreDelta: number;
+  rule_id: string;
+  is_shadow: boolean;
+  score_delta: number;
 }
 
 export interface InferenceEvent {
-  requestId: string;
+  request_id: string;
   timestamp?: Date | undefined;
-  modelVersion: string;
-  rulesVersion: string;
-  modelScore: number;
-  finalScore: number;
-  ruleImpacts: RuleImpact[];
-  userId: string;
+  model_version: string;
+  rules_version: string;
+  model_score: number;
+  final_score: number;
+  rule_impacts: RuleImpact[];
+  user_id: string;
   decision: string;
-  decisionReason: string;
+  decision_reason: string;
   thresholds?: DecisionThresholds | undefined;
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface DecisionThresholds {
-  approveMax: number;
-  reviewMax: number;
+  approve_max: number;
+  review_max: number;
 }
 
 export interface LogInferenceEventRequest {
@@ -567,10 +567,10 @@ export interface LogInferenceEventResponse {
 }
 
 export interface ListRuleVersionsRequest {
-  ruleId: string;
+  rule_id: string;
   limit: number;
   offset: number;
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface ListRuleVersionsResponse {
@@ -579,35 +579,35 @@ export interface ListRuleVersionsResponse {
 }
 
 export interface GetRuleVersionRequest {
-  ruleId: string;
+  rule_id: string;
   /** "latest", "active", or specific version */
-  versionId: string;
-  tenantId: string;
+  version_id: string;
+  tenant_id: string;
 }
 
 export interface GetRuleVersionResponse {
   rule?: Rule | undefined;
-  versionId: string;
-  createdAt?: Date | undefined;
+  version_id: string;
+  created_at?: Date | undefined;
 }
 
 export interface PublishRuleVersionRequest {
-  ruleId: string;
+  rule_id: string;
   /** Optional: specific version to promote. If empty, promote draft. */
-  versionId: string;
+  version_id: string;
   actor: string;
   reason: string;
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface PublishRuleVersionResponse {
   success: boolean;
-  activeVersionId: string;
+  active_version_id: string;
 }
 
 export interface GetRuleReadinessRequest {
-  ruleId: string;
-  tenantId: string;
+  rule_id: string;
+  tenant_id: string;
 }
 
 export interface ReadinessCheck {
@@ -617,46 +617,46 @@ export interface ReadinessCheck {
 }
 
 export interface GetRuleReadinessResponse {
-  ruleId: string;
+  rule_id: string;
   ready: boolean;
   checks: ReadinessCheck[];
 }
 
 export interface DiffRuleVersionsRequest {
-  ruleId: string;
-  versionA: string;
-  versionB: string;
-  tenantId: string;
+  rule_id: string;
+  version_a: string;
+  version_b: string;
+  tenant_id: string;
 }
 
 export interface RuleDiffChange {
   field: string;
   /** JSON string */
-  oldValue: string;
+  old_value: string;
   /** JSON string */
-  newValue: string;
+  new_value: string;
   description: string;
 }
 
 export interface DiffRuleVersionsResponse {
-  ruleId: string;
-  versionA: string;
-  versionB: string;
+  rule_id: string;
+  version_a: string;
+  version_b: string;
   changes: RuleDiffChange[];
 }
 
 export interface GetRuleStatsRequest {
   /** Optional, if empty returns all */
-  ruleId: string;
+  rule_id: string;
   days: number;
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface RuleStats {
-  ruleId: string;
-  triggeredCount: string;
-  shadowTriggeredCount: string;
-  approvalRate: number;
+  rule_id: string;
+  triggered_count: string;
+  shadow_triggered_count: string;
+  approval_rate: number;
 }
 
 export interface GetRuleStatsResponse {
@@ -666,27 +666,27 @@ export interface GetRuleStatsResponse {
 export interface GetAttributionRequest {
   days: number;
   limit: number;
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface DailyAttribution {
   date: string;
-  ruleId: string;
+  rule_id: string;
   /** Total score contributed */
-  contributionScore: string;
+  contribution_score: string;
   volume: string;
 }
 
 export interface ListDecisionsRequest {
-  userId: string;
+  user_id: string;
   decision: string;
-  minScore: number;
-  maxScore: number;
-  startDate?: Date | undefined;
-  endDate?: Date | undefined;
+  min_score: number;
+  max_score: number;
+  start_date?: Date | undefined;
+  end_date?: Date | undefined;
   limit: number;
   offset: number;
-  tenantId: string;
+  tenant_id: string;
   pagination?: CursorPageRequest | undefined;
 }
 
@@ -696,18 +696,18 @@ export interface ListDecisionsResponse {
 }
 
 export interface DecisionSummary {
-  requestId: string;
-  userId: string;
-  createdAt?: Date | undefined;
-  finalScore: number;
+  request_id: string;
+  user_id: string;
+  created_at?: Date | undefined;
+  final_score: number;
   decision: string;
-  decisionReason: string;
+  decision_reason: string;
   thresholds?: DecisionThresholds | undefined;
 }
 
 export interface GetDecisionRequest {
-  requestId: string;
-  tenantId: string;
+  request_id: string;
+  tenant_id: string;
 }
 
 export interface GetDecisionResponse {
@@ -715,8 +715,8 @@ export interface GetDecisionResponse {
 }
 
 export interface GetDecisionTraceRequest {
-  requestId: string;
-  tenantId: string;
+  request_id: string;
+  tenant_id: string;
 }
 
 export interface GetDecisionTraceResponse {
@@ -724,24 +724,24 @@ export interface GetDecisionTraceResponse {
 }
 
 export interface GetRuleImpactRequest {
-  ruleId: string;
-  startDate?: Date | undefined;
-  endDate?: Date | undefined;
-  tenantId: string;
+  rule_id: string;
+  start_date?: Date | undefined;
+  end_date?: Date | undefined;
+  tenant_id: string;
 }
 
 export interface RuleImpactBucket {
   date: string;
-  triggerCount: string;
-  avgScoreDelta: number;
-  decisionsChangedCount: string;
+  trigger_count: string;
+  avg_score_delta: number;
+  decisions_changed_count: string;
 }
 
 export interface GetRuleImpactResponse {
-  ruleId: string;
-  totalTriggers: string;
-  avgScoreDelta: number;
-  dailyBuckets: RuleImpactBucket[];
+  rule_id: string;
+  total_triggers: string;
+  avg_score_delta: number;
+  daily_buckets: RuleImpactBucket[];
 }
 
 export interface GetAttributionResponse {
@@ -750,20 +750,20 @@ export interface GetAttributionResponse {
 
 /** Feature Hydration (Phase 6) */
 export interface UserFeatures {
-  userId: string;
-  snapshotId: string;
-  snapshotTimestamp?: Date | undefined;
-  velocity24h: number;
-  amountToAvgRatio30d: number;
-  balanceVolatilityZScore: number;
-  bankConnections24h: number;
-  merchantRiskScore: number;
-  hasHistory: boolean;
+  user_id: string;
+  snapshot_id: string;
+  snapshot_timestamp?: Date | undefined;
+  velocity_24h: number;
+  amount_to_avg_ratio_30d: number;
+  balance_volatility_z_score: number;
+  bank_connections_24h: number;
+  merchant_risk_score: number;
+  has_history: boolean;
 }
 
 export interface GetLatestUserFeaturesRequest {
-  userId: string;
-  tenantId: string;
+  user_id: string;
+  tenant_id: string;
 }
 
 export interface GetLatestUserFeaturesResponse {
@@ -772,8 +772,8 @@ export interface GetLatestUserFeaturesResponse {
 }
 
 export interface BatchGetLatestUserFeaturesRequest {
-  userIds: string[];
-  tenantId: string;
+  user_ids: string[];
+  tenant_id: string;
 }
 
 export interface BatchGetLatestUserFeaturesResponse {
@@ -787,19 +787,19 @@ export interface BatchGetLatestUserFeaturesResponse_FeaturesEntry {
 
 /** Backtest Compare (Phase 8) */
 export interface CompareBacktestsRequest {
-  baselineJobId: string;
-  candidateJobId: string;
-  tenantId: string;
+  baseline_job_id: string;
+  candidate_job_id: string;
+  tenant_id: string;
 }
 
 export interface BacktestMetricsDelta {
   /** candidate - baseline */
-  matchRateDelta: number;
-  scoreMeanDelta: number;
-  scoreStdDelta: number;
-  rejectedRateDelta: number;
-  totalRecordsDelta: string;
-  matchedCountDelta: string;
+  match_rate_delta: number;
+  score_mean_delta: number;
+  score_std_delta: number;
+  rejected_rate_delta: number;
+  total_records_delta: string;
+  matched_count_delta: string;
 }
 
 export interface CompareBacktestsResponse {
@@ -811,18 +811,18 @@ export interface CompareBacktestsResponse {
 /** Shadow Comparison (Phase 9) */
 export interface GetShadowComparisonRequest {
   hours: number;
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface ShadowModeMetrics {
-  totalEvaluations: string;
+  total_evaluations: string;
   /** how many times shadow score != final_score */
-  divergentScoresCount: string;
-  divergentRate: number;
-  activeScoreMean: number;
-  shadowScoreMean: number;
-  activeScoreDistribution: { [key: string]: number };
-  shadowScoreDistribution: { [key: string]: number };
+  divergent_scores_count: string;
+  divergent_rate: number;
+  active_score_mean: number;
+  shadow_score_mean: number;
+  active_score_distribution: { [key: string]: number };
+  shadow_score_distribution: { [key: string]: number };
 }
 
 export interface ShadowModeMetrics_ActiveScoreDistributionEntry {
@@ -840,34 +840,34 @@ export interface GetShadowComparisonResponse {
 }
 
 export interface Job {
-  jobId: string;
-  jobType: string;
+  job_id: string;
+  job_type: string;
   status: string;
-  createdAt?: Date | undefined;
-  startedAt?: Date | undefined;
-  endedAt?: Date | undefined;
-  errorCode: string;
-  errorMessage: string;
-  paramsJson: string;
-  metricsJson: string;
+  created_at?: Date | undefined;
+  started_at?: Date | undefined;
+  ended_at?: Date | undefined;
+  error_code: string;
+  error_message: string;
+  params_json: string;
+  metrics_json: string;
 }
 
 export interface JobEvent {
-  eventId: string;
-  jobId: string;
-  eventType: string;
+  event_id: string;
+  job_id: string;
+  event_type: string;
   timestamp?: Date | undefined;
-  detailsJson: string;
+  details_json: string;
 }
 
 export interface ListJobsRequest {
-  jobType: string;
+  job_type: string;
   status: string;
-  startDate?: Date | undefined;
-  endDate?: Date | undefined;
+  start_date?: Date | undefined;
+  end_date?: Date | undefined;
   limit: number;
   offset: number;
-  tenantId: string;
+  tenant_id: string;
   pagination?: CursorPageRequest | undefined;
 }
 
@@ -877,8 +877,8 @@ export interface ListJobsResponse {
 }
 
 export interface GetJobRequest {
-  jobId: string;
-  tenantId: string;
+  job_id: string;
+  tenant_id: string;
 }
 
 export interface GetJobResponse {
@@ -886,8 +886,8 @@ export interface GetJobResponse {
 }
 
 export interface CancelJobRequest {
-  jobId: string;
-  tenantId: string;
+  job_id: string;
+  tenant_id: string;
 }
 
 export interface CancelJobResponse {
@@ -895,21 +895,21 @@ export interface CancelJobResponse {
 }
 
 export interface RetryJobRequest {
-  jobId: string;
-  tenantId: string;
+  job_id: string;
+  tenant_id: string;
 }
 
 export interface RetryJobResponse {
-  newJobId: string;
+  new_job_id: string;
 }
 
 export interface GetJobEventsRequest {
-  jobId: string;
+  job_id: string;
   limit: number;
   offset: number;
-  beforeTs?: Date | undefined;
-  beforeId: string;
-  tenantId: string;
+  before_ts?: Date | undefined;
+  before_id: string;
+  tenant_id: string;
 }
 
 export interface GetJobEventsResponse {
@@ -917,16 +917,16 @@ export interface GetJobEventsResponse {
 }
 
 export interface GetJobSummaryRequest {
-  startTime?: Date | undefined;
-  endTime?: Date | undefined;
-  tenantId: string;
+  start_time?: Date | undefined;
+  end_time?: Date | undefined;
+  tenant_id: string;
 }
 
 export interface JobSummaryBucket {
-  bucketTime?: Date | undefined;
-  totalJobs: string;
-  completedJobs: string;
-  failedJobs: string;
+  bucket_time?: Date | undefined;
+  total_jobs: string;
+  completed_jobs: string;
+  failed_jobs: string;
 }
 
 export interface GetJobSummaryResponse {
@@ -934,17 +934,17 @@ export interface GetJobSummaryResponse {
 }
 
 export interface DatasetProfile {
-  profileId: string;
-  tenantId: string;
-  computedAt?: Date | undefined;
-  recordCount: string;
-  featureProfiles: FeatureProfile[];
+  profile_id: string;
+  tenant_id: string;
+  computed_at?: Date | undefined;
+  record_count: string;
+  feature_profiles: FeatureProfile[];
 }
 
 export interface GetDatasetSummaryRequest {
   /** if empty, get latest? */
-  profileId: string;
-  tenantId: string;
+  profile_id: string;
+  tenant_id: string;
 }
 
 export interface GetDatasetSummaryResponse {
@@ -957,55 +957,55 @@ export interface ListDatasetProfilesResponse {
 }
 
 export interface GetLatestDatasetProfileRequest {
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface GetLatestDatasetProfileResponse {
-  profileId: string;
-  computedAt?: Date | undefined;
-  recordCount: string;
+  profile_id: string;
+  computed_at?: Date | undefined;
+  record_count: string;
 }
 
 export interface CompareDatasetProfilesRequest {
-  baselineProfileId: string;
-  candidateProfileId: string;
-  tenantId: string;
+  baseline_profile_id: string;
+  candidate_profile_id: string;
+  tenant_id: string;
 }
 
 export interface CompareDatasetProfilesResponse {
-  baselineProfileId: string;
-  candidateProfileId: string;
+  baseline_profile_id: string;
+  candidate_profile_id: string;
   drift: FeatureDrift[];
 }
 
 export interface FeatureDrift {
-  featureName: string;
+  feature_name: string;
   psi: number;
   /** "none", "low", "high" */
-  driftSeverity: string;
+  drift_severity: string;
 }
 
 export interface TrainingRun {
-  runId: string;
-  modelName: string;
+  run_id: string;
+  model_name: string;
   status: string;
-  startedAt?: Date | undefined;
-  endedAt?: Date | undefined;
-  metricsJson: string;
-  paramsJson: string;
-  datasetId: string;
-  mlflowRunId: string;
-  tenantId: string;
+  started_at?: Date | undefined;
+  ended_at?: Date | undefined;
+  metrics_json: string;
+  params_json: string;
+  dataset_id: string;
+  mlflow_run_id: string;
+  tenant_id: string;
 }
 
 export interface ListTrainingRunsRequest {
-  modelName: string;
+  model_name: string;
   limit: number;
   offset: number;
   status: string;
-  startDate?: Date | undefined;
-  endDate?: Date | undefined;
-  tenantId: string;
+  start_date?: Date | undefined;
+  end_date?: Date | undefined;
+  tenant_id: string;
   pagination?: CursorPageRequest | undefined;
 }
 
@@ -1015,10 +1015,10 @@ export interface ListTrainingRunsResponse {
 }
 
 export interface ListModelVersionsRequest {
-  modelName: string;
+  model_name: string;
   limit: number;
   offset: number;
-  tenantId: string;
+  tenant_id: string;
   pagination?: CursorPageRequest | undefined;
 }
 
@@ -1029,8 +1029,8 @@ export interface ListModelVersionsResponse {
 }
 
 export interface GetTrainingRunRequest {
-  runId: string;
-  tenantId: string;
+  run_id: string;
+  tenant_id: string;
 }
 
 export interface GetTrainingRunResponse {
@@ -1040,15 +1040,15 @@ export interface GetTrainingRunResponse {
 export interface MetricPoint {
   timestamp?: Date | undefined;
   value: number;
-  runId: string;
+  run_id: string;
 }
 
 export interface GetMetricSeriesRequest {
-  modelName: string;
-  metricName: string;
-  startDate?: Date | undefined;
-  endDate?: Date | undefined;
-  tenantId: string;
+  model_name: string;
+  metric_name: string;
+  start_date?: Date | undefined;
+  end_date?: Date | undefined;
+  tenant_id: string;
 }
 
 export interface GetMetricSeriesResponse {
@@ -1057,7 +1057,7 @@ export interface GetMetricSeriesResponse {
 
 export interface ReportTrainingRunRequest {
   run?: TrainingRun | undefined;
-  tenantId: string;
+  tenant_id: string;
 }
 
 export interface ReportTrainingRunResponse {

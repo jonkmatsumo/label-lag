@@ -130,7 +130,7 @@ proto-gen-ts:
 	protoc -I $(PROTO_DIR) \
 		--plugin=./typescript/ui/node_modules/.bin/protoc-gen-ts_proto \
 		--ts_proto_out=typescript/ui/src/types/generated \
-		--ts_proto_opt=esModuleInterop=true,forceLong=string,useOptionals=true,outputEncodeMethods=false,outputJsonMethods=false,outputClientImpl=false \
+		--ts_proto_opt=esModuleInterop=true,forceLong=string,useOptionals=true,outputEncodeMethods=false,outputJsonMethods=false,outputClientImpl=false,snakeToCamel=false,stringEnums=true \
 		$(PROTO_DIR)/inference/v1/*.proto \
 		$(PROTO_DIR)/training/v1/*.proto \
 		$(PROTO_DIR)/analytics/v1/*.proto \

@@ -86,7 +86,7 @@ export function ProfileDetail() {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {Object.entries(summary.columns).map(([col, stats]) => (
+                                            {Object.entries(summary.columns).map(([col, stats]: [string, any]) => (
                                                 <tr key={col}>
                                                     <td className="font-monospace small">{col}</td>
                                                     <td><code>{stats.type}</code></td>

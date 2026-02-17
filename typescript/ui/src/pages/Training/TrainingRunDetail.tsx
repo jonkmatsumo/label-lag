@@ -93,7 +93,7 @@ export function TrainingRunDetail() {
                                 <dt className="col-sm-5">Version</dt>
                                 <dd className="col-sm-7">
                                     <span className="badge bg-light text-dark border">
-                                        {run.version}
+                                        {run.mlflow_run_id?.slice(0, 7) ?? 'v1'}
                                     </span>
                                 </dd>
 
@@ -102,7 +102,7 @@ export function TrainingRunDetail() {
 
                                 <dt className="col-sm-5">Created</dt>
                                 <dd className="col-sm-7 small">
-                                    {new Date(run.created_at).toLocaleString()}
+                                    {run.started_at ? new Date(run.started_at).toLocaleString() : '-'}
                                 </dd>
 
                                 {run.started_at && (
@@ -114,11 +114,11 @@ export function TrainingRunDetail() {
                                     </>
                                 )}
 
-                                {run.completed_at && (
+                                {run.ended_at && (
                                     <>
                                         <dt className="col-sm-5">Completed</dt>
                                         <dd className="col-sm-7 small">
-                                            {new Date(run.completed_at).toLocaleString()}
+                                            {new Date(run.ended_at).toLocaleString()}
                                         </dd>
                                     </>
                                 )}

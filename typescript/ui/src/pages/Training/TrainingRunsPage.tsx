@@ -34,7 +34,7 @@ export function TrainingRunsPage() {
             return {
                 items: resp.runs ?? [],
                 nextCursor: resp.pagination?.next_cursor,
-                total: resp.pagination?.total,
+                total: resp.pagination?.total ? parseInt(resp.pagination.total, 10) : undefined,
             };
         },
         limit: PAGE_SIZE,
@@ -118,14 +118,14 @@ export function TrainingRunsPage() {
                                             <td>{run.model_name}</td>
                                             <td>
                                                 <span className="badge bg-light text-dark border">
-                                                    {run.version}
+                                                    {run.mlflow_run_id?.slice(0, 7) ?? 'v1'}
                                                 </span>
                                             </td>
                                             <td>
                                                 <StatusBadge status={run.status} />
                                             </td>
                                             <td className="small text-muted">
-                                                {new Date(run.created_at).toLocaleString()}
+                                                {run.started_at ? new Date(run.started_at).toLocaleString() : '-'}
                                             </td>
                                         </tr>
                                     ))}

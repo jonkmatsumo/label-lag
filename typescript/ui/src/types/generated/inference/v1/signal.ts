@@ -9,10 +9,10 @@
 export const protobufPackage = "gateway.v1";
 
 export interface SignalRequest {
-  userId: string;
+  user_id: string;
   amount: number;
   currency: string;
-  clientTransactionId: string;
+  client_transaction_id: string;
 }
 
 export interface RiskComponent {
@@ -21,22 +21,22 @@ export interface RiskComponent {
 }
 
 export interface MatchedRule {
-  ruleId: string;
+  rule_id: string;
   severity: string;
   reason: string;
   explanation: string;
 }
 
 export interface SignalResponse {
-  requestId: string;
+  request_id: string;
   score: number;
-  riskLabel: string;
-  latencyMs: number;
-  riskComponents: RiskComponent[];
-  modelVersion: string;
-  matchedRules: MatchedRule[];
-  modelScore?: number | undefined;
-  rulesVersion?: string | undefined;
-  shadowMatchedRules: MatchedRule[];
-  debugInfo?: { [key: string]: any } | undefined;
+  risk_label: string;
+  latency_ms: number;
+  risk_components: RiskComponent[];
+  model_version: string;
+  matched_rules: MatchedRule[];
+  model_score?: number | undefined;
+  rules_version?: string | undefined;
+  shadow_matched_rules: MatchedRule[];
+  debug_info?: { [key: string]: any } | undefined;
 }

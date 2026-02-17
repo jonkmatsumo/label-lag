@@ -63,7 +63,7 @@ export function CompareProfiles() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {data.features.map((f) => (
+                                {data.features.map((f: any) => (
                                     <tr key={f.feature}>
                                         <td className="font-monospace small">{f.feature}</td>
                                         <td>{f.psi.toFixed(4)}</td>

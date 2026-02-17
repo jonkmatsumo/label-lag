@@ -1,6 +1,6 @@
 import { useContext } from 'react';
 import { TenantContext } from '../context/TenantContextDefinition';
-import { TenantContextValue } from '../context/types';
+import type { TenantContextValue } from '../context/types';
 
 export function useTenant(): TenantContextValue {
     const ctx = useContext(TenantContext);

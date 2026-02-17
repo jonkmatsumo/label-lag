@@ -27,7 +27,7 @@ export function Analytics() {
 
   // Sort stats by date ascending for chart
   const chartData = dailyStatsQuery.data?.stats ?
-    [...dailyStatsQuery.data.stats].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()) : [];
+    [...dailyStatsQuery.data.stats].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) : [];
 
   // Fetch recent alerts for metric only
   const alertsQuery = useQuery({
@@ -78,7 +78,7 @@ export function Analytics() {
                   `${((alertsQuery.data.alerts.filter((a: RecentAlert) => a.computed_risk_score >= 80).length / Math.max(overviewQuery.data.total_records * 0.05, 1)) * 100).toFixed(1)}%`
                   : '--'}
               </div>
-              <div className="small text-muted mt-1" style={{fontSize: '0.7em'}}>False Positive Rate (Est)</div>
+              <div className="small text-muted mt-1" style={{ fontSize: '0.7em' }}>False Positive Rate (Est)</div>
             </div>
           </div>
         ) : null}
@@ -94,11 +94,11 @@ export function Analytics() {
         <div className="col-lg-8">
           <div className="card h-100 shadow-sm border-0">
             <div className="card-header bg-white border-bottom py-3">
-               <h3 className="card-title h6 fw-bold mb-0">Transaction Volume & Fraud Trends</h3>
+              <h3 className="card-title h6 fw-bold mb-0">Transaction Volume & Fraud Trends</h3>
             </div>
             <div className="card-body" style={{ height: 350 }}>
               {dailyStatsQuery.isLoading ? <div className="loading">Loading charts...</div> : (
-                 chartData.length > 0 ? (
+                chartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
@@ -111,7 +111,7 @@ export function Analytics() {
                       <Line yAxisId="right" type="monotone" dataKey="fraud_rate" name="Fraud Rate" stroke="#dc3545" strokeWidth={2} dot={{ r: 3 }} />
                     </ComposedChart>
                   </ResponsiveContainer>
-                 ) : <div className="text-center p-5 text-muted">No trend data available</div>
+                ) : <div className="text-center p-5 text-muted">No trend data available</div>
               )}
             </div>
           </div>
@@ -120,11 +120,11 @@ export function Analytics() {
         {/* Fraud Breakdown */}
         <div className="col-lg-4">
           <div className="card h-100 shadow-sm border-0">
-             <div className="card-header bg-white border-bottom py-3">
-               <h3 className="card-title h6 fw-bold mb-0">Fraud Type Distribution</h3>
+            <div className="card-header bg-white border-bottom py-3">
+              <h3 className="card-title h6 fw-bold mb-0">Fraud Type Distribution</h3>
             </div>
             <div className="card-body d-flex align-items-center justify-content-center">
-               <FraudTypeChart />
+              <FraudTypeChart />
             </div>
           </div>
         </div>
@@ -172,7 +172,7 @@ function TransactionExplorer() {
   });
 
   const handlePageChange = (newOffset: number) => {
-    setFilters(prev => ({ ...prev, offset: newOffset }));
+    setFilters((prev: TransactionSearchRequest) => ({ ...prev, offset: newOffset }));
   };
 
   return (
@@ -184,7 +184,7 @@ function TransactionExplorer() {
         <TransactionFilters filters={filters} onChange={setFilters} />
 
         {searchQuery.isLoading && !searchQuery.isPlaceholderData ? (
-          <div className="text-center p-5"><div className="spinner-border text-primary"/></div>
+          <div className="text-center p-5"><div className="spinner-border text-primary" /></div>
         ) : searchQuery.isError ? (
           <ErrorBanner error={searchQuery.error} title="Error loading transactions" className="alert alert-danger" />
         ) : (
@@ -237,7 +237,7 @@ function TransactionFilters({ filters, onChange }: { filters: TransactionSearchR
           <input
             type="text" className="form-control form-control-sm"
             value={localFilters.user_id || ''}
-            onChange={e => setLocalFilters({...localFilters, user_id: e.target.value || undefined})}
+            onChange={e => setLocalFilters({ ...localFilters, user_id: e.target.value || undefined })}
             placeholder="Search User..."
           />
         </div>
@@ -246,7 +246,7 @@ function TransactionFilters({ filters, onChange }: { filters: TransactionSearchR
           <input
             type="text" className="form-control form-control-sm"
             value={localFilters.transaction_id || ''}
-            onChange={e => setLocalFilters({...localFilters, transaction_id: e.target.value || undefined})}
+            onChange={e => setLocalFilters({ ...localFilters, transaction_id: e.target.value || undefined })}
             placeholder="Search Txn ID..."
           />
         </div>
@@ -255,7 +255,7 @@ function TransactionFilters({ filters, onChange }: { filters: TransactionSearchR
           <input
             type="number" className="form-control form-control-sm"
             value={localFilters.min_amount || ''}
-            onChange={e => setLocalFilters({...localFilters, min_amount: e.target.value ? Number(e.target.value) : undefined})}
+            onChange={e => setLocalFilters({ ...localFilters, min_amount: e.target.value ? Number(e.target.value) : undefined })}
           />
         </div>
         <div className="col-md-2">
@@ -263,7 +263,7 @@ function TransactionFilters({ filters, onChange }: { filters: TransactionSearchR
           <select
             className="form-select form-select-sm"
             value={localFilters.is_fraudulent === undefined ? '' : String(localFilters.is_fraudulent)}
-            onChange={e => setLocalFilters({...localFilters, is_fraudulent: e.target.value === '' ? undefined : e.target.value === 'true'})}
+            onChange={e => setLocalFilters({ ...localFilters, is_fraudulent: e.target.value === '' ? undefined : e.target.value === 'true' })}
           >
             <option value="">All Transactions</option>
             <option value="false">Legitimate Only</option>
@@ -279,12 +279,12 @@ function TransactionFilters({ filters, onChange }: { filters: TransactionSearchR
 
       {expanded && (
         <div className="row g-3 mt-1 pt-3 border-top">
-           <div className="col-md-3">
+          <div className="col-md-3">
             <label className="form-label small fw-bold">Start Date</label>
             <input
               type="date" className="form-control form-control-sm"
               value={localFilters.start_date || ''}
-              onChange={e => setLocalFilters({...localFilters, start_date: e.target.value})}
+              onChange={e => setLocalFilters({ ...localFilters, start_date: e.target.value })}
             />
           </div>
           <div className="col-md-3">
@@ -292,7 +292,7 @@ function TransactionFilters({ filters, onChange }: { filters: TransactionSearchR
             <input
               type="date" className="form-control form-control-sm"
               value={localFilters.end_date || ''}
-              onChange={e => setLocalFilters({...localFilters, end_date: e.target.value})}
+              onChange={e => setLocalFilters({ ...localFilters, end_date: e.target.value })}
             />
           </div>
           <div className="col-md-2">
@@ -300,15 +300,15 @@ function TransactionFilters({ filters, onChange }: { filters: TransactionSearchR
             <input
               type="number" className="form-control form-control-sm"
               value={localFilters.min_score || ''}
-              onChange={e => setLocalFilters({...localFilters, min_score: e.target.value ? Number(e.target.value) : undefined})}
+              onChange={e => setLocalFilters({ ...localFilters, min_score: e.target.value ? Number(e.target.value) : undefined })}
             />
           </div>
-           <div className="col-md-2">
+          <div className="col-md-2">
             <label className="form-label small fw-bold">Max Score</label>
             <input
               type="number" className="form-control form-control-sm"
               value={localFilters.max_score || ''}
-              onChange={e => setLocalFilters({...localFilters, max_score: e.target.value ? Number(e.target.value) : undefined})}
+              onChange={e => setLocalFilters({ ...localFilters, max_score: e.target.value ? Number(e.target.value) : undefined })}
             />
           </div>
         </div>
@@ -348,7 +348,7 @@ function TransactionTable({ data }: { data: TransactionDetail[] }) {
           ) : (
             data.map((tx) => (
               <tr key={tx.record_id}>
-                <td className="small text-muted">{new Date(tx.created_at).toLocaleString()}</td>
+                <td className="small text-muted">{tx.created_at ? new Date(tx.created_at).toLocaleString() : '-'}</td>
                 <td className="font-monospace small">{tx.user_id}</td>
                 <td className="fw-bold">${tx.amount.toFixed(2)}</td>
                 <td>
@@ -360,10 +360,10 @@ function TransactionTable({ data }: { data: TransactionDetail[] }) {
                 </td>
                 <td>
                   <div className="d-flex align-items-center gap-2">
-                    <div className="progress flex-grow-1" style={{height: '6px', width: '60px'}}>
+                    <div className="progress flex-grow-1" style={{ height: '6px', width: '60px' }}>
                       <div
                         className={`progress-bar ${tx.is_fraudulent ? 'bg-danger' : 'bg-primary'}`}
-                        style={{width: `${(tx.merchant_risk_score || 0)}%`}}
+                        style={{ width: `${(tx.merchant_risk_score || 0)}%` }}
                       />
                     </div>
                     <span className="small">{tx.merchant_risk_score || '--'}</span>
@@ -371,7 +371,7 @@ function TransactionTable({ data }: { data: TransactionDetail[] }) {
                 </td>
                 <td className="small">{tx.fraud_type || '--'}</td>
                 <td className="text-end">
-                  <button className="btn btn-sm btn-outline-primary py-0 px-2" style={{fontSize: '0.7rem'}}>Details</button>
+                  <button className="btn btn-sm btn-outline-primary py-0 px-2" style={{ fontSize: '0.7rem' }}>Details</button>
                 </td>
               </tr>
             ))

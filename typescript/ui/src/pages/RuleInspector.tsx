@@ -8,6 +8,8 @@ import type {
   SandboxEvaluateResponse,
   ApprovalSignalItem,
   RuleSuggestion,
+  Rule,
+  ReadinessCheck,
 } from '../types/api';
 import {
   AlertTriangle, CheckCircle, Info, Shield,
@@ -121,7 +123,7 @@ export function RuleManagement() {
                 </tr>
               </thead>
               <tbody>
-                {rulesQuery.data?.rules.map((rule) => (
+                {rulesQuery.data?.rules.map((rule: Rule) => (
                   <React.Fragment key={rule.id}>
                     <tr
                       onClick={() => setExpandedRule(expandedRule === rule.id ? null : rule.id)}
@@ -132,25 +134,25 @@ export function RuleManagement() {
                         {expandedRule === rule.id ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                       </td>
                       <td>
-                        <div className="fw-bold">{rule.name}</div>
-                        <div className="small text-muted text-truncate" style={{ maxWidth: '250px' }}>{rule.description}</div>
+                        <div className="fw-bold">{rule.id}</div>
+                        <div className="small text-muted text-truncate" style={{ maxWidth: '250px' }}>{rule.reason}</div>
                       </td>
                       <td>
                         <span className={`badge rounded-pill ${getStatusBadgeClass(rule.status)}`}>
                           {rule.status.replace('_', ' ')}
                         </span>
                       </td>
-                      <td><code className="bg-light px-2 py-1 rounded small">{rule.condition}</code></td>
+                      <td><code className="bg-light px-2 py-1 rounded small">{rule.field} {rule.op} {rule.value_json}</code></td>
                       <td>
                         <span className="small fw-medium">{rule.action}</span>
-                        {rule.score_adjustment !== undefined && (
-                          <span className={rule.score_adjustment > 0 ? 'text-danger ms-1' : 'text-success ms-1'}>
-                            ({rule.score_adjustment > 0 ? '+' : ''}{rule.score_adjustment})
+                        {rule.score !== undefined && (
+                          <span className={rule.score > 0 ? 'text-danger ms-1' : 'text-success ms-1'}>
+                            ({rule.score > 0 ? '+' : ''}{rule.score})
                           </span>
                         )}
                       </td>
                       <td className="small text-muted">
-                        {new Date(rule.updated_at).toLocaleDateString()}
+                        -
                       </td>
                     </tr>
                     {expandedRule === rule.id && (
@@ -251,12 +253,12 @@ function RuleOverviewTab({ rule, onShowPublish }: { rule: DraftRule, onShowPubli
               </div>
             </div>
             <ul className="list-group list-group-flush border rounded overflow-hidden">
-              {readinessQuery.data.checks.map((check, i) => (
+              {readinessQuery.data.checks.map((check: ReadinessCheck, i: number) => (
                 <li key={i} className="list-group-item d-flex justify-content-between align-items-center py-2 px-3 small">
                   <span className="fw-medium">{check.name}</span>
                   <div className="d-flex align-items-center">
                     <span className="text-muted me-2" style={{ fontSize: '0.9em' }}>{check.message}</span>
-                    <StatusDot status={check.status} />
+                    <StatusDot status={(check as any).status} />
                   </div>
                 </li>
               ))}
@@ -345,22 +347,23 @@ function RuleHistoryTab({ ruleId }: { ruleId: string }) {
       <div className="col-md-5">
         <h6 className="fw-bold mb-3 small text-uppercase tracking-wider text-muted">Version History</h6>
         <div className="list-group list-group-flush border rounded overflow-hidden shadow-sm">
-          {versions.map(v => (
+          {versions.map((v: Rule) => (
             <button
-              key={v.version_id}
-              className={`list-group-item list-group-item-action py-3 px-3 border-bottom d-flex justify-content-between align-items-start ${selectedVersions.includes(v.version_id) ? 'bg-primary bg-opacity-10 border-start border-4 border-primary' : ''}`}
-              onClick={() => handleToggleVersion(v.version_id)}
+              key={v.id}
+              className={`list-group-item list-group-item-action py-3 px-3 border-bottom d-flex justify-content-between align-items-start ${selectedVersions.includes(v.id) ? 'bg-primary bg-opacity-10 border-start border-4 border-primary' : ''}`}
+              onClick={() => handleToggleVersion(v.id)}
             >
               <div className="flex-grow-1">
                 <div className="d-flex justify-content-between mb-1">
-                  <span className="font-monospace small fw-bold">v{v.version_id.substring(0, 8)}</span>
-                  <span className="badge bg-light text-dark border small">{v.rule.status}</span>
+                  <span className="font-monospace small fw-bold">v{v.id.substring(0, 8)}</span>
+                  <span className="badge bg-light text-dark border small">{v.status}</span>
                 </div>
-                <div className="small text-muted mb-1">{new Date(v.timestamp).toLocaleString()}</div>
+                {/* Timestamp missing in Rule proto */}
+                <div className="small text-muted mb-1">-</div>
                 <div className="small fw-medium text-truncate" style={{ maxWidth: '200px' }}>{v.reason || 'No reason provided'}</div>
               </div>
               <div className="ms-2">
-                {selectedVersions.includes(v.version_id) && <CheckCircle size={16} className="text-primary" />}
+                {selectedVersions.includes(v.id) && <CheckCircle size={16} className="text-primary" />}
               </div>
             </button>
           ))}
@@ -399,7 +402,7 @@ function RuleHistoryTab({ ruleId }: { ruleId: string }) {
                 </tr>
               </thead>
               <tbody>
-                {diffQuery.data.changes.map((c, i) => (
+                {diffQuery.data.changes.map((c: any, i: number) => (
                   <tr key={i} className={c.change_type === 'modified' ? 'table-warning bg-opacity-10' : ''}>
                     <td className="fw-bold text-muted">{c.field_name}</td>
                     <td className="text-decoration-line-through text-muted">{JSON.stringify(c.old_value)}</td>
@@ -517,7 +520,7 @@ function PublishModal({ rule, onClose, onSuccess }: { rule: DraftRule, onClose: 
       <div className="modal-dialog modal-dialog-centered">
         <div className="modal-content shadow-lg border-0">
           <div className="modal-header border-0 pb-0">
-            <h5 className="modal-title fw-bold">Publish Rule: {rule.name}</h5>
+            <h5 className="modal-title fw-bold">Publish Rule: {rule.id}</h5>
             <button type="button" className="btn-close" onClick={onClose}></button>
           </div>
           <form onSubmit={handleSubmit}>
@@ -849,7 +852,7 @@ export function RuleShadow() {
                 </tr>
               </thead>
               <tbody>
-                {shadowQuery.data.rule_metrics.map((metric) => (
+                {shadowQuery.data.rule_metrics.map((metric: any) => (
                   <tr key={metric.rule_id}>
                     <td><code>{metric.rule_id}</code></td>
                     <td style={{ textAlign: 'right' }}>{metric.production_matches.toLocaleString()}</td>
@@ -980,7 +983,7 @@ export function RuleBacktests() {
                 </tr>
               </thead>
               <tbody>
-                {paginatedResults.map((result) => (
+                {paginatedResults.map((result: any) => (
                   <tr key={result.job_id}>
                     <td><code>{result.job_id.slice(0, 8)}</code></td>
                     <td><code>{result.rule_id}</code></td>

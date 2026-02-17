@@ -723,12 +723,12 @@ function DriftTab() {
   return (
     <div className="row g-4">
       <div className="col-md-4">
-        <div className={`card h-100 border-0 shadow-sm ${driftQuery.data?.drift_detected ? 'bg-danger bg-opacity-10' : 'bg-success bg-opacity-10'}`}>
+        <div className={`card h-100 border-0 shadow-sm ${driftQuery.data?.status !== 'ok' ? 'bg-danger bg-opacity-10' : 'bg-success bg-opacity-10'}`}>
           <div className="card-body text-center d-flex flex-column justify-content-center">
             <div className="display-4 mb-2">
-              {driftQuery.data?.drift_detected ? '🚨' : '✅'}
+              {driftQuery.data?.status !== 'ok' ? '🚨' : '✅'}
             </div>
-            <h4 className="fw-bold">{driftQuery.data?.drift_detected ? 'Drift Detected' : 'No Drift'}</h4>
+            <h4 className="fw-bold">{driftQuery.data?.status !== 'ok' ? 'Drift Detected' : 'No Drift'}</h4>
             <p className="text-muted small mb-0">Status: {driftQuery.data?.status}</p>
           </div>
         </div>

@@ -16,8 +16,8 @@ export const protobufPackage = "google.protobuf";
  */
 export enum NullValue {
   /** NULL_VALUE - Null value. */
-  NULL_VALUE = 0,
-  UNRECOGNIZED = -1,
+  NULL_VALUE = "NULL_VALUE",
+  UNRECOGNIZED = "UNRECOGNIZED",
 }
 
 /**
@@ -50,27 +50,27 @@ export interface Struct_FieldsEntry {
  */
 export interface Value {
   /** Represents a null value. */
-  nullValue?:
+  null_value?:
     | NullValue
     | undefined;
   /** Represents a double value. */
-  numberValue?:
+  number_value?:
     | number
     | undefined;
   /** Represents a string value. */
-  stringValue?:
+  string_value?:
     | string
     | undefined;
   /** Represents a boolean value. */
-  boolValue?:
+  bool_value?:
     | boolean
     | undefined;
   /** Represents a structured value. */
-  structValue?:
+  struct_value?:
     | { [key: string]: any }
     | undefined;
   /** Represents a repeated `Value`. */
-  listValue?: Array<any> | undefined;
+  list_value?: Array<any> | undefined;
 }
 
 /**

@@ -12,47 +12,47 @@ export const protobufPackage = "gateway.v1";
 export interface EvaluateRulesRequest {
   /** Flexible map for feature hydration */
   features?: { [key: string]: any } | undefined;
-  baseScore: number;
+  base_score: number;
   /** Optional, if not provided uses default */
   ruleset?: RuleSet | undefined;
-  shadowMode: boolean;
+  shadow_mode: boolean;
 }
 
 export interface EvaluateRulesResponse {
-  finalScore: number;
-  baselineScore: number;
+  final_score: number;
+  baseline_score: number;
   /** Only if shadow_mode=true */
-  shadowScore: number;
-  matchedRules: string[];
+  shadow_score: number;
+  matched_rules: string[];
   explanations: Explanation[];
-  shadowMatchedRules: string[];
-  shadowExplanations: Explanation[];
+  shadow_matched_rules: string[];
+  shadow_explanations: Explanation[];
   rejected: boolean;
-  rulesetVersion: string;
+  ruleset_version: string;
   warnings: Conflict[];
-  evaluationTimeMs: number;
+  evaluation_time_ms: number;
 }
 
 export interface EvaluateRulesDiffRequest {
   features?: { [key: string]: any } | undefined;
-  baseScore: number;
-  rulesetA?: RuleSet | undefined;
-  rulesetB?: RuleSet | undefined;
-  shadowMode: boolean;
+  base_score: number;
+  ruleset_a?: RuleSet | undefined;
+  ruleset_b?: RuleSet | undefined;
+  shadow_mode: boolean;
 }
 
 export interface EvaluateRulesDiffResponse {
   a?: EvaluateRulesResponse | undefined;
   b?: EvaluateRulesResponse | undefined;
   diff?: RulesDiffSummary | undefined;
-  totalEvaluationTimeMs: number;
+  total_evaluation_time_ms: number;
 }
 
 export interface RulesDiffSummary {
   severity: string;
-  scoreDelta: number;
-  matchedRulesAdded: string[];
-  matchedRulesRemoved: string[];
+  score_delta: number;
+  matched_rules_added: string[];
+  matched_rules_removed: string[];
 }
 
 export interface RuleSet {
@@ -60,13 +60,13 @@ export interface RuleSet {
 }
 
 export interface Explanation {
-  ruleId: string;
+  rule_id: string;
   severity: string;
   reason: string;
   action: string;
   score: number;
   explanation: string;
-  scoreDelta: number;
+  score_delta: number;
 }
 
 export interface Conflict {
@@ -79,18 +79,18 @@ export interface ReloadRulesRequest {
 }
 
 export enum ReloadRulesRequest_Source {
-  SOURCE_UNSPECIFIED = 0,
-  FILE_PROVIDER = 1,
-  API_PROVIDER = 2,
-  BOTH = 3,
-  UNRECOGNIZED = -1,
+  SOURCE_UNSPECIFIED = "SOURCE_UNSPECIFIED",
+  FILE_PROVIDER = "FILE_PROVIDER",
+  API_PROVIDER = "API_PROVIDER",
+  BOTH = "BOTH",
+  UNRECOGNIZED = "UNRECOGNIZED",
 }
 
 export interface ReloadRulesResponse {
   success: boolean;
-  rulesVersion: string;
-  reloadedSources: ReloadRulesRequest_Source[];
-  durationMs: string;
+  rules_version: string;
+  reloaded_sources: ReloadRulesRequest_Source[];
+  duration_ms: string;
   message: string;
 }
 
@@ -100,33 +100,33 @@ export interface ExplainEvaluationRequest {
     | RuleSet
     | undefined;
   /** Default 50 if 0 */
-  maxRules: number;
+  max_rules: number;
   /** Default false */
-  includeValues: boolean;
+  include_values: boolean;
 }
 
 export interface ExplainEvaluationResponse {
-  evalTimeMs: number;
-  matchedCount: number;
-  rulesVersion: string;
+  eval_time_ms: number;
+  matched_count: number;
+  rules_version: string;
   traces: RuleTrace[];
 }
 
 export interface RuleTrace {
-  ruleId: string;
+  rule_id: string;
   matched: boolean;
-  evalTimeMs: number;
+  eval_time_ms: number;
   conditions: ConditionTrace[];
 }
 
 export interface ConditionTrace {
   field: string;
   operator: string;
-  expectedType: string;
-  actualType: string;
+  expected_type: string;
+  actual_type: string;
   result: boolean;
   /** Only if include_values=true and safe */
-  actualValueRedacted: string;
+  actual_value_redacted: string;
 }
 
 export interface GatewayService {
