@@ -3,6 +3,7 @@ package httpserver
 import (
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/requestid"
@@ -11,13 +12,68 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/time/rate"
 )
+
+type tenantLimiter struct {
+	limiter  *rate.Limiter
+	lastSeen time.Time
+}
+
+var (
+	limiters = make(map[string]*tenantLimiter)
+	limitMu  sync.Mutex
+)
+
+func init() {
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		for range ticker.C {
+			limitMu.Lock()
+			for tid, l := range limiters {
+				if time.Since(l.lastSeen) > 1*time.Hour {
+					delete(limiters, tid)
+				}
+			}
+			limitMu.Unlock()
+		}
+	}()
+}
+
+func rateLimitMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tenantID := tenant.FromContext(r.Context())
+		if tenantID == "" {
+			tenantID = "default"
+		}
+
+		limitMu.Lock()
+		l, ok := limiters[tenantID]
+		if !ok {
+			// Default: 10 req/s, burst 20
+			l = &tenantLimiter{
+				limiter:  rate.NewLimiter(rate.Limit(10), 20),
+				lastSeen: time.Now(),
+			}
+			limiters[tenantID] = l
+		}
+		l.lastSeen = time.Now()
+		limitMu.Unlock()
+
+		if !l.limiter.Allow() {
+			writeJSONError(w, r, http.StatusTooManyRequests, "rate limit exceeded")
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
 
 func tenancyMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tenantID := r.Header.Get("X-Tenant-Id")
 		if requiresTenantHeader(r.URL.Path) && tenantID == "" {
-			writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+			writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 			return
 		}
 		if tenantID == "" {

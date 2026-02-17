@@ -1,15 +1,13 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { backtestApi } from '../api';
-import type { BacktestCompareRequest, BacktestCompareResponse } from '../types/api';
+import type { BacktestCompareRequest, BacktestCompareResponse, BacktestMetrics } from '../types/api';
 
 export function WhatIf() {
   const [formData, setFormData] = useState<BacktestCompareRequest>({
-    base_version: '',
-    candidate_version: '',
-    start_date: getDefaultStartDate(),
-    end_date: getDefaultEndDate(),
-    rule_id: '',
+    baseline_job_id: '',
+    candidate_job_id: '',
+    tenant_id: 'default', // TODO: useTenant() hook
   });
 
   const [result, setResult] = useState<BacktestCompareResponse | null>(null);
@@ -25,12 +23,7 @@ export function WhatIf() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setResult(null);
-
-    const request: BacktestCompareRequest = {
-      ...formData,
-      rule_id: formData.rule_id || undefined,
-    };
-    compareMutation.mutate(request);
+    compareMutation.mutate(formData);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -44,10 +37,9 @@ export function WhatIf() {
   return (
     <div className="page">
       <h2>What-If Simulation</h2>
-      <p>Compare rule versions to understand impact before deployment</p>
+      <p>Compare backtest jobs to understand impact</p>
 
       <div className="whatif-layout">
-        {/* Input Form */}
         <div className="card">
           <div className="card-header">
             <h3 className="card-title">Comparison Parameters</h3>
@@ -55,92 +47,36 @@ export function WhatIf() {
           <form onSubmit={handleSubmit}>
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label" htmlFor="base_version">
-                  Base Version
+                <label className="form-label" htmlFor="baseline_job_id">
+                  Baseline Job ID
                 </label>
                 <input
                   type="text"
-                  id="base_version"
-                  name="base_version"
+                  id="baseline_job_id"
+                  name="baseline_job_id"
                   className="form-input"
-                  value={formData.base_version}
+                  value={formData.baseline_job_id}
                   onChange={handleInputChange}
-                  placeholder="e.g., v1.0.0 or current"
+                  placeholder="e.g., job-123"
                   required
                 />
-                <small className="form-hint">
-                  Current production ruleset version
-                </small>
               </div>
 
               <div className="form-group">
-                <label className="form-label" htmlFor="candidate_version">
-                  Candidate Version
+                <label className="form-label" htmlFor="candidate_job_id">
+                  Candidate Job ID
                 </label>
                 <input
                   type="text"
-                  id="candidate_version"
-                  name="candidate_version"
+                  id="candidate_job_id"
+                  name="candidate_job_id"
                   className="form-input"
-                  value={formData.candidate_version}
+                  value={formData.candidate_job_id}
                   onChange={handleInputChange}
-                  placeholder="e.g., v1.1.0 or draft"
-                  required
-                />
-                <small className="form-hint">
-                  New ruleset version to compare
-                </small>
-              </div>
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label" htmlFor="start_date">
-                  Start Date
-                </label>
-                <input
-                  type="date"
-                  id="start_date"
-                  name="start_date"
-                  className="form-input"
-                  value={formData.start_date}
-                  onChange={handleInputChange}
+                  placeholder="e.g., job-456"
                   required
                 />
               </div>
-
-              <div className="form-group">
-                <label className="form-label" htmlFor="end_date">
-                  End Date
-                </label>
-                <input
-                  type="date"
-                  id="end_date"
-                  name="end_date"
-                  className="form-input"
-                  value={formData.end_date}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label" htmlFor="rule_id">
-                Specific Rule ID (optional)
-              </label>
-              <input
-                type="text"
-                id="rule_id"
-                name="rule_id"
-                className="form-input"
-                value={formData.rule_id}
-                onChange={handleInputChange}
-                placeholder="Leave empty to compare full rulesets"
-              />
-              <small className="form-hint">
-                Compare a single rule instead of full rulesets
-              </small>
             </div>
 
             <button
@@ -165,58 +101,47 @@ export function WhatIf() {
           </form>
         </div>
 
-        {/* Results */}
         {result && (
           <div className="comparison-results">
             {/* Delta Summary */}
-            <div className="card">
-              <div className="card-header">
-                <h3 className="card-title">Impact Summary</h3>
+            {result.delta && (
+              <div className="card">
+                <div className="card-header">
+                  <h3 className="card-title">Impact Summary</h3>
+                </div>
+                <div className="metrics-grid">
+                  <DeltaMetric
+                    label="Match Rate"
+                    value={result.delta.match_rate_delta}
+                    format="percent"
+                  />
+                  <DeltaMetric
+                    label="Score Mean"
+                    value={result.delta.score_mean_delta}
+                    format="number"
+                  />
+                  <DeltaMetric
+                    label="Rejected Rate"
+                    value={result.delta.rejected_rate_delta}
+                    format="percent"
+                  />
+                </div>
               </div>
-              <div className="metrics-grid">
-                <DeltaMetric
-                  label="Precision"
-                  value={result.delta.precision}
-                  format="percent"
-                />
-                <DeltaMetric
-                  label="Recall"
-                  value={result.delta.recall}
-                  format="percent"
-                />
-                <DeltaMetric
-                  label="F1 Score"
-                  value={result.delta.f1_score}
-                  format="percent"
-                />
-                <DeltaMetric
-                  label="Match Rate"
-                  value={result.delta.match_rate_delta}
-                  format="percent"
-                />
-              </div>
-            </div>
+            )}
 
             {/* Side-by-side comparison */}
             <div className="comparison-grid">
               <div className="comparison-section">
-                <h4>Base Version ({formData.base_version})</h4>
-                <MetricsDisplay metrics={result.base} />
+                <h4>Base Job ({formData.baseline_job_id})</h4>
+                {result.baseline?.metrics && <MetricsDisplay metrics={result.baseline.metrics} />}
               </div>
               <div className="comparison-section">
-                <h4>Candidate Version ({formData.candidate_version})</h4>
-                <MetricsDisplay metrics={result.candidate} />
+                <h4>Candidate Job ({formData.candidate_job_id})</h4>
+                {result.candidate?.metrics && <MetricsDisplay metrics={result.candidate.metrics} />}
               </div>
             </div>
 
-            {result.job_id && (
-              <div className="result-metadata" style={{ marginTop: '1rem' }}>
-                <div className="metadata-item">
-                  <span className="metadata-label">Job ID:</span>
-                  <code>{result.job_id}</code>
-                </div>
-              </div>
-            )}
+            {/* No job_id in CompareBacktestsResponse */}
           </div>
         )}
       </div>
@@ -246,19 +171,19 @@ function DeltaMetric({ label, value, format }: DeltaMetricProps) {
     <div className="metric-card">
       <div className="metric-label">{label} Change</div>
       <div
-        className={`metric-value ${
-          isPositive
-            ? 'delta-positive'
-            : isNegative
+        className={`metric-value ${isPositive
+          ? 'delta-positive'
+          : isNegative
             ? 'delta-negative'
             : 'delta-neutral'
-        }`}
+          }`}
       >
         {displayValue}
       </div>
       {!isNeutral && (
         <div className="metric-indicator">
-          {isPositive ? '↑ Better' : '↓ Worse'}
+          {/* Context dependent interpretation of 'Better' */}
+          Change
         </div>
       )}
     </div>
@@ -266,66 +191,34 @@ function DeltaMetric({ label, value, format }: DeltaMetricProps) {
 }
 
 interface MetricsDisplayProps {
-  metrics: {
-    precision: number;
-    recall: number;
-    f1_score: number;
-    total_records: number;
-    flagged_transactions: number;
-    true_positives: number;
-    false_positives: number;
-    match_rate: number;
-    rejected_count: number;
-  };
+  metrics: BacktestMetrics;
 }
 
 function MetricsDisplay({ metrics }: MetricsDisplayProps) {
   return (
     <div className="metrics-list">
       <div className="metric-row">
-        <span className="metric-name">Precision</span>
-        <span className="metric-val">{(metrics.precision * 100).toFixed(2)}%</span>
+        <span className="metric-name">Match Rate</span>
+        <span className="metric-val">{(metrics.match_rate * 100).toFixed(2)}%</span>
       </div>
       <div className="metric-row">
-        <span className="metric-name">Recall</span>
-        <span className="metric-val">{(metrics.recall * 100).toFixed(2)}%</span>
-      </div>
-      <div className="metric-row">
-        <span className="metric-name">F1 Score</span>
-        <span className="metric-val">{(metrics.f1_score * 100).toFixed(2)}%</span>
+        <span className="metric-name">Score Mean</span>
+        <span className="metric-val">{metrics.score_mean.toFixed(4)}</span>
       </div>
       <div className="metric-row separator">
         <span className="metric-name">Total Transactions</span>
-        <span className="metric-val">{metrics.total_records.toLocaleString()}</span>
+        <span className="metric-val">{Number(metrics.total_records).toLocaleString()}</span>
       </div>
       <div className="metric-row">
-        <span className="metric-name">Flagged</span>
+        <span className="metric-name">Matches</span>
         <span className="metric-val">
-          {metrics.flagged_transactions.toLocaleString()} ({(metrics.match_rate * 100).toFixed(2)}%)
+          {Number(metrics.matched_count).toLocaleString()}
         </span>
       </div>
       <div className="metric-row text-danger">
         <span className="metric-name">Rejected</span>
-        <span className="metric-val">{metrics.rejected_count.toLocaleString()}</span>
-      </div>
-      <div className="metric-row">
-        <span className="metric-name">True Positives</span>
-        <span className="metric-val">{metrics.true_positives.toLocaleString()}</span>
-      </div>
-      <div className="metric-row">
-        <span className="metric-name">False Positives</span>
-        <span className="metric-val">{metrics.false_positives.toLocaleString()}</span>
+        <span className="metric-val">{Number(metrics.rejected_count).toLocaleString()} ({metrics.rejected_rate.toFixed(2)}%)</span>
       </div>
     </div>
   );
-}
-
-function getDefaultStartDate(): string {
-  const date = new Date();
-  date.setDate(date.getDate() - 7);
-  return date.toISOString().split('T')[0];
-}
-
-function getDefaultEndDate(): string {
-  return new Date().toISOString().split('T')[0];
 }

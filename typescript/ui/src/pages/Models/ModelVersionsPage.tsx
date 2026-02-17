@@ -28,7 +28,7 @@ export function ModelVersionsPage() {
             return {
                 items: resp.versions ?? [],
                 nextCursor: resp.pagination?.next_cursor,
-                total: resp.pagination?.total,
+                total: resp.pagination?.total ? parseInt(resp.pagination.total, 10) : 0,
             };
         },
         limit: PAGE_SIZE,
@@ -87,13 +87,13 @@ export function ModelVersionsPage() {
                                 </thead>
                                 <tbody>
                                     {pagination.data.map((v) => (
-                                        <tr key={v.version}>
+                                        <tr key={v.run_id}>
                                             <td>
                                                 <Link
-                                                    to={`/models/${encodeURIComponent(v.version)}`}
+                                                    to={`/training/runs/${v.run_id}`}
                                                     className="font-monospace text-decoration-none small"
                                                 >
-                                                    {v.version}
+                                                    {v.mlflow_run_id || v.run_id.slice(0, 8)}
                                                 </Link>
                                             </td>
                                             <td>{v.model_name}</td>
@@ -101,10 +101,10 @@ export function ModelVersionsPage() {
                                                 <StatusBadge status={v.status} />
                                             </td>
                                             <td className="small text-muted">
-                                                {new Date(v.created_at).toLocaleString()}
+                                                {v.started_at ? new Date(v.started_at).toLocaleString() : '-'}
                                             </td>
                                             <td className="small text-muted">
-                                                {v.deployed_at ? new Date(v.deployed_at).toLocaleString() : '--'}
+                                                {v.ended_at ? new Date(v.ended_at).toLocaleString() : '--'}
                                             </td>
                                         </tr>
                                     ))}

@@ -8,6 +8,8 @@ import (
 
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/requestid"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
@@ -16,12 +18,25 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+var (
+	inferenceEventsDropped = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "orchestrator_inference_events_dropped_total",
+		Help: "Total number of inference events dropped due to full queue.",
+	})
+)
+
+const (
+	defaultQueueSize = 1000
+)
+
 type AnalyticsClient struct {
-	target  string
-	timeout time.Duration
-	conn    *grpc.ClientConn
-	stub    crudv1.AnalyticsServiceClient
-	breaker *CircuitBreaker
+	target   string
+	timeout  time.Duration
+	conn     *grpc.ClientConn
+	stub     crudv1.AnalyticsServiceClient
+	breaker  *CircuitBreaker
+	logQueue chan *crudv1.LogInferenceEventRequest
+	stop     chan struct{}
 }
 
 func NewAnalyticsClient(target string, timeout time.Duration) (*AnalyticsClient, error) {
@@ -50,20 +65,44 @@ func NewAnalyticsClient(target string, timeout time.Duration) (*AnalyticsClient,
 		return nil, fmt.Errorf("dial analytics-crud target: %w", err)
 	}
 
-	return &AnalyticsClient{
-		target:  target,
-		timeout: timeout,
-		conn:    conn,
-		stub:    crudv1.NewAnalyticsServiceClient(conn),
-		breaker: NewCircuitBreaker(),
-	}, nil
+	client := &AnalyticsClient{
+		target:   target,
+		timeout:  timeout,
+		conn:     conn,
+		stub:     crudv1.NewAnalyticsServiceClient(conn),
+		breaker:  NewCircuitBreaker(),
+		logQueue: make(chan *crudv1.LogInferenceEventRequest, defaultQueueSize),
+		stop:     make(chan struct{}),
+	}
+	client.startWorker()
+
+	return client, nil
 }
 
 func (c *AnalyticsClient) Close() error {
+	if c.stop != nil {
+		close(c.stop)
+	}
 	if c.conn == nil {
 		return nil
 	}
 	return c.conn.Close()
+}
+
+func (c *AnalyticsClient) startWorker() {
+	go func() {
+		for {
+			select {
+			case req := <-c.logQueue:
+				// Use context.Background() since the original request context may have been cancelled
+				ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+				_, _ = c.stub.LogInferenceEvent(ctx, req)
+				cancel()
+			case <-c.stop:
+				return
+			}
+		}
+	}()
 }
 
 func (c *AnalyticsClient) withMetadata(ctx context.Context) context.Context {
@@ -772,33 +811,17 @@ func (c *AnalyticsClient) LogInferenceEvent(ctx context.Context, req *crudv1.Log
 		return nil, fmt.Errorf("nil request")
 	}
 
-	span := trace.SpanFromContext(ctx)
-	if err := c.breaker.Allow(); err != nil {
-		span.SetAttributes(
-			attribute.String("analytics.breaker_state", c.breaker.State().String()),
-			attribute.String("analytics.breaker_open_reason", "cooldown"),
-		)
-		return nil, mapRPCError(err)
+	// Push to queue non-blocking
+	select {
+	case c.logQueue <- req:
+		// Queued successfully
+	default:
+		// Queue full, drop event and increment counter
+		inferenceEventsDropped.Inc()
 	}
 
-	callCtx := ctx
-	if _, ok := ctx.Deadline(); !ok {
-		var cancel context.CancelFunc
-		callCtx, cancel = context.WithTimeout(ctx, c.timeout)
-		defer cancel()
-	}
-
-	resp, err := c.stub.LogInferenceEvent(c.withMetadata(callCtx), req)
-	c.breaker.RecordResult(err)
-
-	span.SetAttributes(
-		attribute.String("analytics.breaker_state", c.breaker.State().String()),
-	)
-
-	if err != nil {
-		return nil, mapRPCError(err)
-	}
-	return resp, nil
+	// Always return success to the caller to avoid blocking inference
+	return &crudv1.LogInferenceEventResponse{Success: true}, nil
 }
 
 func (c *AnalyticsClient) CompareBacktests(ctx context.Context, req *crudv1.CompareBacktestsRequest) (*crudv1.CompareBacktestsResponse, error) {

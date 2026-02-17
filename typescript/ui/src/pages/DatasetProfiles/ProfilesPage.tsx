@@ -24,7 +24,7 @@ export function ProfilesPage() {
             return {
                 items: resp.profiles ?? [],
                 nextCursor: resp.pagination?.next_cursor,
-                total: resp.pagination?.total,
+                total: resp.pagination?.total ? parseInt(resp.pagination.total) : 0,
             };
         },
         limit: PAGE_SIZE,
@@ -116,9 +116,9 @@ export function ProfilesPage() {
                                                 </Link>
                                             </td>
                                             <td className="small text-muted">
-                                                {new Date(p.created_at).toLocaleString()}
+                                                {new Date(p.computed_at || 0).toLocaleString()}
                                             </td>
-                                            <td>{p.row_count.toLocaleString()}</td>
+                                            <td>{(p.record_count || 0).toLocaleString()}</td>
                                             <td>{p.column_count}</td>
                                             <td className="small text-muted">
                                                 {p.size_bytes ? (p.size_bytes / 1024 / 1024).toFixed(2) + ' MB' : '--'}

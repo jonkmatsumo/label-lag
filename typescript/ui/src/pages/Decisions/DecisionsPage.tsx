@@ -32,7 +32,7 @@ export function DecisionsPage() {
             return {
                 items: resp.decisions ?? [],
                 nextCursor: resp.pagination?.next_cursor,
-                total: resp.pagination?.total,
+                total: resp.pagination?.total ? parseInt(String(resp.pagination.total)) : 0,
             };
         },
         limit: PAGE_SIZE,
@@ -105,24 +105,24 @@ export function DecisionsPage() {
                                 </thead>
                                 <tbody>
                                     {pagination.data.map((d) => (
-                                        <tr key={d.decision_id}>
+                                        <tr key={d.request_id}>
                                             <td>
                                                 <Link
-                                                    to={`/decisions/${d.decision_id}`}
+                                                    to={`/decisions/${d.request_id}`}
                                                     className="font-monospace text-decoration-none small"
                                                 >
-                                                    {d.decision_id.slice(0, 12)}...
+                                                    {d.request_id.slice(0, 12)}...
                                                 </Link>
                                             </td>
                                             <td className="font-monospace small">{d.user_id}</td>
                                             <td>
                                                 <DecisionBadge decision={d.decision} />
                                             </td>
-                                            <td className="font-monospace">{(d.score * 100).toFixed(1)}</td>
+                                            <td className="font-monospace">{(d.final_score * 100).toFixed(1)}</td>
                                             <td className="small text-muted">
-                                                {new Date(d.timestamp).toLocaleString()}
+                                                {d.created_at ? new Date(d.created_at).toLocaleString() : '-'}
                                             </td>
-                                            <td className="small text-muted">{d.model_version}</td>
+                                            <td className="small text-muted text-center">-</td>
                                         </tr>
                                     ))}
                                 </tbody>

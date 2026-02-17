@@ -122,7 +122,20 @@ test-smoke:
 PROTO_DIR = proto
 PYTHON_SRC_DIR = python/src
 
-proto-gen: proto-gen-go proto-gen-python
+proto-gen: proto-gen-go proto-gen-python proto-gen-ts
+
+proto-gen-ts:
+	@echo "Generating TypeScript stubs..."
+	@mkdir -p typescript/ui/src/types/generated
+	protoc -I $(PROTO_DIR) \
+		--plugin=./typescript/ui/node_modules/.bin/protoc-gen-ts_proto \
+		--ts_proto_out=typescript/ui/src/types/generated \
+		--ts_proto_opt=esModuleInterop=true,forceLong=string,useOptionals=true,outputEncodeMethods=false,outputJsonMethods=false,outputClientImpl=false,snakeToCamel=false,stringEnums=true \
+		$(PROTO_DIR)/inference/v1/*.proto \
+		$(PROTO_DIR)/training/v1/*.proto \
+		$(PROTO_DIR)/analytics/v1/*.proto \
+		$(PROTO_DIR)/forecast/v1/*.proto \
+		$(PROTO_DIR)/common/v1/*.proto
 
 proto-gen-go:
 	@echo "Generating Go stubs..."

@@ -49,18 +49,12 @@ export function ModelVersionDetail() {
                                 <dd className="col-sm-8">{model.status}</dd>
 
                                 <dt className="col-sm-4">Created</dt>
-                                <dd className="col-sm-8">{new Date(model.created_at).toLocaleString()}</dd>
+                                <dd className="col-sm-8">{model.started_at ? new Date(model.started_at).toLocaleString() : '-'}</dd>
 
-                                {model.deployed_at && (
+                                {model.ended_at && (
                                     <>
-                                        <dt className="col-sm-4">Deployed At</dt>
-                                        <dd className="col-sm-8">{new Date(model.deployed_at).toLocaleString()}</dd>
-                                    </>
-                                )}
-                                {model.deployed_by && (
-                                    <>
-                                        <dt className="col-sm-4">Deployed By</dt>
-                                        <dd className="col-sm-8">{model.deployed_by}</dd>
+                                        <dt className="col-sm-4">Completed</dt>
+                                        <dd className="col-sm-8">{new Date(model.ended_at).toLocaleString()}</dd>
                                     </>
                                 )}
                             </dl>

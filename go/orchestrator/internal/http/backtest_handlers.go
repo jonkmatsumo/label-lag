@@ -42,24 +42,24 @@ func (h *Handler) handleBacktestCompare(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if h.analyticsClient == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "analytics backend unavailable")
+		writeJSONError(w, r, http.StatusServiceUnavailable, "analytics backend unavailable")
 		return
 	}
 
 	var req backtestCompareRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid JSON payload")
+		writeJSONError(w, r, http.StatusBadRequest, "invalid JSON payload")
 		return
 	}
 
 	if req.BaselineJobID == "" || req.CandidateJobID == "" {
-		writeJSONError(w, http.StatusBadRequest, "baseline_job_id and candidate_job_id are required")
+		writeJSONError(w, r, http.StatusBadRequest, "baseline_job_id and candidate_job_id are required")
 		return
 	}
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -69,7 +69,7 @@ func (h *Handler) handleBacktestCompare(w http.ResponseWriter, r *http.Request) 
 		TenantId:       tenantID,
 	})
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 
@@ -94,31 +94,31 @@ func (h *Handler) handleBacktestResults(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if h.analyticsClient == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "analytics backend unavailable")
+		writeJSONError(w, r, http.StatusServiceUnavailable, "analytics backend unavailable")
 		return
 	}
 
 	limit, err := parseIntQueryParam(r, "limit", 50, 1, 100)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	ruleID := r.URL.Query().Get("rule_id")
 	startDate, err := parseOptionalTime(r.URL.Query().Get("start_date"))
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	endDate, err := parseOptionalTime(r.URL.Query().Get("end_date"))
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -135,7 +135,7 @@ func (h *Handler) handleBacktestResults(w http.ResponseWriter, r *http.Request) 
 
 	resp, err := h.analyticsClient.ListBacktestResults(r.Context(), req)
 	if err != nil {
-		writeAnalyticsRPCError(w, err)
+		writeAnalyticsRPCError(w, r, err)
 		return
 	}
 

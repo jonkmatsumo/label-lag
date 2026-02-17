@@ -63,12 +63,12 @@ export function CompareProfiles() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {data.features.map((f) => (
+                                {data.features.map((f: { feature: string; psi: number; severity: string }) => (
                                     <tr key={f.feature}>
                                         <td className="font-monospace small">{f.feature}</td>
                                         <td>{f.psi.toFixed(4)}</td>
                                         <td>
-                                            <SeverityBadge severity={f.severity} />
+                                            <SeverityBadge severity={f.severity as 'low' | 'medium' | 'high'} />
                                         </td>
                                     </tr>
                                 ))}

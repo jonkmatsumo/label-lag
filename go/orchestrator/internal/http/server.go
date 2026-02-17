@@ -13,9 +13,11 @@ func NewServer(addr string, logger *slog.Logger, handler *Handler, readTimeout, 
 		handler.Register(mux)
 	}
 
-	h := tenancyMiddleware(mux)
-	h = requestIDMiddleware(logger, h)
+	h := http.Handler(mux)
+	h = rateLimitMiddleware(h)
+	h = tenancyMiddleware(h)
 	h = metricsMiddleware(logger, h)
+	h = requestIDMiddleware(logger, h)
 
 	return &http.Server{
 		Addr:              addr,

@@ -32,7 +32,7 @@ export function Jobs() {
       return {
         items: resp.jobs ?? [],
         nextCursor: resp.pagination?.next_cursor,
-        total: resp.pagination?.total,
+        total: resp.pagination?.total ? parseInt(String(resp.pagination.total)) : 0,
       };
     },
     limit: PAGE_SIZE,
@@ -121,7 +121,7 @@ export function Jobs() {
                         <JobStatusBadge status={job.status} />
                       </td>
                       <td className="small text-muted">
-                        {new Date(job.created_at).toLocaleString()}
+                        {job.created_at ? new Date(job.created_at).toLocaleString() : '-'}
                       </td>
                       <td className="small text-muted">
                         {formatDuration(job.created_at, job.ended_at)}
@@ -167,9 +167,14 @@ export function JobStatusBadge({ status }: { status: string }) {
   );
 }
 
-function formatDuration(start: string, end?: string): string {
+function formatDuration(start?: string | Date, end?: string | Date): string {
+  if (!start) return '--';
+  const startTime = new Date(start).getTime();
+  const endTime = end ? new Date(end).getTime() : Date.now(); // Calculate duration so far if running? Or just '--'?
+  // If end is undefined, it might be running. But the original code was: if (!end) return '--';
   if (!end) return '--';
-  const ms = new Date(end).getTime() - new Date(start).getTime();
+
+  const ms = endTime - startTime;
   if (ms < 1000) return `${ms}ms`;
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
   return `${(ms / 60000).toFixed(1)}m`;

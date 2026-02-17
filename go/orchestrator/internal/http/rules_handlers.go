@@ -90,10 +90,10 @@ func (h *Handler) handleSandboxEvaluate(w http.ResponseWriter, r *http.Request) 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
-			writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			writeJSONError(w, r, http.StatusRequestEntityTooLarge, "request body too large")
 			return
 		}
-		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
+		writeJSONError(w, r, http.StatusBadRequest, "invalid json payload")
 		return
 	}
 	defer r.Body.Close()
@@ -102,7 +102,7 @@ func (h *Handler) handleSandboxEvaluate(w http.ResponseWriter, r *http.Request) 
 	if req.RuleSet != nil {
 		validRules, errs := rules.FilterValidRules(req.RuleSet.Rules)
 		if len(errs) > 0 {
-			writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid rules: %v", errs))
+			writeJSONError(w, r, http.StatusBadRequest, fmt.Sprintf("invalid rules: %v", errs))
 			return
 		}
 		ruleset = *req.RuleSet
@@ -117,7 +117,7 @@ func (h *Handler) handleSandboxEvaluate(w http.ResponseWriter, r *http.Request) 
 
 	result, err := rules.EvaluateRules(req.Features, req.BaseScore, &ruleset, rules.EvalOptions{Debug: debug})
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "rule evaluation failed")
+		writeJSONError(w, r, http.StatusInternalServerError, "rule evaluation failed")
 		return
 	}
 
@@ -141,10 +141,10 @@ func (h *Handler) handleSandboxDiff(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
-			writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			writeJSONError(w, r, http.StatusRequestEntityTooLarge, "request body too large")
 			return
 		}
-		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
+		writeJSONError(w, r, http.StatusBadRequest, "invalid json payload")
 		return
 	}
 	defer r.Body.Close()
@@ -172,13 +172,13 @@ func (h *Handler) handleSandboxDiff(w http.ResponseWriter, r *http.Request) {
 
 	resA, err := eval(req.RuleSetA)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	resB, err := eval(req.RuleSetB)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -268,10 +268,10 @@ func (h *Handler) handleEvaluateRulesDiff(w http.ResponseWriter, r *http.Request
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
-			writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			writeJSONError(w, r, http.StatusRequestEntityTooLarge, "request body too large")
 			return
 		}
-		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
+		writeJSONError(w, r, http.StatusBadRequest, "invalid json payload")
 		return
 	}
 	defer r.Body.Close()
@@ -325,13 +325,13 @@ func (h *Handler) handleEvaluateRulesDiff(w http.ResponseWriter, r *http.Request
 
 	resultA, respA, err := eval(req.RuleSetA)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	resultB, respB, err := eval(req.RuleSetB)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -391,10 +391,10 @@ func (h *Handler) handleEvaluateRules(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
-			writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			writeJSONError(w, r, http.StatusRequestEntityTooLarge, "request body too large")
 			return
 		}
-		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
+		writeJSONError(w, r, http.StatusBadRequest, "invalid json payload")
 		return
 	}
 	defer r.Body.Close()
@@ -404,7 +404,7 @@ func (h *Handler) handleEvaluateRules(w http.ResponseWriter, r *http.Request) {
 	if req.RuleSet != nil {
 		validRules, errs := rules.FilterValidRules(req.RuleSet.Rules)
 		if len(errs) > 0 {
-			writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid rules: %v", errs))
+			writeJSONError(w, r, http.StatusBadRequest, fmt.Sprintf("invalid rules: %v", errs))
 			return
 		}
 		ruleset = *req.RuleSet
@@ -421,7 +421,7 @@ func (h *Handler) handleEvaluateRules(w http.ResponseWriter, r *http.Request) {
 
 	result, err := rules.EvaluateRules(req.Features, req.BaseScore, &ruleset, rules.EvalOptions{Debug: debug})
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "rule evaluation failed")
+		writeJSONError(w, r, http.StatusInternalServerError, "rule evaluation failed")
 		return
 	}
 
@@ -492,7 +492,7 @@ func (h *Handler) handleListRules(w http.ResponseWriter, r *http.Request) {
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -502,7 +502,7 @@ func (h *Handler) handleListRules(w http.ResponseWriter, r *http.Request) {
 		TenantId:        tenantID,
 	})
 	if err != nil {
-		writeRPCError(w, err)
+		writeRPCError(w, r, err)
 		return
 	}
 
@@ -516,7 +516,7 @@ func (h *Handler) handleListRules(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "failed to encode response")
+		writeJSONError(w, r, http.StatusInternalServerError, "failed to encode response")
 	}
 }
 
@@ -531,10 +531,10 @@ func (h *Handler) handleCreateRule(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&rule); err != nil {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
-			writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			writeJSONError(w, r, http.StatusRequestEntityTooLarge, "request body too large")
 			return
 		}
-		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
+		writeJSONError(w, r, http.StatusBadRequest, "invalid json payload")
 		return
 	}
 	defer r.Body.Close()
@@ -546,7 +546,7 @@ func (h *Handler) handleCreateRule(w http.ResponseWriter, r *http.Request) {
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -556,7 +556,7 @@ func (h *Handler) handleCreateRule(w http.ResponseWriter, r *http.Request) {
 		TenantId: tenantID,
 	})
 	if err != nil {
-		writeRPCError(w, err)
+		writeRPCError(w, r, err)
 		return
 	}
 
@@ -572,13 +572,13 @@ func (h *Handler) handleGetRule(w http.ResponseWriter, r *http.Request) {
 
 	ruleID := r.PathValue("rule_id")
 	if ruleID == "" {
-		writeJSONError(w, http.StatusBadRequest, "rule_id required")
+		writeJSONError(w, r, http.StatusBadRequest, "rule_id required")
 		return
 	}
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -587,7 +587,7 @@ func (h *Handler) handleGetRule(w http.ResponseWriter, r *http.Request) {
 		TenantId: tenantID,
 	})
 	if err != nil {
-		writeRPCError(w, err)
+		writeRPCError(w, r, err)
 		return
 	}
 
@@ -606,7 +606,7 @@ func (h *Handler) handleUpdateRule(w http.ResponseWriter, r *http.Request) {
 
 	ruleID := r.PathValue("rule_id")
 	if ruleID == "" {
-		writeJSONError(w, http.StatusBadRequest, "rule_id required")
+		writeJSONError(w, r, http.StatusBadRequest, "rule_id required")
 		return
 	}
 
@@ -615,24 +615,24 @@ func (h *Handler) handleUpdateRule(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&rule); err != nil {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
-			writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			writeJSONError(w, r, http.StatusRequestEntityTooLarge, "request body too large")
 			return
 		}
-		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
+		writeJSONError(w, r, http.StatusBadRequest, "invalid json payload")
 		return
 	}
 	defer r.Body.Close()
 
 	// Ensure ID matches path
 	if rule.Id != "" && rule.Id != ruleID {
-		writeJSONError(w, http.StatusBadRequest, "rule_id mismatch")
+		writeJSONError(w, r, http.StatusBadRequest, "rule_id mismatch")
 		return
 	}
 	rule.Id = ruleID
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -641,7 +641,7 @@ func (h *Handler) handleUpdateRule(w http.ResponseWriter, r *http.Request) {
 		TenantId: tenantID,
 	})
 	if err != nil {
-		writeRPCError(w, err)
+		writeRPCError(w, r, err)
 		return
 	}
 
@@ -657,13 +657,13 @@ func (h *Handler) handleDeleteRule(w http.ResponseWriter, r *http.Request) {
 
 	ruleID := r.PathValue("rule_id")
 	if ruleID == "" {
-		writeJSONError(w, http.StatusBadRequest, "rule_id required")
+		writeJSONError(w, r, http.StatusBadRequest, "rule_id required")
 		return
 	}
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -672,7 +672,7 @@ func (h *Handler) handleDeleteRule(w http.ResponseWriter, r *http.Request) {
 		TenantId: tenantID,
 	})
 	if err != nil {
-		writeRPCError(w, err)
+		writeRPCError(w, r, err)
 		return
 	}
 
@@ -688,7 +688,7 @@ func (h *Handler) handleListRuleVersions(w http.ResponseWriter, r *http.Request)
 
 	ruleID := r.PathValue("rule_id")
 	if ruleID == "" {
-		writeJSONError(w, http.StatusBadRequest, "rule_id required")
+		writeJSONError(w, r, http.StatusBadRequest, "rule_id required")
 		return
 	}
 
@@ -698,7 +698,7 @@ func (h *Handler) handleListRuleVersions(w http.ResponseWriter, r *http.Request)
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -709,7 +709,7 @@ func (h *Handler) handleListRuleVersions(w http.ResponseWriter, r *http.Request)
 		TenantId: tenantID,
 	})
 	if err != nil {
-		writeRPCError(w, err)
+		writeRPCError(w, r, err)
 		return
 	}
 
@@ -728,13 +728,13 @@ func (h *Handler) handleGetRuleVersion(w http.ResponseWriter, r *http.Request) {
 	ruleID := r.PathValue("rule_id")
 	versionID := r.PathValue("version_id")
 	if ruleID == "" || versionID == "" {
-		writeJSONError(w, http.StatusBadRequest, "rule_id and version_id required")
+		writeJSONError(w, r, http.StatusBadRequest, "rule_id and version_id required")
 		return
 	}
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -744,7 +744,7 @@ func (h *Handler) handleGetRuleVersion(w http.ResponseWriter, r *http.Request) {
 		TenantId:  tenantID,
 	})
 	if err != nil {
-		writeRPCError(w, err)
+		writeRPCError(w, r, err)
 		return
 	}
 
@@ -761,13 +761,13 @@ func (h *Handler) handleRuleReadiness(w http.ResponseWriter, r *http.Request) {
 
 	ruleID := r.PathValue("rule_id")
 	if ruleID == "" {
-		writeJSONError(w, http.StatusBadRequest, "rule_id required")
+		writeJSONError(w, r, http.StatusBadRequest, "rule_id required")
 		return
 	}
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -776,7 +776,7 @@ func (h *Handler) handleRuleReadiness(w http.ResponseWriter, r *http.Request) {
 		TenantId: tenantID,
 	})
 	if err != nil {
-		writeRPCError(w, err)
+		writeRPCError(w, r, err)
 		return
 	}
 
@@ -793,7 +793,7 @@ func (h *Handler) handlePublishRule(w http.ResponseWriter, r *http.Request) {
 
 	ruleID := r.PathValue("rule_id")
 	if ruleID == "" {
-		writeJSONError(w, http.StatusBadRequest, "rule_id required")
+		writeJSONError(w, r, http.StatusBadRequest, "rule_id required")
 		return
 	}
 
@@ -810,7 +810,7 @@ func (h *Handler) handlePublishRule(w http.ResponseWriter, r *http.Request) {
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -822,7 +822,7 @@ func (h *Handler) handlePublishRule(w http.ResponseWriter, r *http.Request) {
 		TenantId:  tenantID,
 	})
 	if err != nil {
-		writeRPCError(w, err)
+		writeRPCError(w, r, err)
 		return
 	}
 
@@ -843,7 +843,7 @@ func (h *Handler) handleRuleDiff(w http.ResponseWriter, r *http.Request) {
 	versionB := r.URL.Query().Get("version_b") // "live" or empty
 
 	if ruleID == "" || versionA == "" {
-		writeJSONError(w, http.StatusBadRequest, "rule_id and version_a required")
+		writeJSONError(w, r, http.StatusBadRequest, "rule_id and version_a required")
 		return
 	}
 	if versionB == "" {
@@ -852,7 +852,7 @@ func (h *Handler) handleRuleDiff(w http.ResponseWriter, r *http.Request) {
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -863,7 +863,7 @@ func (h *Handler) handleRuleDiff(w http.ResponseWriter, r *http.Request) {
 		TenantId: tenantID,
 	})
 	if err != nil {
-		writeRPCError(w, err)
+		writeRPCError(w, r, err)
 		return
 	}
 

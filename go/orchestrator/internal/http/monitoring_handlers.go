@@ -25,7 +25,7 @@ func (h *Handler) handleMonitoringDrift(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if h.forecastClient == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "forecast backend unavailable")
+		writeJSONError(w, r, http.StatusServiceUnavailable, "forecast backend unavailable")
 		return
 	}
 
@@ -39,7 +39,7 @@ func (h *Handler) handleMonitoringDrift(w http.ResponseWriter, r *http.Request) 
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -50,7 +50,7 @@ func (h *Handler) handleMonitoringDrift(w http.ResponseWriter, r *http.Request) 
 		TenantId:     tenantID,
 	})
 	if err != nil {
-		writeRPCError(w, err)
+		writeRPCError(w, r, err)
 		return
 	}
 
@@ -66,7 +66,7 @@ func (h *Handler) handleMetricsShadowComparison(w http.ResponseWriter, r *http.R
 	}
 
 	if h.analyticsClient == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "analytics backend unavailable")
+		writeJSONError(w, r, http.StatusServiceUnavailable, "analytics backend unavailable")
 		return
 	}
 
@@ -74,7 +74,7 @@ func (h *Handler) handleMetricsShadowComparison(w http.ResponseWriter, r *http.R
 
 	tenantID, err := mustTenantID(r)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing X-Tenant-Id")
+		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 		return
 	}
 
@@ -83,7 +83,7 @@ func (h *Handler) handleMetricsShadowComparison(w http.ResponseWriter, r *http.R
 		TenantId: tenantID,
 	})
 	if err != nil {
-		writeRPCError(w, err)
+		writeRPCError(w, r, err)
 		return
 	}
 
@@ -97,7 +97,7 @@ var apiHTTPClient = &http.Client{Timeout: 10 * time.Second}
 func proxyAPIGet(w http.ResponseWriter, r *http.Request) {
 	apiBaseURL := strings.TrimRight(getAPIBaseURL(), "/")
 	if apiBaseURL == "" {
-		writeJSONError(w, http.StatusServiceUnavailable, "analytics backend unavailable")
+		writeJSONError(w, r, http.StatusServiceUnavailable, "analytics backend unavailable")
 		return
 	}
 
@@ -108,7 +108,7 @@ func proxyAPIGet(w http.ResponseWriter, r *http.Request) {
 
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, targetURL, nil)
 	if err != nil {
-		writeJSONError(w, http.StatusBadGateway, "analytics backend error")
+		writeJSONError(w, r, http.StatusBadGateway, "analytics backend error")
 		return
 	}
 	if reqID := requestid.FromContext(r.Context()); reqID != "" {
@@ -117,14 +117,14 @@ func proxyAPIGet(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := apiHTTPClient.Do(req)
 	if err != nil {
-		writeJSONError(w, http.StatusBadGateway, "analytics backend error")
+		writeJSONError(w, r, http.StatusBadGateway, "analytics backend error")
 		return
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		writeJSONError(w, http.StatusBadGateway, "analytics backend error")
+		writeJSONError(w, r, http.StatusBadGateway, "analytics backend error")
 		return
 	}
 
