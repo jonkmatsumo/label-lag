@@ -286,11 +286,17 @@ export type DraftRule = Rule;
 export type DashboardStats = DailyStatsResponse;
 
 // Relaxed types to fix UI build
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type DatasetProfile = any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type CompareProfilesResponse = any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type DecisionDetail = any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type ReadinessReportResponse = any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type RuleDiffResponse = any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type RuleAttributionResponse = any;
 
 // Mapped types
