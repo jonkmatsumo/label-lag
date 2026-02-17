@@ -152,6 +152,7 @@ func (h *Handler) logWorker() {
 		rpcCancel()
 		if err != nil {
 			h.logger.Warn("failed to log inference event to CRUD", "error", err, "request_id", event.requestID)
+			grpcclient.LogEventsDropped.WithLabelValues("handler", "send_error").Inc()
 		}
 
 		span.End()
@@ -171,6 +172,11 @@ func (h *Handler) Shutdown(ctx context.Context) error {
 	case <-ctx.Done():
 		// Cancel in-flight RPCs so workers can exit
 		h.workerCancel()
+		// Record remaining items as shutdown drops
+		remaining := len(h.logQueue)
+		if remaining > 0 {
+			grpcclient.LogEventsDropped.WithLabelValues("handler", "shutdown").Add(float64(remaining))
+		}
 		// Give workers a brief grace period to finish
 		select {
 		case <-done:
