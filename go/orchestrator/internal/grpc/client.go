@@ -11,6 +11,8 @@ import (
 
 	inferencev1 "github.com/jonkmatsumo/label-lag/go/orchestrator/internal/grpc/inferencev1"
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/requestid"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
@@ -19,6 +21,18 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/status"
+)
+
+var (
+	circuitBreakerState = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "orchestrator_circuit_breaker_state",
+		Help: "Current circuit breaker state: 0=closed, 1=open, 2=half-open.",
+	}, []string{"client"})
+
+	circuitBreakerTransitions = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "orchestrator_circuit_breaker_transitions_total",
+		Help: "Total circuit breaker state transitions.",
+	}, []string{"client", "from_state", "to_state"})
 )
 
 const (
@@ -51,6 +65,7 @@ func (s BreakerState) String() string {
 
 type CircuitBreaker struct {
 	mu               sync.RWMutex
+	name             string
 	state            BreakerState
 	failureCount     int
 	failureThreshold int
@@ -58,25 +73,30 @@ type CircuitBreaker struct {
 	lastFailureTime  time.Time
 }
 
-func NewCircuitBreaker() *CircuitBreaker {
+func NewCircuitBreakerWithPrefix(prefix string) *CircuitBreaker {
 	threshold := defaultBreakerThreshold
-	if val := os.Getenv("INFERENCE_BREAKER_FAILURE_THRESHOLD"); val != "" {
+	if val := os.Getenv(prefix + "_BREAKER_FAILURE_THRESHOLD"); val != "" {
 		if i, err := strconv.Atoi(val); err == nil {
 			threshold = i
 		}
 	}
 	timeout := defaultBreakerTimeout
-	if val := os.Getenv("INFERENCE_BREAKER_RESET_TIMEOUT_MS"); val != "" {
+	if val := os.Getenv(prefix + "_BREAKER_RESET_TIMEOUT_MS"); val != "" {
 		if ms, err := strconv.Atoi(val); err == nil {
 			timeout = time.Duration(ms) * time.Millisecond
 		}
 	}
 
 	return &CircuitBreaker{
+		name:             prefix,
 		state:            StateClosed,
 		failureThreshold: threshold,
 		resetTimeout:     timeout,
 	}
+}
+
+func NewCircuitBreaker() *CircuitBreaker {
+	return NewCircuitBreakerWithPrefix("INFERENCE")
 }
 
 func (cb *CircuitBreaker) State() BreakerState {
@@ -92,7 +112,9 @@ func (cb *CircuitBreaker) Allow() error {
 	if cb.state == StateOpen {
 		if time.Since(cb.lastFailureTime) > cb.resetTimeout {
 			cb.state = StateHalfOpen
-			slog.Info("inference circuit breaker: half-open", "reason", "cooldown elapsed")
+			slog.Info(cb.name+" circuit breaker: half-open", "reason", "cooldown elapsed")
+			circuitBreakerState.WithLabelValues(cb.name).Set(float64(StateHalfOpen))
+			circuitBreakerTransitions.WithLabelValues(cb.name, StateOpen.String(), StateHalfOpen.String()).Inc()
 			return nil
 		}
 		return status.Error(codes.Unavailable, "circuit breaker is open")
@@ -107,7 +129,9 @@ func (cb *CircuitBreaker) RecordResult(err error) {
 	// 1. Success case
 	if err == nil {
 		if cb.state == StateHalfOpen {
-			slog.Info("inference circuit breaker: closed", "reason", "success in half-open")
+			slog.Info(cb.name+" circuit breaker: closed", "reason", "success in half-open")
+			circuitBreakerState.WithLabelValues(cb.name).Set(float64(StateClosed))
+			circuitBreakerTransitions.WithLabelValues(cb.name, StateHalfOpen.String(), StateClosed.String()).Inc()
 		}
 		cb.state = StateClosed
 		cb.failureCount = 0
@@ -127,7 +151,9 @@ func (cb *CircuitBreaker) RecordResult(err error) {
 		// OR we treat it as success. If the service replied "InvalidArgument", it IS up.
 		// So treating it as success is correct for "Is the service reachable?".
 		if cb.state == StateHalfOpen {
-			slog.Info("inference circuit breaker: closed", "reason", "application error in half-open")
+			slog.Info(cb.name+" circuit breaker: closed", "reason", "application error in half-open")
+			circuitBreakerState.WithLabelValues(cb.name).Set(float64(StateClosed))
+			circuitBreakerTransitions.WithLabelValues(cb.name, StateHalfOpen.String(), StateClosed.String()).Inc()
 			cb.state = StateClosed
 			cb.failureCount = 0
 		}
@@ -138,13 +164,16 @@ func (cb *CircuitBreaker) RecordResult(err error) {
 	}
 
 	// 3. Failure case
+	prevState := cb.state
 
 	cb.failureCount++
 	cb.lastFailureTime = time.Now()
 
 	if cb.state == StateHalfOpen || cb.failureCount >= cb.failureThreshold {
 		if cb.state != StateOpen {
-			slog.Warn("inference circuit breaker: open", "failures", cb.failureCount, "error", err)
+			slog.Warn(cb.name+" circuit breaker: open", "failures", cb.failureCount, "error", err)
+			circuitBreakerState.WithLabelValues(cb.name).Set(float64(StateOpen))
+			circuitBreakerTransitions.WithLabelValues(cb.name, prevState.String(), StateOpen.String()).Inc()
 		}
 		cb.state = StateOpen
 	}
