@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ApiClient, ApiError } from './client';
 
-global.fetch = vi.fn();
+globalThis.fetch = vi.fn();
 
 describe('ApiClient', () => {
     let client: ApiClient;
@@ -22,11 +22,11 @@ describe('ApiClient', () => {
             },
         };
 
-        vi.mocked(global.fetch).mockResolvedValue({
+        vi.mocked(globalThis.fetch).mockResolvedValue({
             ok: false,
             status: 400,
             json: async () => errorResponse,
-        });
+        } as Response);
 
         try {
             await client.get('/test');
@@ -43,11 +43,11 @@ describe('ApiClient', () => {
     });
 
     it('should include request_id from header if missing in error body', async () => {
-        vi.mocked(global.fetch).mockResolvedValue({
+        vi.mocked(globalThis.fetch).mockResolvedValue({
             ok: false,
             status: 500,
             json: async () => ({}),
-        });
+        } as Response);
 
         try {
             await client.get('/test');
