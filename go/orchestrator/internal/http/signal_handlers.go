@@ -11,6 +11,7 @@ import (
 
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
 	forecastv1 "github.com/jonkmatsumo/label-lag/go/forecast/proto/forecastv1"
+	grpcclient "github.com/jonkmatsumo/label-lag/go/orchestrator/internal/grpc"
 	inferencev1 "github.com/jonkmatsumo/label-lag/go/orchestrator/internal/grpc/inferencev1"
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/requestid"
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/rules"
@@ -20,6 +21,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
+
+const defaultHopTimeout = 5 * time.Second
 
 func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -60,7 +63,13 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inferenceResp, err := h.forecastClient.PredictSignal(r.Context(), &forecastv1.PredictSignalRequest{
+	// Compute per-hop timeout budgets from the request deadline so
+	// downstream calls don't outlive the caller.
+	hopTimeout := grpcclient.RemainingBudget(r.Context(), defaultHopTimeout)
+	hopCtx, hopCancel := context.WithTimeout(r.Context(), hopTimeout)
+	defer hopCancel()
+
+	inferenceResp, err := h.forecastClient.PredictSignal(hopCtx, &forecastv1.PredictSignalRequest{
 		UserId:              req.UserId,
 		Amount:              req.Amount,
 		Currency:            req.Currency,
@@ -77,9 +86,12 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 	// Feature Hydration: Move ownership to Go
 	features := map[string]any{}
 
-	// 1. Try to fetch from Analytics
+	// 1. Try to fetch from Analytics (using budget-aware context)
 	if h.analyticsClient != nil {
-		hydrated, err := h.analyticsClient.GetFeatures(r.Context(), req.UserId, tenantIDFromRequest(r))
+		featureTimeout := grpcclient.RemainingBudget(r.Context(), defaultHopTimeout)
+		featureCtx, featureCancel := context.WithTimeout(r.Context(), featureTimeout)
+		hydrated, err := h.analyticsClient.GetFeatures(featureCtx, req.UserId, tenantIDFromRequest(r))
+		featureCancel()
 		if err != nil {
 			h.logger.Warn("failed to hydrate features from analytics", "error", err, "user_id", req.UserId)
 			// Ensure empty features on analytics failure
