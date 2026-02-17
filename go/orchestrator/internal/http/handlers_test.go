@@ -819,6 +819,10 @@ func (s *stubAnalyticsClient) LogInferenceEvent(ctx context.Context, req *crudv1
 	return &crudv1.LogInferenceEventResponse{Success: true}, s.err
 }
 
+func (s *stubAnalyticsClient) DirectLogInferenceEvent(ctx context.Context, req *crudv1.LogInferenceEventRequest) (*crudv1.LogInferenceEventResponse, error) {
+	return &crudv1.LogInferenceEventResponse{Success: true}, s.err
+}
+
 func (s *stubAnalyticsClient) CompareBacktests(ctx context.Context, req *crudv1.CompareBacktestsRequest) (*crudv1.CompareBacktestsResponse, error) {
 	return &crudv1.CompareBacktestsResponse{}, s.err
 }
@@ -995,17 +999,56 @@ func TestHandleEvaluateSignal_RulesProviderError(t *testing.T) {
 
 	handler.handleEvaluateSignal(rec, req)
 
+	// Cold cache (no previously cached ruleset) should return 503
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d (cold-cache 503), got %d", http.StatusServiceUnavailable, rec.Code)
+	}
+}
+
+func TestHandleEvaluateSignal_RulesProviderError_WithCache(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	handler := NewHandler(HandlerOptions{
+		Logger:          logger,
+		InferenceClient: stubInferenceClient{},
+		TrainingClient:  stubTrainingClient{},
+		ForecastClient:  stubForecastClient{},
+		RulesProvider:   errProvider{},
+		MaxBodyBytes:    1024,
+	})
+
+	// Warm the cache manually
+	cachedRules := rules.RuleSet{
+		Version: "v-cached",
+		Rules: []rules.Rule{
+			{
+				ID:     "cached-rule",
+				Field:  "velocity_24h",
+				Op:     ">",
+				Value:  100,
+				Action: "flag",
+				Status: rules.RuleStatusActive,
+			},
+		},
+	}
+	handler.cacheRuleset(&cachedRules)
+
+	payload := `{"user_id":"u1","amount":100,"currency":"USD","client_transaction_id":"t1"}`
+	req := httptest.NewRequest(http.MethodPost, "/evaluate/signal", strings.NewReader(payload))
+	rec := httptest.NewRecorder()
+
+	handler.handleEvaluateSignal(rec, req)
+
+	// Warm cache should serve from cache and return 200
 	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d (fail-open), got %d", http.StatusOK, rec.Code)
+		t.Fatalf("expected status %d (cached fallback), got %d; body: %s", http.StatusOK, rec.Code, rec.Body.String())
 	}
 
 	var payloadResp map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &payloadResp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	t.Logf("Response body: %s", rec.Body.String())
-	if rv, ok := payloadResp["rules_version"]; ok && rv != nil {
-		t.Errorf("expected no rules_version (or null) in response when provider fails, got %v", rv)
+	if rv, ok := payloadResp["rules_version"]; !ok || rv == nil || rv == "" {
+		t.Errorf("expected non-empty rules_version from cached ruleset, got %v", rv)
 	}
 }
 

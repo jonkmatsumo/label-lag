@@ -98,7 +98,16 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 	ruleset, err := h.rulesProvider.GetRules(r.Context())
 	if err != nil {
 		h.logger.Warn("failed to load ruleset", "error", err)
-		ruleset = rules.RuleSet{}
+		rulesFallbackTotal.Inc()
+		if cached := h.getLastGoodRuleset(); cached != nil {
+			ruleset = *cached
+			h.logger.Info("using cached ruleset fallback", "version", ruleset.Version)
+		} else {
+			writeJSONError(w, r, http.StatusServiceUnavailable, "rules provider unavailable")
+			return
+		}
+	} else if len(ruleset.Rules) > 0 || ruleset.Version != "" {
+		h.cacheRuleset(&ruleset)
 	}
 
 	rawScore := int32(math.Round(inferenceResp.GetProbability() * 100))

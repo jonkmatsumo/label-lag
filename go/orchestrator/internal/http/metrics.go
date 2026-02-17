@@ -26,6 +26,11 @@ var (
 		Help:    "Duration of HTTP requests in seconds.",
 		Buckets: prometheus.DefBuckets,
 	}, []string{"method", "route", "tenant"})
+
+	rulesFallbackTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "orchestrator_rules_fallback_total",
+		Help: "Total number of times the rules provider failed and fallback was used.",
+	})
 )
 
 type responseWriter struct {
