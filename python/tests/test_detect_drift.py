@@ -1,5 +1,6 @@
 """Tests for drift detection functionality."""
 
+import logging
 from unittest.mock import patch
 
 import numpy as np
@@ -82,6 +83,40 @@ class TestCalculatePsi:
 
         psi = calculate_psi(expected, actual)
         assert psi >= 0.0
+
+    def test_constant_expected_distribution_returns_zero_and_warns(self, caplog):
+        """Constant expected values should short-circuit PSI with warning."""
+        expected = np.array([5.0] * 100)
+        actual = np.array([4.0, 5.0, 6.0] * 34)
+
+        with caplog.at_level(logging.WARNING):
+            psi = calculate_psi(expected, actual, buckettype="quantiles", buckets=10)
+
+        assert psi == 0.0
+        assert any(
+            "Expected distribution is constant" in record.message
+            for record in caplog.records
+        )
+
+    def test_quantile_ties_reduce_bucket_count_and_remain_stable(self, caplog):
+        """Tied quantiles should warn about reduced buckets and remain deterministic."""
+        expected = np.array([0.0] * 95 + [1.0] * 5)
+        actual = np.array([0.0] * 90 + [1.0] * 10)
+
+        with caplog.at_level(logging.WARNING):
+            psi_first = calculate_psi(
+                expected, actual, buckettype="quantiles", buckets=10
+            )
+            psi_second = calculate_psi(
+                expected, actual, buckettype="quantiles", buckets=10
+            )
+
+        assert psi_first == pytest.approx(psi_second)
+        assert psi_first >= 0.0
+        assert any(
+            "reduced from" in record.message and "tied values" in record.message
+            for record in caplog.records
+        )
 
     def test_invalid_buckettype_raises_error(self):
         """Invalid buckettype should raise ValueError."""
