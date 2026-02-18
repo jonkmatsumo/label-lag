@@ -107,14 +107,34 @@ def calculate_psi(
         logger.warning("Empty array provided for PSI calculation")
         return 0.0
 
+    if len(np.unique(expected)) < 2:
+        logger.warning(
+            "Expected distribution is constant; "
+            "skipping PSI calculation and returning 0.0"
+        )
+        return 0.0
+
     # Create bucket boundaries
     if buckettype == "bins":
         min_val = min(expected.min(), actual.min())
         max_val = max(expected.max(), actual.max())
         breakpoints = np.linspace(min_val, max_val, buckets + 1)
     elif buckettype == "quantiles":
-        breakpoints = np.percentile(expected, np.linspace(0, 100, buckets + 1))
-        breakpoints = np.unique(breakpoints)
+        quantile_breakpoints = np.percentile(expected, np.linspace(0, 100, buckets + 1))
+        breakpoints = np.unique(quantile_breakpoints)
+        if len(breakpoints) < 2:
+            logger.warning(
+                "Quantile PSI bucketing produced fewer than 2 breakpoints; "
+                "returning 0.0"
+            )
+            return 0.0
+        if len(breakpoints) < (buckets + 1):
+            logger.warning(
+                "Quantile PSI bucketing reduced from %s to %s buckets "
+                "due to tied values",
+                buckets,
+                len(breakpoints) - 1,
+            )
     else:
         raise ValueError(f"Unknown buckettype: {buckettype}")
 
