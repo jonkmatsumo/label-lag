@@ -73,6 +73,7 @@ class SignalForecaster:
         Args:
             request: The signal request.
             features_override: Optional pre-hydrated features to use.
+            request_id: Optional caller-provided request identifier.
 
         Returns:
             Dict with prediction results.
@@ -82,7 +83,7 @@ class SignalForecaster:
         from forecast.model_manager import get_model_manager
 
         start_time = time.time()
-        request_id = request_id or f"req_{uuid.uuid4().hex[:12]}"
+        request_id = request_id or self._generate_request_id()
 
         if features_override:
             logger.debug(f"Using pre-hydrated features for user {request.user_id}")
@@ -199,6 +200,11 @@ class SignalForecaster:
         )
 
         return response
+
+    @staticmethod
+    def _generate_request_id() -> str:
+        """Generate an internal request identifier when caller does not provide one."""
+        return f"req_{uuid.uuid4().hex[:12]}"
 
     def _predict_with_model(
         self, manager, features: FeatureVector
