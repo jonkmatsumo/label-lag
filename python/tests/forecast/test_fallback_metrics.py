@@ -4,23 +4,15 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
+from prometheus_client import REGISTRY
 
-from forecast.metrics import (
-    heuristic_fallback_total,
-    model_fallback_total,
-    zero_fallback_total,
-)
 from forecast.services import SignalForecaster
 from training.schemas import SignalRequest
 
 
-@pytest.fixture(autouse=True)
-def _reset_counters():
-    """Reset all counters before each test."""
-    model_fallback_total.reset()
-    heuristic_fallback_total.reset()
-    zero_fallback_total.reset()
-    yield
+def _get_counter(name, reason=None):
+    labels = {"reason": reason} if reason else None
+    return REGISTRY.get_sample_value(f"{name}_total", labels) or 0.0
 
 
 @pytest.fixture
@@ -59,35 +51,41 @@ def _mock_features():
 class TestHeuristicFallbackCounter:
     def test_heuristic_fallback_increments(self, forecaster, mock_manager):
         mock_manager.model_loaded = False
+        reason = "model_not_loaded"
+        initial = _get_counter("forecast_heuristic_fallback", reason=reason)
 
         with patch.object(forecaster, "_fetch_features") as mock_fetch:
             mock_fetch.return_value = _mock_features()
             forecaster.predict(_make_request(fallback_mode="probability"))
 
-        assert heuristic_fallback_total.value == 1
+        assert _get_counter("forecast_heuristic_fallback", reason=reason) == initial + 1
 
     def test_heuristic_fallback_increments_on_multiple_calls(
         self, forecaster, mock_manager
     ):
         mock_manager.model_loaded = False
+        reason = "model_not_loaded"
+        initial = _get_counter("forecast_heuristic_fallback", reason=reason)
 
         with patch.object(forecaster, "_fetch_features") as mock_fetch:
             mock_fetch.return_value = _mock_features()
             forecaster.predict(_make_request(fallback_mode="probability"))
             forecaster.predict(_make_request(fallback_mode="probability"))
 
-        assert heuristic_fallback_total.value == 2
+        assert _get_counter("forecast_heuristic_fallback", reason=reason) == initial + 2
 
 
 class TestZeroFallbackCounter:
     def test_zero_fallback_increments(self, forecaster, mock_manager):
         mock_manager.model_loaded = False
+        reason = "model_not_loaded"
+        initial = _get_counter("forecast_zero_fallback", reason=reason)
 
         with patch.object(forecaster, "_fetch_features") as mock_fetch:
             mock_fetch.return_value = _mock_features()
             forecaster.predict(_make_request(fallback_mode="zero"))
 
-        assert zero_fallback_total.value == 1
+        assert _get_counter("forecast_zero_fallback", reason=reason) == initial + 1
 
 
 class TestModelFallbackCounter:
@@ -95,6 +93,8 @@ class TestModelFallbackCounter:
         """When MLflow fails and pickle fallback succeeds, counter increments."""
         from forecast.model_manager import ModelManager
 
+        reason = "mlflow_unavailable"
+        initial = _get_counter("forecast_model_fallback", reason=reason)
         manager = ModelManager.__new__(ModelManager)
         manager._initialized = False
         manager.__init__()
@@ -105,7 +105,7 @@ class TestModelFallbackCounter:
         ):
             manager.load_production_model()
 
-        assert model_fallback_total.value == 1
+        assert _get_counter("forecast_model_fallback", reason=reason) == initial + 1
 
 
 class TestNoFallbackOnModelSuccess:
@@ -118,6 +118,8 @@ class TestNoFallbackOnModelSuccess:
 
         features = _mock_features()
         features.has_history = True
+        initial_h = _get_counter("forecast_heuristic_fallback", reason="no_history")
+        initial_z = _get_counter("forecast_zero_fallback", reason="no_history")
 
         with (
             patch.object(forecaster, "_fetch_features", return_value=features),
@@ -125,5 +127,8 @@ class TestNoFallbackOnModelSuccess:
         ):
             forecaster.predict(_make_request())
 
-        assert heuristic_fallback_total.value == 0
-        assert zero_fallback_total.value == 0
+        assert (
+            _get_counter("forecast_heuristic_fallback", reason="no_history")
+            == initial_h
+        )
+        assert _get_counter("forecast_zero_fallback", reason="no_history") == initial_z

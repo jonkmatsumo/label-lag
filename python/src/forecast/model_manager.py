@@ -129,7 +129,7 @@ class ModelManager:
         from forecast.metrics import model_fallback_total
 
         if self._load_fallback_model():
-            model_fallback_total.inc({"reason": "mlflow_unavailable"})
+            model_fallback_total.labels(reason="mlflow_unavailable").inc()
             return True
 
         logger.error("No model available - both MLflow and fallback failed")

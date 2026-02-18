@@ -11,6 +11,7 @@ from pathlib import Path
 class InferenceServerConfig:
     host: str
     port: int
+    metrics_port: int
     max_workers: int
     db_dsn: str | None
     mlflow_tracking_uri: str | None
@@ -29,6 +30,7 @@ def load_config() -> InferenceServerConfig:
     return InferenceServerConfig(
         host=os.getenv("INFERENCE_SERVER_HOST", "0.0.0.0"),
         port=int(os.getenv("INFERENCE_SERVER_PORT", "50052")),
+        metrics_port=int(os.getenv("INFERENCE_SERVER_METRICS_PORT", "9091")),
         max_workers=int(os.getenv("INFERENCE_SERVER_MAX_WORKERS", "10")),
         db_dsn=os.getenv("INFERENCE_SERVER_DB_DSN"),
         mlflow_tracking_uri=os.getenv("INFERENCE_SERVER_MLFLOW_TRACKING_URI"),
