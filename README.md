@@ -227,7 +227,7 @@ The React UI now supports:
 
 ## Repository / File Structure
 
-The repo is organized around data flow and runtime boundaries so services can evolve independently while sharing a common domain model.
+The repo is organized around data flow and runtime boundaries so services can evolve independently while sharing a common domain model. Detailed operational documentation can be found in [Resilience & Operability Guide](docs/ops/resilience.md).
 
 ```
 go/
