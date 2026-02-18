@@ -26,6 +26,7 @@ dependencies = [
     "grpcio>=1.76.0",
     "grpcio-tools>=1.76.0",
     "tenacity>=9.1.2",
+    "prometheus-client>=0.20.0",
 ]
 
 [project.scripts]
