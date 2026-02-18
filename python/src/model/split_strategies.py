@@ -1,5 +1,6 @@
 """Split strategies for train/test and CV."""
 
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
@@ -7,6 +8,8 @@ import numpy as np
 import pandas as pd
 
 from training.schemas import SplitConfig, SplitStrategy
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -139,6 +142,14 @@ class StratifiedTemporalSplitStrategy(BaseSplitStrategy):
         config: SplitConfig,
     ) -> SplitResult:
         """Delegate to temporal; stratification can be refined later."""
+        logger.warning(
+            "Requested split strategy '%s' is not implemented; delegating to '%s'. "
+            "Use '%s' for explicit behavior or implement '%s'.",
+            SplitStrategy.TEMPORAL_STRATIFIED.value,
+            SplitStrategy.TEMPORAL.value,
+            SplitStrategy.TEMPORAL.value,
+            SplitStrategy.TEMPORAL_STRATIFIED.value,
+        )
         return TemporalSplitStrategy().split(df, cutoff, config)
 
 
@@ -152,6 +163,14 @@ class ExpandingWindowStrategy(BaseSplitStrategy):
         config: SplitConfig,
     ) -> SplitResult:
         """Delegate to temporal for now."""
+        logger.warning(
+            "Requested split strategy '%s' is not implemented; delegating to '%s'. "
+            "Use '%s' for explicit behavior or implement '%s'.",
+            SplitStrategy.EXPANDING_WINDOW.value,
+            SplitStrategy.TEMPORAL.value,
+            SplitStrategy.TEMPORAL.value,
+            SplitStrategy.EXPANDING_WINDOW.value,
+        )
         return TemporalSplitStrategy().split(df, cutoff, config)
 
 
