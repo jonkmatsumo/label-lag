@@ -348,8 +348,9 @@ class ModelManager:
 
             # Create sample data matching required features
             required = self.required_features
+            rng = np.random.default_rng(0)
             sample_data = pd.DataFrame(
-                {feat: np.random.rand(n_samples) for feat in required}
+                {feat: rng.random(n_samples) for feat in required}
             )
 
             # Measure latencies
