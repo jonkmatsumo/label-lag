@@ -58,22 +58,17 @@ describe('Rules Detail Routes', () => {
         method: 'GET',
       }).reply(200, {
         rule_id: 'rule-001',
-        timestamp: '2024-01-15T10:30:00Z',
-        overall_status: 'ready',
+        ready: true,
         checks: [
           {
-            policy_type: 'performance',
-            name: 'Match Rate Check',
-            status: 'passed',
-            message: 'Match rate within acceptable range',
-            details: { match_rate: 0.05 },
+            name: 'json_validity',
+            passed: true,
+            message: 'Value is valid JSON',
           },
           {
-            policy_type: 'stability',
-            name: 'Score Stability',
-            status: 'passed',
-            message: 'Score delta stable',
-            details: { mean_delta: 2.5 },
+            name: 'integrity',
+            passed: true,
+            message: 'Rule integrity check passed',
           },
         ],
       });
@@ -86,8 +81,9 @@ describe('Rules Detail Routes', () => {
       expect(response.statusCode).toBe(200);
       const data = response.json();
       expect(data.rule_id).toBe('rule-001');
-      expect(data.overall_status).toBe('ready');
+      expect(data.ready).toBe(true);
       expect(data.checks).toHaveLength(2);
+      expect(data.checks[0].passed).toBe(true);
     });
 
     it('returns 404 for unknown rule', async () => {
@@ -209,10 +205,19 @@ describe('Rules Detail Routes', () => {
         version_a: 'v2',
         version_b: 'v1',
         changes: [
-          { field: 'value', old_value: 5000, new_value: 10000 },
-          { field: 'severity', old_value: 'medium', new_value: 'high' },
+          {
+            field: 'value',
+            old_value: '5000',
+            new_value: '10000',
+            description: 'Value changed',
+          },
+          {
+            field: 'severity',
+            old_value: '"medium"',
+            new_value: '"high"',
+            description: 'Severity changed',
+          },
         ],
-        is_breaking: false,
       });
 
       const response = await ctx.app.inject({
@@ -223,7 +228,7 @@ describe('Rules Detail Routes', () => {
       expect(response.statusCode).toBe(200);
       const data = response.json();
       expect(data.changes).toHaveLength(2);
-      expect(data.is_breaking).toBe(false);
+      expect(data.changes[0].field).toBe('value');
     });
 
     it('uses default versions when not specified', async () => {
@@ -235,7 +240,6 @@ describe('Rules Detail Routes', () => {
         version_a: 'v2',
         version_b: 'v1',
         changes: [],
-        is_breaking: false,
       });
 
       const response = await ctx.app.inject({

@@ -1,0 +1,31 @@
+import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
+import {
+  transformReadinessResponse,
+  transformRuleDiffResponse,
+} from '../src/contracts/rules-detail.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const fixtureDir = join(__dirname, '..', 'testdata', 'contracts', 'rules-detail');
+
+function loadFixture<T>(name: string): T {
+  return JSON.parse(readFileSync(join(fixtureDir, name), 'utf-8')) as T;
+}
+
+describe('rules-detail contract transforms', () => {
+  it('maps readiness payload to observed BFF contract shape', () => {
+    const upstream = loadFixture<unknown>('readiness.upstream.json');
+    const expected = loadFixture<unknown>('readiness.bff.json');
+
+    expect(transformReadinessResponse(upstream)).toEqual(expected);
+  });
+
+  it('maps diff payload to observed BFF contract shape', () => {
+    const upstream = loadFixture<unknown>('diff.upstream.json');
+    const expected = loadFixture<unknown>('diff.bff.json');
+
+    expect(transformRuleDiffResponse(upstream)).toEqual(expected);
+  });
+});

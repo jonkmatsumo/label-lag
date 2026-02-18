@@ -1,12 +1,14 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { HttpClient, UpstreamError } from '../services/http-client.js';
 import type {
-  ReadinessReportResponse,
   RuleVersionListResponse,
   RuleVersionResponse,
-  RuleDiffResponse,
   ProductionRulesResponse,
 } from '../types/api.js';
+import {
+  transformReadinessResponse,
+  transformRuleDiffResponse,
+} from '../contracts/rules-detail.js';
 
 export interface RulesDetailRoutesOptions {
   httpClient: HttpClient;
@@ -101,9 +103,10 @@ export async function rulesDetailRoutes(
           options.target = 'gateway';
         }
 
-        const response = await httpClient.request<ReadinessReportResponse>(options);
+        const response = await httpClient.request<unknown>(options);
+        const transformed = transformReadinessResponse(response.data);
 
-        return reply.status(response.statusCode).send(response.data);
+        return reply.status(response.statusCode).send(transformed);
       } catch (error) {
         if (error instanceof UpstreamError) {
           return reply.status(error.statusCode).send(error.toResponse());
@@ -253,9 +256,10 @@ export async function rulesDetailRoutes(
           options.target = 'gateway';
         }
 
-        const response = await httpClient.request<RuleDiffResponse>(options);
+        const response = await httpClient.request<unknown>(options);
+        const transformed = transformRuleDiffResponse(response.data);
 
-        return reply.status(response.statusCode).send(response.data);
+        return reply.status(response.statusCode).send(transformed);
       } catch (error) {
         if (error instanceof UpstreamError) {
           return reply.status(error.statusCode).send(error.toResponse());
