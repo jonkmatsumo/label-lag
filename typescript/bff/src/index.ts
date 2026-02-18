@@ -20,6 +20,10 @@ import {
   datasetRoutes,
   mlflowRoutes,
   jobsRoutes,
+  decisionsRoutes,
+  trainingRoutes,
+  modelsRoutes,
+  profilesRoutes,
 } from './routes/index.js';
 import { ErrorResponse } from './types/api.js';
 

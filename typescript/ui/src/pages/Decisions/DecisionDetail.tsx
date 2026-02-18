@@ -33,6 +33,13 @@ export function DecisionDetail() {
         );
     }
 
+    const scoreLabel = typeof decision.score === 'number'
+        ? (decision.score * 100).toFixed(1)
+        : '--';
+    const timestampLabel = decision.timestamp
+        ? new Date(decision.timestamp).toLocaleString()
+        : '--';
+
     return (
         <div className="container-fluid py-4">
             <header className="mb-4">
@@ -55,10 +62,10 @@ export function DecisionDetail() {
                                 <dd className="col-sm-8">{decision.decision}</dd>
 
                                 <dt className="col-sm-4">Score</dt>
-                                <dd className="col-sm-8">{(decision.score * 100).toFixed(1)}</dd>
+                                <dd className="col-sm-8">{scoreLabel}</dd>
 
                                 <dt className="col-sm-4">Timestamp</dt>
-                                <dd className="col-sm-8">{new Date(decision.timestamp).toLocaleString()}</dd>
+                                <dd className="col-sm-8">{timestampLabel}</dd>
 
                                 <dt className="col-sm-4">Model Version</dt>
                                 <dd className="col-sm-8">{decision.model_version}</dd>

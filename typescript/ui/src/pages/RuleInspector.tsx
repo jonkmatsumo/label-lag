@@ -449,13 +449,17 @@ function RuleImpactTab({ ruleId }: { ruleId: string }) {
   if (attributionQuery.isLoading) return <div className="text-center py-5"><div className="spinner-border text-primary" /></div>;
   if (!attributionQuery.data) return <div className="alert alert-info">No attribution data available for this rule.</div>;
 
-  const data = attributionQuery.data;
+  const items = attributionQuery.data.items ?? [];
+  const totalMatches = items.reduce((sum, item) => sum + Number(item.volume), 0);
+  const netImpact = items.reduce((sum, item) => sum + Number(item.contribution_score), 0);
+  const averageImpactPerMatch = totalMatches > 0 ? netImpact / totalMatches : 0;
+  const averageDailyImpact = items.length > 0 ? netImpact / items.length : 0;
 
-  // Waterfall data: Base -> Impact -> Final
+  // Derived from attribution items.
   const waterfallData = [
-    { name: 'Model Base', value: data.mean_model_score, fill: '#8884d8' },
-    { name: 'Rule Impact', value: data.net_impact, fill: data.net_impact > 0 ? '#ff7300' : '#82ca9d' },
-    { name: 'Final Score', value: data.mean_final_score, fill: '#413ea0' }
+    { name: 'Net Impact', value: netImpact, fill: netImpact > 0 ? '#ff7300' : '#82ca9d' },
+    { name: 'Avg / Match', value: averageImpactPerMatch, fill: '#8884d8' },
+    { name: 'Avg / Day', value: averageDailyImpact, fill: '#413ea0' }
   ];
 
   return (
@@ -467,8 +471,8 @@ function RuleImpactTab({ ruleId }: { ruleId: string }) {
             <ComposedChart data={waterfallData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="name" />
-              <YAxis domain={[0, 100]} />
-              <Tooltip formatter={(value: number | undefined) => value ? [value.toFixed(1), 'Score'] : ['0.0', 'Score']} />
+              <YAxis />
+              <Tooltip formatter={(value: number | undefined) => value ? [value.toFixed(1), 'Impact'] : ['0.0', 'Impact']} />
               <Bar dataKey="value" barSize={60}>
                 {waterfallData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.fill} />
@@ -482,27 +486,27 @@ function RuleImpactTab({ ruleId }: { ruleId: string }) {
           <div className="col-3">
             <div className="p-3 border rounded bg-light">
               <div className="small text-muted text-uppercase mb-1">Matches</div>
-              <div className="h4 mb-0 fw-bold">{data.total_matches.toLocaleString()}</div>
+              <div className="h4 mb-0 fw-bold">{totalMatches.toLocaleString()}</div>
             </div>
           </div>
           <div className="col-3">
             <div className="p-3 border rounded bg-light">
-              <div className="small text-muted text-uppercase mb-1">Mean Base</div>
-              <div className="h4 mb-0 fw-bold">{data.mean_model_score.toFixed(1)}</div>
+              <div className="small text-muted text-uppercase mb-1">Avg / Match</div>
+              <div className="h4 mb-0 fw-bold">{averageImpactPerMatch.toFixed(1)}</div>
             </div>
           </div>
           <div className="col-3">
             <div className="p-3 border rounded bg-light">
               <div className="small text-muted text-uppercase mb-1">Net Impact</div>
-              <div className={`h4 mb-0 fw-bold ${data.net_impact > 0 ? 'text-danger' : 'text-success'}`}>
-                {data.net_impact > 0 ? '+' : ''}{data.net_impact.toFixed(1)}
+              <div className={`h4 mb-0 fw-bold ${netImpact > 0 ? 'text-danger' : 'text-success'}`}>
+                {netImpact > 0 ? '+' : ''}{netImpact.toFixed(1)}
               </div>
             </div>
           </div>
           <div className="col-3">
             <div className="p-3 border rounded bg-light border-primary bg-primary bg-opacity-10">
-              <div className="small text-primary text-uppercase mb-1">Final Avg</div>
-              <div className="h4 mb-0 fw-bold text-primary">{data.mean_final_score.toFixed(1)}</div>
+              <div className="small text-primary text-uppercase mb-1">Days</div>
+              <div className="h4 mb-0 fw-bold text-primary">{items.length.toLocaleString()}</div>
             </div>
           </div>
         </div>
