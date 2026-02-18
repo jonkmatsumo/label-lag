@@ -649,6 +649,15 @@ def train_model(
             _mlflow.log_artifact(fi_json)
             _mlflow.log_artifact(fi_png)
 
+            model_card_path = os.path.join(tmpdir, "model_card.md")
+            model_card_params = {
+                **params_log,
+                "train_fraud_rate": float((split.y_train == 1).mean()),
+                "test_fraud_rate": float((split.y_test == 1).mean()),
+            }
+            _generate_model_card(model_card_params, metrics_dict, model_card_path)
+            _mlflow.log_artifact(model_card_path)
+
         _mlflow.log_metric("training_time_seconds", time.time() - training_start_time)
         model_uri = f"runs:/{run_id}/model"
         _mlflow.register_model(model_uri, EXPERIMENT_NAME)
