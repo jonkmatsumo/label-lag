@@ -1,0 +1,19 @@
+{
+  "rule_id": "high_velocity",
+  "version_a": "v1",
+  "version_b": "v2",
+  "changes": [
+    {
+      "field": "value",
+      "old_value": "5",
+      "new_value": "10",
+      "description": "Value changed from 5 to 10"
+    },
+    {
+      "field": "severity",
+      "old_value": "\"medium\"",
+      "new_value": "\"high\"",
+      "description": "Severity updated"
+    }
+  ]
+}

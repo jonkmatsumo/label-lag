@@ -1,0 +1,16 @@
+{
+  "items": [
+    {
+      "date": "2026-01-01",
+      "rule_id": "high_velocity",
+      "contribution_score": "450",
+      "volume": "9"
+    },
+    {
+      "date": "2026-01-02",
+      "rule_id": "high_velocity",
+      "contribution_score": "320",
+      "volume": "6"
+    }
+  ]
+}

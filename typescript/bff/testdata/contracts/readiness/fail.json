@@ -1,0 +1,16 @@
+{
+  "rule_id": "high_velocity",
+  "ready": false,
+  "checks": [
+    {
+      "name": "syntax_check",
+      "passed": true,
+      "message": "Rule syntax is valid"
+    },
+    {
+      "name": "backtest_coverage",
+      "passed": false,
+      "message": "Insufficient backtest coverage: 0 backtests found"
+    }
+  ]
+}

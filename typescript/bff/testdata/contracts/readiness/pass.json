@@ -1,0 +1,16 @@
+{
+  "rule_id": "high_velocity",
+  "ready": true,
+  "checks": [
+    {
+      "name": "syntax_check",
+      "passed": true,
+      "message": "Rule syntax is valid"
+    },
+    {
+      "name": "shadow_mode_check",
+      "passed": true,
+      "message": "Shadow mode evaluation passed"
+    }
+  ]
+}
