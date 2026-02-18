@@ -40,6 +40,15 @@ class FeatureVector:
     transaction_amount: Decimal = Decimal("0")
 
 
+@dataclass(frozen=True)
+class ModelPredictionResult:
+    """Result payload for model prediction attempts."""
+
+    score: float
+    used_fallback: bool = False
+    fallback_reason: str | None = None
+
+
 @dataclass
 class SignalForecaster:
     """Forecaster for fraud signals.
@@ -54,7 +63,10 @@ class SignalForecaster:
     model_version: str = MODEL_VERSION
 
     def predict(
-        self, request: SignalRequest, features_override: dict[str, Any] | None = None
+        self,
+        request: SignalRequest,
+        features_override: dict[str, Any] | None = None,
+        request_id: str | None = None,
     ) -> dict:
         """Perform prediction only, skipping rule evaluation.
 
@@ -70,7 +82,7 @@ class SignalForecaster:
         from forecast.model_manager import get_model_manager
 
         start_time = time.time()
-        request_id = f"req_{uuid.uuid4().hex[:12]}"
+        request_id = request_id or f"req_{uuid.uuid4().hex[:12]}"
 
         if features_override:
             logger.debug(f"Using pre-hydrated features for user {request.user_id}")
@@ -82,8 +94,23 @@ class SignalForecaster:
 
         fallback_used = False
         fallback_reason = None
+        effective_fallback_mode = None
         if manager.model_loaded and features.has_history:
-            raw_probability = self._predict_with_model(manager, features)
+            prediction_result = self._predict_with_model(manager, features)
+            if isinstance(prediction_result, ModelPredictionResult):
+                raw_probability = prediction_result.score
+                fallback_used = prediction_result.used_fallback
+                fallback_reason = prediction_result.fallback_reason
+            else:
+                # Backward-compatible for tests/mocks that patch a raw float.
+                raw_probability = float(prediction_result)
+
+            if fallback_used:
+                effective_fallback_mode = "probability"
+                heuristic_fallback_total.labels(
+                    reason=fallback_reason or "model_prediction_error"
+                ).inc()
+
             model_version = manager.model_version
             model_loaded = True
         else:
@@ -135,6 +162,8 @@ class SignalForecaster:
             "calibrator_loaded": manager.calibrator_loaded,
             **coverage_info,
         }
+        if fallback_reason:
+            diagnostics["fallback_reason"] = fallback_reason
         if fallback_used:
             diagnostics["fallback_mode_effective"] = effective_fallback_mode
 
@@ -171,7 +200,9 @@ class SignalForecaster:
 
         return response
 
-    def _predict_with_model(self, manager, features: FeatureVector) -> float:
+    def _predict_with_model(
+        self, manager, features: FeatureVector
+    ) -> ModelPredictionResult:
         """Use the ML model for prediction.
 
         Args:
@@ -179,7 +210,7 @@ class SignalForecaster:
             features: Feature vector from database.
 
         Returns:
-            Probability of fraud.
+            Model prediction result with fallback diagnostics.
         """
         try:
             # Get required features from the model
@@ -228,18 +259,30 @@ class SignalForecaster:
             # Check if any required features are missing
             if missing_features:
                 # Still log the failure but provide metrics above
-                return self._calculate_probability(features)
+                return ModelPredictionResult(
+                    score=self._calculate_probability(features),
+                    used_fallback=True,
+                    fallback_reason="missing_features",
+                )
 
             probability = manager.predict_single(feature_dict)
             if probability is None:
                 # predict_single returned None due to missing features
-                return self._calculate_probability(features)
+                return ModelPredictionResult(
+                    score=self._calculate_probability(features),
+                    used_fallback=True,
+                    fallback_reason="missing_features",
+                )
 
             logger.debug(f"ML model prediction: {probability}")
-            return float(probability)
+            return ModelPredictionResult(score=float(probability))
         except Exception as e:
             logger.warning(f"ML prediction failed, falling back to heuristic: {e}")
-            return self._calculate_probability(features)
+            return ModelPredictionResult(
+                score=self._calculate_probability(features),
+                used_fallback=True,
+                fallback_reason="model_prediction_error",
+            )
 
     def _map_to_feature_vector(
         self, request: SignalRequest, feature_dict: dict[str, Any]
