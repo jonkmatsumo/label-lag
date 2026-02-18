@@ -650,16 +650,25 @@ message GetRuleReadinessRequest {
   string tenant_id = 2;
 }
 
+enum ReadinessStatus {
+  READINESS_STATUS_UNSPECIFIED = 0;
+  READINESS_STATUS_PASS = 1;
+  READINESS_STATUS_WARN = 2;
+  READINESS_STATUS_FAIL = 3;
+}
+
 message ReadinessCheck {
   string name = 1;
   bool passed = 2;
   string message = 3;
+  ReadinessStatus status = 4;
 }
 
 message GetRuleReadinessResponse {
   string rule_id = 1;
   bool ready = 2;
   repeated ReadinessCheck checks = 3;
+  ReadinessStatus overall_status = 4;
 }
 
 message DiffRuleVersionsRequest {
@@ -670,10 +679,11 @@ message DiffRuleVersionsRequest {
 }
 
 message RuleDiffChange {
-  string field = 1;
-  string old_value = 2; // JSON string
-  string new_value = 3; // JSON string
+  string field_name = 1;
+  string before_value = 2; // JSON string
+  string after_value = 3; // JSON string
   string description = 4;
+  string change_type = 5; // e.g. "modified"
 }
 
 message DiffRuleVersionsResponse {
@@ -681,6 +691,7 @@ message DiffRuleVersionsResponse {
   string version_a = 2;
   string version_b = 3;
   repeated RuleDiffChange changes = 4;
+  bool is_breaking = 5;
 }
 
 message GetRuleStatsRequest {

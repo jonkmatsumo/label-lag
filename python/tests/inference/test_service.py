@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import grpc
 import pytest
 
@@ -98,3 +100,57 @@ def test_score_requires_client_transaction_id(service):
     )
     with pytest.raises(grpc.RpcError):
         service.Score(request, ctx)
+
+
+def test_score_preserves_caller_request_id(service):
+    ctx = FakeContext()
+    request = inference_pb2.ScoreRequest(
+        request_id="req_from_caller",
+        user_id="user",
+        amount=10.0,
+        currency="USD",
+        client_transaction_id="txn-1",
+    )
+
+    with patch.object(
+        service._forecaster,
+        "predict",
+        return_value={
+            "request_id": "req_internal",
+            "model_score": 88,
+            "model_version": "v1",
+            "model_loaded": True,
+            "fallback_used": False,
+        },
+    ) as mock_predict:
+        response = service.Score(request, ctx)
+
+    assert response.request_id == "req_from_caller"
+    assert mock_predict.call_args.kwargs["request_id"] == "req_from_caller"
+
+
+def test_score_generates_and_reuses_request_id_when_missing(service):
+    ctx = FakeContext()
+    request = inference_pb2.ScoreRequest(
+        user_id="user",
+        amount=10.0,
+        currency="USD",
+        client_transaction_id="txn-2",
+    )
+
+    with patch.object(
+        service._forecaster,
+        "predict",
+        return_value={
+            "request_id": "req_internal",
+            "model_score": 77,
+            "model_version": "v1",
+            "model_loaded": True,
+            "fallback_used": False,
+        },
+    ) as mock_predict:
+        response = service.Score(request, ctx)
+
+    generated_id = mock_predict.call_args.kwargs["request_id"]
+    assert generated_id
+    assert response.request_id == generated_id

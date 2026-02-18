@@ -99,13 +99,7 @@ export function ProfileDetail() {
                                 </div>
                             ) : (
                                 <div className="p-4 text-center text-muted">
-                                    {profile.columns_json ? (
-                                        <pre className="text-start bg-light p-3 rounded small mb-0">
-                                            {JSON.stringify(JSON.parse(profile.columns_json), null, 2)}
-                                        </pre>
-                                    ) : (
-                                        'No detailed statistics available'
-                                    )}
+                                    No detailed statistics available
                                 </div>
                             )}
                         </div>

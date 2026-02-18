@@ -1,0 +1,22 @@
+{
+  "rule_id": "high_velocity",
+  "version_a": "v1",
+  "version_b": "v2",
+  "is_breaking": true,
+  "changes": [
+    {
+      "field_name": "value",
+      "change_type": "modified",
+      "before_value": "5",
+      "after_value": "10",
+      "description": "Value changed from 5 to 10"
+    },
+    {
+      "field_name": "severity",
+      "change_type": "modified",
+      "before_value": "\"medium\"",
+      "after_value": "\"high\"",
+      "description": "Severity updated"
+    }
+  ]
+}

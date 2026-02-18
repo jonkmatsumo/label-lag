@@ -3,6 +3,7 @@ import logging
 import os
 import time
 import uuid
+from threading import Lock
 
 import grpc
 import structlog
@@ -477,22 +478,27 @@ class AnalyticsCRUDClient:
 
 
 _client = None
+_client_lock = Lock()
 
 
 def get_crud_client():
     global _client
     if _client is None:
-        _client = AnalyticsCRUDClient()
+        with _client_lock:
+            if _client is None:
+                _client = AnalyticsCRUDClient()
     return _client
 
 
 def reset_crud_client():
     """Reset the singleton client (for testing)."""
     global _client
-    _client = None
+    with _client_lock:
+        _client = None
 
 
 def set_crud_client(client):
     """Set a custom client (for testing)."""
     global _client
-    _client = client
+    with _client_lock:
+        _client = client

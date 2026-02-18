@@ -1,10 +1,12 @@
 """Tests for split strategies."""
 
+import logging
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from model.loader import DataLoader
 from model.split_strategies import (
@@ -166,6 +168,42 @@ class TestGetStrategy:
         for s in SplitStrategy:
             impl = get_strategy(s)
             assert impl is not None
+
+
+class TestStubStrategyWarnings:
+    """Stub strategies should warn and delegate to temporal."""
+
+    @pytest.mark.parametrize(
+        "strategy",
+        [SplitStrategy.TEMPORAL_STRATIFIED, SplitStrategy.EXPANDING_WINDOW],
+    )
+    def test_stub_strategy_warns_and_matches_temporal(self, strategy, caplog):
+        df = pd.DataFrame(
+            {
+                "transaction_timestamp": pd.to_datetime(
+                    ["2024-01-01", "2024-01-05", "2024-01-10", "2024-01-15"]
+                ),
+                "x": [1, 2, 3, 4],
+            }
+        )
+        cutoff = pd.Timestamp("2024-01-09")
+        baseline = TemporalSplitStrategy().split(
+            df, cutoff, SplitConfig(strategy=SplitStrategy.TEMPORAL, seed=42)
+        )
+
+        with caplog.at_level(logging.WARNING):
+            result = get_strategy(strategy).split(
+                df, cutoff, SplitConfig(strategy=strategy, seed=42)
+            )
+
+        assert result.train_indices == baseline.train_indices
+        assert result.test_indices == baseline.test_indices
+        assert any(
+            record.levelno == logging.WARNING
+            and strategy.value in record.message
+            and "delegating to 'temporal'" in record.message
+            for record in caplog.records
+        )
 
 
 class TestEnhancedManifest:

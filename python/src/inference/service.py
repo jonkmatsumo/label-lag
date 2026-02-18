@@ -48,7 +48,7 @@ class InferenceService(inference_pb2_grpc.InferenceServiceServicer):
                 "client_transaction_id is required",
             )
 
-        request.request_id or _generate_request_id()
+        caller_request_id = request.request_id or _generate_request_id()
         currency = request.currency or "USD"
 
         try:
@@ -76,13 +76,15 @@ class InferenceService(inference_pb2_grpc.InferenceServiceServicer):
                 )
 
             prediction = self._forecaster.predict(
-                signal_request, features_override=features_override
+                signal_request,
+                features_override=features_override,
+                request_id=caller_request_id,
             )
         except Exception as exc:
             context.abort(grpc.StatusCode.INTERNAL, f"prediction failed: {exc}")
 
         response = inference_pb2.ScoreResponse(
-            request_id=prediction["request_id"],
+            request_id=caller_request_id,
             model_score=float(prediction["model_score"]),
             model_version=prediction["model_version"],
             model_loaded=prediction["model_loaded"],

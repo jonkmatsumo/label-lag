@@ -277,7 +277,12 @@ import type {
   GetJobEventsResponse,
   GetDecisionTraceResponse,
   GetOverviewMetricsResponse,
-  GetRecentAlertsResponse
+  GetRecentAlertsResponse,
+  GetRuleReadinessResponse,
+  DiffRuleVersionsResponse,
+  GetAttributionResponse,
+  CompareDatasetProfilesResponse,
+  FeatureProfile
 } from './generated/analytics/v1/analytics';
 
 // Aliases for compatibility
@@ -285,19 +290,35 @@ export type DailyStatsResponse = GetDailyStatsResponse;
 export type DraftRule = Rule;
 export type DashboardStats = DailyStatsResponse;
 
-// Relaxed types to fix UI build
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type DatasetProfile = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type CompareProfilesResponse = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type DecisionDetail = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type ReadinessReportResponse = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type RuleDiffResponse = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type RuleAttributionResponse = any;
+// Dataset profile — proto DatasetProfile plus BFF-side column_count/size_bytes fields
+// (column_count and size_bytes are not in the proto schema; they come from the BFF response)
+export interface DatasetProfile {
+  profile_id: string;
+  tenant_id?: string;
+  computed_at?: string | Date;
+  record_count?: string | number;
+  column_count?: number;
+  size_bytes?: number;
+  feature_profiles?: FeatureProfile[];
+}
+
+export type CompareProfilesResponse = CompareDatasetProfilesResponse;
+
+// DecisionDetail: flat shape matching UI field access in DecisionDetail.tsx.
+// Note: the backend wraps this in GetDecisionResponse.decision (InferenceEvent);
+// the UI currently accesses the wrong nesting level — tracked as a known bug.
+export interface DecisionDetail {
+  user_id?: string;
+  decision?: string;
+  score?: number;
+  timestamp?: string | Date;
+  model_version?: string;
+  features_json?: string;
+}
+
+export type ReadinessReportResponse = GetRuleReadinessResponse;
+export type RuleDiffResponse = DiffRuleVersionsResponse;
+export type RuleAttributionResponse = GetAttributionResponse;
 
 // Mapped types
 export type DraftRulesResponse = ListRulesResponse;

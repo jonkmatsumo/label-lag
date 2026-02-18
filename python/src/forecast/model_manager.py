@@ -348,8 +348,9 @@ class ModelManager:
 
             # Create sample data matching required features
             required = self.required_features
+            rng = np.random.default_rng(0)
             sample_data = pd.DataFrame(
-                {feat: np.random.rand(n_samples) for feat in required}
+                {feat: rng.random(n_samples) for feat in required}
             )
 
             # Measure latencies
@@ -370,11 +371,14 @@ class ModelManager:
             try:
                 client = mlflow.MlflowClient()
                 versions = client.search_model_versions(f"name='{MODEL_NAME}'")
+                normalized_model_version = (self._model_version or "").lstrip("v")
+                matched_version = False
                 for v in versions:
                     if (
                         v.current_stage == "Production"
-                        and v.version == self._model_version
+                        and v.version == normalized_model_version
                     ):
+                        matched_version = True
                         run_id = v.run_id
                         client.log_metric(run_id, "inference_latency_p50_ms", p50)
                         client.log_metric(run_id, "inference_latency_p95_ms", p95)
@@ -384,6 +388,14 @@ class ModelManager:
                             f"p95={p95:.2f}ms, p99={p99:.2f}ms"
                         )
                         break
+                if not matched_version:
+                    logger.debug(
+                        (
+                            "No matching production model version found for benchmark "
+                            "metrics"
+                        ),
+                        model_version=self._model_version,
+                    )
             except Exception as e:
                 logger.debug(f"Could not log inference latency to MLflow: {e}")
 

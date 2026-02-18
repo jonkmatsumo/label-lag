@@ -1,0 +1,12 @@
+{
+  "total_records": 50000,
+  "fraud_records": 1000,
+  "fraud_rate": 0.02,
+  "unique_users": 5000,
+  "min_transaction_timestamp": "2025-01-01T00:00:00Z",
+  "max_transaction_timestamp": "2026-01-15T23:59:59Z",
+  "min_created_at": "2025-01-01T00:00:00Z",
+  "max_created_at": "2026-01-15T23:59:59Z",
+  "total_amount": 12500000.0,
+  "fraud_amount": 250000.0
+}

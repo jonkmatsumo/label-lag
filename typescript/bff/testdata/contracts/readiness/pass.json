@@ -1,0 +1,19 @@
+{
+  "rule_id": "high_velocity",
+  "ready": true,
+  "overall_status": "READINESS_STATUS_PASS",
+  "checks": [
+    {
+      "name": "syntax_check",
+      "passed": true,
+      "status": "READINESS_STATUS_PASS",
+      "message": "Rule syntax is valid"
+    },
+    {
+      "name": "shadow_mode_check",
+      "passed": true,
+      "status": "READINESS_STATUS_PASS",
+      "message": "Shadow mode evaluation passed"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "rule_id": "high_velocity",
+  "ready": true,
+  "overall_status": "READINESS_STATUS_PASS",
+  "checks": [
+    {
+      "name": "json_validity",
+      "passed": true,
+      "status": "READINESS_STATUS_PASS",
+      "message": "Value is valid JSON"
+    },
+    {
+      "name": "integrity",
+      "passed": true,
+      "status": "READINESS_STATUS_PASS",
+      "message": "Rule integrity check passed"
+    }
+  ]
+}

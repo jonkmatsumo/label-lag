@@ -63,12 +63,12 @@ export function CompareProfiles() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {data.features.map((f: { feature: string; psi: number; severity: string }) => (
-                                    <tr key={f.feature}>
-                                        <td className="font-monospace small">{f.feature}</td>
+                                {data.drift.map((f) => (
+                                    <tr key={f.feature_name}>
+                                        <td className="font-monospace small">{f.feature_name}</td>
                                         <td>{f.psi.toFixed(4)}</td>
                                         <td>
-                                            <SeverityBadge severity={f.severity as 'low' | 'medium' | 'high'} />
+                                            <SeverityBadge severity={toUiSeverity(f.drift_severity)} />
                                         </td>
                                     </tr>
                                 ))}
@@ -92,4 +92,15 @@ function SeverityBadge({ severity }: { severity: 'low' | 'medium' | 'high' }) {
             {severity.toUpperCase()}
         </span>
     );
+}
+
+function toUiSeverity(value: string): 'low' | 'medium' | 'high' {
+    const normalized = value.toLowerCase();
+    if (normalized === 'high') {
+        return 'high';
+    }
+    if (normalized === 'medium') {
+        return 'medium';
+    }
+    return 'low';
 }
