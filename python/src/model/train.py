@@ -199,7 +199,11 @@ def _generate_model_card(params: dict, metrics: dict, path: str | Path) -> None:
 
 
 def _compute_metrics(y_true, y_pred, y_proba):
-    """Compute precision, recall, pr_auc, f1, roc_auc, log_loss, brier, tp/fp/tn/fn."""
+    """Compute precision, recall, pr_auc, f1, roc_auc, log_loss, brier, tp/fp/tn/fn.
+
+    Returns None for roc_auc and log_loss if y_true contains only one class,
+    matching mathematical undefinedness for these metrics.
+    """
     import numpy as np
     from sklearn.metrics import (
         average_precision_score,
@@ -212,13 +216,24 @@ def _compute_metrics(y_true, y_pred, y_proba):
         roc_auc_score,
     )
 
+    y_true = np.asarray(y_true)
     precision = precision_score(y_true, y_pred, zero_division=0)
     recall = recall_score(y_true, y_pred, zero_division=0)
-    pr_auc = average_precision_score(y_true, y_proba)
-    f1 = f1_score(y_true, y_pred, zero_division=0)
+
     n_classes = len(np.unique(y_true))
-    roc_auc_val = roc_auc_score(y_true, y_proba) if n_classes > 1 else 0.0
-    log_loss_val = log_loss(y_true, y_proba) if n_classes > 1 else 0.0
+    # AP requires at least one positive sample to be well-defined for PR curve
+    pr_auc = (
+        average_precision_score(y_true, y_proba)
+        if n_classes > 1 and np.any(y_true == 1)
+        else 0.0
+    )
+
+    f1 = f1_score(y_true, y_pred, zero_division=0)
+
+    # These metrics are mathematically undefined for single-class folds
+    roc_auc_val = roc_auc_score(y_true, y_proba) if n_classes > 1 else None
+    log_loss_val = log_loss(y_true, y_proba) if n_classes > 1 else None
+
     brier = brier_score_loss(y_true, y_proba)
     cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
     if cm.shape == (2, 2):
