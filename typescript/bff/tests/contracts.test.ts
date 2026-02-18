@@ -66,7 +66,7 @@ describe('Contract: GET /rules/:rule_id/readiness', () => {
 // ─── Rule Diff (protojson handler) ───────────────────────────────────────────
 
 describe('Contract: GET /rules/:rule_id/diff', () => {
-  it('with-changes fixture has proto-shaped fields (version_a not version_a_id)', () => {
+  it('with-changes fixture includes stable breaking-change signal', () => {
     const payload = loadFixture('rule-diff/with-changes.json') as Record<string, unknown>;
 
     expect(typeof payload.rule_id).toBe('string');
@@ -75,6 +75,8 @@ describe('Contract: GET /rules/:rule_id/diff', () => {
     expect(typeof payload.version_b).toBe('string');
     expect(payload.version_a_id).toBeUndefined();
     expect(payload.version_b_id).toBeUndefined();
+    expect(typeof payload.is_breaking).toBe('boolean');
+    expect(payload.is_breaking).toBe(true);
 
     expect(Array.isArray(payload.changes)).toBe(true);
     const changes = payload.changes as Array<Record<string, unknown>>;
@@ -86,21 +88,18 @@ describe('Contract: GET /rules/:rule_id/diff', () => {
       expect(typeof change.old_value).toBe('string');
       expect(typeof change.new_value).toBe('string');
       expect(typeof change.description).toBe('string');
-      // BFF DTO had field_name, change_type, is_breaking — must NOT be present
+      // Canonical renames happen in a later refactor phase.
       expect(change.field_name).toBeUndefined();
       expect(change.change_type).toBeUndefined();
     }
-
-    // BFF DTO had is_breaking at top level — must NOT be present
-    expect(payload.is_breaking).toBeUndefined();
   });
 
-  it('no-changes fixture has empty changes array', () => {
+  it('no-changes fixture has empty changes array and non-breaking status', () => {
     const payload = loadFixture('rule-diff/no-changes.json') as Record<string, unknown>;
 
     expect(Array.isArray(payload.changes)).toBe(true);
     expect((payload.changes as unknown[]).length).toBe(0);
-    expect(payload.is_breaking).toBeUndefined();
+    expect(payload.is_breaking).toBe(false);
   });
 });
 

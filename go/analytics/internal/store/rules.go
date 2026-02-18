@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jonkmatsumo/label-lag/go/analytics/internal/db"
@@ -306,25 +307,100 @@ func (s *SQLStore) DiffRuleVersions(ctx context.Context, ruleID, vA, vB string, 
 	}
 
 	changes := []*pb.RuleDiffChange{}
+	isBreaking := false
 	if ruleA.Field != ruleB.Field {
-		changes = append(changes, &pb.RuleDiffChange{Field: "field", OldValue: ruleB.Field, NewValue: ruleA.Field, Description: "Field changed"})
+		change := &pb.RuleDiffChange{Field: "field", OldValue: ruleB.Field, NewValue: ruleA.Field, Description: "Field changed"}
+		changes = append(changes, change)
+		isBreaking = isBreaking || isBreakingChange(change)
 	}
 	if ruleA.Op != ruleB.Op {
-		changes = append(changes, &pb.RuleDiffChange{Field: "op", OldValue: ruleB.Op, NewValue: ruleA.Op, Description: "Operator changed"})
+		change := &pb.RuleDiffChange{Field: "op", OldValue: ruleB.Op, NewValue: ruleA.Op, Description: "Operator changed"}
+		changes = append(changes, change)
+		isBreaking = isBreaking || isBreakingChange(change)
 	}
 	if ruleA.ValueJson != ruleB.ValueJson {
-		changes = append(changes, &pb.RuleDiffChange{Field: "value", OldValue: ruleB.ValueJson, NewValue: ruleA.ValueJson, Description: "Value changed"})
+		change := &pb.RuleDiffChange{Field: "value", OldValue: ruleB.ValueJson, NewValue: ruleA.ValueJson, Description: "Value changed"}
+		changes = append(changes, change)
+		isBreaking = isBreaking || isBreakingChange(change)
 	}
 	if ruleA.Action != ruleB.Action {
-		changes = append(changes, &pb.RuleDiffChange{Field: "action", OldValue: ruleB.Action, NewValue: ruleA.Action, Description: "Action changed"})
+		change := &pb.RuleDiffChange{Field: "action", OldValue: ruleB.Action, NewValue: ruleA.Action, Description: "Action changed"}
+		changes = append(changes, change)
+		isBreaking = isBreaking || isBreakingChange(change)
 	}
 
 	return &pb.DiffRuleVersionsResponse{
-		RuleId:   ruleID,
-		VersionA: vA,
-		VersionB: vB,
-		Changes:  changes,
+		RuleId:     ruleID,
+		VersionA:   vA,
+		VersionB:   vB,
+		Changes:    changes,
+		IsBreaking: isBreaking,
 	}, nil
+}
+
+func isBreakingChange(change *pb.RuleDiffChange) bool {
+	if change == nil {
+		return false
+	}
+
+	oldValue := strings.TrimSpace(change.OldValue)
+	newValue := strings.TrimSpace(change.NewValue)
+	if oldValue != "" && newValue == "" {
+		return true // Field removal.
+	}
+
+	if oldValue == "" && newValue != "" && isRequiredDiffField(change.Field) {
+		return true // Requiredness increase.
+	}
+
+	if change.Field == "value" && diffValueType(change.OldValue) != diffValueType(change.NewValue) {
+		return true // Type change.
+	}
+
+	switch change.Field {
+	case "field", "op", "action":
+		return true // Core behavior change.
+	default:
+		return false
+	}
+}
+
+func isRequiredDiffField(field string) bool {
+	switch field {
+	case "field", "op", "value", "action":
+		return true
+	default:
+		return false
+	}
+}
+
+func diffValueType(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "empty"
+	}
+
+	var parsed interface{}
+	if err := json.Unmarshal([]byte(trimmed), &parsed); err != nil {
+		return "string"
+	}
+
+	switch parsed.(type) {
+	case nil:
+		return "null"
+	case bool:
+		return "bool"
+	case float64:
+		return "number"
+	case string:
+		return "string"
+	case []interface{}:
+		return "array"
+	case map[string]interface{}:
+		return "object"
+	default:
+		return "unknown"
+	}
 }
 
 func (s *SQLStore) SaveRule(ctx context.Context, r *pb.Rule, tenantID string) error {

@@ -81,6 +81,7 @@ const (
   "rule_id": "high_velocity",
   "version_a": "v1",
   "version_b": "v2",
+  "is_breaking": true,
   "diff_type": "modification",
   "changes": [
     {

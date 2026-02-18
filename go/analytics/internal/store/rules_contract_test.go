@@ -59,3 +59,53 @@ func TestGetRuleReadiness_InvalidJSONSetsFailStatuses(t *testing.T) {
 	assert.True(t, resp.Checks[1].Passed)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestDiffRuleVersions_BreakingWhenCoreBehaviorChanges(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+	mock.ExpectQuery("SELECT rule_json FROM rule_versions WHERE rule_id = \\$1 AND version_id = \\$2").
+		WithArgs("rule-1", "v2").
+		WillReturnRows(sqlmock.NewRows([]string{"rule_json"}).
+			AddRow([]byte(`{"id":"rule-1","field":"amount","op":"<","value_json":"10","action":"flag"}`)))
+	mock.ExpectQuery("SELECT rule_json FROM rule_versions WHERE rule_id = \\$1 AND version_id = \\$2").
+		WithArgs("rule-1", "v1").
+		WillReturnRows(sqlmock.NewRows([]string{"rule_json"}).
+			AddRow([]byte(`{"id":"rule-1","field":"amount","op":">","value_json":"5","action":"flag"}`)))
+
+	resp, err := s.DiffRuleVersions(context.Background(), "rule-1", "v2", "v1", "")
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+
+	assert.True(t, resp.IsBreaking)
+	require.NotEmpty(t, resp.Changes)
+	assert.Equal(t, "op", resp.Changes[0].Field)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestDiffRuleVersions_NonBreakingForSameTypeValueChange(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+	mock.ExpectQuery("SELECT rule_json FROM rule_versions WHERE rule_id = \\$1 AND version_id = \\$2").
+		WithArgs("rule-1", "v2").
+		WillReturnRows(sqlmock.NewRows([]string{"rule_json"}).
+			AddRow([]byte(`{"id":"rule-1","field":"amount","op":">","value_json":"10","action":"flag"}`)))
+	mock.ExpectQuery("SELECT rule_json FROM rule_versions WHERE rule_id = \\$1 AND version_id = \\$2").
+		WithArgs("rule-1", "v1").
+		WillReturnRows(sqlmock.NewRows([]string{"rule_json"}).
+			AddRow([]byte(`{"id":"rule-1","field":"amount","op":">","value_json":"5","action":"flag"}`)))
+
+	resp, err := s.DiffRuleVersions(context.Background(), "rule-1", "v2", "v1", "")
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+
+	assert.False(t, resp.IsBreaking)
+	require.Len(t, resp.Changes, 1)
+	assert.Equal(t, "value", resp.Changes[0].Field)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}

@@ -690,6 +690,7 @@ message DiffRuleVersionsResponse {
   string version_a = 2;
   string version_b = 3;
   repeated RuleDiffChange changes = 4;
+  bool is_breaking = 5;
 }
 
 message GetRuleStatsRequest {

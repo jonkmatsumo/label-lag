@@ -9,12 +9,6 @@
       "old_value": "5",
       "new_value": "10",
       "description": "Value changed"
-    },
-    {
-      "field": "severity",
-      "old_value": "\"medium\"",
-      "new_value": "\"high\"",
-      "description": "Severity changed"
     }
   ]
 }

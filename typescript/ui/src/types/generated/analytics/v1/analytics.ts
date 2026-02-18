@@ -653,6 +653,7 @@ export interface DiffRuleVersionsResponse {
   version_a: string;
   version_b: string;
   changes: RuleDiffChange[];
+  is_breaking: boolean;
 }
 
 export interface GetRuleStatsRequest {

@@ -29,6 +29,7 @@ import {
   toOverallReadinessStatus,
   type ReadinessDisplayStatus,
 } from './ruleReadiness';
+import { hasBreakingChanges } from './ruleDiff';
 
 const ruleTabs = [
   { path: '/rules', label: 'Management', exact: true },
@@ -403,7 +404,7 @@ function RuleHistoryTab({ ruleId }: { ruleId: string }) {
           <div className="text-center py-5"><div className="spinner-border text-primary" /></div>
         ) : diffQuery.data ? (
           <div className="space-y-3">
-            {diffQuery.data.is_breaking && (
+            {hasBreakingChanges(diffQuery.data) && (
               <div className="alert alert-warning py-2 small d-flex align-items-center border-0">
                 <AlertTriangle size={14} className="me-2" />
                 Breaking changes detected (behavioral shift).

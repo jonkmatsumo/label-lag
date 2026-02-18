@@ -31,6 +31,7 @@ export interface RuleDiffResponseContract {
   version_a: string;
   version_b: string;
   changes: RuleDiffChangeContract[];
+  is_breaking: boolean;
 }
 
 function asRecord(value: unknown, context: string): Record<string, unknown> {
@@ -126,11 +127,68 @@ export function transformRuleDiffResponse(payload: unknown): RuleDiffResponseCon
       description: asString(change.description, `rule diff response.changes[${index}].description`),
     };
   });
+  const is_breaking = typeof response.is_breaking === 'boolean'
+    ? response.is_breaking
+    : inferBreakingFromChanges(changes);
 
   return {
     rule_id: asString(response.rule_id, 'rule diff response.rule_id'),
     version_a: asString(response.version_a, 'rule diff response.version_a'),
     version_b: asString(response.version_b, 'rule diff response.version_b'),
     changes,
+    is_breaking,
   };
+}
+
+function inferBreakingFromChanges(changes: RuleDiffChangeContract[]): boolean {
+  return changes.some((change) => {
+    if (change.old_value.trim() !== '' && change.new_value.trim() === '') {
+      return true;
+    }
+
+    if (change.old_value.trim() === '' && change.new_value.trim() !== '' && isRequiredRuleField(change.field)) {
+      return true;
+    }
+
+    if (change.field === 'value' && inferValueType(change.old_value) !== inferValueType(change.new_value)) {
+      return true;
+    }
+
+    return change.field === 'field' || change.field === 'op' || change.field === 'action';
+  });
+}
+
+function isRequiredRuleField(field: string): boolean {
+  return field === 'field' || field === 'op' || field === 'value' || field === 'action';
+}
+
+function inferValueType(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed === '') {
+    return 'empty';
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    if (parsed === null) {
+      return 'null';
+    }
+    if (Array.isArray(parsed)) {
+      return 'array';
+    }
+    switch (typeof parsed) {
+      case 'boolean':
+        return 'bool';
+      case 'number':
+        return 'number';
+      case 'string':
+        return 'string';
+      case 'object':
+        return 'object';
+      default:
+        return 'unknown';
+    }
+  } catch {
+    return 'string';
+  }
 }

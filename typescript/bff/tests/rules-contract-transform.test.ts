@@ -47,4 +47,16 @@ describe('rules-detail contract transforms', () => {
 
     expect(transformRuleDiffResponse(upstream)).toEqual(expected);
   });
+
+  it('preserves explicit breaking flags from upstream diff payloads', () => {
+    const breakingUpstream = loadFixture<unknown>('diff.breaking.upstream.json');
+    const breakingExpected = loadFixture<unknown>('diff.breaking.bff.json');
+
+    expect(transformRuleDiffResponse(breakingUpstream)).toEqual(breakingExpected);
+
+    const nonBreakingUpstream = loadFixture<unknown>('diff.non-breaking.upstream.json');
+    const nonBreakingExpected = loadFixture<unknown>('diff.non-breaking.bff.json');
+
+    expect(transformRuleDiffResponse(nonBreakingUpstream)).toEqual(nonBreakingExpected);
+  });
 });

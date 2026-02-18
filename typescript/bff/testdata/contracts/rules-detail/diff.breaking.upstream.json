@@ -1,0 +1,14 @@
+{
+  "rule_id": "high_velocity",
+  "version_a": "v2",
+  "version_b": "v1",
+  "is_breaking": true,
+  "changes": [
+    {
+      "field": "op",
+      "old_value": ">",
+      "new_value": "<",
+      "description": "Operator changed"
+    }
+  ]
+}

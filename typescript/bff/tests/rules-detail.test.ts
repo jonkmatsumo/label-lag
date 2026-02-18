@@ -208,6 +208,7 @@ describe('Rules Detail Routes', () => {
         rule_id: 'rule-001',
         version_a: 'v2',
         version_b: 'v1',
+        is_breaking: true,
         changes: [
           {
             field: 'value',
@@ -232,6 +233,7 @@ describe('Rules Detail Routes', () => {
       expect(response.statusCode).toBe(200);
       const data = response.json();
       expect(data.changes).toHaveLength(2);
+      expect(data.is_breaking).toBe(true);
       expect(data.changes[0].field).toBe('value');
     });
 
@@ -243,6 +245,7 @@ describe('Rules Detail Routes', () => {
         rule_id: 'rule-001',
         version_a: 'v2',
         version_b: 'v1',
+        is_breaking: false,
         changes: [],
       });
 
