@@ -5,9 +5,10 @@
   "is_breaking": true,
   "changes": [
     {
-      "field": "op",
-      "old_value": ">",
-      "new_value": "<",
+      "field_name": "op",
+      "change_type": "modified",
+      "before_value": ">",
+      "after_value": "<",
       "description": "Operator changed"
     }
   ]

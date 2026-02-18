@@ -20,9 +20,10 @@ export interface ReadinessResponseContract {
 }
 
 interface RuleDiffChangeContract {
-  field: string;
-  old_value: string;
-  new_value: string;
+  field_name: string;
+  change_type: string;
+  before_value: string;
+  after_value: string;
   description: string;
 }
 
@@ -120,10 +121,26 @@ export function transformRuleDiffResponse(payload: unknown): RuleDiffResponseCon
   const response = asRecord(payload, 'rule diff response');
   const changes = asArray(response.changes, 'rule diff response.changes').map((item, index) => {
     const change = asRecord(item, `rule diff response.changes[${index}]`);
+    const beforeValue = asString(
+      change.before_value ?? change.old_value,
+      `rule diff response.changes[${index}].before_value`
+    );
+    const afterValue = asString(
+      change.after_value ?? change.new_value,
+      `rule diff response.changes[${index}].after_value`
+    );
+    const fieldName = asString(
+      change.field_name ?? change.field,
+      `rule diff response.changes[${index}].field_name`
+    );
+    const changeTypeRaw = change.change_type;
     return {
-      field: asString(change.field, `rule diff response.changes[${index}].field`),
-      old_value: asString(change.old_value, `rule diff response.changes[${index}].old_value`),
-      new_value: asString(change.new_value, `rule diff response.changes[${index}].new_value`),
+      field_name: fieldName,
+      change_type: typeof changeTypeRaw === 'string' && changeTypeRaw.trim() !== ''
+        ? changeTypeRaw
+        : 'modified',
+      before_value: beforeValue,
+      after_value: afterValue,
       description: asString(change.description, `rule diff response.changes[${index}].description`),
     };
   });
@@ -142,19 +159,26 @@ export function transformRuleDiffResponse(payload: unknown): RuleDiffResponseCon
 
 function inferBreakingFromChanges(changes: RuleDiffChangeContract[]): boolean {
   return changes.some((change) => {
-    if (change.old_value.trim() !== '' && change.new_value.trim() === '') {
+    if (change.before_value.trim() !== '' && change.after_value.trim() === '') {
       return true;
     }
 
-    if (change.old_value.trim() === '' && change.new_value.trim() !== '' && isRequiredRuleField(change.field)) {
+    if (
+      change.before_value.trim() === '' &&
+      change.after_value.trim() !== '' &&
+      isRequiredRuleField(change.field_name)
+    ) {
       return true;
     }
 
-    if (change.field === 'value' && inferValueType(change.old_value) !== inferValueType(change.new_value)) {
+    if (
+      change.field_name === 'value' &&
+      inferValueType(change.before_value) !== inferValueType(change.after_value)
+    ) {
       return true;
     }
 
-    return change.field === 'field' || change.field === 'op' || change.field === 'action';
+    return change.field_name === 'field' || change.field_name === 'op' || change.field_name === 'action';
   });
 }
 

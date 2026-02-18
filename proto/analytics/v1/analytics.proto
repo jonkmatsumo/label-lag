@@ -679,10 +679,11 @@ message DiffRuleVersionsRequest {
 }
 
 message RuleDiffChange {
-  string field = 1;
-  string old_value = 2; // JSON string
-  string new_value = 3; // JSON string
+  string field_name = 1;
+  string before_value = 2; // JSON string
+  string after_value = 3; // JSON string
   string description = 4;
+  string change_type = 5; // e.g. "modified"
 }
 
 message DiffRuleVersionsResponse {

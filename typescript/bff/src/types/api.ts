@@ -539,8 +539,8 @@ export interface RuleVersionListResponse {
 export interface FieldChange {
   field_name: string;
   change_type: 'modified' | 'unchanged';
-  old_value: unknown;
-  new_value: unknown;
+  before_value: unknown;
+  after_value: unknown;
 }
 
 export interface RuleDiffResponse {

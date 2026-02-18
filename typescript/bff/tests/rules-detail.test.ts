@@ -211,15 +211,17 @@ describe('Rules Detail Routes', () => {
         is_breaking: true,
         changes: [
           {
-            field: 'value',
-            old_value: '5000',
-            new_value: '10000',
+            field_name: 'value',
+            change_type: 'modified',
+            before_value: '5000',
+            after_value: '10000',
             description: 'Value changed',
           },
           {
-            field: 'severity',
-            old_value: '"medium"',
-            new_value: '"high"',
+            field_name: 'severity',
+            change_type: 'modified',
+            before_value: '"medium"',
+            after_value: '"high"',
             description: 'Severity changed',
           },
         ],
@@ -234,7 +236,7 @@ describe('Rules Detail Routes', () => {
       const data = response.json();
       expect(data.changes).toHaveLength(2);
       expect(data.is_breaking).toBe(true);
-      expect(data.changes[0].field).toBe('value');
+      expect(data.changes[0].field_name).toBe('value');
     });
 
     it('uses default versions when not specified', async () => {

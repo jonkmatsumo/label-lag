@@ -309,22 +309,46 @@ func (s *SQLStore) DiffRuleVersions(ctx context.Context, ruleID, vA, vB string, 
 	changes := []*pb.RuleDiffChange{}
 	isBreaking := false
 	if ruleA.Field != ruleB.Field {
-		change := &pb.RuleDiffChange{Field: "field", OldValue: ruleB.Field, NewValue: ruleA.Field, Description: "Field changed"}
+		change := &pb.RuleDiffChange{
+			FieldName:   "field",
+			ChangeType:  "modified",
+			BeforeValue: ruleB.Field,
+			AfterValue:  ruleA.Field,
+			Description: "Field changed",
+		}
 		changes = append(changes, change)
 		isBreaking = isBreaking || isBreakingChange(change)
 	}
 	if ruleA.Op != ruleB.Op {
-		change := &pb.RuleDiffChange{Field: "op", OldValue: ruleB.Op, NewValue: ruleA.Op, Description: "Operator changed"}
+		change := &pb.RuleDiffChange{
+			FieldName:   "op",
+			ChangeType:  "modified",
+			BeforeValue: ruleB.Op,
+			AfterValue:  ruleA.Op,
+			Description: "Operator changed",
+		}
 		changes = append(changes, change)
 		isBreaking = isBreaking || isBreakingChange(change)
 	}
 	if ruleA.ValueJson != ruleB.ValueJson {
-		change := &pb.RuleDiffChange{Field: "value", OldValue: ruleB.ValueJson, NewValue: ruleA.ValueJson, Description: "Value changed"}
+		change := &pb.RuleDiffChange{
+			FieldName:   "value",
+			ChangeType:  "modified",
+			BeforeValue: ruleB.ValueJson,
+			AfterValue:  ruleA.ValueJson,
+			Description: "Value changed",
+		}
 		changes = append(changes, change)
 		isBreaking = isBreaking || isBreakingChange(change)
 	}
 	if ruleA.Action != ruleB.Action {
-		change := &pb.RuleDiffChange{Field: "action", OldValue: ruleB.Action, NewValue: ruleA.Action, Description: "Action changed"}
+		change := &pb.RuleDiffChange{
+			FieldName:   "action",
+			ChangeType:  "modified",
+			BeforeValue: ruleB.Action,
+			AfterValue:  ruleA.Action,
+			Description: "Action changed",
+		}
 		changes = append(changes, change)
 		isBreaking = isBreaking || isBreakingChange(change)
 	}
@@ -343,21 +367,21 @@ func isBreakingChange(change *pb.RuleDiffChange) bool {
 		return false
 	}
 
-	oldValue := strings.TrimSpace(change.OldValue)
-	newValue := strings.TrimSpace(change.NewValue)
+	oldValue := strings.TrimSpace(change.BeforeValue)
+	newValue := strings.TrimSpace(change.AfterValue)
 	if oldValue != "" && newValue == "" {
 		return true // Field removal.
 	}
 
-	if oldValue == "" && newValue != "" && isRequiredDiffField(change.Field) {
+	if oldValue == "" && newValue != "" && isRequiredDiffField(change.FieldName) {
 		return true // Requiredness increase.
 	}
 
-	if change.Field == "value" && diffValueType(change.OldValue) != diffValueType(change.NewValue) {
+	if change.FieldName == "value" && diffValueType(change.BeforeValue) != diffValueType(change.AfterValue) {
 		return true // Type change.
 	}
 
-	switch change.Field {
+	switch change.FieldName {
 	case "field", "op", "action":
 		return true // Core behavior change.
 	default:

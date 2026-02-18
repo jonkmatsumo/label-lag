@@ -5,15 +5,17 @@
   "is_breaking": true,
   "changes": [
     {
-      "field": "value",
-      "old_value": "5",
-      "new_value": "10",
+      "field_name": "value",
+      "change_type": "modified",
+      "before_value": "5",
+      "after_value": "10",
       "description": "Value changed from 5 to 10"
     },
     {
-      "field": "severity",
-      "old_value": "\"medium\"",
-      "new_value": "\"high\"",
+      "field_name": "severity",
+      "change_type": "modified",
+      "before_value": "\"medium\"",
+      "after_value": "\"high\"",
       "description": "Severity updated"
     }
   ]

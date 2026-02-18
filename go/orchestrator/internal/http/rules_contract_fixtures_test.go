@@ -85,9 +85,10 @@ const (
   "diff_type": "modification",
   "changes": [
     {
-      "field": "value",
-      "old_value": 5,
-      "new_value": 10,
+      "field_name": "value",
+      "change_type": "modified",
+      "before_value": 5,
+      "after_value": 10,
       "description": "Value changed from 5 to 10"
     }
   ],

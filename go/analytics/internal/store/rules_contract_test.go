@@ -81,7 +81,10 @@ func TestDiffRuleVersions_BreakingWhenCoreBehaviorChanges(t *testing.T) {
 
 	assert.True(t, resp.IsBreaking)
 	require.NotEmpty(t, resp.Changes)
-	assert.Equal(t, "op", resp.Changes[0].Field)
+	assert.Equal(t, "op", resp.Changes[0].FieldName)
+	assert.Equal(t, "modified", resp.Changes[0].ChangeType)
+	assert.Equal(t, ">", resp.Changes[0].BeforeValue)
+	assert.Equal(t, "<", resp.Changes[0].AfterValue)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -106,6 +109,9 @@ func TestDiffRuleVersions_NonBreakingForSameTypeValueChange(t *testing.T) {
 
 	assert.False(t, resp.IsBreaking)
 	require.Len(t, resp.Changes, 1)
-	assert.Equal(t, "value", resp.Changes[0].Field)
+	assert.Equal(t, "value", resp.Changes[0].FieldName)
+	assert.Equal(t, "modified", resp.Changes[0].ChangeType)
+	assert.Equal(t, "5", resp.Changes[0].BeforeValue)
+	assert.Equal(t, "10", resp.Changes[0].AfterValue)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }

@@ -83,14 +83,16 @@ describe('Contract: GET /rules/:rule_id/diff', () => {
     expect(changes.length).toBeGreaterThan(0);
 
     for (const change of changes) {
-      // Proto field names: field, old_value, new_value, description
-      expect(typeof change.field).toBe('string');
-      expect(typeof change.old_value).toBe('string');
-      expect(typeof change.new_value).toBe('string');
+      expect(typeof change.field_name).toBe('string');
+      expect((change.field_name as string).trim().length).toBeGreaterThan(0);
+      expect(typeof change.change_type).toBe('string');
+      expect((change.change_type as string).trim().length).toBeGreaterThan(0);
+      expect(typeof change.before_value).toBe('string');
+      expect(typeof change.after_value).toBe('string');
       expect(typeof change.description).toBe('string');
-      // Canonical renames happen in a later refactor phase.
-      expect(change.field_name).toBeUndefined();
-      expect(change.change_type).toBeUndefined();
+      expect(change.field).toBeUndefined();
+      expect(change.old_value).toBeUndefined();
+      expect(change.new_value).toBeUndefined();
     }
   });
 

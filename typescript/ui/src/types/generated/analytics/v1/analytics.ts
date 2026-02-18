@@ -640,12 +640,14 @@ export interface DiffRuleVersionsRequest {
 }
 
 export interface RuleDiffChange {
-  field: string;
+  field_name: string;
   /** JSON string */
-  old_value: string;
+  before_value: string;
   /** JSON string */
-  new_value: string;
+  after_value: string;
   description: string;
+  /** e.g. "modified" */
+  change_type: string;
 }
 
 export interface DiffRuleVersionsResponse {

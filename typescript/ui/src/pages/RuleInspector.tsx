@@ -420,12 +420,12 @@ function RuleHistoryTab({ ruleId }: { ruleId: string }) {
                 </tr>
               </thead>
               <tbody>
-                {diffQuery.data.changes.map((c: { field_name: string; change_type: string; old_value: unknown; new_value: unknown }, i: number) => (
+                {diffQuery.data.changes.map((c, i: number) => (
                   <tr key={i} className={c.change_type === 'modified' ? 'table-warning bg-opacity-10' : ''}>
                     <td className="fw-bold text-muted">{c.field_name}</td>
-                    <td className="text-decoration-line-through text-muted">{JSON.stringify(c.old_value)}</td>
+                    <td className="text-decoration-line-through text-muted">{JSON.stringify(c.before_value)}</td>
                     <td className="text-center"><ArrowRight size={12} className="text-muted" /></td>
-                    <td className="fw-bold">{JSON.stringify(c.new_value)}</td>
+                    <td className="fw-bold">{JSON.stringify(c.after_value)}</td>
                   </tr>
                 ))}
               </tbody>
