@@ -20,10 +20,12 @@ test:
 lint:
 	uv run ruff check python/src python/tests
 	uv run ruff format --check python/src python/tests
+	for dir in go/orchestrator go/analytics go/training go/forecast go/common; do (cd $$dir && go fmt ./... && go vet ./...); done
 
 lint-fix:
 	uv run ruff check --fix python/src python/tests
 	uv run ruff format python/src python/tests
+	for dir in go/orchestrator go/analytics go/training go/forecast go/common; do (cd $$dir && go fmt ./... && go vet ./...); done
 
 clean:
 	rm -rf .pytest_cache

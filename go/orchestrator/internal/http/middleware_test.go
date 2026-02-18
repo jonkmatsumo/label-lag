@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
@@ -221,4 +222,72 @@ func TestRateLimitConcurrentAccess(t *testing.T) {
 	}
 	wg.Wait()
 	// If we reach here without a race/panic, the test passes
+}
+
+func TestTenantLimiter_UpdateLastSeen(t *testing.T) {
+	tl := &tenantLimiter{}
+	tl.lastSeen.Store(100)
+
+	// Update with newer time
+	tl.updateLastSeen(200)
+	if tl.lastSeen.Load() != 200 {
+		t.Errorf("expected 200, got %d", tl.lastSeen.Load())
+	}
+
+	// Update with older time (should be ignored)
+	tl.updateLastSeen(150)
+	if tl.lastSeen.Load() != 200 {
+		t.Errorf("expected 200, got %d", tl.lastSeen.Load())
+	}
+
+	// Update with same time
+	tl.updateLastSeen(200)
+	if tl.lastSeen.Load() != 200 {
+		t.Errorf("expected 200, got %d", tl.lastSeen.Load())
+	}
+}
+
+func TestRateLimitTenantsGauge(t *testing.T) {
+	resetLimiterMap()
+	rateLimitTenants.Set(0)
+
+	handler := rateLimitMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// 1. Initial request for tenant-1
+	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
+	req1 = req1.WithContext(tenant.WithTenantID(req1.Context(), "tenant-1"))
+	handler.ServeHTTP(httptest.NewRecorder(), req1)
+
+	if val := testutil.ToFloat64(rateLimitTenants); val != 1 {
+		t.Errorf("expected gauge 1 after first tenant, got %v", val)
+	}
+
+	// 2. Second request for SAME tenant-1
+	handler.ServeHTTP(httptest.NewRecorder(), req1)
+	if val := testutil.ToFloat64(rateLimitTenants); val != 1 {
+		t.Errorf("expected gauge still 1 after same tenant, got %v", val)
+	}
+
+	// 3. Request for tenant-2
+	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
+	req2 = req2.WithContext(tenant.WithTenantID(req2.Context(), "tenant-2"))
+	handler.ServeHTTP(httptest.NewRecorder(), req2)
+
+	if val := testutil.ToFloat64(rateLimitTenants); val != 2 {
+		t.Errorf("expected gauge 2 after second tenant, got %v", val)
+	}
+
+	// 4. Cleanup should update gauge
+	// Manually make tenant-1 stale
+	val, _ := limiterMap.Load("tenant-1")
+	tl1 := val.(*tenantLimiter)
+	tl1.lastSeen.Store(time.Now().Add(-2 * time.Hour).UnixNano())
+
+	cleanupStaleLimiters()
+
+	if val := testutil.ToFloat64(rateLimitTenants); val != 1 {
+		t.Errorf("expected gauge 1 after cleanup of 1 tenant, got %v", val)
+	}
 }

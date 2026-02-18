@@ -73,25 +73,25 @@ func TestCircuitBreaker_HalfOpenFailure(t *testing.T) {
 }
 
 func TestNewCircuitBreakerWithPrefix(t *testing.T) {
-	// Default breaker should have INFERENCE name
+	// Default breaker should have inference name
 	cb := NewCircuitBreaker()
-	if cb.name != "INFERENCE" {
-		t.Errorf("expected name INFERENCE, got %q", cb.name)
+	if cb.name != "inference" {
+		t.Errorf("expected name inference, got %q", cb.name)
 	}
 
 	// Custom prefix
-	cb2 := NewCircuitBreakerWithPrefix("TRAINING")
-	if cb2.name != "TRAINING" {
-		t.Errorf("expected name TRAINING, got %q", cb2.name)
+	cb2 := NewCircuitBreakerWithPrefix("training")
+	if cb2.name != "training" {
+		t.Errorf("expected name training, got %q", cb2.name)
 	}
 	if cb2.failureThreshold != defaultBreakerThreshold {
 		t.Errorf("expected default threshold %d, got %d", defaultBreakerThreshold, cb2.failureThreshold)
 	}
 
 	// Env var override
-	t.Setenv("FORECAST_BREAKER_FAILURE_THRESHOLD", "10")
-	t.Setenv("FORECAST_BREAKER_RESET_TIMEOUT_MS", "5000")
-	cb3 := NewCircuitBreakerWithPrefix("FORECAST")
+	t.Setenv("forecast_BREAKER_FAILURE_THRESHOLD", "10")
+	t.Setenv("forecast_BREAKER_RESET_TIMEOUT_MS", "5000")
+	cb3 := NewCircuitBreakerWithPrefix("forecast")
 	if cb3.failureThreshold != 10 {
 		t.Errorf("expected threshold 10, got %d", cb3.failureThreshold)
 	}
@@ -141,12 +141,12 @@ func TestCircuitBreaker_PrometheusMetrics(t *testing.T) {
 	cb.RecordResult(status.Error(codes.Unavailable, "fail"))
 	cb.RecordResult(status.Error(codes.Unavailable, "fail"))
 
-	stateVal := testutil.ToFloat64(circuitBreakerState.WithLabelValues("TEST_METRICS"))
+	stateVal := testutil.ToFloat64(breakerState.WithLabelValues("TEST_METRICS"))
 	if stateVal != float64(StateOpen) {
 		t.Errorf("expected state gauge %v (open), got %v", float64(StateOpen), stateVal)
 	}
 
-	transVal := testutil.ToFloat64(circuitBreakerTransitions.WithLabelValues("TEST_METRICS", "closed", "open"))
+	transVal := testutil.ToFloat64(breakerTransitions.WithLabelValues("TEST_METRICS", "closed", "open"))
 	if transVal != 1 {
 		t.Errorf("expected 1 closed->open transition, got %v", transVal)
 	}
@@ -157,12 +157,12 @@ func TestCircuitBreaker_PrometheusMetrics(t *testing.T) {
 		t.Fatalf("expected Allow to succeed, got %v", err)
 	}
 
-	stateVal = testutil.ToFloat64(circuitBreakerState.WithLabelValues("TEST_METRICS"))
+	stateVal = testutil.ToFloat64(breakerState.WithLabelValues("TEST_METRICS"))
 	if stateVal != float64(StateHalfOpen) {
 		t.Errorf("expected state gauge %v (half-open), got %v", float64(StateHalfOpen), stateVal)
 	}
 
-	transVal = testutil.ToFloat64(circuitBreakerTransitions.WithLabelValues("TEST_METRICS", "open", "half-open"))
+	transVal = testutil.ToFloat64(breakerTransitions.WithLabelValues("TEST_METRICS", "open", "half-open"))
 	if transVal != 1 {
 		t.Errorf("expected 1 open->half-open transition, got %v", transVal)
 	}
@@ -170,12 +170,12 @@ func TestCircuitBreaker_PrometheusMetrics(t *testing.T) {
 	// Success -> closed
 	cb.RecordResult(nil)
 
-	stateVal = testutil.ToFloat64(circuitBreakerState.WithLabelValues("TEST_METRICS"))
+	stateVal = testutil.ToFloat64(breakerState.WithLabelValues("TEST_METRICS"))
 	if stateVal != float64(StateClosed) {
 		t.Errorf("expected state gauge %v (closed), got %v", float64(StateClosed), stateVal)
 	}
 
-	transVal = testutil.ToFloat64(circuitBreakerTransitions.WithLabelValues("TEST_METRICS", "half-open", "closed"))
+	transVal = testutil.ToFloat64(breakerTransitions.WithLabelValues("TEST_METRICS", "half-open", "closed"))
 	if transVal != 1 {
 		t.Errorf("expected 1 half-open->closed transition, got %v", transVal)
 	}
@@ -190,21 +190,21 @@ func TestCircuitBreaker_FailuresCounter(t *testing.T) {
 		cb.RecordResult(status.Error(codes.Unavailable, "fail"))
 	}
 
-	failVal := testutil.ToFloat64(circuitBreakerFailures.WithLabelValues("TEST_FAILURES"))
+	failVal := testutil.ToFloat64(breakerFailures.WithLabelValues("TEST_FAILURES"))
 	if failVal != 3 {
 		t.Errorf("expected 3 failures, got %v", failVal)
 	}
 
 	// App errors should NOT increment failures
 	cb.RecordResult(status.Error(codes.NotFound, "not found"))
-	failVal = testutil.ToFloat64(circuitBreakerFailures.WithLabelValues("TEST_FAILURES"))
+	failVal = testutil.ToFloat64(breakerFailures.WithLabelValues("TEST_FAILURES"))
 	if failVal != 3 {
 		t.Errorf("expected still 3 failures after app error, got %v", failVal)
 	}
 
 	// DeadlineExceeded should also count
 	cb.RecordResult(status.Error(codes.DeadlineExceeded, "timeout"))
-	failVal = testutil.ToFloat64(circuitBreakerFailures.WithLabelValues("TEST_FAILURES"))
+	failVal = testutil.ToFloat64(breakerFailures.WithLabelValues("TEST_FAILURES"))
 	if failVal != 4 {
 		t.Errorf("expected 4 failures after DeadlineExceeded, got %v", failVal)
 	}

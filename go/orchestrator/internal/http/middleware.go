@@ -23,11 +23,29 @@ var (
 		Name: "orchestrator_rate_limited_total",
 		Help: "Total requests rejected by the rate limiter.",
 	}, []string{"tenant_present"})
+	rateLimitTenants = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "orchestrator_rate_limit_tenants_total",
+		Help: "Total number of active tenant limiters.",
+	})
 )
 
 type tenantLimiter struct {
 	limiter  *rate.Limiter
 	lastSeen atomic.Int64 // Unix nanoseconds
+}
+
+// updateLastSeen ensures the timestamp only moves forward, protecting
+// against clock skew or out-of-order updates in high concurrency.
+func (tl *tenantLimiter) updateLastSeen(now int64) {
+	for {
+		old := tl.lastSeen.Load()
+		if now <= old {
+			return
+		}
+		if tl.lastSeen.CompareAndSwap(old, now) {
+			return
+		}
+	}
 }
 
 // limiterMap uses sync.Map to avoid holding a global mutex on the hot
@@ -47,13 +65,17 @@ func init() {
 // delete is lock-free on the sync.Map.
 func cleanupStaleLimiters() {
 	now := time.Now().UnixNano()
+	var count float64
 	limiterMap.Range(func(key, value any) bool {
 		tl := value.(*tenantLimiter)
 		if now-tl.lastSeen.Load() > int64(1*time.Hour) {
 			limiterMap.Delete(key)
+		} else {
+			count++
 		}
 		return true
 	})
+	rateLimitTenants.Set(count)
 }
 
 func rateLimitMiddleware(next http.Handler) http.Handler {
@@ -65,11 +87,14 @@ func rateLimitMiddleware(next http.Handler) http.Handler {
 			tenantPresent = "false"
 		}
 
-		val, _ := limiterMap.LoadOrStore(tenantID, &tenantLimiter{
+		val, loaded := limiterMap.LoadOrStore(tenantID, &tenantLimiter{
 			limiter: rate.NewLimiter(rate.Limit(10), 20),
 		})
+		if !loaded {
+			rateLimitTenants.Inc()
+		}
 		tl := val.(*tenantLimiter)
-		tl.lastSeen.Store(time.Now().UnixNano())
+		tl.updateLastSeen(time.Now().UnixNano())
 
 		if !tl.limiter.Allow() {
 			rateLimitedTotal.WithLabelValues(tenantPresent).Inc()

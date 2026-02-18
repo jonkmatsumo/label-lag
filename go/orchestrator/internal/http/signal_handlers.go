@@ -207,6 +207,7 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 			handlerLogQueueDepth.Set(float64(len(h.logQueue)))
 		default:
 			dropped := h.droppedLogs.Add(1)
+			grpcclient.LogEventsDropped.WithLabelValues("handler", "full").Inc()
 			if dropped%100 == 1 {
 				h.logger.Warn("dropping inference log event", "total_dropped", dropped)
 			}

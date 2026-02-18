@@ -103,19 +103,13 @@ class SignalForecaster:
             fallback_used = True
             if fallback_mode == "zero":
                 raw_probability = 0.0
-                zero_fallback_total.inc(
-                    {"reason": fallback_reason, "request_id": request_id}
-                )
+                zero_fallback_total.labels(reason=fallback_reason).inc()
             elif os.getenv("DISABLE_HEURISTIC_FALLBACK") == "true":
                 raw_probability = 0.05
-                heuristic_fallback_total.inc(
-                    {"reason": "heuristic_disabled", "request_id": request_id}
-                )
+                heuristic_fallback_total.labels(reason="heuristic_disabled").inc()
             else:
                 raw_probability = self._calculate_probability(features)
-                heuristic_fallback_total.inc(
-                    {"reason": fallback_reason, "request_id": request_id}
-                )
+                heuristic_fallback_total.labels(reason=fallback_reason).inc()
 
             model_version = self.model_version
             model_loaded = False

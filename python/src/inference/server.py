@@ -41,6 +41,15 @@ def serve() -> None:
 
     listen_addr = f"{config.host}:{config.port}"
     server.add_insecure_port(listen_addr)
+
+    # Start Prometheus metrics server
+    from prometheus_client import start_http_server
+
+    start_http_server(config.metrics_port)
+    logger.info(
+        "inference metrics listening on %s (port %d)", config.host, config.metrics_port
+    )
+
     logger.info("inference listening on %s", listen_addr)
     server.start()
     server.wait_for_termination()

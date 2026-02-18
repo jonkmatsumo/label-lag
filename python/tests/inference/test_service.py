@@ -77,6 +77,7 @@ def service():
         include_features_used=False,
         score_timeout_ms=1500,
         config_path=None,
+        metrics_port=9091,
     )
     return InferenceService(config)
 

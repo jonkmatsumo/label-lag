@@ -19,19 +19,22 @@ import (
 )
 
 var (
-	inferenceEventsDropped = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "orchestrator_inference_events_dropped_total",
-		Help: "Total number of inference events dropped due to full queue.",
-	})
-
 	analyticsQueueDepth = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "orchestrator_analytics_log_queue_depth",
-		Help: "Current number of pending events in the analytics log queue.",
+		Name: "orchestrator_analytics_queue_depth",
+		Help: "Current depth of the analytics log queue (async sender).",
 	})
+	LogEventsDropped = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "orchestrator_log_events_dropped_total",
+		Help: "Total number of log events dropped due to queue saturation or shutdown.",
+	}, []string{"queue", "reason"})
 
 	analyticsQueueCapacity = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "orchestrator_analytics_log_queue_capacity",
 		Help: "Maximum capacity of the analytics log queue.",
+	})
+	inferenceEventsDropped = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "orchestrator_inference_events_dropped_total",
+		Help: "Total number of inference events dropped by the async logger.",
 	})
 )
 
@@ -80,7 +83,7 @@ func NewAnalyticsClient(target string, timeout time.Duration) (*AnalyticsClient,
 		timeout:  timeout,
 		conn:     conn,
 		stub:     crudv1.NewAnalyticsServiceClient(conn),
-		breaker:  NewCircuitBreakerWithPrefix("ANALYTICS"),
+		breaker:  NewCircuitBreakerWithPrefix("analytics"),
 		logQueue: make(chan *crudv1.LogInferenceEventRequest, defaultQueueSize),
 		stop:     make(chan struct{}),
 	}
@@ -108,10 +111,21 @@ func (c *AnalyticsClient) startWorker() {
 				analyticsQueueDepth.Set(float64(len(c.logQueue)))
 				// Use context.Background() since the original request context may have been cancelled
 				ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
-				_, _ = c.stub.LogInferenceEvent(ctx, req)
+				_, err := c.stub.LogInferenceEvent(ctx, req)
+				if err != nil {
+					LogEventsDropped.WithLabelValues("analytics", "send_error").Inc()
+				}
 				cancel()
 			case <-c.stop:
-				return
+				// Drain queue on shutdown and record as dropped
+				for {
+					select {
+					case <-c.logQueue:
+						LogEventsDropped.WithLabelValues("analytics", "shutdown").Inc()
+					default:
+						return
+					}
+				}
 			}
 		}
 	}()
@@ -848,6 +862,7 @@ func (c *AnalyticsClient) LogInferenceEvent(ctx context.Context, req *crudv1.Log
 		analyticsQueueDepth.Set(float64(len(c.logQueue)))
 	default:
 		// Queue full, drop event and increment counter
+		LogEventsDropped.WithLabelValues("analytics", "full").Inc()
 		inferenceEventsDropped.Inc()
 	}
 
