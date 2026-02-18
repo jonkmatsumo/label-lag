@@ -167,6 +167,62 @@ class TestModelCardContainsRequiredSections:
             Path(path).unlink(missing_ok=True)
 
 
+class TestModelCardArtifactLogging:
+    """Verify model card artifact is generated and logged."""
+
+    @patch("features.registry.FeatureRegistry.get")
+    @patch("model.train._get_git_sha", return_value="abc123")
+    @patch("model.train.mlflow")
+    @patch("model.train.DataLoader")
+    def test_train_model_logs_model_card_artifact(
+        self, mock_loader_cls, mock_mlflow, _mock_git, _mock_registry
+    ):
+        """train_model logs model_card.md and creates the artifact file."""
+        mock_loader = MagicMock()
+        mock_loader.FEATURE_COLUMNS = DataLoader.FEATURE_COLUMNS
+        mock_loader_cls.return_value = mock_loader
+
+        mock_split = TrainTestSplit(
+            X_train=pd.DataFrame(
+                {
+                    "velocity_24h": [1, 2, 3, 4],
+                    "amount_to_avg_ratio_30d": [1.0, 1.5, 2.0, 2.5],
+                    "balance_volatility_z_score": [0.0, 0.5, 1.0, 1.5],
+                }
+            ),
+            y_train=pd.Series([0, 1, 0, 1]),
+            X_test=pd.DataFrame(
+                {
+                    "velocity_24h": [5, 6],
+                    "amount_to_avg_ratio_30d": [3.0, 3.5],
+                    "balance_volatility_z_score": [2.0, 2.5],
+                }
+            ),
+            y_test=pd.Series([1, 0]),
+        )
+        mock_loader.load_train_test_split.return_value = mock_split
+
+        mock_run = MagicMock()
+        mock_run.info.run_id = "run_xyz"
+        mock_mlflow.start_run.return_value.__enter__.return_value = mock_run
+        mock_mlflow.set_experiment.return_value = None
+
+        logged_artifacts = []
+
+        def _capture_artifact(path):
+            logged_artifacts.append(path)
+            if str(path).endswith("model_card.md"):
+                text = Path(path).read_text()
+                assert "# Model Card" in text
+                assert "## Training Summary" in text
+
+        mock_mlflow.log_artifact.side_effect = _capture_artifact
+
+        train_model(n_jobs=1)
+
+        assert any(str(path).endswith("model_card.md") for path in logged_artifacts)
+
+
 class TestConfusionMatrixPlot:
     """Verify confusion matrix plot helper."""
 
