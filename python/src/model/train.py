@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import logging
 import os
 import platform
 import subprocess
@@ -12,6 +13,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from model.loader import DataLoader
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     import matplotlib.pyplot as plt
@@ -559,15 +562,22 @@ def train_model(
                 fm = _compute_metrics(y_tr.iloc[val_idx], y_vp, y_vprob)
                 fold_metrics.append(fm)
                 for key, val in fm.items():
-                    _mlflow.log_metric(f"cv_{key}_fold_{fold_i}", val, step=fold_i)
+                    if val is not None:
+                        _mlflow.log_metric(f"cv_{key}_fold_{fold_i}", val, step=fold_i)
+                    else:
+                        logger.warning(f"Fold {fold_i} is degenerate for metric {key}")
             if fold_metrics:
                 agg = {}
-                for key in fold_metrics[0]:
-                    vals = [m[key] for m in fold_metrics]
-                    agg[f"{key}_mean"] = float(np.mean(vals))
-                    agg[f"{key}_std"] = float(np.std(vals))
-                    agg[f"{key}_min"] = float(np.min(vals))
-                    agg[f"{key}_max"] = float(np.max(vals))
+                for key in fold_metrics[0].keys():
+                    vals = [m[key] for m in fold_metrics if m[key] is not None]
+                    if vals:
+                        agg[f"{key}_mean"] = float(np.mean(vals))
+                        agg[f"{key}_std"] = float(np.std(vals))
+                        agg[f"{key}_min"] = float(np.min(vals))
+                        agg[f"{key}_max"] = float(np.max(vals))
+                        agg[f"cv_valid_folds_{key}"] = float(len(vals))
+                    else:
+                        logger.warning(f"No valid folds for CV metric: {key}")
                 _mlflow.log_metrics(agg)
                 _mlflow.set_tags({"cv.enabled": "true", "cv.n_folds": str(k)})
 
