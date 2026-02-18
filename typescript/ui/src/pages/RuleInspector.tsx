@@ -23,6 +23,12 @@ import {
 } from 'recharts';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { useTenant } from '../hooks/useTenant';
+import {
+  canPublishFromReadiness,
+  toCheckReadinessStatus,
+  toOverallReadinessStatus,
+  type ReadinessDisplayStatus,
+} from './ruleReadiness';
 
 const ruleTabs = [
   { path: '/rules', label: 'Management', exact: true },
@@ -235,7 +241,17 @@ function RuleOverviewTab({ rule, onShowPublish }: { rule: DraftRule, onShowPubli
     enabled: !!rule.id && (rule.status === 'pending_approval' || rule.status === 'approved')
   });
 
-  const isReady = readinessQuery.data?.overall_status !== 'fail';
+  const overallReadinessStatus = toOverallReadinessStatus(readinessQuery.data);
+  const isReady = canPublishFromReadiness(readinessQuery.data);
+  const readinessAlertClass =
+    overallReadinessStatus === 'pass'
+      ? 'alert-success'
+      : overallReadinessStatus === 'warn'
+      ? 'alert-warning'
+      : overallReadinessStatus === 'fail'
+      ? 'alert-danger'
+      : 'alert-secondary';
+  const readinessLabel = overallReadinessStatus.toUpperCase();
 
   return (
     <div className="row g-4">
@@ -247,10 +263,10 @@ function RuleOverviewTab({ rule, onShowPublish }: { rule: DraftRule, onShowPubli
           <div className="spinner-border spinner-border-sm text-muted" />
         ) : readinessQuery.data ? (
           <div className="space-y-2">
-            <div className={`alert ${readinessQuery.data.overall_status === 'pass' ? 'alert-success' : readinessQuery.data.overall_status === 'warn' ? 'alert-warning' : 'alert-danger'} py-2 small border-0`}>
+            <div className={`alert ${readinessAlertClass} py-2 small border-0`}>
               <div className="d-flex align-items-center fw-bold text-uppercase">
-                {readinessQuery.data.overall_status === 'pass' ? <CheckCircle size={14} className="me-2" /> : <AlertTriangle size={14} className="me-2" />}
-                {readinessQuery.data.overall_status}
+                {overallReadinessStatus === 'pass' ? <CheckCircle size={14} className="me-2" /> : <AlertTriangle size={14} className="me-2" />}
+                {readinessLabel}
               </div>
             </div>
             <ul className="list-group list-group-flush border rounded overflow-hidden">
@@ -259,7 +275,7 @@ function RuleOverviewTab({ rule, onShowPublish }: { rule: DraftRule, onShowPubli
                   <span className="fw-medium">{check.name}</span>
                   <div className="d-flex align-items-center">
                     <span className="text-muted me-2" style={{ fontSize: '0.9em' }}>{check.message}</span>
-                    <StatusDot status={check.passed ? 'pass' : 'fail'} />
+                    <StatusDot status={toStatusDotValue(toCheckReadinessStatus(check))} />
                   </div>
                 </li>
               ))}
@@ -582,6 +598,13 @@ function PublishModal({ rule, onClose, onSuccess }: { rule: DraftRule, onClose: 
 function StatusDot({ status }: { status: 'pass' | 'warn' | 'fail' | 'skip' }) {
   const color = status === 'pass' ? 'bg-success' : status === 'warn' ? 'bg-warning' : status === 'fail' ? 'bg-danger' : 'bg-secondary';
   return <span className={`d-inline-block rounded-circle ${color}`} style={{ width: '8px', height: '8px' }} title={status} />;
+}
+
+function toStatusDotValue(status: ReadinessDisplayStatus): 'pass' | 'warn' | 'fail' | 'skip' {
+  if (status === 'unknown') {
+    return 'skip';
+  }
+  return status;
 }
 
 export function RuleSandbox() {

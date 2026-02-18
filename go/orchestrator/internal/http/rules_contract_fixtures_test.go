@@ -36,21 +36,22 @@ const (
 	// ReadinessResponseFixture represents the response from GET /rules/{id}/readiness
 	ReadinessResponseFixture = `{
   "rule_id": "high_velocity",
-  "status": "ready",
+  "ready": true,
+  "overall_status": "READINESS_STATUS_PASS",
   "checks": [
     {
       "name": "syntax_check",
       "passed": true,
+      "status": "READINESS_STATUS_PASS",
       "message": "Rule syntax is valid"
     },
     {
         "name": "shadow_mode_check",
         "passed": true,
+        "status": "READINESS_STATUS_PASS",
         "message": "Shadow mode evaluation passed"
     }
-  ],
-  "overall_ready": true,
-  "generated_at": "2024-01-01T00:00:00Z"
+  ]
 }`
 
 	// RuleVersionsListResponseFixture represents the response from GET /rules/{id}/versions

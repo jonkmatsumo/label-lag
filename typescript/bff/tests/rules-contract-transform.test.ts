@@ -22,6 +22,25 @@ describe('rules-detail contract transforms', () => {
     expect(transformReadinessResponse(upstream)).toEqual(expected);
   });
 
+  it('normalizes unknown readiness statuses to a safe enum value', () => {
+    const transformed = transformReadinessResponse({
+      rule_id: 'rule-001',
+      ready: false,
+      overall_status: 'UNSUPPORTED_STATUS',
+      checks: [
+        {
+          name: 'integrity',
+          passed: false,
+          status: 'UNSUPPORTED_STATUS',
+          message: 'failing integrity check',
+        },
+      ],
+    });
+
+    expect(transformed.overall_status).toBe('READINESS_STATUS_UNSPECIFIED');
+    expect(transformed.checks[0]?.status).toBe('READINESS_STATUS_UNSPECIFIED');
+  });
+
   it('maps diff payload to observed BFF contract shape', () => {
     const upstream = loadFixture<unknown>('diff.upstream.json');
     const expected = loadFixture<unknown>('diff.bff.json');

@@ -488,16 +488,24 @@ export interface BacktestResultsListResponse {
 }
 
 // Rules detail types
+export type ReadinessStatus =
+  | 'READINESS_STATUS_UNSPECIFIED'
+  | 'READINESS_STATUS_PASS'
+  | 'READINESS_STATUS_WARN'
+  | 'READINESS_STATUS_FAIL'
+  | 'UNRECOGNIZED';
+
 export interface ReadinessCheck {
   name: string;
-  status: 'pass' | 'warn' | 'fail';
+  passed: boolean;
+  status: ReadinessStatus;
   message: string;
 }
 
 export interface ReadinessReportResponse {
   rule_id: string;
-  timestamp: string;
-  overall_status: 'pass' | 'warn' | 'fail';
+  ready: boolean;
+  overall_status: ReadinessStatus;
   checks: ReadinessCheck[];
 }
 

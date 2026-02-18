@@ -650,16 +650,25 @@ message GetRuleReadinessRequest {
   string tenant_id = 2;
 }
 
+enum ReadinessStatus {
+  READINESS_STATUS_UNSPECIFIED = 0;
+  READINESS_STATUS_PASS = 1;
+  READINESS_STATUS_WARN = 2;
+  READINESS_STATUS_FAIL = 3;
+}
+
 message ReadinessCheck {
   string name = 1;
   bool passed = 2;
   string message = 3;
+  ReadinessStatus status = 4;
 }
 
 message GetRuleReadinessResponse {
   string rule_id = 1;
   bool ready = 2;
   repeated ReadinessCheck checks = 3;
+  ReadinessStatus overall_status = 4;
 }
 
 message DiffRuleVersionsRequest {

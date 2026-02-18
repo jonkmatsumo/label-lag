@@ -1,15 +1,18 @@
 {
   "rule_id": "high_velocity",
   "ready": false,
+  "overall_status": "READINESS_STATUS_FAIL",
   "checks": [
     {
       "name": "syntax_check",
       "passed": true,
+      "status": "READINESS_STATUS_PASS",
       "message": "Rule syntax is valid"
     },
     {
       "name": "backtest_coverage",
       "passed": false,
+      "status": "READINESS_STATUS_FAIL",
       "message": "Insufficient backtest coverage: 0 backtests found"
     }
   ]

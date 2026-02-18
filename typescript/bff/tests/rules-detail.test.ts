@@ -59,15 +59,18 @@ describe('Rules Detail Routes', () => {
       }).reply(200, {
         rule_id: 'rule-001',
         ready: true,
+        overall_status: 'READINESS_STATUS_PASS',
         checks: [
           {
             name: 'json_validity',
             passed: true,
+            status: 'READINESS_STATUS_PASS',
             message: 'Value is valid JSON',
           },
           {
             name: 'integrity',
             passed: true,
+            status: 'READINESS_STATUS_PASS',
             message: 'Rule integrity check passed',
           },
         ],
@@ -82,6 +85,7 @@ describe('Rules Detail Routes', () => {
       const data = response.json();
       expect(data.rule_id).toBe('rule-001');
       expect(data.ready).toBe(true);
+      expect(data.overall_status).toBe('READINESS_STATUS_PASS');
       expect(data.checks).toHaveLength(2);
       expect(data.checks[0].passed).toBe(true);
     });

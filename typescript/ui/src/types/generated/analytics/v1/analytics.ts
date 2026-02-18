@@ -9,6 +9,14 @@ import type { CursorPageRequest, CursorPageResponse } from "../../common/v1/pagi
 
 export const protobufPackage = "crud.v1";
 
+export enum ReadinessStatus {
+  READINESS_STATUS_UNSPECIFIED = "READINESS_STATUS_UNSPECIFIED",
+  READINESS_STATUS_PASS = "READINESS_STATUS_PASS",
+  READINESS_STATUS_WARN = "READINESS_STATUS_WARN",
+  READINESS_STATUS_FAIL = "READINESS_STATUS_FAIL",
+  UNRECOGNIZED = "UNRECOGNIZED",
+}
+
 export interface GetKpisRequest {
   start_time?: Date | undefined;
   end_time?:
@@ -614,12 +622,14 @@ export interface ReadinessCheck {
   name: string;
   passed: boolean;
   message: string;
+  status: ReadinessStatus;
 }
 
 export interface GetRuleReadinessResponse {
   rule_id: string;
   ready: boolean;
   checks: ReadinessCheck[];
+  overall_status: ReadinessStatus;
 }
 
 export interface DiffRuleVersionsRequest {

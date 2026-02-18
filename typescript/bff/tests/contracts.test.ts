@@ -24,36 +24,42 @@ function loadFixture(relativePath: string): unknown {
 // ─── Readiness (protojson handler) ──────────────────────────────────────────
 
 describe('Contract: GET /rules/:rule_id/readiness', () => {
-  it('pass fixture has proto-shaped fields (ready, not overall_status)', () => {
+  it('pass fixture has readiness enum status fields', () => {
     const payload = loadFixture('readiness/pass.json') as Record<string, unknown>;
 
     expect(typeof payload.rule_id).toBe('string');
     expect(typeof payload.ready).toBe('boolean');
     expect(payload.ready).toBe(true);
+    expect(payload.overall_status).toBe('READINESS_STATUS_PASS');
     expect(Array.isArray(payload.checks)).toBe(true);
 
-    // Proto field names: passed (boolean), NOT status ('pass'|'warn'|'fail')
+    const validReadinessStatuses = new Set([
+      'READINESS_STATUS_UNSPECIFIED',
+      'READINESS_STATUS_PASS',
+      'READINESS_STATUS_WARN',
+      'READINESS_STATUS_FAIL',
+      'UNRECOGNIZED',
+    ]);
+
     const checks = payload.checks as Array<Record<string, unknown>>;
     for (const check of checks) {
       expect(typeof check.name).toBe('string');
       expect(typeof check.passed).toBe('boolean');
+      expect(typeof check.status).toBe('string');
+      expect(validReadinessStatuses.has(check.status as string)).toBe(true);
       expect(typeof check.message).toBe('string');
-      // BFF DTO had 'status' — must NOT be present
-      expect(check.status).toBeUndefined();
     }
-
-    // BFF DTO had 'overall_status' and 'timestamp' — must NOT be present
-    expect(payload.overall_status).toBeUndefined();
-    expect(payload.timestamp).toBeUndefined();
   });
 
-  it('fail fixture has ready=false with at least one check where passed=false', () => {
+  it('fail fixture has ready=false and failing overall status', () => {
     const payload = loadFixture('readiness/fail.json') as Record<string, unknown>;
 
     expect(payload.ready).toBe(false);
+    expect(payload.overall_status).toBe('READINESS_STATUS_FAIL');
     const checks = payload.checks as Array<Record<string, unknown>>;
     const failedChecks = checks.filter(c => c.passed === false);
     expect(failedChecks.length).toBeGreaterThan(0);
+    expect(failedChecks.every(c => c.status === 'READINESS_STATUS_FAIL')).toBe(true);
   });
 });
 

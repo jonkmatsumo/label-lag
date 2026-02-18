@@ -243,21 +243,35 @@ func (s *SQLStore) GetRuleReadiness(ctx context.Context, ruleID string, tenantID
 
 	checks := []*pb.ReadinessCheck{}
 	overallReady := true
+	overallStatus := pb.ReadinessStatus_READINESS_STATUS_PASS
 
 	var val interface{}
-	jsonCheck := &pb.ReadinessCheck{Name: "json_validity", Passed: true, Message: "Value is valid JSON"}
+	jsonCheck := &pb.ReadinessCheck{
+		Name:    "json_validity",
+		Passed:  true,
+		Message: "Value is valid JSON",
+		Status:  pb.ReadinessStatus_READINESS_STATUS_PASS,
+	}
 	if err := json.Unmarshal([]byte(valueJSON), &val); err != nil {
 		jsonCheck.Passed = false
 		jsonCheck.Message = fmt.Sprintf("Invalid JSON value: %v", err)
+		jsonCheck.Status = pb.ReadinessStatus_READINESS_STATUS_FAIL
 		overallReady = false
+		overallStatus = pb.ReadinessStatus_READINESS_STATUS_FAIL
 	}
 	checks = append(checks, jsonCheck)
-	checks = append(checks, &pb.ReadinessCheck{Name: "integrity", Passed: true, Message: "Rule integrity check passed"})
+	checks = append(checks, &pb.ReadinessCheck{
+		Name:    "integrity",
+		Passed:  true,
+		Message: "Rule integrity check passed",
+		Status:  pb.ReadinessStatus_READINESS_STATUS_PASS,
+	})
 
 	return &pb.GetRuleReadinessResponse{
-		RuleId: ruleID,
-		Ready:  overallReady,
-		Checks: checks,
+		RuleId:        ruleID,
+		Ready:         overallReady,
+		Checks:        checks,
+		OverallStatus: overallStatus,
 	}, nil
 }
 

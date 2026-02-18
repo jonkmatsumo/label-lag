@@ -1,12 +1,21 @@
 interface ReadinessCheckContract {
   name: string;
   passed: boolean;
+  status: ReadinessStatus;
   message: string;
 }
+
+export type ReadinessStatus =
+  | 'READINESS_STATUS_UNSPECIFIED'
+  | 'READINESS_STATUS_PASS'
+  | 'READINESS_STATUS_WARN'
+  | 'READINESS_STATUS_FAIL'
+  | 'UNRECOGNIZED';
 
 export interface ReadinessResponseContract {
   rule_id: string;
   ready: boolean;
+  overall_status: ReadinessStatus;
   checks: ReadinessCheckContract[];
 }
 
@@ -52,20 +61,56 @@ function asArray(value: unknown, context: string): unknown[] {
   return value;
 }
 
+const VALID_READINESS_STATUS: ReadinessStatus[] = [
+  'READINESS_STATUS_UNSPECIFIED',
+  'READINESS_STATUS_PASS',
+  'READINESS_STATUS_WARN',
+  'READINESS_STATUS_FAIL',
+  'UNRECOGNIZED',
+];
+
+function parseReadinessStatus(
+  value: unknown,
+  fallback: ReadinessStatus
+): ReadinessStatus {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+  if (VALID_READINESS_STATUS.includes(value as ReadinessStatus)) {
+    return value as ReadinessStatus;
+  }
+  return 'READINESS_STATUS_UNSPECIFIED';
+}
+
+function readinessStatusFromPassed(passed: boolean): ReadinessStatus {
+  return passed ? 'READINESS_STATUS_PASS' : 'READINESS_STATUS_FAIL';
+}
+
 export function transformReadinessResponse(payload: unknown): ReadinessResponseContract {
   const response = asRecord(payload, 'readiness response');
+  const ready = asBoolean(response.ready, 'readiness response.ready');
+  const overall_status = parseReadinessStatus(
+    response.overall_status,
+    readinessStatusFromPassed(ready)
+  );
   const checks = asArray(response.checks, 'readiness response.checks').map((item, index) => {
     const check = asRecord(item, `readiness response.checks[${index}]`);
+    const passed = asBoolean(check.passed, `readiness response.checks[${index}].passed`);
     return {
       name: asString(check.name, `readiness response.checks[${index}].name`),
-      passed: asBoolean(check.passed, `readiness response.checks[${index}].passed`),
+      passed,
+      status: parseReadinessStatus(
+        check.status,
+        readinessStatusFromPassed(passed)
+      ),
       message: asString(check.message, `readiness response.checks[${index}].message`),
     };
   });
 
   return {
     rule_id: asString(response.rule_id, 'readiness response.rule_id'),
-    ready: asBoolean(response.ready, 'readiness response.ready'),
+    ready,
+    overall_status,
     checks,
   };
 }
