@@ -18,9 +18,8 @@ class _FailingPredictModel:
 
 
 def _fresh_manager() -> ModelManager:
+    ModelManager._instance = None
     manager = ModelManager()
-    manager._initialized = False
-    manager.__init__()
     return manager
 
 
