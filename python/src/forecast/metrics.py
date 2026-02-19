@@ -5,6 +5,10 @@ These metrics track fallback/degradation events and model benchmark latency.
 
 from prometheus_client import Counter, Gauge, Histogram
 
+# NOTE: When adding labels to these metrics, ensure they are low-cardinality.
+# Avoid labels like 'request_id' or 'transaction_id' that could explode the
+# number of time series in Prometheus.
+
 # Model fallback: MLflow unavailable, fell back to pickle
 model_fallback_total = Counter(
     "forecast_model_fallback_total",
