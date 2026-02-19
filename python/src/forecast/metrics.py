@@ -1,9 +1,9 @@
-"""Lightweight metrics counters for forecast service observability.
+"""Lightweight metrics for forecast service observability.
 
-These counters track fallback and degradation events.
+These metrics track fallback/degradation events and model benchmark latency.
 """
 
-from prometheus_client import Counter, Histogram
+from prometheus_client import Counter, Gauge, Histogram
 
 # Model fallback: MLflow unavailable, fell back to pickle
 model_fallback_total = Counter(
@@ -31,4 +31,18 @@ inference_feature_coverage_ratio = Histogram(
     "inference_feature_coverage_ratio",
     "Ratio of required features present during inference (0.0 to 1.0).",
     buckets=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.99, 1.0),
+)
+
+# Model benchmark latency samples during load-time benchmark.
+inference_benchmark_sample_latency_ms = Histogram(
+    "forecast_inference_benchmark_sample_latency_ms",
+    "Sample-level inference latency during model-load benchmark (milliseconds).",
+    buckets=(0.1, 0.5, 1, 2, 5, 10, 20, 50, 100, 250, 500, 1000),
+)
+
+# Load-time benchmark percentile snapshots.
+inference_benchmark_percentile_latency_ms = Gauge(
+    "forecast_inference_benchmark_percentile_latency_ms",
+    "Inference latency percentile snapshot from load-time benchmark (milliseconds).",
+    ["percentile"],
 )

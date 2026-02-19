@@ -370,7 +370,7 @@ class ModelManager:
     def _benchmark_inference(
         self, bundle: ModelStateBundle, n_samples: int = 100
     ) -> None:
-        """Benchmark inference latency and log to MLflow.
+        """Benchmark inference latency and emit runtime metrics.
 
         Args:
             bundle: The model bundle to benchmark.
@@ -380,8 +380,6 @@ class ModelManager:
             return
 
         try:
-            import mlflow
-
             # Create sample data matching required features
             required = bundle.required_features
             rng = np.random.default_rng(0)
@@ -406,36 +404,31 @@ class ModelManager:
             p95 = latencies_sorted[int(len(latencies_sorted) * 0.95)]
             p99 = latencies_sorted[int(len(latencies_sorted) * 0.99)]
 
-            # Log to MLflow (find the run_id from the model version)
+            # Emit runtime metrics only. Do not mutate historical training runs.
             try:
-                client = mlflow.MlflowClient()
-                versions = client.search_model_versions(f"name='{MODEL_NAME}'")
-                matched_version = False
-                for v in versions:
-                    if (
-                        v.current_stage == "Production"
-                        and f"v{v.version}" == bundle.version
-                    ):
-                        matched_version = True
-                        run_id = v.run_id
-                        client.log_metric(run_id, "inference_latency_p50_ms", p50)
-                        client.log_metric(run_id, "inference_latency_p95_ms", p95)
-                        client.log_metric(run_id, "inference_latency_p99_ms", p99)
-                        logger.info(
-                            f"Logged inference latency: p50={p50:.2f}ms, "
-                            f"p95={p95:.2f}ms, p99={p99:.2f}ms"
-                        )
-                        break
-                if not matched_version:
-                    logger.debug(
-                        (
-                            "No matching production model version found for benchmark "
-                            "metrics"
-                        ),
-                        model_version=self._model_version,
-                    )
+                from forecast.metrics import (
+                    inference_benchmark_percentile_latency_ms,
+                    inference_benchmark_sample_latency_ms,
+                )
+
+                for latency in latencies_ms:
+                    inference_benchmark_sample_latency_ms.observe(latency)
+
+                inference_benchmark_percentile_latency_ms.labels(percentile="p50").set(
+                    p50
+                )
+                inference_benchmark_percentile_latency_ms.labels(percentile="p95").set(
+                    p95
+                )
+                inference_benchmark_percentile_latency_ms.labels(percentile="p99").set(
+                    p99
+                )
+                logger.info(
+                    f"Benchmark inference latency: p50={p50:.2f}ms, "
+                    f"p95={p95:.2f}ms, p99={p99:.2f}ms"
+                )
             except Exception as e:
-                logger.debug(f"Could not log inference latency to MLflow: {e}")
+                logger.debug(f"Could not emit inference benchmark runtime metrics: {e}")
 
         except Exception as e:
             logger.debug(f"Inference benchmarking failed: {e}")
