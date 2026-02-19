@@ -18,6 +18,17 @@ class Currency(str, Enum):
     AUD = "AUD"
 
 
+class ErrorCategory(str, Enum):
+    """Canonical error categories for inference and fallback."""
+
+    MODEL_NOT_LOADED = "model_not_loaded"
+    NO_HISTORY = "no_history"
+    MISSING_FEATURES = "missing_features"
+    MODEL_PREDICTION_ERROR = "model_prediction_error"
+    HEURISTIC_DISABLED = "heuristic_disabled"
+    MLFLOW_UNAVAILABLE = "mlflow_unavailable"
+
+
 class SignalRequest(BaseModel):
     """Request schema for signal evaluation endpoint."""
 

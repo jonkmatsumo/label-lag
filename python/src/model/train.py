@@ -351,7 +351,8 @@ def train_model(
 
     training_start_time = time.time()
 
-    with _mlflow.start_run() as run:
+    with _mlflow.start_run() as run, _mlflow.start_span(name="train_model") as span:
+        span.set_attribute("feature_count", len(actual_feature_columns))
         _mlflow.set_tags(
             {
                 "git_sha": _get_git_sha() or "unknown",

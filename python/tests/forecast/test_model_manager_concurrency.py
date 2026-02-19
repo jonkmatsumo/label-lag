@@ -95,13 +95,13 @@ class TestModelManagerConcurrency:
             t.start()
 
             reload_started.wait()
-            # At this point, state is "loading"
+            # At this point, reload is in progress but state is NOT "loading"
+            # if we had a bundle because we only transition to loading if
+            # not self.model_loaded (atomic swap requirement)
 
-            # Case 1: Prediction during loading should fail based on our
-            # deterministic requirement
-            with pytest.raises(RuntimeError) as excinfo:
-                manager.predict(pd.DataFrame())
-            assert "reload_in_progress" in excinfo.value.args
+            # Case 1: Prediction during reload should SUCCEED using old bundle
+            res = manager.predict(pd.DataFrame())
+            assert res[0] == 0.1
 
             # Allow reload to finish
             can_finish_reload.set()

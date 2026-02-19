@@ -91,6 +91,8 @@ PSI_THRESHOLD_WARNING = _DRIFT_THRESHOLDS["psi_warning"]
 PSI_THRESHOLD_CRITICAL = _DRIFT_THRESHOLDS["psi_critical"]
 CACHE_TTL_SECONDS = _DRIFT_THRESHOLDS["cache_ttl_seconds"]
 
+MIN_REFERENCE_SAMPLES = 500
+
 
 def calculate_psi(
     expected: np.ndarray,
@@ -254,6 +256,15 @@ def detect_drift(
         return results
 
     results["reference_size"] = len(df_reference)
+
+    if len(df_reference) < MIN_REFERENCE_SAMPLES:
+        msg = (
+            f"Insufficient reference data: {len(df_reference)} samples "
+            f"(minimum {MIN_REFERENCE_SAMPLES})"
+        )
+        logger.warning(msg)
+        results["error"] = msg
+        return results
 
     df_current = get_live_data(hours=hours)
     if len(df_current) == 0:
