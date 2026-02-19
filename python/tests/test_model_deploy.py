@@ -16,10 +16,19 @@ class TestModelDeploy:
     @pytest.fixture
     def model_manager(self):
         """Create a model manager for testing."""
+        from forecast.model_manager import ModelStateBundle
+
         manager = ModelManager()
-        manager._model = MagicMock()
-        manager._model_version = "v1"
-        manager._model_source = "mlflow"
+        manager._bundle = ModelStateBundle(
+            model=MagicMock(),
+            version="v1",
+            source="mlflow",
+            required_features=[],
+            calibrator=None,
+            calibrator_loaded=False,
+            baseline_distribution=None,
+            feature_importance=None,
+        )
         return manager
 
     @pytest.fixture
@@ -50,7 +59,7 @@ class TestModelDeploy:
         """Test that deploy creates MODEL_DEPLOYED audit event."""
         mock_get_manager.return_value = model_manager
         model_manager.load_production_model = MagicMock(return_value=True)
-        model_manager._model_version = "v2"
+        model_manager._bundle.version = "v2"
 
         # Simulate deploy audit logging
         # (happens inside load_production_model or service?)
