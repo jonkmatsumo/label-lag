@@ -309,7 +309,10 @@ def _derive_calibration_split(
             "train_tail_fraction_fallback_no_calibration",
         )
 
+    # Invariant: calibration set size must be > 0 and fit set size must be > 0
+    # to be considered a valid calibration split.
     desired_cal_size = max(1, int(n_samples * validation_fraction))
+    # Preserve at least 2 samples for fit data to avoid trivial failures.
     cal_size = min(desired_cal_size, max(0, n_samples - 2))
 
     # Keep at least two classes in fit slice when possible to avoid
@@ -320,16 +323,21 @@ def _derive_calibration_split(
             break
         cal_size -= 1
 
+    # Tighten invariant: if cal_size would be 0 or fit_size would be 0,
+    # fallback to full train without calibration.
+    fit_size = n_samples - cal_size
+    if cal_size <= 0 or fit_size <= 0:
+        cal_size = 0
+        split_strategy = "train_tail_fraction_fallback_no_calibration"
+    else:
+        split_strategy = "train_tail_fraction"
+
     split_at = n_samples - cal_size
     x_fit = _slice(x_train, 0, split_at)
     y_fit = _slice(y_train, 0, split_at)
     x_cal = _slice(x_train, split_at, n_samples)
     y_cal = _slice(y_train, split_at, n_samples)
-    split_strategy = (
-        "train_tail_fraction"
-        if cal_size > 0
-        else "train_tail_fraction_fallback_no_calibration"
-    )
+
     return x_fit, y_fit, x_cal, y_cal, cal_size, split_strategy
 
 
@@ -615,6 +623,12 @@ def train_model(
             "random_state": random_state,
             "feature_columns": json.dumps(actual_feature_columns),
             "calibration_set_size": int(calibration_set_size),
+            "train_fit_set_size": int(len(y_fit_base)),
+            "calibration_fraction_effective": (
+                float(calibration_set_size) / split.train_size
+                if split.train_size > 0
+                else 0.0
+            ),
             "calibration_positive_rate": (
                 float(y_cal.mean()) if calibration_set_size > 0 else 0.0
             ),
