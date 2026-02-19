@@ -606,42 +606,52 @@ class ModelManager:
             return None
 
         try:
-            # Try to access underlying XGBoost model
-            # MLflow pyfunc models wrap the original model
-            underlying_model = (
-                model._model_impl if hasattr(model, "_model_impl") else model
-            )
 
-            # Check if it's an XGBoost model
-            if hasattr(underlying_model, "get_booster"):
-                # XGBoost model - get feature importance
-                booster = underlying_model.get_booster()
-                importance_dict = booster.get_score(importance_type="gain")
+            def _iter_candidates(model_obj):
+                queue = [model_obj]
+                seen: set[int] = set()
+                attrs = ("_model_impl", "_model", "model")
+                while queue:
+                    candidate = queue.pop(0)
+                    if candidate is None:
+                        continue
+                    candidate_id = id(candidate)
+                    if candidate_id in seen:
+                        continue
+                    seen.add(candidate_id)
+                    yield candidate
+                    for attr in attrs:
+                        if hasattr(candidate, attr):
+                            queue.append(getattr(candidate, attr, None))
 
-                # Map feature indices to feature names
-                if len(importance_dict) == len(feature_names):
-                    # Importance dict uses f0, f1, etc. as keys
-                    importance_map = {}
-                    for i, feature_name in enumerate(feature_names):
-                        key = f"f{i}"
-                        if key in importance_dict:
-                            importance_map[feature_name] = float(importance_dict[key])
-                    return importance_map
-                else:
-                    # Try direct mapping if keys are feature names
-                    return {
-                        k: float(v)
-                        for k, v in importance_dict.items()
-                        if k in feature_names
-                    }
-            elif hasattr(underlying_model, "feature_importances_"):
-                # Scikit-learn style model
-                importances = underlying_model.feature_importances_
-                if len(importances) == len(feature_names):
-                    return {
-                        name: float(imp)
-                        for name, imp in zip(feature_names, importances)
-                    }
+            dense_importances = None
+            for candidate in _iter_candidates(model):
+                if hasattr(candidate, "feature_importances_"):
+                    dense_importances = np.asarray(candidate.feature_importances_)
+                    break
+
+            if dense_importances is None:
+                logger.warning(
+                    "Could not extract dense feature_importances_ from loaded model."
+                )
+                return None
+
+            if len(dense_importances) != len(feature_names):
+                logger.warning(
+                    "Feature importance length mismatch: importances=%s features=%s. "
+                    "Returning best-effort mapping.",
+                    len(dense_importances),
+                    len(feature_names),
+                )
+
+            overlap = min(len(dense_importances), len(feature_names))
+            importance_map = {
+                feature_names[i]: float(dense_importances[i]) for i in range(overlap)
+            }
+            if len(feature_names) > overlap:
+                for feature_name in feature_names[overlap:]:
+                    importance_map[feature_name] = 0.0
+            return importance_map
         except Exception as e:
             logger.warning(f"Could not extract feature importance: {e}")
 
