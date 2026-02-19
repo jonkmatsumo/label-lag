@@ -152,7 +152,9 @@ class ModelManager:
         Returns:
             True if a model was loaded successfully, False otherwise.
         """
-        self._transition_to("loading")
+        # Only transition to loading if we don't have a model yet (atomic swap)
+        if not self.model_loaded:
+            self._transition_to("loading")
 
         # Try loading from MLflow first
         bundle = self._load_from_mlflow()
