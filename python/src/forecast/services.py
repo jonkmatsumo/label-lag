@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
+import mlflow
 import numpy as np
 import structlog
 
@@ -227,87 +228,108 @@ class SignalForecaster:
         Returns:
             Model prediction result with fallback diagnostics.
         """
-        try:
-            # Get required features from the model
-            required_features = manager.required_features
+        with mlflow.start_span(name="_predict_with_model") as span:
+            span.set_attribute("model_version", manager.model_version)
+            try:
+                # Get required features from the model
+                required_features = manager.required_features
 
-            # Build feature dict using only required features
-            # Map from FeatureVector attributes (which may not have all features)
-            feature_dict = {}
-            available_count = 0
-            missing_features = []
+                # Build feature dict using only required features
+                # Map from FeatureVector attributes (which may not have all features)
+                feature_dict = {}
+                available_count = 0
+                missing_features = []
 
-            for feature_name in required_features:
-                # Try to get attribute from FeatureVector (case-insensitive)
-                if hasattr(features, feature_name):
-                    val = getattr(features, feature_name)
-                    if val is not None:
-                        feature_dict[feature_name] = val
-                        available_count += 1
+                for feature_name in required_features:
+                    # Try to get attribute from FeatureVector (case-insensitive)
+                    if hasattr(features, feature_name):
+                        val = getattr(features, feature_name)
+                        if val is not None:
+                            feature_dict[feature_name] = val
+                            available_count += 1
+                        else:
+                            missing_features.append(feature_name)
+                            feature_dict[feature_name] = None
                     else:
                         missing_features.append(feature_name)
                         feature_dict[feature_name] = None
+
+                # Compute coverage metrics (FF3)
+                # Normalized contract: present_required / total_required
+                # If no features required, coverage is perfect (1.0).
+                total_required = len(required_features)
+
+                span.set_attribute("feature_count.total", total_required)
+                span.set_attribute("feature_count.available", available_count)
+
+                if total_required > 0:
+                    coverage_ratio = float(available_count) / float(total_required)
                 else:
-                    missing_features.append(feature_name)
-                    feature_dict[feature_name] = None
+                    coverage_ratio = 1.0
 
-            # Compute coverage metrics (FF3)
-            # Normalized contract: present_required / total_required
-            # If no features required, coverage is perfect (1.0).
-            total_required = len(required_features)
+                # Clamp for safety, though logic guarantees 0.0 <= ratio <= 1.0
+                coverage_ratio = max(0.0, min(1.0, coverage_ratio))
 
-            if total_required > 0:
-                coverage_ratio = float(available_count) / float(total_required)
-            else:
-                coverage_ratio = 1.0
+                # Emit coverage metric
+                inference_feature_coverage_ratio.observe(coverage_ratio)
 
-            # Clamp for safety, though logic guarantees 0.0 <= ratio <= 1.0
-            coverage_ratio = max(0.0, min(1.0, coverage_ratio))
+                log_data = {
+                    "event": "inference_feature_coverage",
+                    "model_version": manager.model_version,
+                    "required_count": total_required,
+                    "available_count": available_count,
+                    "coverage_ratio": round(coverage_ratio, 4),
+                }
 
-            # Emit coverage metric
-            inference_feature_coverage_ratio.observe(coverage_ratio)
+                if coverage_ratio < 1.0:
+                    log_data["missing_features"] = missing_features[:10]
+                    logger.warning(
+                        f"Incomplete feature coverage for inference: {log_data}"
+                    )
+                else:
+                    logger.info(f"Full feature coverage for inference: {log_data}")
 
-            log_data = {
-                "event": "inference_feature_coverage",
-                "model_version": manager.model_version,
-                "required_count": total_required,
-                "available_count": available_count,
-                "coverage_ratio": round(coverage_ratio, 4),
-            }
+                # Check if any required features are missing
+                if missing_features:
+                    span.set_attribute("fallback_used", True)
+                    span.set_attribute(
+                        "fallback_reason", ErrorCategory.MISSING_FEATURES
+                    )
+                    # Still log the failure but provide metrics above
+                    return ModelPredictionResult(
+                        score=self._calculate_probability(features),
+                        used_fallback=True,
+                        fallback_reason=ErrorCategory.MISSING_FEATURES,
+                    )
 
-            if coverage_ratio < 1.0:
-                log_data["missing_features"] = missing_features[:10]
-                logger.warning(f"Incomplete feature coverage for inference: {log_data}")
-            else:
-                logger.info(f"Full feature coverage for inference: {log_data}")
+                probability = manager.predict_single(feature_dict)
+                if probability is None:
+                    # predict_single returned None due to missing features
+                    span.set_attribute("fallback_used", True)
+                    span.set_attribute(
+                        "fallback_reason", ErrorCategory.MISSING_FEATURES
+                    )
+                    return ModelPredictionResult(
+                        score=self._calculate_probability(features),
+                        used_fallback=True,
+                        fallback_reason=ErrorCategory.MISSING_FEATURES,
+                    )
 
-            # Check if any required features are missing
-            if missing_features:
-                # Still log the failure but provide metrics above
+                logger.debug(f"ML model prediction: {probability}")
+                span.set_attribute("fallback_used", False)
+                return ModelPredictionResult(score=float(probability))
+            except Exception as e:
+                logger.warning(f"ML prediction failed, falling back to heuristic: {e}")
+                span.set_attribute("fallback_used", True)
+                span.set_attribute(
+                    "fallback_reason", ErrorCategory.MODEL_PREDICTION_ERROR
+                )
+                span.set_attribute("error", str(e))
                 return ModelPredictionResult(
                     score=self._calculate_probability(features),
                     used_fallback=True,
-                    fallback_reason=ErrorCategory.MISSING_FEATURES,
+                    fallback_reason=ErrorCategory.MODEL_PREDICTION_ERROR,
                 )
-
-            probability = manager.predict_single(feature_dict)
-            if probability is None:
-                # predict_single returned None due to missing features
-                return ModelPredictionResult(
-                    score=self._calculate_probability(features),
-                    used_fallback=True,
-                    fallback_reason=ErrorCategory.MISSING_FEATURES,
-                )
-
-            logger.debug(f"ML model prediction: {probability}")
-            return ModelPredictionResult(score=float(probability))
-        except Exception as e:
-            logger.warning(f"ML prediction failed, falling back to heuristic: {e}")
-            return ModelPredictionResult(
-                score=self._calculate_probability(features),
-                used_fallback=True,
-                fallback_reason=ErrorCategory.MODEL_PREDICTION_ERROR,
-            )
 
     def _map_to_feature_vector(
         self, request: SignalRequest, feature_dict: dict[str, Any]
@@ -347,37 +369,46 @@ class SignalForecaster:
         Returns:
             FeatureVector with user features.
         """
-        try:
-            client = get_crud_client()
-            tx = client.get_features(user_id=request.user_id)
+        with mlflow.start_span(name="_fetch_features") as span:
+            span.set_attribute("user_id", request.user_id)
+            try:
+                client = get_crud_client()
+                tx = client.get_features(user_id=request.user_id)
 
-            if tx is not None:
-                logger.debug(f"Found features for user {request.user_id} via Analytics")
+                if tx is not None:
+                    logger.debug(
+                        f"Found features for user {request.user_id} via Analytics"
+                    )
+                    return FeatureVector(
+                        velocity_24h=int(tx.velocity_24h),
+                        amount_to_avg_ratio_30d=float(tx.amount_to_avg_ratio_30d),
+                        balance_volatility_z_score=float(tx.balance_volatility_z_score),
+                        bank_connections_24h=0,  # Not in feature_snapshots yet
+                        merchant_risk_score=int(tx.merchant_risk_score),
+                        has_history=True,
+                        transaction_amount=request.amount,
+                    )
+                else:
+                    logger.debug(
+                        f"No features found for user {request.user_id} in Analytics"
+                    )
+
+            except Exception as e:
+                logger.warning(f"Failed to fetch features from Analytics: {e}")
+                span.set_attribute("error", str(e))
+
+            # Fallback: mark as no history. Do NOT simulate by default.
+            # Unknown user behavior is now Go-aligned (either Go hydrates/simulates,
+            # or Python uses model fallback logic without features).
+            disable_sim = (
+                os.getenv("DISABLE_FEATURE_SIMULATION", "true").lower() == "true"
+            )
+            if disable_sim:
                 return FeatureVector(
-                    velocity_24h=int(tx.velocity_24h),
-                    amount_to_avg_ratio_30d=float(tx.amount_to_avg_ratio_30d),
-                    balance_volatility_z_score=float(tx.balance_volatility_z_score),
-                    bank_connections_24h=0,  # Not in feature_snapshots yet
-                    merchant_risk_score=int(tx.merchant_risk_score),
-                    has_history=True,
-                    transaction_amount=request.amount,
-                )
-            else:
-                logger.debug(
-                    f"No features found for user {request.user_id} in Analytics"
+                    has_history=False, transaction_amount=request.amount
                 )
 
-        except Exception as e:
-            logger.warning(f"Failed to fetch features from Analytics: {e}")
-
-        # Fallback: mark as no history. Do NOT simulate by default.
-        # Unknown user behavior is now Go-aligned (either Go hydrates/simulates,
-        # or Python uses model fallback logic without features).
-        disable_sim = os.getenv("DISABLE_FEATURE_SIMULATION", "true").lower() == "true"
-        if disable_sim:
-            return FeatureVector(has_history=False, transaction_amount=request.amount)
-
-        return self._simulate_features(request)
+            return self._simulate_features(request)
 
     def _simulate_features(self, request: SignalRequest) -> FeatureVector:
         """Generate simulated features for users not in database.
