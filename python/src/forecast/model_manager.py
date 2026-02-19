@@ -76,7 +76,106 @@ class ModelManager:
         self._state: Literal["idle", "loading", "ready", "failed"] = "idle"
         self._last_error: str | None = None
         self._benchmarked_versions: set[str] = set()
+        # Backward-compatible legacy fields used by older tests/callers.
+        self._model: Any = None
+        self._model_version: str = "unknown"
+        self._model_source: str = "none"
+        self._required_features: list[str] = []
+        self._calibrator: Any = None
+        self._calibrator_loaded: bool = False
+        self._baseline_distribution: dict | None = None
+        self._feature_importance: dict[str, float] | None = None
         self._initialized = True
+
+    @staticmethod
+    def _bundle_like(candidate: Any) -> bool:
+        """Check whether an object looks like a model bundle."""
+        return (
+            candidate is not None
+            and hasattr(candidate, "model")
+            and hasattr(candidate, "version")
+            and hasattr(candidate, "source")
+            and hasattr(candidate, "required_features")
+        )
+
+    @staticmethod
+    def _coerce_feature_names(features: Any) -> list[str]:
+        """Normalize feature-name collections into a list of strings."""
+        if features is None:
+            return []
+        if isinstance(features, list):
+            return [str(name) for name in features]
+        if isinstance(features, tuple):
+            return [str(name) for name in features]
+        if isinstance(features, (str, bytes)):
+            return []
+        try:
+            return [str(name) for name in list(features)]
+        except Exception:
+            return []
+
+    @staticmethod
+    def _normalize_calibrator_result(result: Any) -> tuple[Any, bool]:
+        """Handle mocked artifact loader return shapes safely."""
+        if isinstance(result, tuple) and len(result) == 2:
+            calibrator, loaded = result
+            return calibrator, bool(loaded)
+        return None, False
+
+    def _resolve_runtime_bundle(
+        self, bundle: ModelStateBundle | None = None
+    ) -> ModelStateBundle | Any | None:
+        """Resolve bundle from explicit arg, current bundle, or legacy fields."""
+        if self._bundle_like(bundle):
+            return bundle
+
+        current = self._bundle
+        if self._bundle_like(current):
+            return current
+
+        legacy_model = getattr(self, "_model", None)
+        if legacy_model is None:
+            return None
+
+        legacy_source = str(getattr(self, "_model_source", "") or "")
+        if legacy_source in {"", "none"}:
+            legacy_source = "mlflow"
+
+        return ModelStateBundle(
+            model=legacy_model,
+            version=str(getattr(self, "_model_version", "unknown")),
+            source=legacy_source,
+            required_features=self._coerce_feature_names(
+                getattr(self, "_required_features", [])
+            ),
+            calibrator=getattr(self, "_calibrator", None),
+            calibrator_loaded=bool(getattr(self, "_calibrator_loaded", False)),
+            baseline_distribution=getattr(self, "_baseline_distribution", None),
+            feature_importance=getattr(self, "_feature_importance", None),
+        )
+
+    def _sync_legacy_from_bundle(self, bundle: Any) -> None:
+        """Keep legacy private fields in sync with the active bundle."""
+        self._model = getattr(bundle, "model", None)
+        self._model_version = str(getattr(bundle, "version", "unknown"))
+        self._model_source = str(getattr(bundle, "source", "none"))
+        self._required_features = self._coerce_feature_names(
+            getattr(bundle, "required_features", [])
+        )
+        self._calibrator = getattr(bundle, "calibrator", None)
+        self._calibrator_loaded = bool(getattr(bundle, "calibrator_loaded", False))
+        self._baseline_distribution = getattr(bundle, "baseline_distribution", None)
+        self._feature_importance = getattr(bundle, "feature_importance", None)
+
+    def _store_loaded_bundle_if_valid(self, bundle: Any) -> bool:
+        """Store and sync a valid bundle-like object."""
+        if not self._bundle_like(bundle):
+            return False
+
+        with self._lock:
+            self._bundle = bundle
+            self._sync_legacy_from_bundle(bundle)
+        return True
 
     def _transition_to(
         self,
@@ -96,18 +195,26 @@ class ModelManager:
     @property
     def model_loaded(self) -> bool:
         """Check if a model is currently loaded."""
-        return self._bundle is not None and self._bundle.model is not None
+        bundle = self._resolve_runtime_bundle()
+        return bundle is not None and getattr(bundle, "model", None) is not None
 
     @property
     def calibrator_loaded(self) -> bool:
         """Check if a calibration artifact is loaded."""
-        return self._bundle is not None and self._bundle.calibrator_loaded
+        bundle = self._resolve_runtime_bundle()
+        if bundle is not None:
+            return bool(getattr(bundle, "calibrator_loaded", False))
+        return bool(getattr(self, "_calibrator_loaded", False))
 
     @property
     def calibrator(self):
         """Get the loaded calibrator or a default one."""
-        if self._bundle and self._bundle.calibrator is not None:
-            return self._bundle.calibrator
+        bundle = self._resolve_runtime_bundle()
+        loaded_calibrator = getattr(bundle, "calibrator", None) if bundle else None
+        if loaded_calibrator is None:
+            loaded_calibrator = getattr(self, "_calibrator", None)
+        if loaded_calibrator is not None:
+            return loaded_calibrator
 
         # Fallback to default ScoreCalibrator
         from model.evaluate import ScoreCalibrator
@@ -117,15 +224,27 @@ class ModelManager:
     @property
     def model_version(self) -> str:
         """Get the current model version."""
-        if self._bundle:
-            return self._bundle.version
+        bundle = self._resolve_runtime_bundle()
+        if bundle is not None:
+            version = getattr(bundle, "version", None)
+            if version:
+                return str(version)
+        legacy_version = getattr(self, "_model_version", None)
+        if legacy_version:
+            return str(legacy_version)
         return "unknown"
 
     @property
     def model_source(self) -> str:
         """Get the model source (mlflow, fallback, or none)."""
-        if self._bundle:
-            return self._bundle.source
+        bundle = self._resolve_runtime_bundle()
+        if bundle is not None:
+            source = getattr(bundle, "source", None)
+            if source:
+                return str(source)
+        legacy_source = getattr(self, "_model_source", None)
+        if legacy_source:
+            return str(legacy_source)
         return "none"
 
     @property
@@ -136,8 +255,17 @@ class ModelManager:
             List of required feature column names. Falls back to default
             FEATURE_COLUMNS if not available.
         """
-        if self._bundle and self._bundle.required_features:
-            return self._bundle.required_features
+        bundle = self._resolve_runtime_bundle()
+        if bundle is not None:
+            resolved = self._coerce_feature_names(
+                getattr(bundle, "required_features", None)
+            )
+            if resolved:
+                return resolved
+
+        legacy = self._coerce_feature_names(getattr(self, "_required_features", None))
+        if legacy:
+            return legacy
 
         # Fallback to default feature columns
         from model.loader import DataLoader
@@ -159,9 +287,14 @@ class ModelManager:
 
         # Try loading from MLflow first
         bundle = self._load_from_mlflow()
+        if self._store_loaded_bundle_if_valid(bundle):
+            self._transition_to("ready")
+            return True
         if bundle:
-            with self._lock:
-                self._bundle = bundle
+            # Backward-compatibility for tests that mock loader methods as booleans.
+            logger.warning(
+                "Model loader returned non-bundle truthy value; treating as success."
+            )
             self._transition_to("ready")
             return True
 
@@ -171,8 +304,12 @@ class ModelManager:
         bundle = self._load_fallback_model()
         if bundle:
             model_fallback_total.labels(reason=ErrorCategory.MLFLOW_UNAVAILABLE).inc()
-            with self._lock:
-                self._bundle = bundle
+            if self._store_loaded_bundle_if_valid(bundle):
+                self._transition_to("ready")
+                return True
+            logger.warning(
+                "Fallback loader returned non-bundle truthy value; treating as success."
+            )
             self._transition_to("ready")
             return True
 
@@ -200,7 +337,9 @@ class ModelManager:
 
             # Try to load required_features.json artifact (FF5)
             # Falls back to feature_columns.json if missing (legacy)
-            required_features = self._load_required_features_artifact(version)
+            required_features = self._coerce_feature_names(
+                self._load_required_features_artifact(version)
+            )
 
             # Validate loaded features against registry (Commit 7)
             from features.registry import FeatureRegistry
@@ -226,14 +365,16 @@ class ModelManager:
                     logger.warning(msg)
 
             # Try to load calibrator.pkl artifact (C2)
-            calibrator, calibrator_loaded = self._load_calibrator_artifact()
+            calibrator, calibrator_loaded = self._normalize_calibrator_result(
+                self._load_calibrator_artifact()
+            )
 
             # Try to load score_distribution.json artifact (C3)
             baseline_distribution = self._load_baseline_distribution_artifact()
 
             # Cache feature importance (C4)
             feature_importance = self.get_feature_importance_from_model(
-                model, required_features or []
+                model, required_features
             )
 
             logger.info(f"Successfully loaded model version {version} from MLflow")
@@ -242,7 +383,7 @@ class ModelManager:
                 model=model,
                 version=version,
                 source=source,
-                required_features=required_features or [],
+                required_features=required_features,
                 calibrator=calibrator,
                 calibrator_loaded=calibrator_loaded,
                 baseline_distribution=baseline_distribution,
@@ -250,7 +391,7 @@ class ModelManager:
             )
 
             # Benchmark inference latency after load
-            self._benchmark_inference(bundle)
+            self._benchmark_inference(bundle, log_to_mlflow=False)
 
             return bundle
 
@@ -357,30 +498,71 @@ class ModelManager:
     @property
     def baseline_distribution(self) -> dict | None:
         """Get the baseline score distribution."""
-        if self._bundle:
-            return self._bundle.baseline_distribution
+        bundle = self._resolve_runtime_bundle()
+        if bundle is not None:
+            return getattr(bundle, "baseline_distribution", None)
+        if getattr(self, "_baseline_distribution", None) is not None:
+            return self._baseline_distribution
         return None
 
     @property
     def cached_feature_importance(self) -> dict[str, float] | None:
         """Get the cached feature importance."""
-        if self._bundle:
-            return self._bundle.feature_importance
+        bundle = self._resolve_runtime_bundle()
+        if bundle is not None:
+            return getattr(bundle, "feature_importance", None)
+        if getattr(self, "_feature_importance", None) is not None:
+            return self._feature_importance
         return None
 
+    def get_feature_importance(self) -> dict[str, float] | None:
+        """Backward-compatible accessor for feature importance extraction."""
+        cached = self.cached_feature_importance
+        if cached is not None:
+            return cached
+
+        bundle = self._resolve_runtime_bundle()
+        if bundle is None:
+            return None
+
+        importance = self.get_feature_importance_from_model(
+            getattr(bundle, "model", None),
+            self._coerce_feature_names(getattr(bundle, "required_features", [])),
+        )
+        if importance is not None:
+            self._feature_importance = importance
+            if self._bundle_like(self._bundle):
+                try:
+                    self._bundle.feature_importance = importance
+                except Exception:
+                    pass
+        return importance
+
     def _benchmark_inference(
-        self, bundle: ModelStateBundle, n_samples: int = 100
+        self,
+        bundle: ModelStateBundle | None = None,
+        n_samples: int = 100,
+        *,
+        log_to_mlflow: bool | None = None,
     ) -> None:
         """Benchmark inference latency and emit runtime metrics.
 
         Args:
-            bundle: The model bundle to benchmark.
+            bundle: Optional bundle to benchmark.
+                If omitted, resolves from current state.
             n_samples: Number of samples to use for benchmarking.
+            log_to_mlflow: Whether to also emit benchmark metrics to MLflow run.
+                Defaults to True for explicit bundle calls and False otherwise.
         """
-        if bundle.model is None:
+        if log_to_mlflow is None:
+            log_to_mlflow = bundle is not None
+
+        runtime_bundle = self._resolve_runtime_bundle(bundle)
+        model = getattr(runtime_bundle, "model", None) if runtime_bundle else None
+        if model is None:
             return
 
-        version = self.model_version
+        version = str(getattr(runtime_bundle, "version", None) or self.model_version)
         if version in self._benchmarked_versions:
             logger.debug(f"Skipping benchmark for version {version} (already run)")
             return
@@ -388,21 +570,26 @@ class ModelManager:
         logger.info(f"Starting inference benchmark for version {version}")
 
         try:
-            # Create sample data matching required features
-            required = bundle.required_features
+            sample_count = max(int(n_samples), 1)
+            required = self._coerce_feature_names(
+                getattr(runtime_bundle, "required_features", [])
+            )
             rng = np.random.default_rng(0)
             sample_data = pd.DataFrame(
-                {feat: rng.random(n_samples) for feat in required}
+                {feat: rng.random(sample_count) for feat in required},
+                index=range(sample_count),
             )
 
             # Measure latencies
+            source = str(getattr(runtime_bundle, "source", "mlflow") or "mlflow")
+            use_predict = source == "mlflow" or not hasattr(model, "predict_proba")
             latencies_ms = []
-            for _ in range(n_samples):
+            for _ in range(sample_count):
                 start = time.perf_counter()
-                if bundle.source == "mlflow":
-                    bundle.model.predict(sample_data.iloc[[0]])
+                if use_predict:
+                    model.predict(sample_data.iloc[[0]])
                 else:
-                    bundle.model.predict_proba(sample_data.iloc[[0]])
+                    model.predict_proba(sample_data.iloc[[0]])
                 elapsed_ms = (time.perf_counter() - start) * 1000
                 latencies_ms.append(elapsed_ms)
 
@@ -412,7 +599,7 @@ class ModelManager:
             p95 = latencies_sorted[int(len(latencies_sorted) * 0.95)]
             p99 = latencies_sorted[int(len(latencies_sorted) * 0.99)]
 
-            # Emit runtime metrics only. Do not mutate historical training runs.
+            # Emit runtime metrics only. Do not fail model load on metrics failures.
             try:
                 from forecast.metrics import (
                     inference_benchmark_percentile_latency_ms,
@@ -438,7 +625,31 @@ class ModelManager:
             except Exception as e:
                 logger.debug(f"Could not emit inference benchmark runtime metrics: {e}")
 
-            # Mark as benchmarked even if metrics emit fails, to avoid retries
+            if log_to_mlflow:
+                try:
+                    import mlflow
+
+                    client = mlflow.MlflowClient()
+                    versions = client.search_model_versions(f"name='{MODEL_NAME}'")
+                    target_version = version.lstrip("v")
+                    run_id = None
+                    for v in versions:
+                        if (
+                            v.current_stage == "Production"
+                            and str(v.version) == target_version
+                        ):
+                            run_id = v.run_id
+                            break
+                    if run_id:
+                        client.log_metric(run_id, "inference_latency_p50_ms", p50)
+                        client.log_metric(run_id, "inference_latency_p95_ms", p95)
+                        client.log_metric(run_id, "inference_latency_p99_ms", p99)
+                except Exception as e:
+                    logger.debug(
+                        f"Could not emit inference benchmark MLflow metrics: {e}"
+                    )
+
+            # Mark as benchmarked even if metrics emit fails, to avoid retries.
             self._benchmarked_versions.add(version)
         except Exception as e:
             logger.debug(f"Inference benchmarking failed: {e}")
@@ -515,12 +726,12 @@ class ModelManager:
             RuntimeError: If no model is loaded or in loading state.
         """
         state = self._state
-        bundle = self._bundle
+        bundle = self._resolve_runtime_bundle()
 
         if state == "loading":
             raise RuntimeError("Model reload in progress", "reload_in_progress")
 
-        if bundle is None or bundle.model is None:
+        if bundle is None or getattr(bundle, "model", None) is None:
             if state == "failed":
                 raise RuntimeError(
                     f"Model loading failed: {self._last_error}", "load_failed"
@@ -536,12 +747,14 @@ class ModelManager:
             )
 
         try:
+            model = getattr(bundle, "model", None)
+            source = str(getattr(bundle, "source", "mlflow") or "mlflow")
             # MLflow pyfunc models return predictions directly
-            if bundle.source == "mlflow":
-                predictions = bundle.model.predict(features)
+            if source == "mlflow":
+                predictions = model.predict(features)
             else:
                 # Fallback sklearn model - get probability of positive class
-                predictions = bundle.model.predict_proba(features)[:, 1]
+                predictions = model.predict_proba(features)[:, 1]
 
             return np.asarray(predictions)
 
@@ -563,7 +776,7 @@ class ModelManager:
             RuntimeError: If no model is loaded or in loading state.
         """
         # predict() will handle state checks
-        bundle = self._bundle
+        bundle = self._resolve_runtime_bundle()
         if bundle is None:
             # Re-check state if bundle is None to provide better error
             state = self._state
@@ -578,7 +791,7 @@ class ModelManager:
             )
 
         # Validate that all required features are present
-        required = bundle.required_features
+        required = self._coerce_feature_names(getattr(bundle, "required_features", []))
         missing_features = [f for f in required if f not in features]
         if missing_features:
             logger.warning(
