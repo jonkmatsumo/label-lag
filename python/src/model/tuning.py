@@ -350,6 +350,43 @@ def run_tuning_study(
         # This requires search space customization (Commit 3).
         pass
 
+    # --- Sub-phase 3.2: recover persisted seed before sampler construction ---
+    # If this job already has a study in storage, use its original seed so that
+    # resumed runs reproduce the same trial sequence regardless of what the
+    # caller passes as `seed`.
+    if job_id and (
+        storage_url is not None
+        or os.getenv("TUNING_OPTUNA_STORAGE_URL")
+        or os.getenv("DATABASE_URL")
+    ):
+        from training.optuna_resume import (
+            get_optuna_storage_url,
+            get_tuning_study_name,
+            normalize_optuna_storage_url,
+        )
+
+        resolved = (
+            normalize_optuna_storage_url(storage_url)
+            if storage_url is not None
+            else get_optuna_storage_url()
+        )
+        if resolved and job_id:
+            try:
+                existing = optuna.load_study(
+                    study_name=get_tuning_study_name(job_id),
+                    storage=resolved,
+                )
+                persisted_seed = existing.user_attrs.get("seed")
+                if persisted_seed is not None:
+                    seed = int(persisted_seed)
+                    logger.info(
+                        "Resuming study %s with persisted seed=%d",
+                        job_id,
+                        seed,
+                    )
+            except Exception:
+                pass  # Study doesn't exist yet — first run, use caller seed.
+
     if strategy == "random":
         sampler = optuna.samplers.RandomSampler(seed=seed)
     elif strategy == "grid":
@@ -367,6 +404,9 @@ def run_tuning_study(
     )
     if job_id:
         study.set_user_attr("tuning_job_id", job_id)
+    # Persist seed so resumed studies always reproduce the original sequence.
+    if "seed" not in study.user_attrs:
+        study.set_user_attr("seed", seed)
 
     existing_trial_count = len(study.trials)
     remaining_trials = max(0, n_trials - existing_trial_count)

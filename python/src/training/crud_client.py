@@ -409,23 +409,44 @@ class AnalyticsCRUDClient:
             logger.error("fallback persistence failed", error=str(fallback_err))
 
     def replay_spooled_reports(self):
-        """On startup, attempt to replay failed reports from local spool."""
+        """On startup, attempt to replay failed reports from local spool.
+
+        Uses an atomic rename to avoid TOCTOU: the spool file is renamed to a
+        ``.processing`` snapshot before any reads.  New entries written by
+        concurrent ``_fallback_persist`` calls go to a fresh spool file and are
+        not affected by this replay.  Failed lines are appended back to the live
+        spool so they will be retried on the next startup.
+        """
         var_dir = os.path.join(os.getcwd(), "var")
         log_path = os.path.join(var_dir, "training_run_reports.jsonl")
+        processing_path = log_path + ".processing"
 
         if not os.path.exists(log_path):
             return
 
         logger.info("checking for spooled training reports", log_path=log_path)
 
+        # Atomically claim the spool file.  After this rename, concurrent
+        # _fallback_persist calls will create a new log_path without touching
+        # our snapshot.
         try:
-            with open(log_path) as f:
+            os.rename(log_path, processing_path)
+        except OSError as rename_err:
+            logger.warning(
+                "could not claim spool file for replay",
+                error=str(rename_err),
+            )
+            return
+
+        try:
+            with open(processing_path) as f:
                 lines = f.readlines()
 
             if not lines:
+                os.remove(processing_path)
                 return
 
-            remaining = []
+            failed_lines: list[str] = []
             replayed_count = 0
 
             for line in lines:
@@ -459,22 +480,26 @@ class AnalyticsCRUDClient:
                     replayed_count += 1
                 except Exception as e:
                     logger.warning("failed to replay report line", error=str(e))
-                    remaining.append(line)
+                    failed_lines.append(line)
 
-            if remaining:
-                with open(log_path, "w") as f:
-                    f.writelines(remaining)
-            else:
-                try:
-                    os.remove(log_path)
-                except OSError:
-                    pass
+            # Write failed lines back to the *live* spool (append) so they
+            # merge with any entries written during replay.
+            if failed_lines:
+                with open(log_path, "a") as f:
+                    f.writelines(failed_lines)
+
+            # Remove the processing snapshot regardless of failures.
+            try:
+                os.remove(processing_path)
+            except OSError:
+                pass
 
             if replayed_count > 0:
                 logger.info(f"replayed {replayed_count} spooled reports")
 
         except Exception as e:
             logger.error("error during report replay", error=str(e))
+            # Leave processing_path in place so it can be inspected / retried.
 
 
 _client = None

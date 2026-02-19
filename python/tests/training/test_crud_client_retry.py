@@ -104,7 +104,10 @@ class TestAnalyticsCRUDClientRetry(unittest.TestCase):
     @patch("training.crud_client.os.path.exists")
     @patch("builtins.open", new_callable=unittest.mock.mock_open)
     @patch("training.crud_client.os.remove")
-    def test_replay_spooled_reports_success(self, mock_remove, mock_open, mock_exists):
+    @patch("training.crud_client.os.rename")
+    def test_replay_spooled_reports_success(
+        self, mock_rename, mock_remove, mock_open, mock_exists
+    ):
         mock_exists.return_value = True
         payload = {
             "run_id": "spooled-run",
@@ -123,10 +126,14 @@ class TestAnalyticsCRUDClientRetry(unittest.TestCase):
 
         self.client.replay_spooled_reports()
 
+        mock_rename.assert_called_once()
         self.assertEqual(self.client.stub.ReportTrainingRun.call_count, 1)
-        sent_req = self.client.stub.ReportTrainingRun.call_args[0][0]
-        sent_kwargs = self.client.stub.ReportTrainingRun.call_args.kwargs
+        sent_args, sent_kwargs = self.client.stub.ReportTrainingRun.call_args
+        sent_req = sent_args[0]
         self.assertEqual(sent_req.run.tenant_id, "tenant-1")
         self.assertEqual(sent_req.tenant_id, "tenant-1")
         self.assertIn(("x-request-id", "req-999"), sent_kwargs.get("metadata", []))
         mock_remove.assert_called_once()
+        # Ensure it tried to remove the .processing file
+        remove_path = mock_remove.call_args[0][0]
+        self.assertTrue(remove_path.endswith(".processing"))

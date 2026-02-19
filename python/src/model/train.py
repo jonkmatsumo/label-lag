@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import logging
 import os
 import platform
 import subprocess
@@ -12,6 +13,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from model.loader import DataLoader
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     import matplotlib.pyplot as plt
@@ -199,7 +202,11 @@ def _generate_model_card(params: dict, metrics: dict, path: str | Path) -> None:
 
 
 def _compute_metrics(y_true, y_pred, y_proba):
-    """Compute precision, recall, pr_auc, f1, roc_auc, log_loss, brier, tp/fp/tn/fn."""
+    """Compute precision, recall, pr_auc, f1, roc_auc, log_loss, brier, tp/fp/tn/fn.
+
+    Returns None for roc_auc and log_loss if y_true contains only one class,
+    matching mathematical undefinedness for these metrics.
+    """
     import numpy as np
     from sklearn.metrics import (
         average_precision_score,
@@ -212,13 +219,24 @@ def _compute_metrics(y_true, y_pred, y_proba):
         roc_auc_score,
     )
 
+    y_true = np.asarray(y_true)
     precision = precision_score(y_true, y_pred, zero_division=0)
     recall = recall_score(y_true, y_pred, zero_division=0)
-    pr_auc = average_precision_score(y_true, y_proba)
-    f1 = f1_score(y_true, y_pred, zero_division=0)
+
     n_classes = len(np.unique(y_true))
-    roc_auc_val = roc_auc_score(y_true, y_proba) if n_classes > 1 else 0.0
-    log_loss_val = log_loss(y_true, y_proba) if n_classes > 1 else 0.0
+    # AP requires at least one positive sample to be well-defined for PR curve
+    pr_auc = (
+        average_precision_score(y_true, y_proba)
+        if n_classes > 1 and np.any(y_true == 1)
+        else 0.0
+    )
+
+    f1 = f1_score(y_true, y_pred, zero_division=0)
+
+    # These metrics are mathematically undefined for single-class folds
+    roc_auc_val = roc_auc_score(y_true, y_proba) if n_classes > 1 else None
+    log_loss_val = log_loss(y_true, y_proba) if n_classes > 1 else None
+
     brier = brier_score_loss(y_true, y_proba)
     cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
     if cm.shape == (2, 2):
@@ -544,15 +562,22 @@ def train_model(
                 fm = _compute_metrics(y_tr.iloc[val_idx], y_vp, y_vprob)
                 fold_metrics.append(fm)
                 for key, val in fm.items():
-                    _mlflow.log_metric(f"cv_{key}_fold_{fold_i}", val, step=fold_i)
+                    if val is not None:
+                        _mlflow.log_metric(f"cv_{key}_fold_{fold_i}", val, step=fold_i)
+                    else:
+                        logger.warning(f"Fold {fold_i} is degenerate for metric {key}")
             if fold_metrics:
                 agg = {}
-                for key in fold_metrics[0]:
-                    vals = [m[key] for m in fold_metrics]
-                    agg[f"{key}_mean"] = float(np.mean(vals))
-                    agg[f"{key}_std"] = float(np.std(vals))
-                    agg[f"{key}_min"] = float(np.min(vals))
-                    agg[f"{key}_max"] = float(np.max(vals))
+                for key in fold_metrics[0].keys():
+                    vals = [m[key] for m in fold_metrics if m[key] is not None]
+                    if vals:
+                        agg[f"{key}_mean"] = float(np.mean(vals))
+                        agg[f"{key}_std"] = float(np.std(vals))
+                        agg[f"{key}_min"] = float(np.min(vals))
+                        agg[f"{key}_max"] = float(np.max(vals))
+                        agg[f"cv_valid_folds_{key}"] = float(len(vals))
+                    else:
+                        logger.warning(f"No valid folds for CV metric: {key}")
                 _mlflow.log_metrics(agg)
                 _mlflow.set_tags({"cv.enabled": "true", "cv.n_folds": str(k)})
 

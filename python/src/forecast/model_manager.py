@@ -11,9 +11,10 @@ import logging
 import os
 import pickle
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -29,6 +30,20 @@ MODEL_NAME = "ach-fraud-detection"
 
 # Fallback model path
 FALLBACK_MODEL_PATH = Path(__file__).parent.parent / "model" / "fallback_model.pkl"
+
+
+@dataclass
+class ModelStateBundle:
+    """Bundle of model and associated metadata for atomic swap."""
+
+    model: Any
+    version: str
+    source: str
+    required_features: list[str]
+    calibrator: Any
+    calibrator_loaded: bool
+    baseline_distribution: dict | None
+    feature_importance: dict | None
 
 
 class ModelManager:
@@ -55,31 +70,41 @@ class ModelManager:
         if self._initialized:
             return
 
-        self._model = None
-        self._model_version: str | None = None
-        self._model_source: str = "none"
-        self._required_features: list[str] | None = None
-        self._calibrator = None
-        self._calibrator_loaded = False
-        self._baseline_distribution = None
-        self._cached_feature_importance = None
+        self._bundle: ModelStateBundle | None = None
+        self._state: Literal["idle", "loading", "ready", "failed"] = "idle"
+        self._last_error: str | None = None
         self._initialized = True
+
+    def _transition_to(
+        self,
+        state: Literal["idle", "loading", "ready", "failed"],
+        error: str | None = None,
+    ) -> None:
+        """Atomically transition to a new state and log it."""
+        with self._lock:
+            old_state = self._state
+            self._state = state
+            self._last_error = error
+            logger.info(
+                f"ModelManager state transition: {old_state} -> {state}"
+                + (f" (error: {error})" if error else "")
+            )
 
     @property
     def model_loaded(self) -> bool:
         """Check if a model is currently loaded."""
-        return self._model is not None
+        return self._bundle is not None and self._bundle.model is not None
 
     @property
     def calibrator_loaded(self) -> bool:
         """Check if a calibration artifact is loaded."""
-        return self._calibrator_loaded
+        return self._bundle is not None and self._bundle.calibrator_loaded
 
     @property
     def calibrator(self):
         """Get the loaded calibrator or a default one."""
-        if self._calibrator is not None:
-            return self._calibrator
+        if self._bundle and self._bundle.calibrator is not None:
+            return self._bundle.calibrator
 
         # Fallback to default ScoreCalibrator
         from model.evaluate import ScoreCalibrator
@@ -89,12 +114,16 @@ class ModelManager:
     @property
     def model_version(self) -> str:
         """Get the current model version."""
-        return self._model_version or "unknown"
+        if self._bundle:
+            return self._bundle.version
+        return "unknown"
 
     @property
     def model_source(self) -> str:
         """Get the model source (mlflow, fallback, or none)."""
-        return self._model_source
+        if self._bundle:
+            return self._bundle.source
+        return "none"
 
     @property
     def required_features(self) -> list[str]:
@@ -104,8 +133,8 @@ class ModelManager:
             List of required feature column names. Falls back to default
             FEATURE_COLUMNS if not available.
         """
-        if self._required_features is not None:
-            return self._required_features
+        if self._bundle and self._bundle.required_features:
+            return self._bundle.required_features
 
         # Fallback to default feature columns
         from model.loader import DataLoader
@@ -121,25 +150,36 @@ class ModelManager:
         Returns:
             True if a model was loaded successfully, False otherwise.
         """
+        self._transition_to("loading")
+
         # Try loading from MLflow first
-        if self._load_from_mlflow():
+        bundle = self._load_from_mlflow()
+        if bundle:
+            with self._lock:
+                self._bundle = bundle
+            self._transition_to("ready")
             return True
 
         # Fall back to local model
         from forecast.metrics import model_fallback_total
 
-        if self._load_fallback_model():
+        bundle = self._load_fallback_model()
+        if bundle:
             model_fallback_total.labels(reason="mlflow_unavailable").inc()
+            with self._lock:
+                self._bundle = bundle
+            self._transition_to("ready")
             return True
 
+        self._transition_to("failed", error="Both MLflow and fallback failed")
         logger.error("No model available - both MLflow and fallback failed")
         return False
 
-    def _load_from_mlflow(self) -> bool:
+    def _load_from_mlflow(self) -> ModelStateBundle | None:
         """Attempt to load model from MLflow registry.
 
         Returns:
-            True if successful, False otherwise.
+            ModelStateBundle if successful, None otherwise.
         """
         try:
             import mlflow
@@ -149,21 +189,21 @@ class ModelManager:
             model_uri = f"models:/{MODEL_NAME}/Production"
             logger.info(f"Loading model from MLflow: {model_uri}")
 
-            self._model = mlflow.pyfunc.load_model(model_uri)
-            self._model_version = self._get_production_version()
-            self._model_source = "mlflow"
+            model = mlflow.pyfunc.load_model(model_uri)
+            version = self._get_production_version()
+            source = "mlflow"
 
             # Try to load required_features.json artifact (FF5)
             # Falls back to feature_columns.json if missing (legacy)
-            self._load_required_features_artifact()
+            required_features = self._load_required_features_artifact(version)
 
             # Validate loaded features against registry (Commit 7)
             from features.registry import FeatureRegistry
 
-            if self._required_features:
+            if required_features:
                 registered_features = set(FeatureRegistry.list_features())
                 unknown_features = [
-                    f for f in self._required_features if f not in registered_features
+                    f for f in required_features if f not in registered_features
                 ]
 
                 enforce_strict = (
@@ -179,37 +219,44 @@ class ModelManager:
                         logger.critical(f"STRICT ENFORCEMENT FAILURE: {msg}")
                         raise ValueError(msg)
                     logger.warning(msg)
-                    # Check for missing required features in registry?
-                # (Registry is source of truth for what exists,
-                # model is source of truth for what it NEEDS).
-                # Mismatch means model needs more than what registry defines.
 
             # Try to load calibrator.pkl artifact (C2)
-            self._load_calibrator_artifact()
+            calibrator, calibrator_loaded = self._load_calibrator_artifact()
 
             # Try to load score_distribution.json artifact (C3)
-            self._load_baseline_distribution_artifact()
+            baseline_distribution = self._load_baseline_distribution_artifact()
 
             # Cache feature importance (C4)
-            self._cached_feature_importance = self.get_feature_importance()
+            feature_importance = self.get_feature_importance_from_model(
+                model, required_features or []
+            )
 
-            logger.info(
-                f"Successfully loaded model version {self._model_version} from MLflow"
+            logger.info(f"Successfully loaded model version {version} from MLflow")
+
+            bundle = ModelStateBundle(
+                model=model,
+                version=version,
+                source=source,
+                required_features=required_features or [],
+                calibrator=calibrator,
+                calibrator_loaded=calibrator_loaded,
+                baseline_distribution=baseline_distribution,
+                feature_importance=feature_importance,
             )
 
             # Benchmark inference latency after load
-            self._benchmark_inference()
+            self._benchmark_inference(bundle)
 
-            return True
+            return bundle
 
         except Exception as e:
             logger.critical(
                 f"Failed to load model from MLflow/MinIO: {e}. "
                 "Attempting fallback to local model."
             )
-            return False
+            return None
 
-    def _load_required_features_artifact(self) -> None:
+    def _load_required_features_artifact(self, version: str) -> list[str] | None:
         """Load required_features.json artifact from the model run.
 
         Attempts to load required_features.json (new format).
@@ -221,10 +268,7 @@ class ModelManager:
             client = mlflow.MlflowClient()
             versions = client.search_model_versions(f"name='{MODEL_NAME}'")
             for v in versions:
-                if (
-                    v.current_stage == "Production"
-                    and v.version == self._model_version.lstrip("v")
-                ):
+                if v.current_stage == "Production" and v.version == version.lstrip("v"):
                     run_id = v.run_id
                     # 1. Try new format: required_features.json
                     try:
@@ -233,12 +277,7 @@ class ModelManager:
                         )
                         with open(path) as f:
                             data = json.load(f)
-                        self._required_features = data["features"]
-                        logger.info(
-                            f"Loaded required features from metadata: "
-                            f"{self._required_features}"
-                        )
-                        return
+                        return data["features"]
                     except Exception:
                         logger.debug("required_features.json not found, trying legacy")
 
@@ -246,26 +285,19 @@ class ModelManager:
                     try:
                         path = client.download_artifacts(run_id, "feature_columns.json")
                         with open(path) as f:
-                            self._required_features = json.load(f)
-                        logger.warning(
-                            f"Loaded features from legacy artifact: "
-                            f"{self._required_features}. "
-                            "Please retrain model to generate full metadata."
-                        )
-                        return
+                            return json.load(f)
                     except Exception:
-                        logger.warning(
-                            "No feature artifacts found. "
-                            "Falling back to default columns."
-                        )
+                        logger.warning("No feature artifacts found.")
                         break
         except Exception as e:
             logger.debug(f"Could not load required features metadata: {e}")
+        return None
 
-    def _load_calibrator_artifact(self) -> None:
+    def _load_calibrator_artifact(self) -> tuple[Any, bool]:
         """Load calibrator.pkl artifact from the model run.
 
-        Sets self._calibrator and self._calibrator_loaded if artifact is found.
+        Returns:
+            Tuple of (calibrator, loaded_flag).
         """
         try:
             import joblib
@@ -280,12 +312,7 @@ class ModelManager:
                         artifact_path = client.download_artifacts(
                             run_id, "calibrator.pkl"
                         )
-                        self._calibrator = joblib.load(artifact_path)
-                        self._calibrator_loaded = True
-                        logger.info(
-                            "Successfully loaded calibrator artifact from MLflow"
-                        )
-                        return
+                        return joblib.load(artifact_path), True
                     except Exception as e:
                         logger.debug(
                             f"calibrator.pkl artifact not found or failed to load: {e}"
@@ -293,11 +320,13 @@ class ModelManager:
                         break
         except Exception as e:
             logger.debug(f"Could not load calibrator artifact: {e}")
+        return None, False
 
-    def _load_baseline_distribution_artifact(self) -> None:
+    def _load_baseline_distribution_artifact(self) -> dict | None:
         """Load score_distribution.json artifact from the model run.
 
-        Sets self._baseline_distribution if artifact is found.
+        Returns:
+            Score distribution dict if found, None otherwise.
         """
         try:
             import mlflow
@@ -312,42 +341,45 @@ class ModelManager:
                             run_id, "score_distribution.json"
                         )
                         with open(artifact_path) as f:
-                            self._baseline_distribution = json.load(f)
-                        logger.info(
-                            "Successfully loaded baseline score distribution "
-                            "from MLflow"
-                        )
-                        return
+                            return json.load(f)
                     except Exception as e:
                         logger.debug(f"score_distribution.json artifact not found: {e}")
                         break
         except Exception as e:
             logger.debug(f"Could not load baseline distribution artifact: {e}")
+        return None
 
     @property
     def baseline_distribution(self) -> dict | None:
         """Get the baseline score distribution."""
-        return self._baseline_distribution
+        if self._bundle:
+            return self._bundle.baseline_distribution
+        return None
 
     @property
     def cached_feature_importance(self) -> dict[str, float] | None:
         """Get the cached feature importance."""
-        return self._cached_feature_importance
+        if self._bundle:
+            return self._bundle.feature_importance
+        return None
 
-    def _benchmark_inference(self, n_samples: int = 100) -> None:
+    def _benchmark_inference(
+        self, bundle: ModelStateBundle, n_samples: int = 100
+    ) -> None:
         """Benchmark inference latency and log to MLflow.
 
         Args:
+            bundle: The model bundle to benchmark.
             n_samples: Number of samples to use for benchmarking.
         """
-        if self._model is None:
+        if bundle.model is None:
             return
 
         try:
             import mlflow
 
             # Create sample data matching required features
-            required = self.required_features
+            required = bundle.required_features
             rng = np.random.default_rng(0)
             sample_data = pd.DataFrame(
                 {feat: rng.random(n_samples) for feat in required}
@@ -357,7 +389,10 @@ class ModelManager:
             latencies_ms = []
             for _ in range(n_samples):
                 start = time.perf_counter()
-                self._model.predict(sample_data.iloc[[0]])
+                if bundle.source == "mlflow":
+                    bundle.model.predict(sample_data.iloc[[0]])
+                else:
+                    bundle.model.predict_proba(sample_data.iloc[[0]])
                 elapsed_ms = (time.perf_counter() - start) * 1000
                 latencies_ms.append(elapsed_ms)
 
@@ -371,12 +406,11 @@ class ModelManager:
             try:
                 client = mlflow.MlflowClient()
                 versions = client.search_model_versions(f"name='{MODEL_NAME}'")
-                normalized_model_version = (self._model_version or "").lstrip("v")
                 matched_version = False
                 for v in versions:
                     if (
                         v.current_stage == "Production"
-                        and v.version == normalized_model_version
+                        and f"v{v.version}" == bundle.version
                     ):
                         matched_version = True
                         run_id = v.run_id
@@ -402,34 +436,46 @@ class ModelManager:
         except Exception as e:
             logger.debug(f"Inference benchmarking failed: {e}")
 
-    def _load_fallback_model(self) -> bool:
+    def _load_fallback_model(self) -> ModelStateBundle | None:
         """Attempt to load fallback model from local file.
 
         Returns:
-            True if successful, False otherwise.
+            ModelStateBundle if successful, None otherwise.
         """
         if not FALLBACK_MODEL_PATH.exists():
             logger.warning(f"Fallback model not found at {FALLBACK_MODEL_PATH}")
-            return False
+            return None
 
         try:
             logger.info(f"Loading fallback model from {FALLBACK_MODEL_PATH}")
 
             with open(FALLBACK_MODEL_PATH, "rb") as f:
-                self._model = pickle.load(f)
+                model = pickle.load(f)
 
-            self._model_version = "fallback"
-            self._model_source = "fallback"
+            version = "fallback"
+            source = "fallback"
 
-            logger.warning(
-                "Using fallback model - MLflow registry was unavailable. "
-                "Model predictions may be outdated."
+            # Use default features for fallback
+            from model.loader import DataLoader
+
+            required_features = DataLoader.FEATURE_COLUMNS
+
+            return ModelStateBundle(
+                model=model,
+                version=version,
+                source=source,
+                required_features=required_features,
+                calibrator=None,
+                calibrator_loaded=False,
+                baseline_distribution=None,
+                feature_importance=self.get_feature_importance_from_model(
+                    model, required_features
+                ),
             )
-            return True
 
         except Exception as e:
             logger.error(f"Failed to load fallback model: {e}")
-            return False
+            return None
 
     def _get_production_version(self) -> str:
         """Get the version number of the production model.
@@ -459,18 +505,36 @@ class ModelManager:
             Array of prediction probabilities.
 
         Raises:
-            RuntimeError: If no model is loaded.
+            RuntimeError: If no model is loaded or in loading state.
         """
-        if self._model is None:
-            raise RuntimeError("No model loaded. Call load_production_model() first.")
+        state = self._state
+        bundle = self._bundle
+
+        if state == "loading":
+            raise RuntimeError("Model reload in progress", "reload_in_progress")
+
+        if bundle is None or bundle.model is None:
+            if state == "failed":
+                raise RuntimeError(
+                    f"Model loading failed: {self._last_error}", "load_failed"
+                )
+            raise RuntimeError(
+                "No model loaded. Call load_production_model() first.", "not_loaded"
+            )
+
+        if state == "failed":
+            logger.warning(
+                "Serving from old model bundle because latest reload failed: "
+                f"{self._last_error}"
+            )
 
         try:
             # MLflow pyfunc models return predictions directly
-            if self._model_source == "mlflow":
-                predictions = self._model.predict(features)
+            if bundle.source == "mlflow":
+                predictions = bundle.model.predict(features)
             else:
                 # Fallback sklearn model - get probability of positive class
-                predictions = self._model.predict_proba(features)[:, 1]
+                predictions = bundle.model.predict_proba(features)[:, 1]
 
             return np.asarray(predictions)
 
@@ -489,13 +553,25 @@ class ModelManager:
             features are missing.
 
         Raises:
-            RuntimeError: If no model is loaded.
+            RuntimeError: If no model is loaded or in loading state.
         """
-        if self._model is None:
-            raise RuntimeError("No model loaded. Call load_production_model() first.")
+        # predict() will handle state checks
+        bundle = self._bundle
+        if bundle is None:
+            # Re-check state if bundle is None to provide better error
+            state = self._state
+            if state == "loading":
+                raise RuntimeError("Model reload in progress", "reload_in_progress")
+            if state == "failed":
+                raise RuntimeError(
+                    f"Model loading failed: {self._last_error}", "load_failed"
+                )
+            raise RuntimeError(
+                "No model loaded. Call load_production_model() first.", "not_loaded"
+            )
 
         # Validate that all required features are present
-        required = self.required_features
+        required = bundle.required_features
         missing_features = [f for f in required if f not in features]
         if missing_features:
             logger.warning(
@@ -510,23 +586,26 @@ class ModelManager:
         predictions = self.predict(df)
         return float(predictions[0])
 
-    def get_feature_importance(self) -> dict[str, float] | None:
-        """Get feature importance from the loaded model.
+    def get_feature_importance_from_model(
+        self, model: Any, feature_names: list[str]
+    ) -> dict[str, float] | None:
+        """Extract feature importance from a model instance.
+
+        Args:
+            model: The model instance (MLflow pyfunc or sklearn).
+            feature_names: List of feature names in order.
 
         Returns:
-            Dictionary mapping feature names to importance scores, or None if
-            feature importance cannot be extracted.
+            Dictionary mapping feature names to importance scores.
         """
-        if self._model is None:
+        if model is None:
             return None
 
         try:
             # Try to access underlying XGBoost model
             # MLflow pyfunc models wrap the original model
             underlying_model = (
-                self._model._model_impl
-                if hasattr(self._model, "_model_impl")
-                else self._model
+                model._model_impl if hasattr(model, "_model_impl") else model
             )
 
             # Check if it's an XGBoost model
@@ -536,7 +615,6 @@ class ModelManager:
                 importance_dict = booster.get_score(importance_type="gain")
 
                 # Map feature indices to feature names
-                feature_names = self.required_features
                 if len(importance_dict) == len(feature_names):
                     # Importance dict uses f0, f1, etc. as keys
                     importance_map = {}
@@ -555,7 +633,6 @@ class ModelManager:
             elif hasattr(underlying_model, "feature_importances_"):
                 # Scikit-learn style model
                 importances = underlying_model.feature_importances_
-                feature_names = self.required_features
                 if len(importances) == len(feature_names):
                     return {
                         name: float(imp)
