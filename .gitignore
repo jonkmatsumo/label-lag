@@ -60,6 +60,8 @@ config/*.yaml
 mlflow_artifacts/
 .data/
 data/
+mlflow.db
+mlruns/
 
 # Go binaries
 rules-cli

@@ -28,6 +28,7 @@ plt: Any = None
 xgb_pkg: Any = None
 XGBClassifier: Any = None
 run_tuning_study: Any = None
+logger = logging.getLogger(__name__)
 
 
 def _get_mlflow():
@@ -274,6 +275,72 @@ def _to_python_type(obj):
     return obj
 
 
+def _derive_calibration_split(
+    x_train,
+    y_train,
+    validation_fraction: float,
+):
+    """Derive deterministic train/calibration split from train tail.
+
+    Uses tail slicing to preserve chronology and degrades gracefully for small
+    datasets by keeping enough samples/classes in fit data for model training.
+    """
+
+    def _slice(obj, start: int, end: int):
+        if hasattr(obj, "iloc"):
+            return obj.iloc[start:end]
+        return obj[start:end]
+
+    def _nunique(values) -> int:
+        if hasattr(values, "nunique"):
+            return int(values.nunique())
+        import numpy as np
+
+        return int(np.unique(values).size)
+
+    n_samples = len(y_train)
+    if n_samples == 0:
+        return (
+            x_train,
+            y_train,
+            _slice(x_train, 0, 0),
+            _slice(y_train, 0, 0),
+            0,
+            "train_tail_fraction_fallback_no_calibration",
+        )
+
+    # Invariant: calibration set size must be > 0 and fit set size must be > 0
+    # to be considered a valid calibration split.
+    desired_cal_size = max(1, int(n_samples * validation_fraction))
+    # Preserve at least 2 samples for fit data to avoid trivial failures.
+    cal_size = min(desired_cal_size, max(0, n_samples - 2))
+
+    # Keep at least two classes in fit slice when possible to avoid
+    # single-class XGBoost fit failures on tiny datasets.
+    while cal_size > 0:
+        y_fit_candidate = _slice(y_train, 0, n_samples - cal_size)
+        if _nunique(y_fit_candidate) >= 2:
+            break
+        cal_size -= 1
+
+    # Tighten invariant: if cal_size would be 0 or fit_size would be 0,
+    # fallback to full train without calibration.
+    fit_size = n_samples - cal_size
+    if cal_size <= 0 or fit_size <= 0:
+        cal_size = 0
+        split_strategy = "train_tail_fraction_fallback_no_calibration"
+    else:
+        split_strategy = "train_tail_fraction"
+
+    split_at = n_samples - cal_size
+    x_fit = _slice(x_train, 0, split_at)
+    y_fit = _slice(y_train, 0, split_at)
+    x_cal = _slice(x_train, split_at, n_samples)
+    y_cal = _slice(y_train, split_at, n_samples)
+
+    return x_fit, y_fit, x_cal, y_cal, cal_size, split_strategy
+
+
 def train_model(
     scale_pos_weight: float | None = None,
     max_depth: int = 6,
@@ -347,9 +414,28 @@ def train_model(
     if scale_pos_weight is None:
         scale_pos_weight = n_negative / n_positive
 
+    validation_fraction = split_config.validation_fraction if split_config else 0.2
+    (
+        x_fit_base,
+        y_fit_base,
+        x_cal,
+        y_cal,
+        calibration_set_size,
+        calibration_split_strategy,
+    ) = _derive_calibration_split(
+        split.X_train,
+        split.y_train,
+        validation_fraction=validation_fraction,
+    )
+    calibration_fit_strategy = calibration_split_strategy
+    if calibration_set_size == 0:
+        calibration_fit_strategy = "train_tail_fraction_fallback_full_train"
+
     import time
 
     training_start_time = time.time()
+    effective_early_stopping_rounds = early_stopping_rounds
+    early_stopping_override = None
 
     with _mlflow.start_run() as run, _mlflow.start_span(name="train_model") as span:
         span.set_attribute("feature_count", len(actual_feature_columns))
@@ -381,17 +467,55 @@ def train_model(
         if (
             tuning_config is not None
             and tuning_config.enabled
-            and split.train_size >= 30
+            and len(y_fit_base) >= 10
         ):
-            v_frac = split_config.validation_fraction if split_config else 0.2
-            n = split.train_size
-            val_size = max(5, int(n * v_frac))
+            n = len(y_fit_base)
+            val_size = max(1, int(n * validation_fraction))
             train_size = n - val_size
             if train_size >= 10:
-                x_tr = split.X_train.iloc[:train_size]
-                y_tr = split.y_train.iloc[:train_size]
-                x_val = split.X_train.iloc[train_size:]
-                y_val = split.y_train.iloc[train_size:]
+                x_tr = x_fit_base.iloc[:train_size]
+                y_tr = y_fit_base.iloc[:train_size]
+                x_val = x_fit_base.iloc[train_size:]
+                y_val = y_fit_base.iloc[train_size:]
+
+                if early_stopping_rounds is not None:
+                    val_count = len(y_val)
+                    tune_val_size = val_count // 2
+                    es_val_size = val_count - tune_val_size
+                    _mlflow.log_params(
+                        {
+                            "tuning_val_size": int(tune_val_size),
+                            "early_stop_val_size": int(es_val_size),
+                        }
+                    )
+
+                    if tune_val_size >= 1 and es_val_size >= 1:
+                        x_tune_val = x_val.iloc[:tune_val_size]
+                        y_tune_val = y_val.iloc[:tune_val_size]
+                        x_es_val = x_val.iloc[tune_val_size:]
+                        y_es_val = y_val.iloc[tune_val_size:]
+                        early_stopping_override = (
+                            train_size + tune_val_size,
+                            x_es_val,
+                            y_es_val,
+                        )
+                        x_val = x_tune_val
+                        y_val = y_tune_val
+                        _mlflow.set_tag(
+                            "tuning_es_split_policy", "first_half_tune_second_half_es"
+                        )
+                    else:
+                        effective_early_stopping_rounds = None
+                        disabled_reason = "validation_slice_too_small"
+                        _mlflow.log_param(
+                            "early_stopping_disabled_reason", disabled_reason
+                        )
+                        logger.warning(
+                            f"Early stopping disabled (reason: {disabled_reason}): "
+                            f"requested {early_stopping_rounds} rounds, but validation "
+                            f"slice (size={val_count}) too small to split disjointly."
+                        )
+
                 best, trials_df = _run_tuning(
                     x_tr,
                     y_tr,
@@ -513,6 +637,17 @@ def train_model(
             "learning_rate": learning_rate,
             "random_state": random_state,
             "feature_columns": json.dumps(actual_feature_columns),
+            "calibration_set_size": int(calibration_set_size),
+            "train_fit_set_size": int(len(y_fit_base)),
+            "calibration_fraction_effective": (
+                float(calibration_set_size) / split.train_size
+                if split.train_size > 0
+                else 0.0
+            ),
+            "calibration_positive_rate": (
+                float(y_cal.mean()) if calibration_set_size > 0 else 0.0
+            ),
+            "calibration_split_strategy": calibration_fit_strategy,
         }
         if early_stopping_rounds:
             params_log["early_stopping_rounds"] = early_stopping_rounds
@@ -534,18 +669,18 @@ def train_model(
             "eval_metric": "logloss",
             "n_jobs": n_jobs,
         }
-        if early_stopping_rounds:
-            clf_kw["early_stopping_rounds"] = early_stopping_rounds
+        if effective_early_stopping_rounds:
+            clf_kw["early_stopping_rounds"] = effective_early_stopping_rounds
         clf = XGBClassifier(**clf_kw)
 
         # CV loop
         do_cv = split_config and split_config.strategy == SplitStrategy.KFOLD_TEMPORAL
-        if do_cv and split.train_size >= split_config.n_folds:
+        if do_cv and len(y_fit_base) >= split_config.n_folds:
             k = split_config.n_folds
-            n = split.train_size
+            n = len(y_fit_base)
             fold_metrics = []
-            x_tr = split.X_train
-            y_tr = split.y_train
+            x_tr = x_fit_base
+            y_tr = y_fit_base
             fold_size = n // k
             for fold_i in range(k):
                 val_start = fold_i * fold_size
@@ -582,22 +717,32 @@ def train_model(
                 _mlflow.log_metrics(agg)
                 _mlflow.set_tags({"cv.enabled": "true", "cv.n_folds": str(k)})
 
-        x_fit, y_fit = split.X_train, split.y_train
-        if early_stopping_rounds is not None and split.train_size >= 20:
-            v_frac = split_config.validation_fraction if split_config else 0.2
-            n = split.train_size
-            val_size = max(1, int(n * v_frac))
-            train_size = n - val_size
-            if train_size >= 10 and val_size >= 1:
-                x_fit = split.X_train.iloc[:train_size]
-                y_fit = split.y_train.iloc[:train_size]
-                x_val = split.X_train.iloc[train_size:]
-                y_val = split.y_train.iloc[train_size:]
-                clf.fit(x_fit, y_fit, eval_set=[(x_val, y_val)])
+        x_fit, y_fit = x_fit_base, y_fit_base
+        if effective_early_stopping_rounds is not None and len(y_fit_base) >= 20:
+            if early_stopping_override is not None:
+                fit_end, x_es_val, y_es_val = early_stopping_override
+                x_fit = x_fit_base.iloc[:fit_end]
+                y_fit = y_fit_base.iloc[:fit_end]
+                clf.fit(x_fit, y_fit, eval_set=[(x_es_val, y_es_val)])
                 if hasattr(clf, "best_iteration") and clf.best_iteration is not None:
                     _mlflow.log_metric("best_iteration", int(clf.best_iteration))
             else:
-                clf.fit(x_fit, y_fit)
+                n = len(y_fit_base)
+                val_size = max(1, int(n * validation_fraction))
+                train_size = n - val_size
+                if train_size >= 10 and val_size >= 1:
+                    x_fit = x_fit_base.iloc[:train_size]
+                    y_fit = y_fit_base.iloc[:train_size]
+                    x_val = x_fit_base.iloc[train_size:]
+                    y_val = y_fit_base.iloc[train_size:]
+                    clf.fit(x_fit, y_fit, eval_set=[(x_val, y_val)])
+                    if (
+                        hasattr(clf, "best_iteration")
+                        and clf.best_iteration is not None
+                    ):
+                        _mlflow.log_metric("best_iteration", int(clf.best_iteration))
+                else:
+                    clf.fit(x_fit, y_fit)
         else:
             clf.fit(x_fit, y_fit)
 
@@ -606,11 +751,21 @@ def train_model(
         metrics_dict = _compute_metrics(split.y_test, y_pred, y_pred_proba)
         _mlflow.log_metrics(metrics_dict)
 
-        # Fit calibrator on test set (C2)
+        # Fit calibrator on dedicated calibration slice from training data.
         from model.evaluate import ScoreCalibrator
 
+        x_cal_fit = x_cal
+        y_cal_fit = y_cal
+        if calibration_set_size == 0:
+            x_cal_fit = x_fit_base
+            y_cal_fit = y_fit_base
+
+        y_cal_proba = np.asarray(clf.predict_proba(x_cal_fit)[:, 1])
+        if len(y_cal_proba) != len(y_cal_fit):
+            # Defensive alignment for mocked/non-standard predict_proba outputs.
+            y_cal_proba = y_cal_proba[: len(y_cal_fit)]
         calibrator = ScoreCalibrator()
-        calibrator.fit(y_pred_proba, split.y_test)
+        calibrator.fit(y_cal_proba, y_cal_fit)
 
         signature = infer_signature(split.X_train, y_pred_proba)
         _mlflow.sklearn.log_model(
