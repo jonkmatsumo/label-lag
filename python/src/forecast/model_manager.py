@@ -75,6 +75,7 @@ class ModelManager:
         self._bundle: ModelStateBundle | None = None
         self._state: Literal["idle", "loading", "ready", "failed"] = "idle"
         self._last_error: str | None = None
+        self._benchmarked_versions: set[str] = set()
         self._initialized = True
 
     def _transition_to(
@@ -379,6 +380,13 @@ class ModelManager:
         if bundle.model is None:
             return
 
+        version = self.model_version
+        if version in self._benchmarked_versions:
+            logger.debug(f"Skipping benchmark for version {version} (already run)")
+            return
+
+        logger.info(f"Starting inference benchmark for version {version}")
+
         try:
             # Create sample data matching required features
             required = bundle.required_features
@@ -424,12 +432,14 @@ class ModelManager:
                     p99
                 )
                 logger.info(
-                    f"Benchmark inference latency: p50={p50:.2f}ms, "
+                    f"Benchmark inference latency for {version}: p50={p50:.2f}ms, "
                     f"p95={p95:.2f}ms, p99={p99:.2f}ms"
                 )
             except Exception as e:
                 logger.debug(f"Could not emit inference benchmark runtime metrics: {e}")
 
+            # Mark as benchmarked even if metrics emit fails, to avoid retries
+            self._benchmarked_versions.add(version)
         except Exception as e:
             logger.debug(f"Inference benchmarking failed: {e}")
 
