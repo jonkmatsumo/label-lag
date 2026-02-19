@@ -91,21 +91,27 @@ class TestModelManagerConcurrency:
             def run_reload():
                 manager.load_production_model()
 
-            t = threading.Thread(target=run_reload)
+            # Use daemon thread so it doesn't block exit if test fails
+            t = threading.Thread(target=run_reload, daemon=True)
             t.start()
 
-            reload_started.wait()
-            # At this point, reload is in progress but state is NOT "loading"
-            # if we had a bundle because we only transition to loading if
-            # not self.model_loaded (atomic swap requirement)
+            # Wait for reload to start (with timeout)
+            if not reload_started.wait(timeout=2.0):
+                pytest.fail("Reload did not start within timeout")
 
-            # Case 1: Prediction during reload should SUCCEED using old bundle
-            res = manager.predict(pd.DataFrame())
-            assert res[0] == 0.1
+            try:
+                # At this point, reload is in progress but state is NOT "loading"
+                # if we had a bundle because we only transition to loading if
+                # not self.model_loaded (atomic swap requirement)
 
-            # Allow reload to finish
-            can_finish_reload.set()
-            t.join()
+                # Case 1: Prediction during reload should SUCCEED using old bundle
+                res = manager.predict(pd.DataFrame())
+                assert res[0] == 0.1
+
+            finally:
+                # Allow reload to finish
+                can_finish_reload.set()
+                t.join(timeout=2.0)
 
             # Case 2: After reload, state is "ready" and bundle is bundle2
             assert manager.model_version == "v2"
