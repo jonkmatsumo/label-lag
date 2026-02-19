@@ -28,6 +28,7 @@ plt: Any = None
 xgb_pkg: Any = None
 XGBClassifier: Any = None
 run_tuning_study: Any = None
+logger = logging.getLogger(__name__)
 
 
 def _get_mlflow():
@@ -425,6 +426,8 @@ def train_model(
     import time
 
     training_start_time = time.time()
+    effective_early_stopping_rounds = early_stopping_rounds
+    early_stopping_override = None
 
     with _mlflow.start_run() as run, _mlflow.start_span(name="train_model") as span:
         span.set_attribute("feature_count", len(actual_feature_columns))
@@ -466,6 +469,30 @@ def train_model(
                 y_tr = y_fit_base.iloc[:train_size]
                 x_val = x_fit_base.iloc[train_size:]
                 y_val = y_fit_base.iloc[train_size:]
+
+                if early_stopping_rounds is not None:
+                    val_count = len(y_val)
+                    tune_val_size = val_count // 2
+                    es_val_size = val_count - tune_val_size
+                    if tune_val_size >= 1 and es_val_size >= 1:
+                        x_tune_val = x_val.iloc[:tune_val_size]
+                        y_tune_val = y_val.iloc[:tune_val_size]
+                        x_es_val = x_val.iloc[tune_val_size:]
+                        y_es_val = y_val.iloc[tune_val_size:]
+                        early_stopping_override = (
+                            train_size + tune_val_size,
+                            x_es_val,
+                            y_es_val,
+                        )
+                        x_val = x_tune_val
+                        y_val = y_tune_val
+                    else:
+                        effective_early_stopping_rounds = None
+                        logger.warning(
+                            "Early stopping disabled: validation slice too small "
+                            "to split from tuning validation."
+                        )
+
                 best, trials_df = _run_tuning(
                     x_tr,
                     y_tr,
@@ -613,8 +640,8 @@ def train_model(
             "eval_metric": "logloss",
             "n_jobs": n_jobs,
         }
-        if early_stopping_rounds:
-            clf_kw["early_stopping_rounds"] = early_stopping_rounds
+        if effective_early_stopping_rounds:
+            clf_kw["early_stopping_rounds"] = effective_early_stopping_rounds
         clf = XGBClassifier(**clf_kw)
 
         # CV loop
@@ -662,20 +689,31 @@ def train_model(
                 _mlflow.set_tags({"cv.enabled": "true", "cv.n_folds": str(k)})
 
         x_fit, y_fit = x_fit_base, y_fit_base
-        if early_stopping_rounds is not None and len(y_fit_base) >= 20:
-            n = len(y_fit_base)
-            val_size = max(1, int(n * validation_fraction))
-            train_size = n - val_size
-            if train_size >= 10 and val_size >= 1:
-                x_fit = x_fit_base.iloc[:train_size]
-                y_fit = y_fit_base.iloc[:train_size]
-                x_val = x_fit_base.iloc[train_size:]
-                y_val = y_fit_base.iloc[train_size:]
-                clf.fit(x_fit, y_fit, eval_set=[(x_val, y_val)])
+        if effective_early_stopping_rounds is not None and len(y_fit_base) >= 20:
+            if early_stopping_override is not None:
+                fit_end, x_es_val, y_es_val = early_stopping_override
+                x_fit = x_fit_base.iloc[:fit_end]
+                y_fit = y_fit_base.iloc[:fit_end]
+                clf.fit(x_fit, y_fit, eval_set=[(x_es_val, y_es_val)])
                 if hasattr(clf, "best_iteration") and clf.best_iteration is not None:
                     _mlflow.log_metric("best_iteration", int(clf.best_iteration))
             else:
-                clf.fit(x_fit, y_fit)
+                n = len(y_fit_base)
+                val_size = max(1, int(n * validation_fraction))
+                train_size = n - val_size
+                if train_size >= 10 and val_size >= 1:
+                    x_fit = x_fit_base.iloc[:train_size]
+                    y_fit = y_fit_base.iloc[:train_size]
+                    x_val = x_fit_base.iloc[train_size:]
+                    y_val = y_fit_base.iloc[train_size:]
+                    clf.fit(x_fit, y_fit, eval_set=[(x_val, y_val)])
+                    if (
+                        hasattr(clf, "best_iteration")
+                        and clf.best_iteration is not None
+                    ):
+                        _mlflow.log_metric("best_iteration", int(clf.best_iteration))
+                else:
+                    clf.fit(x_fit, y_fit)
         else:
             clf.fit(x_fit, y_fit)
 
