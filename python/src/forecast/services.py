@@ -9,7 +9,11 @@ from typing import Any
 import numpy as np
 import structlog
 
-from forecast.metrics import heuristic_fallback_total, zero_fallback_total
+from forecast.metrics import (
+    heuristic_fallback_total,
+    inference_feature_coverage_ratio,
+    zero_fallback_total,
+)
 from training.crud_client import get_crud_client
 from training.schemas import (
     SignalRequest,
@@ -254,6 +258,9 @@ class SignalForecaster:
 
             # Clamp for safety, though logic guarantees 0.0 <= ratio <= 1.0
             coverage_ratio = max(0.0, min(1.0, coverage_ratio))
+
+            # Emit coverage metric
+            inference_feature_coverage_ratio.observe(coverage_ratio)
 
             log_data = {
                 "event": "inference_feature_coverage",
