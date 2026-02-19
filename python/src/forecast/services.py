@@ -243,10 +243,17 @@ class SignalForecaster:
                     feature_dict[feature_name] = None
 
             # Compute coverage metrics (FF3)
+            # Normalized contract: present_required / total_required
+            # If no features required, coverage is perfect (1.0).
             total_required = len(required_features)
-            coverage_ratio = (
-                available_count / total_required if total_required > 0 else 1.0
-            )
+
+            if total_required > 0:
+                coverage_ratio = float(available_count) / float(total_required)
+            else:
+                coverage_ratio = 1.0
+
+            # Clamp for safety, though logic guarantees 0.0 <= ratio <= 1.0
+            coverage_ratio = max(0.0, min(1.0, coverage_ratio))
 
             log_data = {
                 "event": "inference_feature_coverage",
