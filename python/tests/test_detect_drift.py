@@ -137,18 +137,18 @@ class TestDetectDrift:
         # Mock reference data
         mock_ref.return_value = pd.DataFrame(
             {
-                "velocity_24h": [1, 2, 3, 4, 5] * 20,
-                "amount_to_avg_ratio_30d": [1.0, 1.5, 2.0, 2.5, 3.0] * 20,
-                "balance_volatility_z_score": [-1.0, 0.0, 1.0, 2.0, 3.0] * 20,
+                "velocity_24h": [1, 2, 3, 4, 5] * 100,
+                "amount_to_avg_ratio_30d": [1.0, 1.5, 2.0, 2.5, 3.0] * 100,
+                "balance_volatility_z_score": [-1.0, 0.0, 1.0, 2.0, 3.0] * 100,
             }
         )
 
         # Mock live data
         mock_live.return_value = pd.DataFrame(
             {
-                "velocity_24h": [1, 2, 3, 4, 5] * 20,
-                "amount_to_avg_ratio_30d": [1.0, 1.5, 2.0, 2.5, 3.0] * 20,
-                "balance_volatility_z_score": [-1.0, 0.0, 1.0, 2.0, 3.0] * 20,
+                "velocity_24h": [1, 2, 3, 4, 5] * 100,
+                "amount_to_avg_ratio_30d": [1.0, 1.5, 2.0, 2.5, 3.0] * 100,
+                "balance_volatility_z_score": [-1.0, 0.0, 1.0, 2.0, 3.0] * 100,
             }
         )
 
@@ -185,9 +185,9 @@ class TestDetectDrift:
         """Missing live data should return error in results."""
         mock_ref.return_value = pd.DataFrame(
             {
-                "velocity_24h": [1, 2, 3],
-                "amount_to_avg_ratio_30d": [1.0, 1.5, 2.0],
-                "balance_volatility_z_score": [-1.0, 0.0, 1.0],
+                "velocity_24h": [1, 2, 3] * 200,
+                "amount_to_avg_ratio_30d": [1.0, 1.5, 2.0] * 200,
+                "balance_volatility_z_score": [-1.0, 0.0, 1.0] * 200,
             }
         )
         mock_live.return_value = pd.DataFrame()
@@ -304,17 +304,17 @@ class TestDetectDrift:
         """Missing features in reference or live data should be skipped."""
         ref_data = pd.DataFrame(
             {
-                "velocity_24h": [1, 2, 3],
-                "amount_to_avg_ratio_30d": [1.0, 1.5, 2.0],
+                "velocity_24h": [1, 2, 3] * 200,
+                "amount_to_avg_ratio_30d": [1.0, 1.5, 2.0] * 200,
                 # Missing balance_volatility_z_score
             }
         )
 
         live_data = pd.DataFrame(
             {
-                "velocity_24h": [1, 2, 3],
-                "amount_to_avg_ratio_30d": [1.0, 1.5, 2.0],
-                "balance_volatility_z_score": [-1.0, 0.0, 1.0],
+                "velocity_24h": [1, 2, 3] * 200,
+                "amount_to_avg_ratio_30d": [1.0, 1.5, 2.0] * 200,
+                "balance_volatility_z_score": [-1.0, 0.0, 1.0] * 200,
             }
         )
 
@@ -327,3 +327,35 @@ class TestDetectDrift:
         assert "velocity_24h" in result["features"]
         assert "amount_to_avg_ratio_30d" in result["features"]
         # balance_volatility_z_score should be skipped (not in reference)
+
+    @patch("training.detect_drift.get_reference_data")
+    @patch("training.detect_drift.get_live_data")
+    def test_insufficient_reference_data(self, mock_live, mock_ref, caplog):
+        """Insufficient reference data should block PSI computation and warn."""
+        # Create small reference dataset (below 500)
+        ref_data = pd.DataFrame(
+            {
+                "velocity_24h": np.random.normal(0, 1, 400),
+                "amount_to_avg_ratio_30d": np.random.normal(0, 1, 400),
+                "balance_volatility_z_score": np.random.normal(0, 1, 400),
+            }
+        )
+        mock_ref.return_value = ref_data
+
+        # Live data doesn't matter as it shouldn't be fetched
+        mock_live.return_value = pd.DataFrame()
+
+        with caplog.at_level(logging.WARNING):
+            result = detect_drift()
+
+        assert "error" in result
+        assert "Insufficient reference data" in result["error"]
+        assert result["drift_detected"] is False
+
+        # Verify warning
+        assert any(
+            "Insufficient reference data" in record.message for record in caplog.records
+        )
+
+        # Verify get_live_data was NOT called
+        mock_live.assert_not_called()
