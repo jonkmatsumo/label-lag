@@ -299,7 +299,14 @@ def _derive_calibration_split(
 
     n_samples = len(y_train)
     if n_samples == 0:
-        return x_train, y_train, _slice(x_train, 0, 0), _slice(y_train, 0, 0), 0
+        return (
+            x_train,
+            y_train,
+            _slice(x_train, 0, 0),
+            _slice(y_train, 0, 0),
+            0,
+            "train_tail_fraction_fallback_no_calibration",
+        )
 
     desired_cal_size = max(1, int(n_samples * validation_fraction))
     cal_size = min(desired_cal_size, max(0, n_samples - 2))
@@ -317,7 +324,12 @@ def _derive_calibration_split(
     y_fit = _slice(y_train, 0, split_at)
     x_cal = _slice(x_train, split_at, n_samples)
     y_cal = _slice(y_train, split_at, n_samples)
-    return x_fit, y_fit, x_cal, y_cal, cal_size
+    split_strategy = (
+        "train_tail_fraction"
+        if cal_size > 0
+        else "train_tail_fraction_fallback_no_calibration"
+    )
+    return x_fit, y_fit, x_cal, y_cal, cal_size, split_strategy
 
 
 def train_model(
@@ -394,11 +406,21 @@ def train_model(
         scale_pos_weight = n_negative / n_positive
 
     validation_fraction = split_config.validation_fraction if split_config else 0.2
-    x_fit_base, y_fit_base, _, _, _ = _derive_calibration_split(
+    (
+        x_fit_base,
+        y_fit_base,
+        x_cal,
+        y_cal,
+        calibration_set_size,
+        calibration_split_strategy,
+    ) = _derive_calibration_split(
         split.X_train,
         split.y_train,
         validation_fraction=validation_fraction,
     )
+    calibration_fit_strategy = calibration_split_strategy
+    if calibration_set_size == 0:
+        calibration_fit_strategy = "train_tail_fraction_fallback_full_train"
 
     import time
 
@@ -565,6 +587,11 @@ def train_model(
             "learning_rate": learning_rate,
             "random_state": random_state,
             "feature_columns": json.dumps(actual_feature_columns),
+            "calibration_set_size": int(calibration_set_size),
+            "calibration_positive_rate": (
+                float(y_cal.mean()) if calibration_set_size > 0 else 0.0
+            ),
+            "calibration_split_strategy": calibration_fit_strategy,
         }
         if early_stopping_rounds:
             params_log["early_stopping_rounds"] = early_stopping_rounds
@@ -657,11 +684,21 @@ def train_model(
         metrics_dict = _compute_metrics(split.y_test, y_pred, y_pred_proba)
         _mlflow.log_metrics(metrics_dict)
 
-        # Fit calibrator on test set (C2)
+        # Fit calibrator on dedicated calibration slice from training data.
         from model.evaluate import ScoreCalibrator
 
+        x_cal_fit = x_cal
+        y_cal_fit = y_cal
+        if calibration_set_size == 0:
+            x_cal_fit = x_fit_base
+            y_cal_fit = y_fit_base
+
+        y_cal_proba = np.asarray(clf.predict_proba(x_cal_fit)[:, 1])
+        if len(y_cal_proba) != len(y_cal_fit):
+            # Defensive alignment for mocked/non-standard predict_proba outputs.
+            y_cal_proba = y_cal_proba[: len(y_cal_fit)]
         calibrator = ScoreCalibrator()
-        calibrator.fit(y_pred_proba, split.y_test)
+        calibrator.fit(y_cal_proba, y_cal_fit)
 
         signature = infer_signature(split.X_train, y_pred_proba)
         _mlflow.sklearn.log_model(
