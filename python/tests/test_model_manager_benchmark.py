@@ -56,3 +56,47 @@ def test_benchmark_failures_are_non_blocking():
 
     # Should not raise even if predict fails inside benchmark loop.
     manager._benchmark_inference(n_samples=2)
+
+
+def test_benchmark_metrics_failure_does_not_block_load():
+    """Ensure that if Prometheus metrics fail, the model load still succeeds."""
+    manager = _fresh_manager()
+
+    # Setup a mock model
+    mock_model = MagicMock()
+    mock_model.predict.return_value = np.array([0.5])
+    manager._model = mock_model
+    manager._model_source = "mlflow"
+    manager._model_version = "v1"
+    manager._required_features = ["feat_a"]
+
+    # Mock metrics to raise an exception
+    with patch("forecast.metrics.inference_benchmark_sample_latency_ms") as mock_hist:
+        mock_hist.observe.side_effect = Exception("Prometheus down")
+
+        # This should NOT raise an exception
+        manager._benchmark_inference(n_samples=5)
+
+    # Verify it was marked as benchmarked anyway
+    assert "v1" in manager._benchmarked_versions
+
+
+def test_benchmark_gating_prevents_repeated_runs():
+    """Ensure benchmarking only happens once per version."""
+    manager = _fresh_manager()
+
+    mock_model = MagicMock()
+    mock_model.predict.return_value = np.array([0.5])
+    manager._model = mock_model
+    manager._model_version = "v2"
+    manager._required_features = ["feat_a"]
+
+    # First call
+    manager._benchmark_inference(n_samples=1)
+    assert "v2" in manager._benchmarked_versions
+    assert mock_model.predict.call_count == 1
+
+    # Second call - should skip
+    manager._benchmark_inference(n_samples=1)
+    # Call count stays 1
+    assert mock_model.predict.call_count == 1
