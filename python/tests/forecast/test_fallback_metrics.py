@@ -7,11 +7,11 @@ import pytest
 from prometheus_client import REGISTRY
 
 from forecast.services import SignalForecaster
-from training.schemas import SignalRequest
+from training.schemas import ErrorCategory, SignalRequest
 
 
 def _get_counter(name, reason=None):
-    labels = {"reason": reason} if reason else None
+    labels = {"reason": str(reason)} if reason else None
     return REGISTRY.get_sample_value(f"{name}_total", labels) or 0.0
 
 
@@ -51,7 +51,7 @@ def _mock_features():
 class TestHeuristicFallbackCounter:
     def test_heuristic_fallback_increments(self, forecaster, mock_manager):
         mock_manager.model_loaded = False
-        reason = "model_not_loaded"
+        reason = ErrorCategory.MODEL_NOT_LOADED
         initial = _get_counter("forecast_heuristic_fallback", reason=reason)
 
         with patch.object(forecaster, "_fetch_features") as mock_fetch:
@@ -64,7 +64,7 @@ class TestHeuristicFallbackCounter:
         self, forecaster, mock_manager
     ):
         mock_manager.model_loaded = False
-        reason = "model_not_loaded"
+        reason = ErrorCategory.MODEL_NOT_LOADED
         initial = _get_counter("forecast_heuristic_fallback", reason=reason)
 
         with patch.object(forecaster, "_fetch_features") as mock_fetch:
@@ -78,7 +78,7 @@ class TestHeuristicFallbackCounter:
 class TestZeroFallbackCounter:
     def test_zero_fallback_increments(self, forecaster, mock_manager):
         mock_manager.model_loaded = False
-        reason = "model_not_loaded"
+        reason = ErrorCategory.MODEL_NOT_LOADED
         initial = _get_counter("forecast_zero_fallback", reason=reason)
 
         with patch.object(forecaster, "_fetch_features") as mock_fetch:
@@ -93,7 +93,7 @@ class TestModelFallbackCounter:
         """When MLflow fails and pickle fallback succeeds, counter increments."""
         from forecast.model_manager import ModelManager
 
-        reason = "mlflow_unavailable"
+        reason = ErrorCategory.MLFLOW_UNAVAILABLE
         initial = _get_counter("forecast_model_fallback", reason=reason)
         manager = ModelManager.__new__(ModelManager)
         manager._initialized = False
@@ -118,8 +118,12 @@ class TestNoFallbackOnModelSuccess:
 
         features = _mock_features()
         features.has_history = True
-        initial_h = _get_counter("forecast_heuristic_fallback", reason="no_history")
-        initial_z = _get_counter("forecast_zero_fallback", reason="no_history")
+        initial_h = _get_counter(
+            "forecast_heuristic_fallback", reason=ErrorCategory.NO_HISTORY
+        )
+        initial_z = _get_counter(
+            "forecast_zero_fallback", reason=ErrorCategory.NO_HISTORY
+        )
 
         with (
             patch.object(forecaster, "_fetch_features", return_value=features),
@@ -128,7 +132,10 @@ class TestNoFallbackOnModelSuccess:
             forecaster.predict(_make_request())
 
         assert (
-            _get_counter("forecast_heuristic_fallback", reason="no_history")
+            _get_counter("forecast_heuristic_fallback", reason=ErrorCategory.NO_HISTORY)
             == initial_h
         )
-        assert _get_counter("forecast_zero_fallback", reason="no_history") == initial_z
+        assert (
+            _get_counter("forecast_zero_fallback", reason=ErrorCategory.NO_HISTORY)
+            == initial_z
+        )
