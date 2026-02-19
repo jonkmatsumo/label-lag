@@ -19,6 +19,8 @@ from typing import Any, Literal
 import numpy as np
 import pandas as pd
 
+from training.schemas import ErrorCategory
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -165,7 +167,7 @@ class ModelManager:
 
         bundle = self._load_fallback_model()
         if bundle:
-            model_fallback_total.labels(reason="mlflow_unavailable").inc()
+            model_fallback_total.labels(reason=ErrorCategory.MLFLOW_UNAVAILABLE).inc()
             with self._lock:
                 self._bundle = bundle
             self._transition_to("ready")

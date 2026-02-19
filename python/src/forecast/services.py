@@ -16,6 +16,7 @@ from forecast.metrics import (
 )
 from training.crud_client import get_crud_client
 from training.schemas import (
+    ErrorCategory,
     SignalRequest,
 )
 
@@ -113,7 +114,7 @@ class SignalForecaster:
             if fallback_used:
                 effective_fallback_mode = "probability"
                 heuristic_fallback_total.labels(
-                    reason=fallback_reason or "model_prediction_error"
+                    reason=fallback_reason or ErrorCategory.MODEL_PREDICTION_ERROR
                 ).inc()
 
             model_version = manager.model_version
@@ -124,7 +125,9 @@ class SignalForecaster:
                 "FORECASTER_FALLBACK_MODE", "probability"
             )
             fallback_reason = (
-                "model_not_loaded" if not manager.model_loaded else "no_history"
+                ErrorCategory.MODEL_NOT_LOADED
+                if not manager.model_loaded
+                else ErrorCategory.NO_HISTORY
             )
 
             if fallback_mode == "error":
@@ -138,7 +141,9 @@ class SignalForecaster:
                 zero_fallback_total.labels(reason=fallback_reason).inc()
             elif os.getenv("DISABLE_HEURISTIC_FALLBACK") == "true":
                 raw_probability = 0.05
-                heuristic_fallback_total.labels(reason="heuristic_disabled").inc()
+                heuristic_fallback_total.labels(
+                    reason=ErrorCategory.HEURISTIC_DISABLED
+                ).inc()
             else:
                 raw_probability = self._calculate_probability(features)
                 heuristic_fallback_total.labels(reason=fallback_reason).inc()
@@ -282,7 +287,7 @@ class SignalForecaster:
                 return ModelPredictionResult(
                     score=self._calculate_probability(features),
                     used_fallback=True,
-                    fallback_reason="missing_features",
+                    fallback_reason=ErrorCategory.MISSING_FEATURES,
                 )
 
             probability = manager.predict_single(feature_dict)
@@ -291,7 +296,7 @@ class SignalForecaster:
                 return ModelPredictionResult(
                     score=self._calculate_probability(features),
                     used_fallback=True,
-                    fallback_reason="missing_features",
+                    fallback_reason=ErrorCategory.MISSING_FEATURES,
                 )
 
             logger.debug(f"ML model prediction: {probability}")
@@ -301,7 +306,7 @@ class SignalForecaster:
             return ModelPredictionResult(
                 score=self._calculate_probability(features),
                 used_fallback=True,
-                fallback_reason="model_prediction_error",
+                fallback_reason=ErrorCategory.MODEL_PREDICTION_ERROR,
             )
 
     def _map_to_feature_vector(
