@@ -629,21 +629,32 @@ class ModelManager:
                 )
                 return None
 
-            if len(dense_importances) != len(feature_names):
+            n_importances = len(dense_importances)
+            n_features = len(feature_names)
+
+            if n_importances != n_features:
                 logger.warning(
-                    "Feature importance length mismatch: importances=%s features=%s. "
-                    "Returning best-effort mapping.",
-                    len(dense_importances),
-                    len(feature_names),
+                    "Feature importance alignment mismatch: model has %s importances "
+                    "but registry/metadata expects %s features. "
+                    "Using first-N mapping.",
+                    n_importances,
+                    n_features,
                 )
 
-            overlap = min(len(dense_importances), len(feature_names))
-            importance_map = {
-                feature_names[i]: float(dense_importances[i]) for i in range(overlap)
-            }
-            if len(feature_names) > overlap:
-                for feature_name in feature_names[overlap:]:
-                    importance_map[feature_name] = 0.0
+            # Explicitly zip and order by registry/required order
+            importance_map = {}
+            for i, name in enumerate(feature_names):
+                if i < n_importances:
+                    importance_map[name] = float(dense_importances[i])
+                else:
+                    # Registry expects a feature the model doesn't have importance for
+                    importance_map[name] = 0.0
+
+            logger.info(
+                "Feature importance aligned for version %s (mode: %s)",
+                self.model_version,
+                "strict" if n_importances == n_features else "best_effort",
+            )
             return importance_map
         except Exception as e:
             logger.warning(f"Could not extract feature importance: {e}")

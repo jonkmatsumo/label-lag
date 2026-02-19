@@ -467,10 +467,10 @@ def train_model(
         if (
             tuning_config is not None
             and tuning_config.enabled
-            and len(y_fit_base) >= 30
+            and len(y_fit_base) >= 10
         ):
             n = len(y_fit_base)
-            val_size = max(5, int(n * validation_fraction))
+            val_size = max(1, int(n * validation_fraction))
             train_size = n - val_size
             if train_size >= 10:
                 x_tr = x_fit_base.iloc[:train_size]
@@ -482,6 +482,13 @@ def train_model(
                     val_count = len(y_val)
                     tune_val_size = val_count // 2
                     es_val_size = val_count - tune_val_size
+                    _mlflow.log_params(
+                        {
+                            "tuning_val_size": int(tune_val_size),
+                            "early_stop_val_size": int(es_val_size),
+                        }
+                    )
+
                     if tune_val_size >= 1 and es_val_size >= 1:
                         x_tune_val = x_val.iloc[:tune_val_size]
                         y_tune_val = y_val.iloc[:tune_val_size]
@@ -494,11 +501,19 @@ def train_model(
                         )
                         x_val = x_tune_val
                         y_val = y_tune_val
+                        _mlflow.set_tag(
+                            "tuning_es_split_policy", "first_half_tune_second_half_es"
+                        )
                     else:
                         effective_early_stopping_rounds = None
+                        disabled_reason = "validation_slice_too_small"
+                        _mlflow.log_param(
+                            "early_stopping_disabled_reason", disabled_reason
+                        )
                         logger.warning(
-                            "Early stopping disabled: validation slice too small "
-                            "to split from tuning validation."
+                            f"Early stopping disabled (reason: {disabled_reason}): "
+                            f"requested {early_stopping_rounds} rounds, but validation "
+                            f"slice (size={val_count}) too small to split disjointly."
                         )
 
                 best, trials_df = _run_tuning(
