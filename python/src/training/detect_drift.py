@@ -117,19 +117,20 @@ def calculate_psi(
         return 0.0, {}
 
     # Create bucket boundaries
+    fallback_reason = None
     if buckettype == "bins":
         min_val = min(expected.min(), actual.min())
         max_val = max(expected.max(), actual.max())
         breakpoints = np.linspace(min_val, max_val, buckets + 1)
     elif buckettype == "quantiles":
         quantile_breakpoints = np.percentile(expected, np.linspace(0, 100, buckets + 1))
-        breakpoints = np.unique(quantile_breakpoints)
-        if len(breakpoints) < (buckets + 1):
-            # Phase 4.1: Deterministic fallback to uniform bins when quantiles collapse
+        unique_breakpoints = np.unique(quantile_breakpoints)
+        if len(unique_breakpoints) < (buckets + 1):
+            fallback_reason = "tied_quantiles"
             logger.warning(
                 "Quantile PSI bucketing collapsed (%s < %s unique breakpoints). "
                 "Falling back to uniform bins over data range.",
-                len(breakpoints),
+                len(unique_breakpoints),
                 buckets + 1,
             )
             data_min = min(expected.min(), actual.min())
@@ -137,11 +138,20 @@ def calculate_psi(
             if data_min == data_max:
                 return 0.0, {}
             breakpoints = np.linspace(data_min, data_max, buckets + 1)
+        else:
+            breakpoints = unique_breakpoints
     else:
         raise ValueError(f"Unknown buckettype: {buckettype}")
 
-    expected_counts = np.histogram(expected, bins=breakpoints)[0]
-    actual_counts = np.histogram(actual, bins=breakpoints)[0]
+    # Use range in np.histogram to ensure inclusivity of edges
+    hist_kwargs = {}
+    if buckettype == "bins" or fallback_reason:
+        hist_kwargs = {"bins": buckets, "range": (breakpoints[0], breakpoints[-1])}
+    else:
+        hist_kwargs = {"bins": breakpoints}
+
+    expected_counts = np.histogram(expected, **hist_kwargs)[0]
+    actual_counts = np.histogram(actual, **hist_kwargs)[0]
 
     expected_pct = expected_counts / len(expected)
     actual_pct = actual_counts / len(actual)
