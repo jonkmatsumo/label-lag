@@ -20,6 +20,7 @@ model_fallback_total = Counter(
 model_reload_failure_total = Counter(
     "forecast_model_reload_failure_total",
     "Times the model reload failed (both MLflow and fallback).",
+    ["reason"],
 )
 
 # Model schema mismatch: feature hash doesn't match

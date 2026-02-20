@@ -1,3 +1,4 @@
+import time
 from unittest.mock import MagicMock, patch
 
 from forecast.model_manager import ModelManager
@@ -48,15 +49,78 @@ class TestModelManagerDiagnostics:
     def test_diagnostics_after_failure(self):
         manager = self._fresh_manager()
         # Mock MLflow and Fallback to fail
+        # MLflow fails with "artifact" in error to trigger "artifact_missing" reason
         with (
-            patch.object(manager, "_load_from_mlflow", return_value=None),
+            patch.object(
+                manager,
+                "_load_from_mlflow",
+                side_effect=lambda: setattr(
+                    manager, "_mlflow_failure_reason", "artifact_missing"
+                )
+                or None,
+            ),
             patch.object(manager, "_load_fallback_model", return_value=None),
-            patch(
-                "forecast.metrics.model_reload_failure_total.inc"
-            ) as mock_metrics_inc,
+            patch("forecast.metrics.model_reload_failure_total.labels") as mock_labels,
         ):
+            mock_inc = mock_labels.return_value.inc
             manager.load_production_model()
             diag = manager.get_diagnostics()
+
             assert diag["state"] == "failed"
             assert diag["last_error"] == "Both MLflow and fallback failed"
-            assert mock_metrics_inc.called
+            assert diag["last_reload_status"] == "failed"
+            assert diag["active_model_version"] == "unknown"
+
+            # Check that metrics was called with correct label
+            mock_labels.assert_called_with(reason="artifact_missing")
+            assert mock_inc.called
+
+    def test_diagnostics_benchmark_status(self):
+        from forecast.model_manager import ModelStateBundle
+
+        manager = self._fresh_manager()
+
+        # Use real bundle object for better validation
+        mock_bundle = ModelStateBundle(
+            model=MagicMock(),
+            version="v1",
+            source="mlflow",
+            required_features=[],
+            calibrator=None,
+            calibrator_loaded=False,
+            baseline_distribution=None,
+            feature_importance=None,
+            last_reload_ts=time.time(),
+        )
+
+        with (
+            patch.object(manager, "_load_from_mlflow", return_value=mock_bundle),
+            patch.object(manager, "_benchmark_inference") as mock_benchmark,
+        ):
+            # 1. Success path: instance-level mock doesn't get 'self'
+            def mock_success(*args, **kwargs):
+                manager._benchmark_last_status = "success"
+                manager._benchmark_last_run_ts = 1234.5
+
+            mock_benchmark.side_effect = mock_success
+
+            res = manager.load_production_model()
+            assert res is True
+            assert mock_benchmark.called
+
+            diag = manager.get_diagnostics()
+            assert diag["benchmark_last_status"] == "success"
+            assert diag["benchmark_last_run_ts"] == 1234.5
+
+            # 2. Failure path
+            def mock_failure(*args, **kwargs):
+                manager._benchmark_last_status = "failed"
+                manager._benchmark_last_run_ts = 1235.5
+
+            mock_benchmark.side_effect = mock_failure
+            # Reset manager state to allow reload re-triggering benchmark
+            manager._benchmarked_versions = set()
+            manager.load_production_model()
+            diag = manager.get_diagnostics()
+            assert diag["benchmark_last_status"] == "failed"
+            assert diag["benchmark_last_run_ts"] == 1235.5
