@@ -3,33 +3,59 @@ import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { analyticsApi } from '../api';
 import type { RecentAlert, TransactionSearchRequest, TransactionDetail } from '../types/api';
 import {
-  Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, BarChart
+  Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart
 } from 'recharts';
-import { Search, ChevronDown, ChevronRight } from 'lucide-react';
+import { Search, ChevronDown, ChevronRight, BarChart3 } from 'lucide-react';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { DateRangePicker, KpiCard } from '../components';
 import { useTenant } from '../hooks/useTenant';
+import type { DateRange } from '../components/DateRangePicker';
 
 export function Analytics() {
   const [daysFilter] = useState(30);
   const { tenantId } = useTenant();
 
-  // Fetch overview metrics
+  // New state for dynamic dashboard
+  const [dateRange, setDateRange] = useState<DateRange>(() => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - 7);
+    return {
+      start: start.toISOString().split('T')[0],
+      end: end.toISOString().split('T')[0],
+    };
+  });
+  const [granularity, setGranularity] = useState<'hour' | 'day'>('day');
+
+  // Fetch performance KPIs
+  const kpisQuery = useQuery({
+    queryKey: ['analytics', tenantId, 'kpis', dateRange, granularity],
+    queryFn: () => analyticsApi.getKpis({
+      start_time: dateRange.start,
+      end_time: dateRange.end,
+      group_by: granularity
+    }),
+    staleTime: 30000,
+  });
+
+  // Fetch volume timeseries
+  const volumeQuery = useQuery({
+    queryKey: ['analytics', tenantId, 'volume', dateRange, granularity],
+    queryFn: () => analyticsApi.getVolume({
+      start_time: dateRange.start,
+      end_time: dateRange.end,
+      granularity
+    }),
+    staleTime: 30000,
+  });
+
+  // Fetch overview metrics (legacy/static)
   const overviewQuery = useQuery({
     queryKey: ['analytics', tenantId, 'overview'],
-    queryFn: analyticsApi.getOverview,
+    queryFn: () => analyticsApi.getOverview(daysFilter),
   });
 
-  // Fetch daily stats
-  const dailyStatsQuery = useQuery({
-    queryKey: ['analytics', tenantId, 'daily-stats', daysFilter],
-    queryFn: () => analyticsApi.getDailyStats(daysFilter),
-  });
-
-  // Sort stats by date ascending for chart
-  const chartData = dailyStatsQuery.data?.stats ?
-    [...dailyStatsQuery.data.stats].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) : [];
-
-  // Fetch recent alerts for metric only
+  // Fetch recent alerts for FPR calculation
   const alertsQuery = useQuery({
     queryKey: ['analytics', tenantId, 'alerts'],
     queryFn: () => analyticsApi.getRecentAlerts(20),
@@ -53,6 +79,118 @@ export function Analytics() {
     <div className="page">
       <h2>Historical Analytics</h2>
       <p>Dataset overview and fraud trends</p>
+
+      {/* KPI Dashboard Controls */}
+      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+        <DateRangePicker onChange={setDateRange} />
+        <div className="btn-group btn-group-sm">
+          <button
+            className={`btn ${granularity === 'hour' ? 'btn-primary' : 'btn-outline-secondary'}`}
+            onClick={() => setGranularity('hour')}
+          >
+            Hourly
+          </button>
+          <button
+            className={`btn ${granularity === 'day' ? 'btn-primary' : 'btn-outline-secondary'}`}
+            onClick={() => setGranularity('day')}
+          >
+            Daily
+          </button>
+        </div>
+      </div>
+
+      {/* KPI Cards */}
+      <div className="row g-3 mb-4">
+        <div className="col-md">
+          <KpiCard
+            label="Total Decisions"
+            value={kpisQuery.data?.total_decisions ?? 0}
+            loading={kpisQuery.isLoading}
+            error={kpisQuery.error}
+            formatter={(val) => formatNumber(val as string | number | null | undefined)}
+          />
+        </div>
+        <div className="col-md">
+          <KpiCard
+            label="Total Alerts"
+            value={kpisQuery.data?.total_alerts ?? 0}
+            loading={kpisQuery.isLoading}
+            error={kpisQuery.error}
+            formatter={(val) => formatNumber(val as string | number | null | undefined)}
+          />
+        </div>
+        <div className="col-md">
+          <KpiCard
+            label="Alert Rate"
+            value={kpisQuery.data?.alert_rate ?? 0}
+            loading={kpisQuery.isLoading}
+            error={kpisQuery.error}
+            formatter={(val) => `${(Number(val) * 100).toFixed(1)}%`}
+          />
+        </div>
+        <div className="col-md">
+          <KpiCard
+            label="Avg Risk Score"
+            value={kpisQuery.data?.avg_score ?? 0}
+            loading={kpisQuery.isLoading}
+            error={kpisQuery.error}
+            formatter={(val) => Number(val).toFixed(1)}
+          />
+        </div>
+        <div className="col-md">
+          <KpiCard
+            label="Rules Fired"
+            value={kpisQuery.data?.rules_fired_total ?? 0}
+            loading={kpisQuery.isLoading}
+            error={kpisQuery.error}
+            formatter={(val) => formatNumber(val as string | number | null | undefined)}
+          />
+        </div>
+      </div>
+
+      {/* Volume Chart */}
+      <div className="card shadow-sm border-0 mb-4">
+        <div className="card-header bg-white border-bottom py-3 d-flex align-items-center gap-2">
+          <BarChart3 size={18} className="text-primary" />
+          <h3 className="card-title h6 fw-bold mb-0">Transaction & Alert Volume</h3>
+        </div>
+        <div className="card-body" style={{ height: 350 }}>
+          {volumeQuery.isLoading ? (
+            <div className="d-flex align-items-center justify-content-center h-100">
+              <div className="spinner-border spinner-border-sm text-primary me-2" /> Loading volume data...
+            </div>
+          ) : volumeQuery.isError ? (
+            <div className="text-danger p-4">Failed to load volume chart</div>
+          ) : volumeQuery.data?.points && volumeQuery.data.points.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={volumeQuery.data.points}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                <XAxis
+                  dataKey="timestamp"
+                  fontSize={10}
+                  tickFormatter={(val) => {
+                    const d = new Date(val);
+                    return granularity === 'hour'
+                      ? `${d.getHours()}:00`
+                      : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                  }}
+                />
+                <YAxis fontSize={10} />
+                <Tooltip
+                  labelFormatter={(label) => new Date(label).toLocaleString()}
+                />
+                <Legend />
+                <Bar dataKey="count" name="Decisions" fill="#cfe2ff" radius={[4, 4, 0, 0]} />
+                <Line type="monotone" dataKey="alerts" name="Alerts" stroke="#dc3545" strokeWidth={2} dot={{ r: 3 }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="d-flex align-items-center justify-content-center h-100 text-muted">
+              No volume data available for the selected range
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Overview Metrics */}
       <div className="card shadow-sm border-0 mb-4">
@@ -93,51 +231,10 @@ export function Analytics() {
             Data range: {overviewQuery.data.min_transaction_timestamp
               ? new Date(overviewQuery.data.min_transaction_timestamp).toLocaleDateString()
               : '--'} - {overviewQuery.data.max_transaction_timestamp
-              ? new Date(overviewQuery.data.max_transaction_timestamp).toLocaleDateString()
-              : '--'}
+                ? new Date(overviewQuery.data.max_transaction_timestamp).toLocaleDateString()
+                : '--'}
           </div>
         )}
-      </div>
-
-      <div className="row mt-4">
-        {/* Transaction Volume & Trends Chart */}
-        <div className="col-lg-8">
-          <div className="card h-100 shadow-sm border-0">
-            <div className="card-header bg-white border-bottom py-3">
-              <h3 className="card-title h6 fw-bold mb-0">Transaction Volume & Fraud Trends</h3>
-            </div>
-            <div className="card-body" style={{ height: 350 }}>
-              {dailyStatsQuery.isLoading ? <div className="loading">Loading charts...</div> : (
-                chartData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                      <XAxis dataKey="date" fontSize={10} tickFormatter={(val) => val.split('-').slice(1).join('/')} />
-                      <YAxis yAxisId="left" fontSize={10} />
-                      <YAxis yAxisId="right" orientation="right" fontSize={10} tickFormatter={(val) => `${(val * 100).toFixed(1)}%`} />
-                      <Tooltip />
-                      <Legend />
-                      <Bar yAxisId="left" dataKey="total_transactions" name="Volume" fill="#cfe2ff" radius={[4, 4, 0, 0]} />
-                      <Line yAxisId="right" type="monotone" dataKey="fraud_rate" name="Fraud Rate" stroke="#dc3545" strokeWidth={2} dot={{ r: 3 }} />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                ) : <div className="text-center p-5 text-muted">No trend data available</div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Fraud Breakdown */}
-        <div className="col-lg-4">
-          <div className="card h-100 shadow-sm border-0">
-            <div className="card-header bg-white border-bottom py-3">
-              <h3 className="card-title h6 fw-bold mb-0">Fraud Type Distribution</h3>
-            </div>
-            <div className="card-body d-flex align-items-center justify-content-center">
-              <FraudTypeChart />
-            </div>
-          </div>
-        </div>
       </div>
 
       <TransactionExplorer />
@@ -145,28 +242,6 @@ export function Analytics() {
   );
 }
 
-function FraudTypeChart() {
-  // Aggregate fraud types if available. For now just show a simple breakdown
-  // since daily stats don't include type breakdown yet.
-  const data = [
-    { name: 'Account Takeover', value: 45, fill: '#ffc107' },
-    { name: 'Stolen Card', value: 30, fill: '#fd7e14' },
-    { name: 'Synthetic Identity', value: 15, fill: '#dc3545' },
-    { name: 'Other', value: 10, fill: '#6c757d' }
-  ];
-
-  return (
-    <ResponsiveContainer width="100%" height={250}>
-      <BarChart data={data} layout="vertical">
-        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
-        <XAxis type="number" hide />
-        <YAxis dataKey="name" type="category" fontSize={10} width={100} />
-        <Tooltip />
-        <Bar dataKey="value" radius={[0, 4, 4, 0]} />
-      </BarChart>
-    </ResponsiveContainer>
-  );
-}
 
 function TransactionExplorer() {
   const { tenantId } = useTenant();

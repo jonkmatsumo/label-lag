@@ -133,8 +133,8 @@ export const backtestApi = {
 
 // Analytics endpoints
 export const analyticsApi = {
-  getOverview: () =>
-    apiClient.get<AnalyticsOverviewResponse>('/bff/v1/analytics/overview'),
+  getOverview: (days?: number) =>
+    apiClient.get<AnalyticsOverviewResponse>(`/bff/v1/analytics/overview${days ? `?days=${days}` : ''}`),
   getDailyStats: (days = 30) =>
     apiClient.get<DailyStatsResponse>(`/bff/v1/analytics/daily-stats?days=${days}`),
   getRecentAlerts: (limit = 50) =>
