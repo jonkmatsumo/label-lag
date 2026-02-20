@@ -52,6 +52,7 @@ import type {
   MetricSeriesPoint,
   KpisResponse,
   VolumeSeriesResponse,
+  ConfusionMatrixResponse,
 } from '../types/api';
 
 // Health endpoints
@@ -160,6 +161,15 @@ export const analyticsApi = {
     searchParams.set('end_time', rest.end_time);
     if (rest.granularity) searchParams.set('granularity', rest.granularity);
     return apiClient.get<VolumeSeriesResponse>(`/bff/v1/volume?${searchParams.toString()}`, signal);
+  },
+  getConfusionMatrix: (params: { start_time: string; end_time: string; threshold?: number; model_version?: string; signal?: AbortSignal }) => {
+    const { signal, ...rest } = params;
+    const searchParams = new URLSearchParams();
+    searchParams.set('start_time', rest.start_time);
+    searchParams.set('end_time', rest.end_time);
+    if (rest.threshold !== undefined) searchParams.set('threshold', String(rest.threshold));
+    if (rest.model_version) searchParams.set('model_version', rest.model_version);
+    return apiClient.get<ConfusionMatrixResponse>(`/bff/v1/analytics/confusion-matrix?${searchParams.toString()}`, signal);
   },
 };
 
