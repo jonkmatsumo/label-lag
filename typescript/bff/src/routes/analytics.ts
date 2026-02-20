@@ -15,6 +15,7 @@ import type {
   RuleAttributionResponse,
   KpisResponse,
   VolumeSeriesResponse,
+  ConfusionMatrixResponse,
 } from '../types/api.js';
 import { parseInt64, timestampToIso } from '../utils/protojson.js';
 
@@ -65,6 +66,13 @@ interface VolumeQuery {
   start_time: string;
   end_time: string;
   granularity?: 'hour' | 'day';
+}
+
+interface ConfusionMatrixQuery {
+  start_time: string;
+  end_time: string;
+  threshold?: number;
+  model_version?: string;
 }
 
 /**
@@ -568,6 +576,81 @@ export async function analyticsRoutes(
             count: parseInt64(p.count) ?? 0,
             alerts: parseInt64(p.alerts) ?? 0,
           })),
+        };
+
+        cache.set(cacheKey, normalized, tenantId, 30000); // 30s TTL
+        return reply.status(response.statusCode).send(normalized);
+      } catch (error) {
+        if (error instanceof UpstreamError) {
+          return reply.status(error.statusCode).send(error.toResponse());
+        }
+        throw error;
+      }
+    }
+  );
+
+  // GET /bff/v1/analytics/confusion-matrix - Get model confusion matrix
+  fastify.get<{ Querystring: ConfusionMatrixQuery }>(
+    '/bff/v1/analytics/confusion-matrix',
+    {
+      schema: {
+        querystring: {
+          type: 'object',
+          required: ['start_time', 'end_time'],
+          additionalProperties: false,
+          properties: {
+            start_time: {
+              type: 'string',
+              pattern: '^\\d{4}-\\d{2}-\\d{2}',
+              description: 'ISO date or datetime string (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ssZ)',
+            },
+            end_time: {
+              type: 'string',
+              pattern: '^\\d{4}-\\d{2}-\\d{2}',
+              description: 'ISO date or datetime string (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ssZ)',
+            },
+            threshold: { type: 'number', minimum: 0, maximum: 100 },
+            model_version: { type: 'string' },
+          },
+        },
+      },
+    },
+    async (
+      request: FastifyRequest<{ Querystring: ConfusionMatrixQuery }>,
+      reply: FastifyReply
+    ) => {
+      try {
+        const { start_time, end_time, threshold, model_version } = request.query;
+        const tenantId = (request as FastifyRequest & { tenantId?: string }).tenantId ?? 'default';
+        const cacheKey = `analytics:confusion-matrix:${tenantId}:${start_time}:${end_time}:${threshold ?? ''}:${model_version ?? ''}`;
+        const cached = cache.get<ConfusionMatrixResponse>(cacheKey, tenantId);
+        if (cached) return reply.send(cached);
+
+        const searchParams = new URLSearchParams();
+        searchParams.set('start_time', start_time);
+        searchParams.set('end_time', end_time);
+        if (threshold !== undefined) searchParams.set('threshold', String(threshold));
+        if (model_version) searchParams.set('model_version', model_version);
+
+        const response = await httpClient.request<any>({
+          method: 'GET',
+          path: `/analytics/confusion-matrix?${searchParams.toString()}`,
+          requestId: request.requestId,
+          tenantId: request.tenantId,
+          target: 'gateway',
+        });
+
+        // Normalize protojson int64 count fields to JS numbers
+        const raw = response.data;
+        const normalized: ConfusionMatrixResponse = {
+          true_positives: parseInt64(raw.true_positives) ?? 0,
+          false_positives: parseInt64(raw.false_positives) ?? 0,
+          true_negatives: parseInt64(raw.true_negatives) ?? 0,
+          false_negatives: parseInt64(raw.false_negatives) ?? 0,
+          precision: raw.precision ?? 0,
+          recall: raw.recall ?? 0,
+          f1_score: raw.f1_score ?? 0,
+          insufficient_labels: raw.insufficient_labels ?? false,
         };
 
         cache.set(cacheKey, normalized, tenantId, 30000); // 30s TTL

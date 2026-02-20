@@ -460,6 +460,17 @@ export interface VolumeSeriesResponse {
   points: VolumePoint[];
 }
 
+export interface ConfusionMatrixResponse {
+  true_positives: number;
+  false_positives: number;
+  true_negatives: number;
+  false_negatives: number;
+  precision: number;
+  recall: number;
+  f1_score: number;
+  insufficient_labels: boolean;
+}
+
 // Monitoring types
 export interface FeatureDriftDetail {
   feature: string;
