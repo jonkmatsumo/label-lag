@@ -331,6 +331,7 @@ class ModelManager:
         bundle = self._load_from_mlflow()
         if self._store_loaded_bundle_if_valid(bundle):
             self._transition_to("ready")
+            self._benchmark_inference(bundle, log_to_mlflow=True)
             return True
         if bundle:
             # Backward-compatibility for tests that mock loader methods as booleans.
@@ -338,6 +339,7 @@ class ModelManager:
                 "Model loader returned non-bundle truthy value; treating as success."
             )
             self._transition_to("ready")
+            # Can't benchmark without a real bundle
             return True
 
         # Fall back to local model
@@ -348,6 +350,7 @@ class ModelManager:
             model_fallback_total.labels(reason=ErrorCategory.MLFLOW_UNAVAILABLE).inc()
             if self._store_loaded_bundle_if_valid(bundle):
                 self._transition_to("ready")
+                self._benchmark_inference(bundle, log_to_mlflow=False)
                 return True
             logger.warning(
                 "Fallback loader returned non-bundle truthy value; treating as success."
