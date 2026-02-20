@@ -13,7 +13,10 @@ import type {
   FeatureSampleResponse,
   RuleAnalyticsResponse,
   RuleAttributionResponse,
+  KpisResponse,
+  VolumeSeriesResponse,
 } from '../types/api.js';
+import { parseInt64, timestampToIso } from '../utils/protojson.js';
 
 export interface AnalyticsRoutesOptions {
   httpClient: HttpClient;
@@ -50,6 +53,18 @@ interface RuleAnalyticsQuery {
 interface RuleAttributionQuery {
   rule_id: string;
   days?: number;
+}
+
+interface KpiQuery {
+  start_time: string;
+  end_time: string;
+  group_by?: 'hour' | 'day';
+}
+
+interface VolumeQuery {
+  start_time: string;
+  end_time: string;
+  granularity?: 'hour' | 'day';
 }
 
 /**
@@ -421,6 +436,126 @@ export async function analyticsRoutes(
           tenantId: request.tenantId,
         });
         return reply.status(response.statusCode).send(response.data);
+      } catch (error) {
+        if (error instanceof UpstreamError) {
+          return reply.status(error.statusCode).send(error.toResponse());
+        }
+        throw error;
+      }
+    }
+  );
+
+  // GET /bff/v1/kpis - Get performance KPIs
+  fastify.get<{ Querystring: KpiQuery }>(
+    '/bff/v1/kpis',
+    {
+      schema: {
+        querystring: {
+          type: 'object',
+          required: ['start_time', 'end_time'],
+          properties: {
+            start_time: { type: 'string' },
+            end_time: { type: 'string' },
+            group_by: { type: 'string', enum: ['hour', 'day'], default: 'day' },
+          },
+        },
+      },
+    },
+    async (
+      request: FastifyRequest<{ Querystring: KpiQuery }>,
+      reply: FastifyReply
+    ) => {
+      try {
+        const { start_time, end_time, group_by = 'day' } = request.query;
+        const cacheKey = `analytics:kpis:${start_time}:${end_time}:${group_by}`;
+        // @ts-ignore
+        const tenantId = request.tenantId || 'default';
+        const cached = cache.get<KpisResponse>(cacheKey, tenantId);
+        if (cached) return reply.send(cached);
+
+        const response = await httpClient.request<any>({
+          method: 'GET',
+          path: `/kpis?start_time=${encodeURIComponent(start_time)}&end_time=${encodeURIComponent(end_time)}&group_by=${group_by}`,
+          requestId: request.requestId,
+          tenantId: request.tenantId,
+          target: 'gateway',
+        });
+
+        // Normalize protojson int64 and timestamps
+        const raw = response.data;
+        const normalized: KpisResponse = {
+          total_decisions: parseInt64(raw.total_decisions) ?? 0,
+          total_alerts: parseInt64(raw.total_alerts) ?? 0,
+          alert_rate: raw.alert_rate ?? 0,
+          avg_score: raw.avg_score ?? 0,
+          rules_fired_total: parseInt64(raw.rules_fired_total) ?? 0,
+          buckets: raw.buckets?.map((b: any) => ({
+            timestamp: timestampToIso(b.timestamp),
+            decisions: parseInt64(b.decisions) ?? 0,
+            alerts: parseInt64(b.alerts) ?? 0,
+            rules_fired: parseInt64(b.rules_fired) ?? 0,
+          })),
+        };
+
+        cache.set(cacheKey, normalized, tenantId, 30000); // 30s TTL
+        return reply.status(response.statusCode).send(normalized);
+      } catch (error) {
+        if (error instanceof UpstreamError) {
+          return reply.status(error.statusCode).send(error.toResponse());
+        }
+        throw error;
+      }
+    }
+  );
+
+  // GET /bff/v1/volume - Get transaction volume timeseries
+  fastify.get<{ Querystring: VolumeQuery }>(
+    '/bff/v1/volume',
+    {
+      schema: {
+        querystring: {
+          type: 'object',
+          required: ['start_time', 'end_time'],
+          properties: {
+            start_time: { type: 'string' },
+            end_time: { type: 'string' },
+            granularity: { type: 'string', enum: ['hour', 'day'], default: 'day' },
+          },
+        },
+      },
+    },
+    async (
+      request: FastifyRequest<{ Querystring: VolumeQuery }>,
+      reply: FastifyReply
+    ) => {
+      try {
+        const { start_time, end_time, granularity = 'day' } = request.query;
+        const cacheKey = `analytics:volume:${start_time}:${end_time}:${granularity}`;
+        // @ts-ignore
+        const tenantId = request.tenantId || 'default';
+        const cached = cache.get<VolumeSeriesResponse>(cacheKey, tenantId);
+        if (cached) return reply.send(cached);
+
+        const response = await httpClient.request<any>({
+          method: 'GET',
+          path: `/volume?start_time=${encodeURIComponent(start_time)}&end_time=${encodeURIComponent(end_time)}&granularity=${granularity}`,
+          requestId: request.requestId,
+          tenantId: request.tenantId,
+          target: 'gateway',
+        });
+
+        // Normalize protojson int64 and timestamps
+        const raw = response.data;
+        const normalized: VolumeSeriesResponse = {
+          points: (raw.points || []).map((p: any) => ({
+            timestamp: timestampToIso(p.timestamp),
+            count: parseInt64(p.count) ?? 0,
+            alerts: parseInt64(p.alerts) ?? 0,
+          })),
+        };
+
+        cache.set(cacheKey, normalized, tenantId, 30000); // 30s TTL
+        return reply.status(response.statusCode).send(normalized);
       } catch (error) {
         if (error instanceof UpstreamError) {
           return reply.status(error.statusCode).send(error.toResponse());
