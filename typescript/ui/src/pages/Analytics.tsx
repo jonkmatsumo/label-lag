@@ -104,49 +104,59 @@ export function Analytics() {
       {/* KPI Cards */}
       <div className="row g-3 mb-4">
         <div className="col-md">
-          <KpiCard
-            label="Total Decisions"
-            value={kpisQuery.data?.total_decisions ?? 0}
-            loading={kpisQuery.isLoading}
-            error={kpisQuery.error}
-            formatter={(val) => formatNumber(val as string | number | null | undefined)}
-          />
+          <div style={{ minHeight: '96px' }}>
+            <KpiCard
+              label="Total Decisions"
+              value={kpisQuery.data?.total_decisions ?? 0}
+              loading={kpisQuery.isLoading}
+              error={kpisQuery.error}
+              formatter={(val) => formatNumber(val as string | number | null | undefined)}
+            />
+          </div>
         </div>
         <div className="col-md">
-          <KpiCard
-            label="Total Alerts"
-            value={kpisQuery.data?.total_alerts ?? 0}
-            loading={kpisQuery.isLoading}
-            error={kpisQuery.error}
-            formatter={(val) => formatNumber(val as string | number | null | undefined)}
-          />
+          <div style={{ minHeight: '96px' }}>
+            <KpiCard
+              label="Total Alerts"
+              value={kpisQuery.data?.total_alerts ?? 0}
+              loading={kpisQuery.isLoading}
+              error={kpisQuery.error}
+              formatter={(val) => formatNumber(val as string | number | null | undefined)}
+            />
+          </div>
         </div>
         <div className="col-md">
-          <KpiCard
-            label="Alert Rate"
-            value={kpisQuery.data?.alert_rate ?? 0}
-            loading={kpisQuery.isLoading}
-            error={kpisQuery.error}
-            formatter={(val) => `${(Number(val) * 100).toFixed(1)}%`}
-          />
+          <div style={{ minHeight: '96px' }}>
+            <KpiCard
+              label="Alert Rate"
+              value={kpisQuery.data?.alert_rate ?? 0}
+              loading={kpisQuery.isLoading}
+              error={kpisQuery.error}
+              formatter={(val) => `${(Number(val) * 100).toFixed(1)}%`}
+            />
+          </div>
         </div>
         <div className="col-md">
-          <KpiCard
-            label="Avg Risk Score"
-            value={kpisQuery.data?.avg_score ?? 0}
-            loading={kpisQuery.isLoading}
-            error={kpisQuery.error}
-            formatter={(val) => Number(val).toFixed(1)}
-          />
+          <div style={{ minHeight: '96px' }}>
+            <KpiCard
+              label="Avg Risk Score"
+              value={kpisQuery.data?.avg_score ?? 0}
+              loading={kpisQuery.isLoading}
+              error={kpisQuery.error}
+              formatter={(val) => Number(val).toFixed(2)}
+            />
+          </div>
         </div>
         <div className="col-md">
-          <KpiCard
-            label="Rules Fired"
-            value={kpisQuery.data?.rules_fired_total ?? 0}
-            loading={kpisQuery.isLoading}
-            error={kpisQuery.error}
-            formatter={(val) => formatNumber(val as string | number | null | undefined)}
-          />
+          <div style={{ minHeight: '96px' }}>
+            <KpiCard
+              label="Rules Fired"
+              value={kpisQuery.data?.rules_fired_total ?? 0}
+              loading={kpisQuery.isLoading}
+              error={kpisQuery.error}
+              formatter={(val) => formatNumber(val as string | number | null | undefined)}
+            />
+          </div>
         </div>
       </div>
 
@@ -165,7 +175,9 @@ export function Analytics() {
             <div className="text-danger p-4">Failed to load volume chart</div>
           ) : volumeQuery.data?.points && volumeQuery.data.points.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={volumeQuery.data.points}>
+              <ComposedChart data={[...volumeQuery.data.points].sort((a, b) =>
+                new Date(a.timestamp ?? 0).getTime() - new Date(b.timestamp ?? 0).getTime()
+              )}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                 <XAxis
                   dataKey="timestamp"
@@ -173,7 +185,7 @@ export function Analytics() {
                   tickFormatter={(val) => {
                     const d = new Date(val);
                     return granularity === 'hour'
-                      ? `${d.getHours()}:00`
+                      ? `${d.getUTCHours().toString().padStart(2, '0')}:00`
                       : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
                   }}
                 />
@@ -188,7 +200,7 @@ export function Analytics() {
             </ResponsiveContainer>
           ) : (
             <div className="d-flex align-items-center justify-content-center h-100 text-muted">
-              No volume data available for the selected range
+              No data available for the selected range
             </div>
           )}
         </div>
