@@ -27,26 +27,28 @@ export function Analytics() {
   });
   const [granularity, setGranularity] = useState<'hour' | 'day'>('day');
 
-  // Fetch performance KPIs
+  // Fetch performance KPIs — signal enables TanStack Query to cancel stale requests
   const kpisQuery = useQuery({
-    queryKey: ['analytics', tenantId, 'kpis', dateRange, granularity],
-    queryFn: () => analyticsApi.getKpis({
+    queryKey: ['analytics', tenantId, 'kpis', dateRange.start, dateRange.end, granularity],
+    queryFn: ({ signal }) => analyticsApi.getKpis({
       start_time: dateRange.start,
       end_time: dateRange.end,
-      group_by: granularity
+      group_by: granularity,
+      signal,
     }),
-    staleTime: 30000,
+    staleTime: 30_000,
   });
 
-  // Fetch volume timeseries
+  // Fetch volume timeseries — signal enables TanStack Query to cancel stale requests
   const volumeQuery = useQuery({
-    queryKey: ['analytics', tenantId, 'volume', dateRange, granularity],
-    queryFn: () => analyticsApi.getVolume({
+    queryKey: ['analytics', tenantId, 'volume', dateRange.start, dateRange.end, granularity],
+    queryFn: ({ signal }) => analyticsApi.getVolume({
       start_time: dateRange.start,
       end_time: dateRange.end,
-      granularity
+      granularity,
+      signal,
     }),
-    staleTime: 30000,
+    staleTime: 30_000,
   });
 
   // Fetch overview metrics (legacy/static)

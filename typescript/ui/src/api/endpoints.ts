@@ -145,19 +145,21 @@ export const analyticsApi = {
     apiClient.get<RuleAttributionResponse>(`/bff/v1/analytics/attribution?rule_id=${encodeURIComponent(ruleId)}&days=${days}`),
   searchTransactions: (request: TransactionSearchRequest) =>
     apiClient.post<TransactionSearchResponse>('/bff/v1/analytics/transactions/search', request),
-  getKpis: (params: { start_time: string; end_time: string; group_by?: 'hour' | 'day' }) => {
+  getKpis: (params: { start_time: string; end_time: string; group_by?: 'hour' | 'day'; signal?: AbortSignal }) => {
+    const { signal, ...rest } = params;
     const searchParams = new URLSearchParams();
-    searchParams.set('start_time', params.start_time);
-    searchParams.set('end_time', params.end_time);
-    if (params.group_by) searchParams.set('group_by', params.group_by);
-    return apiClient.get<KpisResponse>(`/bff/v1/kpis?${searchParams.toString()}`);
+    searchParams.set('start_time', rest.start_time);
+    searchParams.set('end_time', rest.end_time);
+    if (rest.group_by) searchParams.set('group_by', rest.group_by);
+    return apiClient.get<KpisResponse>(`/bff/v1/kpis?${searchParams.toString()}`, signal);
   },
-  getVolume: (params: { start_time: string; end_time: string; granularity?: 'hour' | 'day' }) => {
+  getVolume: (params: { start_time: string; end_time: string; granularity?: 'hour' | 'day'; signal?: AbortSignal }) => {
+    const { signal, ...rest } = params;
     const searchParams = new URLSearchParams();
-    searchParams.set('start_time', params.start_time);
-    searchParams.set('end_time', params.end_time);
-    if (params.granularity) searchParams.set('granularity', params.granularity);
-    return apiClient.get<VolumeSeriesResponse>(`/bff/v1/volume?${searchParams.toString()}`);
+    searchParams.set('start_time', rest.start_time);
+    searchParams.set('end_time', rest.end_time);
+    if (rest.granularity) searchParams.set('granularity', rest.granularity);
+    return apiClient.get<VolumeSeriesResponse>(`/bff/v1/volume?${searchParams.toString()}`, signal);
   },
 };
 
