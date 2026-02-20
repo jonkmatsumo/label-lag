@@ -453,9 +453,18 @@ export async function analyticsRoutes(
         querystring: {
           type: 'object',
           required: ['start_time', 'end_time'],
+          additionalProperties: false,
           properties: {
-            start_time: { type: 'string' },
-            end_time: { type: 'string' },
+            start_time: {
+              type: 'string',
+              pattern: '^\\d{4}-\\d{2}-\\d{2}',
+              description: 'ISO date or datetime string (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ssZ)',
+            },
+            end_time: {
+              type: 'string',
+              pattern: '^\\d{4}-\\d{2}-\\d{2}',
+              description: 'ISO date or datetime string (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ssZ)',
+            },
             group_by: { type: 'string', enum: ['hour', 'day'], default: 'day' },
           },
         },
@@ -467,9 +476,8 @@ export async function analyticsRoutes(
     ) => {
       try {
         const { start_time, end_time, group_by = 'day' } = request.query;
-        const cacheKey = `analytics:kpis:${start_time}:${end_time}:${group_by}`;
-        // @ts-ignore
-        const tenantId = request.tenantId || 'default';
+        const tenantId = (request as FastifyRequest & { tenantId?: string }).tenantId ?? 'default';
+        const cacheKey = `analytics:kpis:${tenantId}:${start_time}:${end_time}:${group_by}`;
         const cached = cache.get<KpisResponse>(cacheKey, tenantId);
         if (cached) return reply.send(cached);
 
@@ -516,9 +524,18 @@ export async function analyticsRoutes(
         querystring: {
           type: 'object',
           required: ['start_time', 'end_time'],
+          additionalProperties: false,
           properties: {
-            start_time: { type: 'string' },
-            end_time: { type: 'string' },
+            start_time: {
+              type: 'string',
+              pattern: '^\\d{4}-\\d{2}-\\d{2}',
+              description: 'ISO date or datetime string (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ssZ)',
+            },
+            end_time: {
+              type: 'string',
+              pattern: '^\\d{4}-\\d{2}-\\d{2}',
+              description: 'ISO date or datetime string (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ssZ)',
+            },
             granularity: { type: 'string', enum: ['hour', 'day'], default: 'day' },
           },
         },
@@ -530,9 +547,8 @@ export async function analyticsRoutes(
     ) => {
       try {
         const { start_time, end_time, granularity = 'day' } = request.query;
-        const cacheKey = `analytics:volume:${start_time}:${end_time}:${granularity}`;
-        // @ts-ignore
-        const tenantId = request.tenantId || 'default';
+        const tenantId = (request as FastifyRequest & { tenantId?: string }).tenantId ?? 'default';
+        const cacheKey = `analytics:volume:${tenantId}:${start_time}:${end_time}:${granularity}`;
         const cached = cache.get<VolumeSeriesResponse>(cacheKey, tenantId);
         if (cached) return reply.send(cached);
 
