@@ -1,0 +1,10 @@
+{
+    "true_positives": "0",
+    "false_positives": "0",
+    "true_negatives": "0",
+    "false_negatives": "0",
+    "precision": 0,
+    "recall": 0,
+    "f1_score": 0,
+    "insufficient_labels": true
+}

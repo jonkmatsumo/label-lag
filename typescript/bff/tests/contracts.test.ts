@@ -330,3 +330,70 @@ describe('Contract: GET /bff/v1/volume', () => {
     expect(typeof raw.points[0].alerts).toBe('string');
   });
 });
+
+// ─── Confusion Matrix (protojson handler with normalization) ─────────────────
+
+describe('Contract: GET /bff/v1/analytics/confusion-matrix', () => {
+  it('basic fixture matches normalized BFF output', () => {
+    const raw = loadFixture('confusion-matrix/basic.json') as any;
+    const expected = loadFixture('confusion-matrix/basic.bff.json');
+
+    const normalized = {
+      true_positives: parseInt64(raw.true_positives),
+      false_positives: parseInt64(raw.false_positives),
+      true_negatives: parseInt64(raw.true_negatives),
+      false_negatives: parseInt64(raw.false_negatives),
+      precision: raw.precision,
+      recall: raw.recall,
+      f1_score: raw.f1_score,
+      insufficient_labels: raw.insufficient_labels,
+    };
+
+    expect(normalized).toEqual(expected);
+  });
+
+  it('all count int64 fields are numbers after normalization', () => {
+    const raw = loadFixture('confusion-matrix/basic.json') as any;
+
+    expect(typeof parseInt64(raw.true_positives)).toBe('number');
+    expect(typeof parseInt64(raw.false_positives)).toBe('number');
+    expect(typeof parseInt64(raw.true_negatives)).toBe('number');
+    expect(typeof parseInt64(raw.false_negatives)).toBe('number');
+  });
+
+  it('raw count int64 fields are strings before normalization (regression guard)', () => {
+    const raw = loadFixture('confusion-matrix/basic.json') as any;
+    // Protojson serializes int64 as strings — test fails if upstream changes encoding
+    expect(typeof raw.true_positives).toBe('string');
+    expect(typeof raw.false_positives).toBe('string');
+    expect(typeof raw.true_negatives).toBe('string');
+    expect(typeof raw.false_negatives).toBe('string');
+  });
+
+  it('float metric fields are numbers in the raw fixture (no normalization needed)', () => {
+    const raw = loadFixture('confusion-matrix/basic.json') as any;
+    expect(typeof raw.precision).toBe('number');
+    expect(typeof raw.recall).toBe('number');
+    expect(typeof raw.f1_score).toBe('number');
+  });
+
+  it('insufficient-labels fixture preserves boolean flag and normalizes counts', () => {
+    const raw = loadFixture('confusion-matrix/insufficient-labels.json') as any;
+    const expected = loadFixture('confusion-matrix/insufficient-labels.bff.json');
+
+    const normalized = {
+      true_positives: parseInt64(raw.true_positives),
+      false_positives: parseInt64(raw.false_positives),
+      true_negatives: parseInt64(raw.true_negatives),
+      false_negatives: parseInt64(raw.false_negatives),
+      precision: raw.precision,
+      recall: raw.recall,
+      f1_score: raw.f1_score,
+      insufficient_labels: raw.insufficient_labels,
+    };
+
+    expect(normalized).toEqual(expected);
+    expect(normalized.insufficient_labels).toBe(true);
+    expect(typeof normalized.true_positives).toBe('number');
+  });
+});
