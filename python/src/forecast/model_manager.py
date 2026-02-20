@@ -47,6 +47,7 @@ class ModelStateBundle:
     baseline_distribution: dict | None
     feature_importance: dict | None
     schema_mismatch_detected: bool = False
+    last_reload_ts: float | None = None
 
 
 class ModelManager:
@@ -154,6 +155,7 @@ class ModelManager:
             calibrator_loaded=bool(getattr(self, "_calibrator_loaded", False)),
             baseline_distribution=getattr(self, "_baseline_distribution", None),
             feature_importance=getattr(self, "_feature_importance", None),
+            last_reload_ts=time.time(),
         )
 
     def _sync_legacy_from_bundle(self, bundle: Any) -> None:
@@ -296,6 +298,9 @@ class ModelManager:
                 "schema_mismatch_detected": self.schema_mismatch_detected,
                 "calibrator_loaded": self.calibrator_loaded,
                 "has_bundle": bundle is not None,
+                "last_reload_ts": getattr(bundle, "last_reload_ts", None)
+                if bundle
+                else None,
             }
 
     def load_production_model(self) -> bool:
@@ -452,6 +457,7 @@ class ModelManager:
                 baseline_distribution=baseline_distribution,
                 feature_importance=feature_importance,
                 schema_mismatch_detected=schema_mismatch,
+                last_reload_ts=time.time(),
             )
 
             # Benchmark inference latency after load
@@ -775,6 +781,7 @@ class ModelManager:
                 feature_importance=self.get_feature_importance_from_model(
                     model, required_features
                 ),
+                last_reload_ts=time.time(),
             )
 
         except Exception as e:

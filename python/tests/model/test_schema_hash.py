@@ -13,10 +13,21 @@ class TestFeatureSchemaHash:
     @patch("model.train._get_git_sha", return_value="abc")
     @patch("model.train.mlflow")
     @patch("model.train.DataLoader")
-    def test_schema_hash_persisted(self, mock_loader_cls, mock_mlflow, _git, _reg):
+    @patch("model.train.XGBClassifier")
+    def test_schema_hash_persisted(
+        self, mock_xgb_cls, mock_loader_cls, mock_mlflow, _git, _reg
+    ):
+        import numpy as np
+
         mock_loader = MagicMock()
         mock_loader.FEATURE_COLUMNS = ["f1", "f2"]
         mock_loader_cls.return_value = mock_loader
+
+        mock_clf = MagicMock()
+        mock_clf.predict.return_value = np.array([0, 1])
+        mock_clf.predict_proba.return_value = np.array([[0.9, 0.1], [0.1, 0.9]])
+        mock_clf.feature_importances_ = np.array([0.5, 0.5])
+        mock_xgb_cls.return_value = mock_clf
 
         mock_split = TrainTestSplit(
             X_train=pd.DataFrame({"f1": [0, 1], "f2": [0, 1]}),

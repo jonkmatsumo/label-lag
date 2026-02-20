@@ -381,9 +381,9 @@ def train_model(
     feature_resolution_mode: str = "strict",
     feature_groups: list[str] | None = None,
     n_jobs: int | None = None,
-    min_cal_samples: int = 100,
-    min_cal_pos: int = 10,
-    min_cal_neg: int = 10,
+    min_cal_samples: int = 200,
+    min_cal_pos: int = 5,
+    min_cal_neg: int = 5,
 ) -> str:
     """Train an XGBoost model with MLflow tracking."""
     _mlflow = _get_mlflow()
