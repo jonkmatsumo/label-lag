@@ -88,6 +88,9 @@ class ModelManager:
         self._baseline_distribution: dict | None = None
         self._feature_importance: dict[str, float] | None = None
         self._schema_mismatch_detected: bool = False
+        self._mlflow_failure_reason: str = "unknown"
+        self._benchmark_last_run_ts: float | None = None
+        self._benchmark_last_status: str | None = None
         self._initialized = True
 
     @staticmethod
@@ -301,6 +304,14 @@ class ModelManager:
                 "last_reload_ts": getattr(bundle, "last_reload_ts", None)
                 if bundle
                 else None,
+                "last_reload_status": "success"
+                if self._state == "ready"
+                else "failed"
+                if self._state == "failed"
+                else "idle",
+                "benchmark_last_run_ts": self._benchmark_last_run_ts,
+                "benchmark_last_status": self._benchmark_last_status,
+                "active_model_version": self.model_version,
             }
 
     def load_production_model(self) -> bool:
@@ -348,7 +359,9 @@ class ModelManager:
         logger.error("No model available - both MLflow and fallback failed")
         from forecast.metrics import model_reload_failure_total
 
-        model_reload_failure_total.inc()
+        # Use mlflow failure reason as the primary reason if both fail
+        reason = self._mlflow_failure_reason
+        model_reload_failure_total.labels(reason=reason).inc()
         return False
 
     def _load_from_mlflow(self) -> ModelStateBundle | None:
@@ -466,6 +479,18 @@ class ModelManager:
             return bundle
 
         except Exception as e:
+            error_str = str(e).lower()
+            if "artifact" in error_str or "not found" in error_str:
+                self._mlflow_failure_reason = "artifact_missing"
+            elif (
+                "mlflow" in error_str
+                or "connection" in error_str
+                or "http" in error_str
+            ):
+                self._mlflow_failure_reason = "mlflow_fetch"
+            else:
+                self._mlflow_failure_reason = "unknown"
+
             logger.critical(
                 f"Failed to load model from MLflow/MinIO: {e}. "
                 "Attempting fallback to local model."
@@ -743,8 +768,12 @@ class ModelManager:
 
             # Mark as benchmarked even if metrics emit fails, to avoid retries.
             self._benchmarked_versions.add(version)
+            self._benchmark_last_status = "success"
         except Exception as e:
             logger.debug(f"Inference benchmarking failed: {e}")
+            self._benchmark_last_status = "failed"
+
+        self._benchmark_last_run_ts = time.time()
 
     def _load_fallback_model(self) -> ModelStateBundle | None:
         """Attempt to load fallback model from local file.
