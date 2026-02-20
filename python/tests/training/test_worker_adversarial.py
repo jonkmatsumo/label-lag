@@ -146,3 +146,47 @@ class TestWorkerAdversarial:
             final_job = job_store.get(job_id)
             assert final_job.status == TuningJobStatus.FAILED
             assert "Artifact store full" in final_job.error_message
+
+    def test_mlflow_start_run_failure(self, worker, job_store, job_queue):
+        """Worker must handle failure to even start a run (e.g. MLflow down)."""
+        job = TuningJob.create(
+            config={"feature_columns": ["f1"]}, total_trials=5, mlflow_run_id="run-fail"
+        )
+        job_id = job.job_id
+        job_store.create(job)
+        job_queue.enqueue(job_id)
+
+        with (
+            patch("training.worker.DataLoader") as mock_loader_cls,
+            patch("mlflow.start_run") as mock_start_run,
+        ):
+            mock_loader = MagicMock()
+            mock_loader.load_train_test_split.return_value = MagicMock(
+                train_size=100,
+                X_train=pd.DataFrame({"f1": [0] * 100}),
+                y_train=pd.Series([0, 1] * 50),
+            )
+            mock_loader_cls.return_value = mock_loader
+
+            # Simulate MLflow being down
+            mock_start_run.side_effect = Exception("MLflow Connection Refused")
+
+            # Let the worker thread process it to test the full catch-all
+            worker_thread = threading.Thread(target=worker._run, daemon=True)
+            worker_thread.start()
+
+            # Wait for terminal status
+            timeout = time.time() + 5
+            final_job = None
+            while time.time() < timeout:
+                j = job_store.get(job_id)
+                if j.status == TuningJobStatus.FAILED:
+                    final_job = j
+                    break
+                time.sleep(0.1)
+
+            worker._stop_event.set()
+            worker_thread.join(timeout=2)
+
+            assert final_job is not None
+            assert "MLflow Connection Refused" in final_job.error_message
