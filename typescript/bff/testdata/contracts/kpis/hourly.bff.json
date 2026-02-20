@@ -1,0 +1,15 @@
+{
+    "total_decisions": 15000,
+    "total_alerts": 450,
+    "alert_rate": 0.03,
+    "avg_score": 42.5,
+    "rules_fired_total": 1250,
+    "buckets": [
+        {
+            "timestamp": "2024-02-20T00:00:00.000Z",
+            "decisions": 5000,
+            "alerts": 150,
+            "rules_fired": 400
+        }
+    ]
+}

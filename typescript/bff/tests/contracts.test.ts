@@ -12,6 +12,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { join, dirname } from 'path';
+import { parseInt64, timestampToIso } from '../src/utils/protojson.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixtureDir = join(__dirname, '..', 'testdata', 'contracts');
@@ -204,5 +205,54 @@ describe('Contract: POST /analytics/transactions/search', () => {
     expect(Array.isArray(payload.transactions)).toBe(true);
     expect((payload.transactions as unknown[]).length).toBe(0);
     expect(payload.total).toBe(0);
+  });
+});
+
+// ─── KPIs (protojson handler with normalization) ───────────────────────────
+
+describe('Contract: GET /bff/v1/kpis', () => {
+  it('hourly fixture matches normalized BFF output', () => {
+    const raw = loadFixture('kpis/hourly.json') as any;
+    const expected = loadFixture('kpis/hourly.bff.json');
+
+    const normalized = {
+      total_decisions: parseInt64(raw.total_decisions),
+      total_alerts: parseInt64(raw.total_alerts),
+      alert_rate: raw.alert_rate,
+      avg_score: raw.avg_score,
+      rules_fired_total: parseInt64(raw.rules_fired_total),
+      buckets: raw.buckets?.map((b: any) => ({
+        timestamp: timestampToIso(b.timestamp),
+        decisions: parseInt64(b.decisions),
+        alerts: parseInt64(b.alerts),
+        rules_fired: parseInt64(b.rules_fired),
+      })),
+    };
+
+    expect(normalized).toEqual(expected);
+    expect(typeof normalized.total_decisions).toBe('number');
+    expect(typeof normalized.buckets?.[0].decisions).toBe('number');
+    expect(typeof normalized.buckets?.[0].timestamp).toBe('string');
+  });
+});
+
+// ─── Volume (protojson handler with normalization) ──────────────────────────
+
+describe('Contract: GET /bff/v1/volume', () => {
+  it('daily fixture matches normalized BFF output', () => {
+    const raw = loadFixture('volume/daily.json') as any;
+    const expected = loadFixture('volume/daily.bff.json');
+
+    const normalized = {
+      points: raw.points?.map((p: any) => ({
+        timestamp: timestampToIso(p.timestamp),
+        count: parseInt64(p.count),
+        alerts: parseInt64(p.alerts),
+      })),
+    };
+
+    expect(normalized).toEqual(expected);
+    expect(typeof normalized.points?.[0].count).toBe('number');
+    expect(typeof normalized.points?.[0].timestamp).toBe('string');
   });
 });
