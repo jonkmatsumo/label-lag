@@ -99,7 +99,7 @@ def calculate_psi(
     actual: np.ndarray,
     buckettype: str = "bins",
     buckets: int = 10,
-) -> float:
+) -> tuple[float, dict[str, Any]]:
     """Calculate Population Stability Index (PSI) between two distributions."""
     # Remove NaN values
     expected = expected[~np.isnan(expected)]
@@ -107,14 +107,14 @@ def calculate_psi(
 
     if len(expected) == 0 or len(actual) == 0:
         logger.warning("Empty array provided for PSI calculation")
-        return 0.0
+        return 0.0, {}
 
     if len(np.unique(expected)) < 2:
         logger.warning(
             "Expected distribution is constant; "
             "skipping PSI calculation and returning 0.0"
         )
-        return 0.0
+        return 0.0, {}
 
     # Create bucket boundaries
     if buckettype == "bins":
@@ -124,19 +124,19 @@ def calculate_psi(
     elif buckettype == "quantiles":
         quantile_breakpoints = np.percentile(expected, np.linspace(0, 100, buckets + 1))
         breakpoints = np.unique(quantile_breakpoints)
-        if len(breakpoints) < 2:
-            logger.warning(
-                "Quantile PSI bucketing produced fewer than 2 breakpoints; "
-                "returning 0.0"
-            )
-            return 0.0
         if len(breakpoints) < (buckets + 1):
+            # Phase 4.1: Deterministic fallback to uniform bins when quantiles collapse
             logger.warning(
-                "Quantile PSI bucketing reduced from %s to %s buckets "
-                "due to tied values",
-                buckets,
-                len(breakpoints) - 1,
+                "Quantile PSI bucketing collapsed (%s < %s unique breakpoints). "
+                "Falling back to uniform bins over data range.",
+                len(breakpoints),
+                buckets + 1,
             )
+            data_min = min(expected.min(), actual.min())
+            data_max = max(expected.max(), actual.max())
+            if data_min == data_max:
+                return 0.0, {}
+            breakpoints = np.linspace(data_min, data_max, buckets + 1)
     else:
         raise ValueError(f"Unknown buckettype: {buckettype}")
 
@@ -153,7 +153,14 @@ def calculate_psi(
     psi_values = (actual_pct - expected_pct) * np.log(actual_pct / expected_pct)
     psi = np.sum(psi_values)
 
-    return float(psi)
+    metadata = {
+        "bucket_type": buckettype,
+        "n_buckets": buckets,
+        "actual_buckets": len(breakpoints) - 1,
+        "breakpoints": [float(b) for b in breakpoints],
+    }
+
+    return float(psi), metadata
 
 
 def get_reference_data() -> pd.DataFrame | None:
@@ -280,7 +287,9 @@ def detect_drift(
         expected = df_reference[feature].values.astype(float)
         actual = df_current[feature].values.astype(float)
 
-        psi = calculate_psi(expected, actual, buckettype="quantiles", buckets=10)
+        psi, bucketing = calculate_psi(
+            expected, actual, buckettype="quantiles", buckets=10
+        )
 
         if psi >= PSI_THRESHOLD_CRITICAL:
             status = "CRITICAL"
@@ -318,6 +327,7 @@ def detect_drift(
         results["features"][feature] = {
             "psi": round(psi, 4),
             "status": status,
+            "bucketing": bucketing,
         }
 
         if status == "CRITICAL":

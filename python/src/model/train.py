@@ -381,6 +381,9 @@ def train_model(
     feature_resolution_mode: str = "strict",
     feature_groups: list[str] | None = None,
     n_jobs: int | None = None,
+    min_cal_samples: int = 100,
+    min_cal_pos: int = 10,
+    min_cal_neg: int = 10,
 ) -> str:
     """Train an XGBoost model with MLflow tracking."""
     _mlflow = _get_mlflow()
@@ -424,6 +427,11 @@ def train_model(
 
     n_negative = (split.y_train == 0).sum()
     n_positive = (split.y_train == 1).sum()
+
+    # Phase 2.1: Persist feature schema hash
+    ordered_features = sorted(actual_feature_columns)
+    schema_json = json.dumps(ordered_features)
+    feature_schema_hash = hashlib.sha256(schema_json.encode("utf-8")).hexdigest()
 
     if n_positive == 0:
         cutoff = training_cutoff_date.date()
@@ -623,6 +631,14 @@ def train_model(
         # Log feature set spec (Commit 8)
         _mlflow.log_dict(feature_spec.model_dump(), "feature_set.json")
         _mlflow.set_tag("feature_set_hash", feature_spec.hash)
+        _mlflow.set_tag("feature_schema_hash", feature_schema_hash)
+        _mlflow.log_dict(
+            {
+                "feature_schema_hash": feature_schema_hash,
+                "feature_count": len(ordered_features),
+            },
+            "feature_schema_hash.json",
+        )
 
         # Log training run spec (NF1)
         from training.schemas import TrainingRunSpec
@@ -778,12 +794,50 @@ def train_model(
             x_cal_fit = x_fit_base
             y_cal_fit = y_fit_base
 
-        y_cal_proba = np.asarray(clf.predict_proba(x_cal_fit)[:, 1])
-        if len(y_cal_proba) != len(y_cal_fit):
-            # Defensive alignment for mocked/non-standard predict_proba outputs.
-            y_cal_proba = y_cal_proba[: len(y_cal_fit)]
+        # Phase 1.1: Calibration viability guards
+        cal_skip_reason = None
+        n_cal_samples = len(y_cal_fit)
+        n_cal_pos = int(np.sum(y_cal_fit == 1))
+        n_cal_neg = int(np.sum(y_cal_fit == 0))
+
+        if n_cal_samples < min_cal_samples:
+            cal_skip_reason = "calibration_skipped_insufficient_samples"
+        elif n_cal_pos < min_cal_pos:
+            cal_skip_reason = "calibration_skipped_insufficient_positives"
+        elif n_cal_neg < min_cal_neg:
+            cal_skip_reason = "calibration_skipped_insufficient_negatives"
+
         calibrator = ScoreCalibrator()
-        calibrator.fit(y_cal_proba, y_cal_fit)
+        cal_params = {
+            "calibration_samples": n_cal_samples,
+            "calibration_pos_count": n_cal_pos,
+            "calibration_neg_count": n_cal_neg,
+        }
+
+        if cal_skip_reason:
+            logger.warning(
+                "Skipping calibration reason_code=%s cal_size=%d "
+                "pos_count=%d neg_count=%d",
+                cal_skip_reason,
+                n_cal_samples,
+                n_cal_pos,
+                n_cal_neg,
+            )
+            cal_params.update(
+                {
+                    "calibration_enabled": False,
+                    "calibration_skip_reason": cal_skip_reason,
+                }
+            )
+        else:
+            y_cal_proba = np.asarray(clf.predict_proba(x_cal_fit)[:, 1])
+            if len(y_cal_proba) != len(y_cal_fit):
+                # Defensive alignment for mocked/non-standard predict_proba outputs.
+                y_cal_proba = y_cal_proba[: len(y_cal_fit)]
+            calibrator.fit(y_cal_proba, y_cal_fit)
+            cal_params["calibration_enabled"] = True
+
+        _mlflow.log_params(cal_params)
 
         signature = infer_signature(split.X_train, y_pred_proba)
         _mlflow.sklearn.log_model(

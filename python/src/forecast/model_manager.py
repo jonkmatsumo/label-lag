@@ -46,6 +46,7 @@ class ModelStateBundle:
     calibrator_loaded: bool
     baseline_distribution: dict | None
     feature_importance: dict | None
+    schema_mismatch_detected: bool = False
 
 
 class ModelManager:
@@ -85,6 +86,7 @@ class ModelManager:
         self._calibrator_loaded: bool = False
         self._baseline_distribution: dict | None = None
         self._feature_importance: dict[str, float] | None = None
+        self._schema_mismatch_detected: bool = False
         self._initialized = True
 
     @staticmethod
@@ -166,6 +168,9 @@ class ModelManager:
         self._calibrator_loaded = bool(getattr(bundle, "calibrator_loaded", False))
         self._baseline_distribution = getattr(bundle, "baseline_distribution", None)
         self._feature_importance = getattr(bundle, "feature_importance", None)
+        self._schema_mismatch_detected = bool(
+            getattr(bundle, "schema_mismatch_detected", False)
+        )
 
     def _store_loaded_bundle_if_valid(self, bundle: Any) -> bool:
         """Store and sync a valid bundle-like object."""
@@ -248,13 +253,16 @@ class ModelManager:
         return "none"
 
     @property
-    def required_features(self) -> list[str]:
-        """Get the list of required feature columns for this model.
+    def schema_mismatch_detected(self) -> bool:
+        """Check if a feature schema mismatch was detected for the active model."""
+        bundle = self._resolve_runtime_bundle()
+        if bundle is not None:
+            return bool(getattr(bundle, "schema_mismatch_detected", False))
+        return bool(getattr(self, "_schema_mismatch_detected", False))
 
-        Returns:
-            List of required feature column names. Falls back to default
-            FEATURE_COLUMNS if not available.
-        """
+    @property
+    def required_features(self) -> list[str]:
+        """Get the list of required feature columns for this model."""
         bundle = self._resolve_runtime_bundle()
         if bundle is not None:
             resolved = self._coerce_feature_names(
@@ -271,6 +279,24 @@ class ModelManager:
         from model.loader import DataLoader
 
         return DataLoader.FEATURE_COLUMNS
+
+    def get_diagnostics(self) -> dict[str, Any]:
+        """Get a diagnostic snapshot of the ModelManager state.
+
+        Returns:
+            Dict containing state, version, source, error, and flags.
+        """
+        with self._lock:
+            bundle = self._resolve_runtime_bundle()
+            return {
+                "state": self._state,
+                "model_version": self.model_version,
+                "model_source": self.model_source,
+                "last_error": self._last_error,
+                "schema_mismatch_detected": self.schema_mismatch_detected,
+                "calibrator_loaded": self.calibrator_loaded,
+                "has_bundle": bundle is not None,
+            }
 
     def load_production_model(self) -> bool:
         """Load the production model from MLflow registry.
@@ -315,6 +341,9 @@ class ModelManager:
 
         self._transition_to("failed", error="Both MLflow and fallback failed")
         logger.error("No model available - both MLflow and fallback failed")
+        from forecast.metrics import model_reload_failure_total
+
+        model_reload_failure_total.inc()
         return False
 
     def _load_from_mlflow(self) -> ModelStateBundle | None:
@@ -379,6 +408,40 @@ class ModelManager:
 
             logger.info(f"Successfully loaded model version {version} from MLflow")
 
+            # Phase 2.2: Validate feature schema hash
+            schema_mismatch = False
+            try:
+                import hashlib
+
+                stored_hash_info = self._load_feature_schema_hash_artifact(version)
+                if stored_hash_info:
+                    stored_hash = stored_hash_info.get("feature_schema_hash")
+                    # Compute expected hash from inference-side required_features
+                    ordered_features = sorted(required_features)
+                    expected_json = json.dumps(ordered_features)
+                    expected_hash = hashlib.sha256(
+                        expected_json.encode("utf-8")
+                    ).hexdigest()
+
+                    if stored_hash and stored_hash != expected_hash:
+                        schema_mismatch = True
+                        logger.warning(
+                            "Feature schema hash mismatch detected! "
+                            "Stored: %s (count=%s), "
+                            "Expected: %s (count=%d). "
+                            "Inference feature ordering or set may "
+                            "differ from training.",
+                            stored_hash,
+                            stored_hash_info.get("feature_count"),
+                            expected_hash,
+                            len(ordered_features),
+                        )
+                        from forecast.metrics import model_schema_mismatch_total
+
+                        model_schema_mismatch_total.inc()
+            except Exception as e:
+                logger.debug(f"Feature schema hash validation failed: {e}")
+
             bundle = ModelStateBundle(
                 model=model,
                 version=version,
@@ -388,6 +451,7 @@ class ModelManager:
                 calibrator_loaded=calibrator_loaded,
                 baseline_distribution=baseline_distribution,
                 feature_importance=feature_importance,
+                schema_mismatch_detected=schema_mismatch,
             )
 
             # Benchmark inference latency after load
@@ -437,6 +501,28 @@ class ModelManager:
                         break
         except Exception as e:
             logger.debug(f"Could not load required features metadata: {e}")
+        return None
+
+    def _load_feature_schema_hash_artifact(self, version: str) -> dict | None:
+        """Load feature_schema_hash.json artifact from the model run."""
+        try:
+            import mlflow
+
+            client = mlflow.MlflowClient()
+            versions = client.search_model_versions(f"name='{MODEL_NAME}'")
+            for v in versions:
+                if v.current_stage == "Production" and v.version == version.lstrip("v"):
+                    run_id = v.run_id
+                    try:
+                        path = client.download_artifacts(
+                            run_id, "feature_schema_hash.json"
+                        )
+                        with open(path) as f:
+                            return json.load(f)
+                    except Exception:
+                        break
+        except Exception as e:
+            logger.debug(f"Could not load feature schema hash artifact: {e}")
         return None
 
     def _load_calibrator_artifact(self) -> tuple[Any, bool]:

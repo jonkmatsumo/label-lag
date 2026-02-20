@@ -100,6 +100,9 @@ message TrainRequest {
   float reg_lambda = 13;
   int32 random_state = 14;
   optional int32 early_stopping_rounds = 15;
+  optional int32 min_cal_samples = 31;
+  optional int32 min_cal_pos = 32;
+  optional int32 min_cal_neg = 33;
   string tenant_id = 30;
 }
 

@@ -16,6 +16,18 @@ model_fallback_total = Counter(
     ["reason"],
 )
 
+# Model reload failure: both MLflow and fallback failed
+model_reload_failure_total = Counter(
+    "forecast_model_reload_failure_total",
+    "Times the model reload failed (both MLflow and fallback).",
+)
+
+# Model schema mismatch: feature hash doesn't match
+model_schema_mismatch_total = Counter(
+    "forecast_model_schema_mismatch_total",
+    "Times the loaded model feature schema hash did not match the computed hash.",
+)
+
 # Heuristic scoring: model not loaded or missing features, used heuristic
 heuristic_fallback_total = Counter(
     "forecast_heuristic_fallback_total",

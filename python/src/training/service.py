@@ -371,6 +371,15 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                 feature_groups=(
                     list(request.feature_groups) if request.feature_groups else None
                 ),
+                min_cal_samples=request.min_cal_samples
+                if request.HasField("min_cal_samples")
+                else 100,
+                min_cal_pos=request.min_cal_pos
+                if request.HasField("min_cal_pos")
+                else 10,
+                min_cal_neg=request.min_cal_neg
+                if request.HasField("min_cal_neg")
+                else 10,
             )
 
             # Report Success
