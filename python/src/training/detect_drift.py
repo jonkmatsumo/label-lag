@@ -164,10 +164,15 @@ def calculate_psi(
     psi = np.sum(psi_values)
 
     metadata = {
-        "bucket_type": buckettype,
-        "n_buckets": buckets,
-        "actual_buckets": len(breakpoints) - 1,
+        "buckettype_requested": buckettype,
+        "buckettype_used": (
+            "bins" if (buckettype == "bins" or fallback_reason) else "quantiles"
+        ),
+        "buckets_requested": buckets,
+        "buckets_used": len(breakpoints) - 1,
+        "bucketing_fallback_reason": fallback_reason,
         "breakpoints": [float(b) for b in breakpoints],
+        "reference_sample_size": len(expected),
     }
 
     return float(psi), metadata
