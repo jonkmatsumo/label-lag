@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { analyticsApi } from '../api';
 import type { RecentAlert, TransactionSearchRequest, TransactionDetail } from '../types/api';
@@ -14,18 +15,66 @@ import type { DateRange } from '../components/DateRangePicker';
 export function Analytics() {
   const [daysFilter] = useState(30);
   const { tenantId } = useTenant();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  // New state for dynamic dashboard
-  const [dateRange, setDateRange] = useState<DateRange>(() => {
+  // ── Compute defaults ────────────────────────────────────────────────────────
+  function getDefaults(): { start: string; end: string; granularity: 'hour' | 'day' } {
     const end = new Date();
     const start = new Date();
     start.setDate(end.getDate() - 7);
     return {
       start: start.toISOString().split('T')[0],
       end: end.toISOString().split('T')[0],
+      granularity: 'day',
     };
-  });
-  const [granularity, setGranularity] = useState<'hour' | 'day'>('day');
+  }
+
+  // ── Validate URL param helpers ───────────────────────────────────────────────
+  const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}/;
+  function isValidDate(s: string | null): s is string {
+    return !!s && ISO_DATE_RE.test(s);
+  }
+  function isValidGranularity(s: string | null): s is 'hour' | 'day' {
+    return s === 'hour' || s === 'day';
+  }
+
+  // ── Read params from URL, fall back to defaults if invalid ───────────────────
+  const rawStart = searchParams.get('start_time');
+  const rawEnd = searchParams.get('end_time');
+  const rawGran = searchParams.get('granularity');
+
+  const defaults = getDefaults();
+  const startTime = isValidDate(rawStart) ? rawStart : defaults.start;
+  const endTime = isValidDate(rawEnd) ? rawEnd : defaults.end;
+  const granularity = isValidGranularity(rawGran) ? rawGran : defaults.granularity;
+
+  // ── On mount: if URL params are missing/invalid, replace with defaults once ──
+  useEffect(() => {
+    const needsFix =
+      !isValidDate(rawStart) ||
+      !isValidDate(rawEnd) ||
+      !isValidGranularity(rawGran);
+
+    if (needsFix) {
+      setSearchParams(
+        { start_time: startTime, end_time: endTime, granularity },
+        { replace: true },
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run only on mount
+
+  // ── DateRange object for DateRangePicker ─────────────────────────────────────
+  const dateRange: DateRange = { start: startTime, end: endTime };
+
+  // ── Handlers ─────────────────────────────────────────────────────────────────
+  const handleDateRangeChange = (range: DateRange) => {
+    setSearchParams({ start_time: range.start, end_time: range.end, granularity });
+  };
+
+  const handleGranularityChange = (g: 'hour' | 'day') => {
+    setSearchParams({ start_time: startTime, end_time: endTime, granularity: g });
+  };
 
   // Fetch performance KPIs — signal enables TanStack Query to cancel stale requests
   const kpisQuery = useQuery({
@@ -95,22 +144,23 @@ export function Analytics() {
 
       {/* KPI Dashboard Controls */}
       <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
-        <DateRangePicker onChange={setDateRange} />
+        <DateRangePicker onChange={handleDateRangeChange} />
         <div className="btn-group btn-group-sm">
           <button
             className={`btn ${granularity === 'hour' ? 'btn-primary' : 'btn-outline-secondary'}`}
-            onClick={() => setGranularity('hour')}
+            onClick={() => handleGranularityChange('hour')}
           >
             Hourly
           </button>
           <button
             className={`btn ${granularity === 'day' ? 'btn-primary' : 'btn-outline-secondary'}`}
-            onClick={() => setGranularity('day')}
+            onClick={() => handleGranularityChange('day')}
           >
             Daily
           </button>
         </div>
       </div>
+
 
       {/* KPI Cards */}
       <div className="row g-3 mb-4">
