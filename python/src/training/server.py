@@ -4,27 +4,14 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
 from concurrent import futures
 from datetime import UTC, datetime
 
 import grpc
 
-# Add generated proto directories to sys.path BEFORE importing the stubs
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.extend(
-    [
-        os.path.join(BASE_DIR, "inference/proto"),
-        os.path.join(BASE_DIR, "training/proto"),
-        os.path.join(BASE_DIR, "forecast/proto"),
-    ]
-)
-
-# Now it's safe to import the stubs
-from forecast.proto.forecast.v1 import forecast_pb2_grpc  # noqa: E402
-
-from forecast.model_manager import get_model_manager  # noqa: E402
-from forecast.service import ForecastService  # noqa: E402
+from forecast.model_manager import get_model_manager
+from forecast.service import ForecastService
+from forecast.v1 import forecast_pb2_grpc
 from training.config import load_config  # noqa: E402
 from training.job_queue import JobQueue  # noqa: E402
 from training.service import TrainingService  # noqa: E402

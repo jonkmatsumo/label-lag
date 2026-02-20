@@ -6,7 +6,7 @@ import pytest
 
 
 def test_api_main_import_is_lightweight():
-    """Assert that importing training.main does not import heavy dependencies."""
+    """Assert that importing training.server does not import heavy dependencies."""
     # Ensure heavy modules are not already in sys.modules
     heavy_modules = ["mlflow", "scipy", "matplotlib"]
     for mod in heavy_modules:
@@ -20,13 +20,13 @@ def test_api_main_import_is_lightweight():
                 f"Module {mod} already in sys.modules, skipping lightweight check"
             )
 
-    # Import training.main
-    import training.main  # noqa: F401
+    # Import training.server
+    import training.server  # noqa: F401
 
     # Check again
     for mod in heavy_modules:
         assert mod not in sys.modules, (
-            f"Module {mod} was imported eagerly by training.main"
+            f"Module {mod} was imported eagerly by training.server"
         )
 
 
@@ -38,6 +38,9 @@ def test_forecast_import_is_lightweight():
             pytest.skip(
                 f"Module {mod} already in sys.modules, skipping lightweight check"
             )
+
+    # Import forecast
+    import forecast  # noqa: F401
 
     for mod in heavy_modules:
         assert mod not in sys.modules, f"Module {mod} was imported eagerly by forecast"

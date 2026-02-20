@@ -317,11 +317,29 @@ def _derive_calibration_split(
 
     # Keep at least two classes in fit slice when possible to avoid
     # single-class XGBoost fit failures on tiny datasets.
-    while cal_size > 0:
-        y_fit_candidate = _slice(y_train, 0, n_samples - cal_size)
-        if _nunique(y_fit_candidate) >= 2:
-            break
-        cal_size -= 1
+    # We search for the first index where the label differs from the first label
+    # to find the minimum fit size that has at least two classes.
+    if cal_size > 0 and n_samples > 1:
+        y_fit_candidate_full = _slice(y_train, 0, n_samples - cal_size)
+        if _nunique(y_fit_candidate_full) < 2:
+            # Need to reduce cal_size (increase fit size) until we have 2 classes.
+            first_val = y_train.iloc[0] if hasattr(y_train, "iloc") else y_train[0]
+            # Find first index i such that y_train[i] != first_val
+            # This is O(N) and much faster than the iterative nunique approach.
+            found_idx = -1
+            for i in range(1, n_samples):
+                val = y_train.iloc[i] if hasattr(y_train, "iloc") else y_train[i]
+                if val != first_val:
+                    found_idx = i
+                    break
+
+            if found_idx != -1:
+                # Minimum fit_size needed is found_idx + 1
+                min_fit_size = found_idx + 1
+                cal_size = min(cal_size, n_samples - min_fit_size)
+            else:
+                # All labels are the same, cannot get 2 classes.
+                cal_size = 0
 
     # Tighten invariant: if cal_size would be 0 or fit_size would be 0,
     # fallback to full train without calibration.

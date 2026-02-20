@@ -827,7 +827,10 @@ class ModelManager:
                 queue = [model_obj]
                 seen: set[int] = set()
                 attrs = ("_model_impl", "_model", "model")
-                while queue:
+                # Safety limit to prevent infinite loop
+                iterations = 0
+                while queue and iterations < 1000:
+                    iterations += 1
                     candidate = queue.pop(0)
                     if candidate is None:
                         continue
