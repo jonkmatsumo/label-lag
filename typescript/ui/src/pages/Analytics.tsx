@@ -5,7 +5,7 @@ import type { RecentAlert, TransactionSearchRequest, TransactionDetail } from '.
 import {
   Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart
 } from 'recharts';
-import { Search, ChevronDown, ChevronRight, BarChart3 } from 'lucide-react';
+import { Search, ChevronDown, ChevronRight, BarChart3, ShieldCheck } from 'lucide-react';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { DateRangePicker, KpiCard } from '../components';
 import { useTenant } from '../hooks/useTenant';
@@ -46,6 +46,17 @@ export function Analytics() {
       start_time: dateRange.start,
       end_time: dateRange.end,
       granularity,
+      signal,
+    }),
+    staleTime: 30_000,
+  });
+
+  // Fetch confusion matrix — signal enables TanStack Query to cancel stale requests
+  const confusionMatrixQuery = useQuery({
+    queryKey: ['analytics', tenantId, 'confusion-matrix', dateRange.start, dateRange.end],
+    queryFn: ({ signal }) => analyticsApi.getConfusionMatrix({
+      start_time: dateRange.start,
+      end_time: dateRange.end,
       signal,
     }),
     staleTime: 30_000,
@@ -157,6 +168,69 @@ export function Analytics() {
               formatter={(val) => formatNumber(val as string | number | null | undefined)}
             />
           </div>
+        </div>
+      </div>
+
+      {/* Model Performance Card (Confusion Matrix) */}
+      <div className="card shadow-sm border-0 mb-4">
+        <div className="card-header bg-white border-bottom py-3 d-flex align-items-center gap-2">
+          <ShieldCheck size={18} className="text-success" />
+          <h3 className="card-title h6 fw-bold mb-0">Model Performance</h3>
+        </div>
+        <div className="card-body" style={{ minHeight: '120px' }}>
+          {confusionMatrixQuery.isLoading ? (
+            <div className="d-flex align-items-center justify-content-center h-100" style={{ minHeight: '100px' }}>
+              <div className="spinner-border spinner-border-sm text-success me-2" />
+              <span className="text-muted small">Loading model performance…</span>
+            </div>
+          ) : confusionMatrixQuery.isError ? (
+            <div className="text-danger small p-2">Failed to load model performance metrics</div>
+          ) : confusionMatrixQuery.data?.insufficient_labels ? (
+            <div className="d-flex align-items-center justify-content-center" style={{ minHeight: '100px' }}>
+              <div className="text-center text-muted">
+                <ShieldCheck size={28} className="mb-2 opacity-25" />
+                <div className="small">Insufficient labeled data for the selected period</div>
+              </div>
+            </div>
+          ) : confusionMatrixQuery.data ? (
+            <div className="row g-4 align-items-start">
+              {/* Precision / Recall / F1 */}
+              <div className="col-md-6">
+                <div className="row g-2">
+                  {([
+                    { label: 'Precision', value: confusionMatrixQuery.data.precision },
+                    { label: 'Recall', value: confusionMatrixQuery.data.recall },
+                    { label: 'F1 Score', value: confusionMatrixQuery.data.f1_score },
+                  ] as { label: string; value: number }[]).map(({ label, value }) => (
+                    <div key={label} className="col-4">
+                      <div className="text-center p-2 bg-light rounded">
+                        <div className="fw-bold fs-6">{(value * 100).toFixed(1)}%</div>
+                        <div className="text-muted" style={{ fontSize: '0.7rem' }}>{label}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* TP / FP / TN / FN compact 2×2 table */}
+              <div className="col-md-6">
+                <div className="row g-1" style={{ maxWidth: '280px' }}>
+                  {([
+                    { label: 'TP', value: confusionMatrixQuery.data.true_positives, bg: 'bg-success-subtle text-success' },
+                    { label: 'FP', value: confusionMatrixQuery.data.false_positives, bg: 'bg-danger-subtle text-danger' },
+                    { label: 'FN', value: confusionMatrixQuery.data.false_negatives, bg: 'bg-warning-subtle text-warning' },
+                    { label: 'TN', value: confusionMatrixQuery.data.true_negatives, bg: 'bg-success-subtle text-success' },
+                  ] as { label: string; value: number; bg: string }[]).map(({ label, value, bg }) => (
+                    <div key={label} className="col-6">
+                      <div className={`text-center p-2 rounded border ${bg}`}>
+                        <div className="fw-bold">{formatNumber(value)}</div>
+                        <div style={{ fontSize: '0.7rem' }}>{label}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
 
