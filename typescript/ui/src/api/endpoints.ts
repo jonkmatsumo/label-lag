@@ -50,6 +50,8 @@ import type {
   DatasetSummary,
   CompareProfilesResponse,
   MetricSeriesPoint,
+  KpisResponse,
+  VolumeSeriesResponse,
 } from '../types/api';
 
 // Health endpoints
@@ -143,6 +145,20 @@ export const analyticsApi = {
     apiClient.get<RuleAttributionResponse>(`/bff/v1/analytics/attribution?rule_id=${encodeURIComponent(ruleId)}&days=${days}`),
   searchTransactions: (request: TransactionSearchRequest) =>
     apiClient.post<TransactionSearchResponse>('/bff/v1/analytics/transactions/search', request),
+  getKpis: (params: { start_time: string; end_time: string; group_by?: 'hour' | 'day' }) => {
+    const searchParams = new URLSearchParams();
+    searchParams.set('start_time', params.start_time);
+    searchParams.set('end_time', params.end_time);
+    if (params.group_by) searchParams.set('group_by', params.group_by);
+    return apiClient.get<KpisResponse>(`/bff/v1/kpis?${searchParams.toString()}`);
+  },
+  getVolume: (params: { start_time: string; end_time: string; granularity?: 'hour' | 'day' }) => {
+    const searchParams = new URLSearchParams();
+    searchParams.set('start_time', params.start_time);
+    searchParams.set('end_time', params.end_time);
+    if (params.granularity) searchParams.set('granularity', params.granularity);
+    return apiClient.get<VolumeSeriesResponse>(`/bff/v1/volume?${searchParams.toString()}`);
+  },
 };
 
 // Monitoring endpoints

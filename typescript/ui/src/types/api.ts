@@ -520,3 +520,30 @@ export interface DriftStatusResponse {
     status: string;
   }>;
 }
+
+// KPI and Volume types (BFF-normalized)
+export interface BffKpiBucket {
+  timestamp: string;
+  decisions: number;
+  alerts: number;
+  rules_fired: number;
+}
+
+export interface KpisResponse {
+  total_decisions: number;
+  total_alerts: number;
+  alert_rate: number;
+  avg_score: number;
+  rules_fired_total: number;
+  buckets?: BffKpiBucket[];
+}
+
+export interface BffVolumePoint {
+  timestamp: string;
+  count: number;
+  alerts: number;
+}
+
+export interface VolumeSeriesResponse {
+  points: BffVolumePoint[];
+}
