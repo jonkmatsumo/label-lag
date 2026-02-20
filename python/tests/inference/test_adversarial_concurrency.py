@@ -104,3 +104,33 @@ class TestAdversarialConcurrency:
 
         assert "Model reload in progress" in str(excinfo.value)
         assert excinfo.value.args[1] == "reload_in_progress"
+
+    def test_benchmark_mlflow_write_failure(self):
+        """Verify that MLflow write failure during benchmark does not crash reload."""
+        manager = self._fresh_manager()
+        mock_bundle = ModelStateBundle(
+            model=MagicMock(),
+            version="v1",
+            source="mlflow",
+            required_features=[],
+            calibrator=None,
+            calibrator_loaded=False,
+            baseline_distribution=None,
+            feature_importance=None,
+            last_reload_ts=time.time(),
+        )
+
+        with (
+            patch.object(manager, "_load_from_mlflow", return_value=mock_bundle),
+            patch("mlflow.MlflowClient") as mock_client_cls,
+        ):
+            mock_client = mock_client_cls.return_value
+            # Simulate failure during log_metric
+            mock_client.log_metric.side_effect = Exception("S3 Upload Failed")
+
+            # This should NOT raise Exception to the caller
+            res = manager.load_production_model()
+            assert res is True
+            assert manager._state == "ready"
+            # It still finished benchmarking even if MLflow log failed
+            assert manager._benchmark_last_status == "success"
