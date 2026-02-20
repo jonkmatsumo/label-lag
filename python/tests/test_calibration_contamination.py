@@ -12,18 +12,22 @@ from model.train import train_model
 @patch("features.registry.FeatureRegistry.get")
 def test_calibrator_fit_uses_calibration_labels_only(_mock_registry):
     """Calibrator must fit on train-derived calibration labels, never y_test."""
+    # Create larger dataset to pass viability guards (min_cal_samples=200, pos=5, neg=5)
+    # Default validation_fraction is 0.2. To get 200 cal samples, we need 1000 total.
+    n_train = 1000
     x_train = pd.DataFrame(
         {
-            "a": list(range(10)),
-            "b": [float(i) for i in range(10)],
-            "c": [i / 10.0 for i in range(10)],
+            "a": list(range(n_train)),
+            "b": [float(i) for i in range(n_train)],
+            "c": [i / float(n_train) for i in range(n_train)],
         }
     )
-    y_train = pd.Series([0, 1, 0, 1, 0, 1, 0, 1, 0, 1])
+    # Balanced labels
+    y_train = pd.Series(([0, 1] * (n_train // 2))[:n_train])
 
     x_test = pd.DataFrame(
         {
-            "a": [100, 101, 102],
+            "a": [2000, 2001, 2002],
             "b": [1.0, 2.0, 3.0],
             "c": [0.2, 0.4, 0.6],
         }
@@ -34,8 +38,9 @@ def test_calibrator_fit_uses_calibration_labels_only(_mock_registry):
         X_train=x_train, y_train=y_train, X_test=x_test, y_test=y_test
     )
 
-    expected_y_cal = y_train.iloc[-2:].to_numpy()
-    calibration_probs = np.array([0.2, 0.8])
+    # 20% of 1000 is 200.
+    expected_y_cal = y_train.iloc[-200:].to_numpy()
+    calibration_probs = np.array([0.5] * 200)
     test_probs = np.array([0.1, 0.4, 0.9])
 
     captured: dict[str, np.ndarray | list[np.ndarray] | None] = {
@@ -72,7 +77,7 @@ def test_calibrator_fit_uses_calibration_labels_only(_mock_registry):
         patch("model.train._get_mlflow") as mock_get_mlflow,
         patch("model.train.DataLoader") as mock_loader_cls,
         patch("model.train.XGBClassifier") as mock_xgb_cls,
-        patch("model.evaluate.ScoreCalibrator", CapturingCalibrator),
+        patch("model.train.ScoreCalibrator", CapturingCalibrator),
         patch("mlflow.models.infer_signature"),
         patch("joblib.dump"),
     ):
@@ -101,7 +106,7 @@ def test_calibrator_fit_uses_calibration_labels_only(_mock_registry):
     assert any(np.array_equal(p, test_probs) for p in captured["transform_probs"])
 
     params_logged = mock_mlflow.log_params.call_args[0][0]
-    assert params_logged["calibration_set_size"] == 2
+    assert params_logged["calibration_samples"] == 200
     assert params_logged["calibration_positive_rate"] == 0.5
     assert params_logged["calibration_split_strategy"] == "train_tail_fraction"
 
@@ -148,10 +153,9 @@ def test_calibration_edge_cases_tiny_data(_mock_registry):
         train_model(feature_columns=["a", "b"])
 
     params_logged = mock_mlflow.log_params.call_args[0][0]
-    # Default validation_fraction is 0.2. 20% of 2 is 0.4 -> 0.
-    # It falls back to no calibration, and then the final strategy is overridden to
-    # 'train_tail_fraction_fallback_full_train' because calibration_set_size == 0.
-    assert params_logged["calibration_set_size"] == 0
+    # In 'tiny_data' test, n=2. train_model preserves 2 samples for fit data.
+    # cal_size = min(desired, n-2) = min(1, 0) = 0.
+    assert params_logged["calibration_samples"] == 0
     assert (
         params_logged["calibration_split_strategy"]
         == "train_tail_fraction_fallback_full_train"
@@ -234,7 +238,10 @@ def test_calibration_fallback_single_class_fit(_mock_registry):
         )
 
     params_logged = mock_mlflow.log_params.call_args[0][0]
-    assert params_logged["calibration_set_size"] == 0
+    # In this test, n=10 and all but last are same class.
+    # To get 2 classes in fit, we need all 10 samples in fit.
+    # Thus calibration_samples becomes 0.
+    assert params_logged["calibration_samples"] == 0
     assert (
         params_logged["calibration_split_strategy"]
         == "train_tail_fraction_fallback_full_train"

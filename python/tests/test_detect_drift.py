@@ -22,7 +22,7 @@ class TestCalculatePsi:
         expected = np.array([1.0, 2.0, 3.0, 4.0, 5.0] * 20)
         actual = np.array([1.0, 2.0, 3.0, 4.0, 5.0] * 20)
 
-        psi = calculate_psi(expected, actual)
+        psi = calculate_psi(expected, actual)[0]
 
         assert psi >= 0.0
         assert psi < 0.01  # Should be very close to zero
@@ -32,7 +32,7 @@ class TestCalculatePsi:
         expected = np.array([1.0, 2.0, 3.0, 4.0, 5.0] * 20)
         actual = np.array([10.0, 11.0, 12.0, 13.0, 14.0] * 20)
 
-        psi = calculate_psi(expected, actual)
+        psi = calculate_psi(expected, actual)[0]
 
         assert psi > 0.0
         assert psi > 1.0  # Significant shift should produce high PSI
@@ -42,13 +42,13 @@ class TestCalculatePsi:
         expected = np.array([])
         actual = np.array([1.0, 2.0, 3.0])
 
-        psi = calculate_psi(expected, actual)
+        psi = calculate_psi(expected, actual)[0]
         assert psi == 0.0
 
-        psi = calculate_psi(actual, expected)
+        psi = calculate_psi(actual, expected)[0]
         assert psi == 0.0
 
-        psi = calculate_psi(expected, expected)
+        psi = calculate_psi(expected, expected)[0]
         assert psi == 0.0
 
     def test_nan_values_handled(self):
@@ -56,7 +56,7 @@ class TestCalculatePsi:
         expected = np.array([1.0, 2.0, np.nan, 4.0, 5.0] * 20)
         actual = np.array([1.0, 2.0, 3.0, np.nan, 5.0] * 20)
 
-        psi = calculate_psi(expected, actual)
+        psi = calculate_psi(expected, actual)[0]
 
         assert not np.isnan(psi)
         assert psi >= 0.0
@@ -66,10 +66,10 @@ class TestCalculatePsi:
         expected = np.random.normal(0, 1, 1000)
         actual = np.random.normal(0.5, 1, 1000)
 
-        psi_bins = calculate_psi(expected, actual, buckettype="bins", buckets=10)
+        psi_bins = calculate_psi(expected, actual, buckettype="bins", buckets=10)[0]
         psi_quantiles = calculate_psi(
             expected, actual, buckettype="quantiles", buckets=10
-        )
+        )[0]
 
         assert psi_bins >= 0.0
         assert psi_quantiles >= 0.0
@@ -81,7 +81,7 @@ class TestCalculatePsi:
         expected = np.array([5.0] * 100)
         actual = np.array([5.0] * 100)
 
-        psi = calculate_psi(expected, actual)
+        psi = calculate_psi(expected, actual)[0]
         assert psi >= 0.0
 
     def test_constant_expected_distribution_returns_zero_and_warns(self, caplog):
@@ -90,7 +90,7 @@ class TestCalculatePsi:
         actual = np.array([4.0, 5.0, 6.0] * 34)
 
         with caplog.at_level(logging.WARNING):
-            psi = calculate_psi(expected, actual, buckettype="quantiles", buckets=10)
+            psi = calculate_psi(expected, actual, buckettype="quantiles", buckets=10)[0]
 
         assert psi == 0.0
         assert any(
@@ -106,15 +106,16 @@ class TestCalculatePsi:
         with caplog.at_level(logging.WARNING):
             psi_first = calculate_psi(
                 expected, actual, buckettype="quantiles", buckets=10
-            )
+            )[0]
             psi_second = calculate_psi(
                 expected, actual, buckettype="quantiles", buckets=10
-            )
+            )[0]
 
         assert psi_first == pytest.approx(psi_second)
         assert psi_first >= 0.0
         assert any(
-            "reduced from" in record.message and "tied values" in record.message
+            "Quantile PSI bucketing collapsed" in record.message
+            and "Falling back to uniform bins" in record.message
             for record in caplog.records
         )
 

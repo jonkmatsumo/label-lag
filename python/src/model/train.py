@@ -12,6 +12,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from model.evaluate import ScoreCalibrator
 from model.loader import DataLoader
 
 logger = logging.getLogger(__name__)
@@ -640,6 +641,26 @@ def train_model(
             "feature_schema_hash.json",
         )
 
+        # Fit calibrator on dedicated calibration slice from training data.
+        x_cal_fit = x_cal
+        y_cal_fit = y_cal
+        if calibration_set_size == 0:
+            x_cal_fit = x_fit_base
+            y_cal_fit = y_fit_base
+
+        # Phase 1.1: Calibration viability guards
+        cal_skip_reason = None
+        n_cal_samples = len(y_cal_fit)
+        n_cal_pos = int(np.sum(y_cal_fit == 1))
+        n_cal_neg = int(np.sum(y_cal_fit == 0))
+
+        if n_cal_samples < min_cal_samples:
+            cal_skip_reason = "calibration_skipped_insufficient_samples"
+        elif n_cal_pos < min_cal_pos:
+            cal_skip_reason = "calibration_skipped_insufficient_positives"
+        elif n_cal_neg < min_cal_neg:
+            cal_skip_reason = "calibration_skipped_insufficient_negatives"
+
         # Log training run spec (NF1)
         from training.schemas import TrainingRunSpec
 
@@ -661,6 +682,9 @@ def train_model(
         _mlflow.log_dict(run_spec.model_dump(), "training_run_spec.json")
         _mlflow.set_tag("training_run_spec_version", str(run_spec.schema_version))
 
+        # Determine effective calibration samples for logging
+        effective_cal_samples = 0 if cal_skip_reason else n_cal_samples
+
         params_log = {
             "scale_pos_weight": scale_pos_weight,
             "max_depth": max_depth,
@@ -671,18 +695,29 @@ def train_model(
             "learning_rate": learning_rate,
             "random_state": random_state,
             "feature_columns": json.dumps(actual_feature_columns),
-            "calibration_set_size": int(calibration_set_size),
+            "calibration_samples": int(effective_cal_samples),
+            "calibration_set_size": int(effective_cal_samples),  # Legacy compatibility
             "train_fit_set_size": int(len(y_fit_base)),
             "calibration_fraction_effective": (
-                float(calibration_set_size) / split.train_size
+                float(effective_cal_samples) / split.train_size
                 if split.train_size > 0
                 else 0.0
             ),
             "calibration_positive_rate": (
-                float(y_cal.mean()) if calibration_set_size > 0 else 0.0
+                float(y_cal_fit.mean()) if n_cal_samples > 0 else 0.0
             ),
-            "calibration_split_strategy": calibration_fit_strategy,
+            "calibration_pos_count": n_cal_pos,
+            "calibration_neg_count": n_cal_neg,
+            "calibration_split_strategy": (
+                calibration_fit_strategy
+                if not cal_skip_reason
+                else "train_tail_fraction_fallback_full_train"
+            ),
+            "calibration_enabled": not bool(cal_skip_reason),
         }
+        if cal_skip_reason:
+            params_log["calibration_skip_reason"] = cal_skip_reason
+
         if early_stopping_rounds:
             params_log["early_stopping_rounds"] = early_stopping_rounds
         _mlflow.log_params(params_log)
@@ -785,35 +820,7 @@ def train_model(
         metrics_dict = _compute_metrics(split.y_test, y_pred, y_pred_proba)
         _mlflow.log_metrics(metrics_dict)
 
-        # Fit calibrator on dedicated calibration slice from training data.
-        from model.evaluate import ScoreCalibrator
-
-        x_cal_fit = x_cal
-        y_cal_fit = y_cal
-        if calibration_set_size == 0:
-            x_cal_fit = x_fit_base
-            y_cal_fit = y_fit_base
-
-        # Phase 1.1: Calibration viability guards
-        cal_skip_reason = None
-        n_cal_samples = len(y_cal_fit)
-        n_cal_pos = int(np.sum(y_cal_fit == 1))
-        n_cal_neg = int(np.sum(y_cal_fit == 0))
-
-        if n_cal_samples < min_cal_samples:
-            cal_skip_reason = "calibration_skipped_insufficient_samples"
-        elif n_cal_pos < min_cal_pos:
-            cal_skip_reason = "calibration_skipped_insufficient_positives"
-        elif n_cal_neg < min_cal_neg:
-            cal_skip_reason = "calibration_skipped_insufficient_negatives"
-
         calibrator = ScoreCalibrator()
-        cal_params = {
-            "calibration_samples": n_cal_samples,
-            "calibration_pos_count": n_cal_pos,
-            "calibration_neg_count": n_cal_neg,
-        }
-
         if cal_skip_reason:
             logger.warning(
                 "Skipping calibration reason_code=%s cal_size=%d "
@@ -823,21 +830,12 @@ def train_model(
                 n_cal_pos,
                 n_cal_neg,
             )
-            cal_params.update(
-                {
-                    "calibration_enabled": False,
-                    "calibration_skip_reason": cal_skip_reason,
-                }
-            )
         else:
             y_cal_proba = np.asarray(clf.predict_proba(x_cal_fit)[:, 1])
             if len(y_cal_proba) != len(y_cal_fit):
                 # Defensive alignment for mocked/non-standard predict_proba outputs.
                 y_cal_proba = y_cal_proba[: len(y_cal_fit)]
             calibrator.fit(y_cal_proba, y_cal_fit)
-            cal_params["calibration_enabled"] = True
-
-        _mlflow.log_params(cal_params)
 
         signature = infer_signature(split.X_train, y_pred_proba)
         _mlflow.sklearn.log_model(
