@@ -210,6 +210,8 @@ describe('Contract: POST /analytics/transactions/search', () => {
 
 // ─── KPIs (protojson handler with normalization) ───────────────────────────
 
+const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
+
 describe('Contract: GET /bff/v1/kpis', () => {
   it('hourly fixture matches normalized BFF output', () => {
     const raw = loadFixture('kpis/hourly.json') as any;
@@ -230,9 +232,59 @@ describe('Contract: GET /bff/v1/kpis', () => {
     };
 
     expect(normalized).toEqual(expected);
-    expect(typeof normalized.total_decisions).toBe('number');
-    expect(typeof normalized.buckets?.[0].decisions).toBe('number');
-    expect(typeof normalized.buckets?.[0].timestamp).toBe('string');
+  });
+
+  it('all top-level int64 fields are numbers after normalization', () => {
+    const raw = loadFixture('kpis/hourly.json') as any;
+
+    const total_decisions = parseInt64(raw.total_decisions);
+    const total_alerts = parseInt64(raw.total_alerts);
+    const rules_fired_total = parseInt64(raw.rules_fired_total);
+
+    expect(typeof total_decisions).toBe('number');
+    expect(typeof total_alerts).toBe('number');
+    expect(typeof rules_fired_total).toBe('number');
+  });
+
+  it('all bucket int64 fields are numbers and timestamps are ISO strings', () => {
+    const raw = loadFixture('kpis/hourly.json') as any;
+
+    expect(Array.isArray(raw.buckets)).toBe(true);
+    expect(raw.buckets.length).toBeGreaterThan(0);
+
+    for (const b of raw.buckets) {
+      const ts = timestampToIso(b.timestamp);
+      const decisions = parseInt64(b.decisions);
+      const alerts = parseInt64(b.alerts);
+      const rules_fired = parseInt64(b.rules_fired);
+
+      // Timestamps must be ISO 8601
+      expect(typeof ts).toBe('string');
+      expect(ISO_RE.test(ts!)).toBe(true);
+
+      // All numeric fields must be JS numbers, not strings
+      expect(typeof decisions).toBe('number');
+      expect(typeof alerts).toBe('number');
+      expect(typeof rules_fired).toBe('number');
+    }
+  });
+
+  it('raw int64 strings are NOT numbers before normalization (ensures test catches regressions)', () => {
+    const raw = loadFixture('kpis/hourly.json') as any;
+    // The upstream fixture intentionally uses string-serialized int64
+    expect(typeof raw.total_decisions).toBe('string');
+    expect(typeof raw.buckets[0].decisions).toBe('string');
+  });
+
+  it('second bucket uses ISO string timestamp and still normalizes correctly', () => {
+    const raw = loadFixture('kpis/hourly.json') as any;
+    // Second bucket uses an ISO string (not a protojson timestamp object)
+    const b = raw.buckets[1];
+    expect(typeof b.timestamp).toBe('string');
+    const ts = timestampToIso(b.timestamp);
+    expect(typeof ts).toBe('string');
+    expect(ISO_RE.test(ts!)).toBe(true);
+    expect(typeof parseInt64(b.decisions)).toBe('number');
   });
 });
 
@@ -252,7 +304,29 @@ describe('Contract: GET /bff/v1/volume', () => {
     };
 
     expect(normalized).toEqual(expected);
-    expect(typeof normalized.points?.[0].count).toBe('number');
-    expect(typeof normalized.points?.[0].timestamp).toBe('string');
+  });
+
+  it('all point int64 fields are numbers and timestamps are ISO strings', () => {
+    const raw = loadFixture('volume/daily.json') as any;
+
+    expect(Array.isArray(raw.points)).toBe(true);
+    expect(raw.points.length).toBeGreaterThan(0);
+
+    for (const p of raw.points) {
+      const ts = timestampToIso(p.timestamp);
+      const count = parseInt64(p.count);
+      const alerts = parseInt64(p.alerts);
+
+      expect(typeof ts).toBe('string');
+      expect(ISO_RE.test(ts!)).toBe(true);
+      expect(typeof count).toBe('number');
+      expect(typeof alerts).toBe('number');
+    }
+  });
+
+  it('raw point int64 fields are strings before normalization', () => {
+    const raw = loadFixture('volume/daily.json') as any;
+    expect(typeof raw.points[0].count).toBe('string');
+    expect(typeof raw.points[0].alerts).toBe('string');
   });
 });

@@ -10,6 +10,12 @@
             "decisions": 5000,
             "alerts": 150,
             "rules_fired": 400
+        },
+        {
+            "timestamp": "2024-02-20T01:00:00.000Z",
+            "decisions": 3200,
+            "alerts": 96,
+            "rules_fired": 280
         }
     ]
 }
