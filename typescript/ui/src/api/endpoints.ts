@@ -50,6 +50,8 @@ import type {
   DatasetSummary,
   CompareProfilesResponse,
   MetricSeriesPoint,
+  KpisResponse,
+  VolumeSeriesResponse,
 } from '../types/api';
 
 // Health endpoints
@@ -131,8 +133,8 @@ export const backtestApi = {
 
 // Analytics endpoints
 export const analyticsApi = {
-  getOverview: () =>
-    apiClient.get<AnalyticsOverviewResponse>('/bff/v1/analytics/overview'),
+  getOverview: (days?: number) =>
+    apiClient.get<AnalyticsOverviewResponse>(`/bff/v1/analytics/overview${days ? `?days=${days}` : ''}`),
   getDailyStats: (days = 30) =>
     apiClient.get<DailyStatsResponse>(`/bff/v1/analytics/daily-stats?days=${days}`),
   getRecentAlerts: (limit = 50) =>
@@ -143,6 +145,22 @@ export const analyticsApi = {
     apiClient.get<RuleAttributionResponse>(`/bff/v1/analytics/attribution?rule_id=${encodeURIComponent(ruleId)}&days=${days}`),
   searchTransactions: (request: TransactionSearchRequest) =>
     apiClient.post<TransactionSearchResponse>('/bff/v1/analytics/transactions/search', request),
+  getKpis: (params: { start_time: string; end_time: string; group_by?: 'hour' | 'day'; signal?: AbortSignal }) => {
+    const { signal, ...rest } = params;
+    const searchParams = new URLSearchParams();
+    searchParams.set('start_time', rest.start_time);
+    searchParams.set('end_time', rest.end_time);
+    if (rest.group_by) searchParams.set('group_by', rest.group_by);
+    return apiClient.get<KpisResponse>(`/bff/v1/kpis?${searchParams.toString()}`, signal);
+  },
+  getVolume: (params: { start_time: string; end_time: string; granularity?: 'hour' | 'day'; signal?: AbortSignal }) => {
+    const { signal, ...rest } = params;
+    const searchParams = new URLSearchParams();
+    searchParams.set('start_time', rest.start_time);
+    searchParams.set('end_time', rest.end_time);
+    if (rest.granularity) searchParams.set('granularity', rest.granularity);
+    return apiClient.get<VolumeSeriesResponse>(`/bff/v1/volume?${searchParams.toString()}`, signal);
+  },
 };
 
 // Monitoring endpoints

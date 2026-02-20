@@ -1,0 +1,20 @@
+{
+    "points": [
+        {
+            "timestamp": {
+                "seconds": "1708387200",
+                "nanos": 0
+            },
+            "count": "1000",
+            "alerts": "30"
+        },
+        {
+            "timestamp": {
+                "seconds": "1708473600",
+                "nanos": 0
+            },
+            "count": "1200",
+            "alerts": "40"
+        }
+    ]
+}

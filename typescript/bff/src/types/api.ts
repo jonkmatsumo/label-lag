@@ -433,6 +433,33 @@ export interface RuleAttributionResponse {
   net_impact: number;
 }
 
+// KPI and Volume types
+export interface KpiBucket {
+  timestamp: string;
+  decisions: number;
+  alerts: number;
+  rules_fired: number;
+}
+
+export interface KpisResponse {
+  total_decisions: number;
+  total_alerts: number;
+  alert_rate: number;
+  avg_score: number;
+  rules_fired_total: number;
+  buckets?: KpiBucket[];
+}
+
+export interface VolumePoint {
+  timestamp: string;
+  count: number;
+  alerts: number;
+}
+
+export interface VolumeSeriesResponse {
+  points: VolumePoint[];
+}
+
 // Monitoring types
 export interface FeatureDriftDetail {
   feature: string;

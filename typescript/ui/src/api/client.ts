@@ -28,8 +28,9 @@ export class ApiClient {
 
   private async request<T>(
     path: string,
-    options: RequestInit = {}
+    options: RequestInit & { signal?: AbortSignal } = {}
   ): Promise<T> {
+    const { signal, ...fetchOptions } = options;
     const url = `${this.baseUrl}${path}`;
     const requestId = uuidv4();
 
@@ -37,17 +38,18 @@ export class ApiClient {
       'Content-Type': 'application/json',
       'X-Request-Id': requestId,
       ...(this.tenantId ? { 'X-Tenant-Id': this.tenantId } : {}),
-      ...options.headers,
+      ...fetchOptions.headers,
     };
 
     if (DEBUG_REQUESTS) {
-      console.debug('[ApiClient] Request', { requestId, method: options.method ?? 'GET', url, headers });
+      console.debug('[ApiClient] Request', { requestId, method: fetchOptions.method ?? 'GET', url, headers });
     }
 
     try {
       const response = await fetch(url, {
-        ...options,
+        ...fetchOptions,
         headers,
+        signal,
       });
 
       const data = await response.json();
@@ -69,6 +71,10 @@ export class ApiClient {
       if (error instanceof ApiError) {
         throw error;
       }
+      // Propagate abort errors as-is so TanStack Query can handle cancellation
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw error;
+      }
       // Network errors or JSON parse errors
       throw new ApiError(
         0,
@@ -79,14 +85,15 @@ export class ApiClient {
     }
   }
 
-  async get<T>(path: string): Promise<T> {
-    return this.request<T>(path, { method: 'GET' });
+  async get<T>(path: string, signal?: AbortSignal): Promise<T> {
+    return this.request<T>(path, { method: 'GET', signal });
   }
 
-  async post<T, B = unknown>(path: string, body?: B): Promise<T> {
+  async post<T, B = unknown>(path: string, body?: B, signal?: AbortSignal): Promise<T> {
     return this.request<T>(path, {
       method: 'POST',
       body: body ? JSON.stringify(body) : undefined,
+      signal,
     });
   }
 
