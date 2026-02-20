@@ -16,7 +16,8 @@ class JobQueue:
             self._canceled.add(job_id)
 
     def get(self, block: bool = True, timeout: float | None = None) -> str | None:
-        while True:
+        # Safety limit to prevent infinite loop
+        for _ in range(1000):
             try:
                 job_id = self._queue.get(block=block, timeout=timeout)
             except queue.Empty:
@@ -27,6 +28,7 @@ class JobQueue:
                     self._queue.task_done()
                     continue
             return job_id
+        return None
 
     def task_done(self) -> None:
         self._queue.task_done()

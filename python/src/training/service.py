@@ -56,7 +56,8 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
 
     def _find_trial(self, job_id: str, trial_number: int):
         cursor: str | None = None
-        while True:
+        # Safety limit to prevent infinite loop if pagination fails to terminate
+        for _ in range(1000):
             trials, next_cursor = self.job_store.list_trials(
                 job_id=job_id,
                 limit=200,
@@ -71,6 +72,7 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
             if not next_cursor:
                 return None
             cursor = next_cursor
+        return None
 
     @staticmethod
     def _coerce_trial_hyperparameters(params: dict[str, str]) -> dict[str, float | int]:
@@ -369,6 +371,15 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                 feature_groups=(
                     list(request.feature_groups) if request.feature_groups else None
                 ),
+                min_cal_samples=request.min_cal_samples
+                if request.HasField("min_cal_samples")
+                else 100,
+                min_cal_pos=request.min_cal_pos
+                if request.HasField("min_cal_pos")
+                else 10,
+                min_cal_neg=request.min_cal_neg
+                if request.HasField("min_cal_neg")
+                else 10,
             )
 
             # Report Success

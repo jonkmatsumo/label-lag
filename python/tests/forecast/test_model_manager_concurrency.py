@@ -108,6 +108,12 @@ class TestModelManagerConcurrency:
                 res = manager.predict(pd.DataFrame())
                 assert res[0] == 0.1
 
+                # Verify diagnostics during reload.
+                # If we had a bundle, state should stay 'ready'.
+                diag = manager.get_diagnostics()
+                assert diag["state"] == "ready"
+                assert diag["model_version"] == "v1"
+
             finally:
                 # Allow reload to finish
                 can_finish_reload.set()
@@ -146,3 +152,9 @@ class TestModelManagerConcurrency:
                 # Should still be able to predict from old bundle
                 res = manager.predict(pd.DataFrame())
                 assert res[0] == 0.8
+
+                # Verify diagnostics after failed reload
+                diag = manager.get_diagnostics()
+                assert diag["state"] == "failed"
+                assert diag["last_error"] is not None
+                assert diag["model_version"] == "vold"

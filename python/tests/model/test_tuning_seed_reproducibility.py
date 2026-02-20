@@ -36,16 +36,24 @@ class TestOptunaSeeds:
         x_data, y = _make_xy()
         captured: list[optuna.study.Study] = []
 
-        original_create = __import__(
-            "model.tuning", fromlist=["create_tuning_study"]
-        ).create_tuning_study
+        # Ensure we use in-memory study by forcing storage_url=None
+        from model.tuning import create_tuning_study
 
         def capturing_create(**kwargs):
-            study = original_create(**kwargs)
+            # Force storage_url to None for unit test
+            kwargs["storage_url"] = None
+            study = create_tuning_study(**kwargs)
             captured.append(study)
             return study
 
-        with patch("model.tuning.create_tuning_study", side_effect=capturing_create):
+        with (
+            patch("model.tuning.create_tuning_study", side_effect=capturing_create),
+            patch("training.optuna_resume.get_optuna_storage_url", return_value=None),
+            patch("mlflow.log_dict"),
+            patch("mlflow.log_params"),
+            patch("mlflow.active_run"),
+            patch("mlflow.start_run"),
+        ):
             run_tuning_study(x_data, y, x_data, y, n_trials=1, seed=99)
 
         assert captured, "create_tuning_study was never called"
@@ -54,6 +62,7 @@ class TestOptunaSeeds:
     def test_seed_not_overwritten_on_second_call(self):
         """If user_attrs already has 'seed', a second call must not overwrite it."""
         x_data, y = _make_xy()
+        # In-memory study for testing
         study = optuna.create_study(direction="maximize")
         study.set_user_attr("seed", 7)
 
@@ -64,7 +73,14 @@ class TestOptunaSeeds:
             call_count += 1
             return study
 
-        with patch("model.tuning.create_tuning_study", side_effect=fake_create):
+        with (
+            patch("model.tuning.create_tuning_study", side_effect=fake_create),
+            patch("training.optuna_resume.get_optuna_storage_url", return_value=None),
+            patch("mlflow.log_dict"),
+            patch("mlflow.log_params"),
+            patch("mlflow.active_run"),
+            patch("mlflow.start_run"),
+        ):
             run_tuning_study(x_data, y, x_data, y, n_trials=1, seed=42)
 
         assert study.user_attrs["seed"] == 7, "Original seed must not be overwritten"
@@ -74,6 +90,7 @@ class TestOptunaSeeds:
         x_data, y = _make_xy()
 
         # Simulate an existing study in storage with seed=7
+        # Use in-memory for unit test
         existing_study = optuna.create_study(direction="maximize")
         existing_study.set_user_attr("seed", 7)
 
@@ -89,6 +106,11 @@ class TestOptunaSeeds:
             patch("model.tuning.create_tuning_study", return_value=existing_study),
             patch("optuna.load_study", return_value=existing_study),
             patch("optuna.samplers.TPESampler", side_effect=capturing_tpe),
+            patch("training.optuna_resume.get_optuna_storage_url", return_value=None),
+            patch("mlflow.log_dict"),
+            patch("mlflow.log_params"),
+            patch("mlflow.active_run"),
+            patch("mlflow.start_run"),
         ):
             run_tuning_study(
                 x_data,

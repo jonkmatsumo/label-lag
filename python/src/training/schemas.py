@@ -321,6 +321,15 @@ class TrainRequest(BaseModel):
     reg_lambda: float = Field(default=1.0, ge=0.0, le=10.0)
     random_state: int = Field(default=42)
     early_stopping_rounds: int | None = Field(default=None, ge=5, le=50)
+    min_cal_samples: int = Field(
+        default=100, ge=0, description="Min samples required for calibration"
+    )
+    min_cal_pos: int = Field(
+        default=10, ge=0, description="Min positives required for calibration"
+    )
+    min_cal_neg: int = Field(
+        default=10, ge=0, description="Min negatives required for calibration"
+    )
     feature_groups: list[str] | None = Field(
         default=None,
         description="List of feature groups to include (e.g. 'transaction')",
@@ -439,12 +448,22 @@ class TrainingRunSpec(BaseModel):
 # =============================================================================
 
 
+class BucketingMetadata(BaseModel):
+    """Metadata about the bucketing used for drift calculation."""
+
+    bucket_type: str = Field(..., description="bins | quantiles")
+    n_buckets: int = Field(..., description="Requested number of buckets")
+    actual_buckets: int = Field(..., description="Actual number of buckets used")
+    breakpoints: list[float] = Field(..., description="List of bucket boundaries")
+
+
 class FeatureDriftDetail(BaseModel):
     """Per-feature drift information."""
 
     feature: str = Field(..., description="Feature name")
     psi: float = Field(..., ge=0.0, description="PSI value")
     status: str = Field(..., description="OK | WARNING | CRITICAL")
+    bucketing: BucketingMetadata | None = Field(default=None)
 
 
 class AlertItem(BaseModel):

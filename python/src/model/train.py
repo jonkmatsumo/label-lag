@@ -12,6 +12,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from model.evaluate import ScoreCalibrator
 from model.loader import DataLoader
 
 logger = logging.getLogger(__name__)
@@ -317,11 +318,29 @@ def _derive_calibration_split(
 
     # Keep at least two classes in fit slice when possible to avoid
     # single-class XGBoost fit failures on tiny datasets.
-    while cal_size > 0:
-        y_fit_candidate = _slice(y_train, 0, n_samples - cal_size)
-        if _nunique(y_fit_candidate) >= 2:
-            break
-        cal_size -= 1
+    # We search for the first index where the label differs from the first label
+    # to find the minimum fit size that has at least two classes.
+    if cal_size > 0 and n_samples > 1:
+        y_fit_candidate_full = _slice(y_train, 0, n_samples - cal_size)
+        if _nunique(y_fit_candidate_full) < 2:
+            # Need to reduce cal_size (increase fit size) until we have 2 classes.
+            first_val = y_train.iloc[0] if hasattr(y_train, "iloc") else y_train[0]
+            # Find first index i such that y_train[i] != first_val
+            # This is O(N) and much faster than the iterative nunique approach.
+            found_idx = -1
+            for i in range(1, n_samples):
+                val = y_train.iloc[i] if hasattr(y_train, "iloc") else y_train[i]
+                if val != first_val:
+                    found_idx = i
+                    break
+
+            if found_idx != -1:
+                # Minimum fit_size needed is found_idx + 1
+                min_fit_size = found_idx + 1
+                cal_size = min(cal_size, n_samples - min_fit_size)
+            else:
+                # All labels are the same, cannot get 2 classes.
+                cal_size = 0
 
     # Tighten invariant: if cal_size would be 0 or fit_size would be 0,
     # fallback to full train without calibration.
@@ -363,6 +382,9 @@ def train_model(
     feature_resolution_mode: str = "strict",
     feature_groups: list[str] | None = None,
     n_jobs: int | None = None,
+    min_cal_samples: int = 200,
+    min_cal_pos: int = 5,
+    min_cal_neg: int = 5,
 ) -> str:
     """Train an XGBoost model with MLflow tracking."""
     _mlflow = _get_mlflow()
@@ -406,6 +428,11 @@ def train_model(
 
     n_negative = (split.y_train == 0).sum()
     n_positive = (split.y_train == 1).sum()
+
+    # Phase 2.1: Persist feature schema hash
+    ordered_features = sorted(actual_feature_columns)
+    schema_json = json.dumps(ordered_features)
+    feature_schema_hash = hashlib.sha256(schema_json.encode("utf-8")).hexdigest()
 
     if n_positive == 0:
         cutoff = training_cutoff_date.date()
@@ -605,6 +632,34 @@ def train_model(
         # Log feature set spec (Commit 8)
         _mlflow.log_dict(feature_spec.model_dump(), "feature_set.json")
         _mlflow.set_tag("feature_set_hash", feature_spec.hash)
+        _mlflow.set_tag("feature_schema_hash", feature_schema_hash)
+        _mlflow.log_dict(
+            {
+                "feature_schema_hash": feature_schema_hash,
+                "feature_count": len(ordered_features),
+            },
+            "feature_schema_hash.json",
+        )
+
+        # Fit calibrator on dedicated calibration slice from training data.
+        x_cal_fit = x_cal
+        y_cal_fit = y_cal
+        if calibration_set_size == 0:
+            x_cal_fit = x_fit_base
+            y_cal_fit = y_fit_base
+
+        # Phase 1.1: Calibration viability guards
+        cal_skip_reason = None
+        n_cal_samples = len(y_cal_fit)
+        n_cal_pos = int(np.sum(y_cal_fit == 1))
+        n_cal_neg = int(np.sum(y_cal_fit == 0))
+
+        if n_cal_samples < min_cal_samples:
+            cal_skip_reason = "calibration_skipped_insufficient_samples"
+        elif n_cal_pos < min_cal_pos:
+            cal_skip_reason = "calibration_skipped_insufficient_positives"
+        elif n_cal_neg < min_cal_neg:
+            cal_skip_reason = "calibration_skipped_insufficient_negatives"
 
         # Log training run spec (NF1)
         from training.schemas import TrainingRunSpec
@@ -627,6 +682,9 @@ def train_model(
         _mlflow.log_dict(run_spec.model_dump(), "training_run_spec.json")
         _mlflow.set_tag("training_run_spec_version", str(run_spec.schema_version))
 
+        # Determine effective calibration samples for logging
+        effective_cal_samples = 0 if cal_skip_reason else n_cal_samples
+
         params_log = {
             "scale_pos_weight": scale_pos_weight,
             "max_depth": max_depth,
@@ -637,18 +695,29 @@ def train_model(
             "learning_rate": learning_rate,
             "random_state": random_state,
             "feature_columns": json.dumps(actual_feature_columns),
-            "calibration_set_size": int(calibration_set_size),
+            "calibration_samples": int(effective_cal_samples),
+            "calibration_set_size": int(effective_cal_samples),  # Legacy compatibility
             "train_fit_set_size": int(len(y_fit_base)),
             "calibration_fraction_effective": (
-                float(calibration_set_size) / split.train_size
+                float(effective_cal_samples) / split.train_size
                 if split.train_size > 0
                 else 0.0
             ),
             "calibration_positive_rate": (
-                float(y_cal.mean()) if calibration_set_size > 0 else 0.0
+                float(y_cal_fit.mean()) if n_cal_samples > 0 else 0.0
             ),
-            "calibration_split_strategy": calibration_fit_strategy,
+            "calibration_pos_count": n_cal_pos,
+            "calibration_neg_count": n_cal_neg,
+            "calibration_split_strategy": (
+                calibration_fit_strategy
+                if not cal_skip_reason
+                else "train_tail_fraction_fallback_full_train"
+            ),
+            "calibration_enabled": not bool(cal_skip_reason),
         }
+        if cal_skip_reason:
+            params_log["calibration_skip_reason"] = cal_skip_reason
+
         if early_stopping_rounds:
             params_log["early_stopping_rounds"] = early_stopping_rounds
         _mlflow.log_params(params_log)
@@ -751,21 +820,22 @@ def train_model(
         metrics_dict = _compute_metrics(split.y_test, y_pred, y_pred_proba)
         _mlflow.log_metrics(metrics_dict)
 
-        # Fit calibrator on dedicated calibration slice from training data.
-        from model.evaluate import ScoreCalibrator
-
-        x_cal_fit = x_cal
-        y_cal_fit = y_cal
-        if calibration_set_size == 0:
-            x_cal_fit = x_fit_base
-            y_cal_fit = y_fit_base
-
-        y_cal_proba = np.asarray(clf.predict_proba(x_cal_fit)[:, 1])
-        if len(y_cal_proba) != len(y_cal_fit):
-            # Defensive alignment for mocked/non-standard predict_proba outputs.
-            y_cal_proba = y_cal_proba[: len(y_cal_fit)]
         calibrator = ScoreCalibrator()
-        calibrator.fit(y_cal_proba, y_cal_fit)
+        if cal_skip_reason:
+            logger.warning(
+                "Skipping calibration reason_code=%s cal_size=%d "
+                "pos_count=%d neg_count=%d",
+                cal_skip_reason,
+                n_cal_samples,
+                n_cal_pos,
+                n_cal_neg,
+            )
+        else:
+            y_cal_proba = np.asarray(clf.predict_proba(x_cal_fit)[:, 1])
+            if len(y_cal_proba) != len(y_cal_fit):
+                # Defensive alignment for mocked/non-standard predict_proba outputs.
+                y_cal_proba = y_cal_proba[: len(y_cal_fit)]
+            calibrator.fit(y_cal_proba, y_cal_fit)
 
         signature = infer_signature(split.X_train, y_pred_proba)
         _mlflow.sklearn.log_model(
