@@ -4,6 +4,7 @@ import { SimpleCache } from '../services/cache.js';
 import type { GetJobSummaryResponse } from '../types/api.js';
 import { parseInt64, timestampToIso } from '../utils/protojson.js';
 import { getRequestAbortSignal } from '../utils/request-signal.js';
+import { normalizeAnalyticsMeta } from '../utils/analytics-meta.js';
 
 export interface JobsRoutesOptions {
   httpClient: HttpClient;
@@ -307,13 +308,20 @@ export async function jobsRoutes(
         });
 
         const raw = response.data;
+        const summaries = (raw.summaries ?? []).map((s: any) => ({
+          bucket_time: timestampToIso(s.bucket_time),
+          total_jobs: parseInt64(s.total_jobs) ?? 0,
+          completed_jobs: parseInt64(s.completed_jobs) ?? 0,
+          failed_jobs: parseInt64(s.failed_jobs) ?? 0,
+        }));
         const normalized: GetJobSummaryResponse = {
-          summaries: (raw.summaries ?? []).map((s: any) => ({
-            bucket_time: timestampToIso(s.bucket_time),
-            total_jobs: parseInt64(s.total_jobs) ?? 0,
-            completed_jobs: parseInt64(s.completed_jobs) ?? 0,
-            failed_jobs: parseInt64(s.failed_jobs) ?? 0,
-          })),
+          summaries,
+          meta: normalizeAnalyticsMeta({
+            raw,
+            startTime: start_time,
+            endTime: end_time,
+            hasData: summaries.length > 0,
+          }),
         };
 
         cache.set(cacheKey, normalized, tenantId, 30000); // 30s TTL

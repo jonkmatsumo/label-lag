@@ -3,5 +3,13 @@
     "total_triggers": 0,
     "avg_score_delta": 0,
     "daily_buckets": [],
-    "truncated": false
+    "truncated": false,
+    "meta": {
+        "time_range": {
+            "start": "2024-01-01T00:00:00.000Z",
+            "end": "2024-01-10T00:00:00.000Z"
+        },
+        "is_partial": true,
+        "partial_reason": "EMPTY"
+    }
 }

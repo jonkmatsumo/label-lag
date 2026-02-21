@@ -6,5 +6,13 @@
             "completed_jobs": 8000000000000000,
             "failed_jobs": 1007199254740991
         }
-    ]
+    ],
+    "meta": {
+        "time_range": {
+            "start": "2024-01-01T00:00:00.000Z",
+            "end": "2024-01-10T00:00:00.000Z"
+        },
+        "is_partial": false,
+        "partial_reason": "UNKNOWN"
+    }
 }

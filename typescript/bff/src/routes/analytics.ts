@@ -20,6 +20,7 @@ import type {
 } from '../types/api.js';
 import { parseInt64, timestampToIso } from '../utils/protojson.js';
 import { getRequestAbortSignal } from '../utils/request-signal.js';
+import { normalizeAnalyticsMeta } from '../utils/analytics-meta.js';
 
 export interface AnalyticsRoutesOptions {
   httpClient: HttpClient;
@@ -794,17 +795,26 @@ export async function analyticsRoutes(
         });
 
         const raw = response.data;
+        const dailyBuckets = (raw.daily_buckets ?? []).map((b: any) => ({
+          date: b.date,
+          trigger_count: parseInt64(b.trigger_count) ?? 0,
+          avg_score_delta: Number(b.avg_score_delta) || 0,
+          decisions_changed_count: parseInt64(b.decisions_changed_count) ?? 0,
+        })).sort((a: any, b: any) => a.date.localeCompare(b.date));
+
+        const totalTriggers = parseInt64(raw.total_triggers) ?? 0;
         const normalized: GetRuleImpactResponse = {
           rule_id: raw.rule_id,
-          total_triggers: parseInt64(raw.total_triggers) ?? 0,
+          total_triggers: totalTriggers,
           avg_score_delta: Number(raw.avg_score_delta) || 0,
-          daily_buckets: (raw.daily_buckets ?? []).map((b: any) => ({
-            date: b.date,
-            trigger_count: parseInt64(b.trigger_count) ?? 0,
-            avg_score_delta: Number(b.avg_score_delta) || 0,
-            decisions_changed_count: parseInt64(b.decisions_changed_count) ?? 0,
-          })).sort((a: any, b: any) => a.date.localeCompare(b.date)),
+          daily_buckets: dailyBuckets,
           truncated: false,
+          meta: normalizeAnalyticsMeta({
+            raw,
+            startTime: start_time,
+            endTime: end_time,
+            hasData: totalTriggers > 0 || dailyBuckets.length > 0,
+          }),
         };
 
         cache.set(cacheKey, normalized, tenantId, 30000); // 30s TTL
