@@ -712,6 +712,20 @@ export async function analyticsRoutes(
         const { start_time, end_time } = request.query;
         const tenantId = (request as any).tenantId ?? 'default';
 
+        // Validation
+        if (start_time && end_time) {
+          const start = new Date(start_time);
+          const end = new Date(end_time);
+          if (start >= end) {
+            return reply.status(400).send({
+              error: {
+                code: 'INVALID_RANGE',
+                message: 'start_time must be before end_time',
+              }
+            });
+          }
+        }
+
         const cacheKey = `analytics:rules:${rule_id}:impact:${tenantId}:${start_time ?? ''}:${end_time ?? ''}`;
         const cached = cache.get<GetRuleImpactResponse>(cacheKey, tenantId);
         if (cached) return reply.send(cached);
@@ -732,13 +746,14 @@ export async function analyticsRoutes(
         const normalized: GetRuleImpactResponse = {
           rule_id: raw.rule_id,
           total_triggers: parseInt64(raw.total_triggers) ?? 0,
-          avg_score_delta: raw.avg_score_delta ?? 0,
+          avg_score_delta: Number(raw.avg_score_delta) || 0,
           daily_buckets: (raw.daily_buckets ?? []).map((b: any) => ({
             date: b.date,
             trigger_count: parseInt64(b.trigger_count) ?? 0,
-            avg_score_delta: b.avg_score_delta ?? 0,
+            avg_score_delta: Number(b.avg_score_delta) || 0,
             decisions_changed_count: parseInt64(b.decisions_changed_count) ?? 0,
           })),
+          truncated: false,
         };
 
         cache.set(cacheKey, normalized, tenantId, 30000); // 30s TTL

@@ -255,6 +255,20 @@ export async function jobsRoutes(
         const { start_time, end_time } = request.query;
         const tenantId = (request as any).tenantId ?? 'default';
 
+        // Validation
+        if (start_time && end_time) {
+          const start = new Date(start_time);
+          const end = new Date(end_time);
+          if (start >= end) {
+            return reply.status(400).send({
+              error: {
+                code: 'INVALID_RANGE',
+                message: 'start_time must be before end_time',
+              }
+            });
+          }
+        }
+
         const cacheKey = `jobs:summary:${tenantId}:${start_time ?? ''}:${end_time ?? ''}`;
         const cached = cache.get<GetJobSummaryResponse>(cacheKey, tenantId);
         if (cached) return reply.send(cached);
