@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import {
   Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  Cell, ComposedChart, Line
+  Cell, ComposedChart, Line, Area, AreaChart
 } from 'recharts';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { useTenant } from '../hooks/useTenant';
@@ -248,10 +248,10 @@ function RuleOverviewTab({ rule, onShowPublish }: { rule: DraftRule, onShowPubli
     overallReadinessStatus === 'pass'
       ? 'alert-success'
       : overallReadinessStatus === 'warn'
-      ? 'alert-warning'
-      : overallReadinessStatus === 'fail'
-      ? 'alert-danger'
-      : 'alert-secondary';
+        ? 'alert-warning'
+        : overallReadinessStatus === 'fail'
+          ? 'alert-danger'
+          : 'alert-secondary';
   const readinessLabel = overallReadinessStatus.toUpperCase();
 
   return (
@@ -446,7 +446,12 @@ function RuleImpactTab({ ruleId }: { ruleId: string }) {
     queryFn: () => analyticsApi.getAttribution(ruleId)
   });
 
-  if (attributionQuery.isLoading) return <div className="text-center py-5"><div className="spinner-border text-primary" /></div>;
+  const impactQuery = useQuery({
+    queryKey: ['analytics', tenantId, 'impact', ruleId],
+    queryFn: () => analyticsApi.getRuleImpact(ruleId)
+  });
+
+  if (attributionQuery.isLoading || impactQuery.isLoading) return <div className="text-center py-5"><div className="spinner-border text-primary" /></div>;
   if (!attributionQuery.data) return <div className="alert alert-info">No attribution data available for this rule.</div>;
 
   const items = attributionQuery.data.items ?? [];
@@ -462,9 +467,15 @@ function RuleImpactTab({ ruleId }: { ruleId: string }) {
     { name: 'Avg / Day', value: averageDailyImpact, fill: '#413ea0' }
   ];
 
+  // Derived from impact buckets.
+  const buckets = impactQuery.data?.daily_buckets ?? [];
+  const totalDecisionsChanged = buckets.reduce((sum: number, b) => {
+    return sum + (Number(b.decisions_changed_count) || 0);
+  }, 0);
+
   return (
     <div className="row g-4">
-      <div className="col-md-12">
+      <div className="col-md-6">
         <h6 className="fw-bold mb-4 small text-uppercase tracking-wider text-muted">Rule Score Attribution (7d Avg)</h6>
         <div style={{ height: 300, width: '100%' }}>
           <ResponsiveContainer width="100%" height="100%">
@@ -482,20 +493,40 @@ function RuleImpactTab({ ruleId }: { ruleId: string }) {
             </ComposedChart>
           </ResponsiveContainer>
         </div>
-        <div className="mt-4 row text-center g-3">
-          <div className="col-3">
+      </div>
+
+      <div className="col-md-6">
+        <h6 className="fw-bold mb-4 small text-uppercase tracking-wider text-muted">Daily Impact Trends</h6>
+        <div style={{ height: 300, width: '100%' }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={impactQuery.data?.daily_buckets ?? []} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="date" />
+              <YAxis yAxisId="left" />
+              <YAxis yAxisId="right" orientation="right" />
+              <Tooltip />
+              <Area yAxisId="left" type="monotone" dataKey="trigger_count" stroke="#8884d8" fill="#8884d8" name="Triggers" />
+              <Area yAxisId="right" type="monotone" dataKey="avg_score_delta" stroke="#82ca9d" fill="#82ca9d" name="Avg Delta" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className="col-md-12">
+        <div className="mt-2 row text-center g-3">
+          <div className="col-md-3">
             <div className="p-3 border rounded bg-light">
-              <div className="small text-muted text-uppercase mb-1">Matches</div>
-              <div className="h4 mb-0 fw-bold">{totalMatches.toLocaleString()}</div>
+              <div className="small text-muted text-uppercase mb-1">Total Triggers</div>
+              <div className="h4 mb-0 fw-bold">{impactQuery.data?.total_triggers.toLocaleString() ?? totalMatches.toLocaleString()}</div>
             </div>
           </div>
-          <div className="col-3">
+          <div className="col-md-3">
             <div className="p-3 border rounded bg-light">
-              <div className="small text-muted text-uppercase mb-1">Avg / Match</div>
-              <div className="h4 mb-0 fw-bold">{averageImpactPerMatch.toFixed(1)}</div>
+              <div className="small text-muted text-uppercase mb-1">Avg Score Delta</div>
+              <div className="h4 mb-0 fw-bold">{impactQuery.data?.avg_score_delta.toFixed(1) ?? averageImpactPerMatch.toFixed(1)}</div>
             </div>
           </div>
-          <div className="col-3">
+          <div className="col-md-3">
             <div className="p-3 border rounded bg-light">
               <div className="small text-muted text-uppercase mb-1">Net Impact</div>
               <div className={`h4 mb-0 fw-bold ${netImpact > 0 ? 'text-danger' : 'text-success'}`}>
@@ -503,10 +534,12 @@ function RuleImpactTab({ ruleId }: { ruleId: string }) {
               </div>
             </div>
           </div>
-          <div className="col-3">
+          <div className="col-md-3">
             <div className="p-3 border rounded bg-light border-primary bg-primary bg-opacity-10">
-              <div className="small text-primary text-uppercase mb-1">Days</div>
-              <div className="h4 mb-0 fw-bold text-primary">{items.length.toLocaleString()}</div>
+              <div className="small text-primary text-uppercase mb-1">Decision Shifts</div>
+              <div className="h4 mb-0 fw-bold text-primary">
+                {totalDecisionsChanged.toLocaleString()}
+              </div>
             </div>
           </div>
         </div>
