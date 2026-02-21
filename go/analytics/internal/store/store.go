@@ -106,6 +106,7 @@ type SQLStore struct {
 }
 
 const defaultQueryTimeout = 30 * time.Second
+const hotAnalyticsQueryTimeout = 10 * time.Second
 
 const (
 	DecisionApprove = "APPROVE"

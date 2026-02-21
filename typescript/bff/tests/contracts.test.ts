@@ -16,6 +16,8 @@ import { parseInt64, timestampToIso } from '../src/utils/protojson.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixtureDir = join(__dirname, '..', 'testdata', 'contracts');
+const CONTRACT_START = '2024-01-01';
+const CONTRACT_END = '2024-01-10';
 
 function loadFixture(relativePath: string): unknown {
   const fullPath = join(fixtureDir, relativePath);
@@ -449,6 +451,14 @@ describe('Contract: GET /bff/v1/analytics/rules/:rule_id/impact', () => {
         decisions_changed_count: parseInt64(b.decisions_changed_count),
       })),
       truncated: false,
+      meta: {
+        time_range: {
+          start: new Date(CONTRACT_START).toISOString(),
+          end: new Date(CONTRACT_END).toISOString(),
+        },
+        is_partial: false,
+        partial_reason: 'UNKNOWN',
+      },
     };
 
     expect(normalized).toEqual(expected);
@@ -469,6 +479,14 @@ describe('Contract: GET /bff/v1/analytics/rules/:rule_id/impact', () => {
         decisions_changed_count: parseInt64(b.decisions_changed_count),
       })),
       truncated: false,
+      meta: {
+        time_range: {
+          start: new Date(CONTRACT_START).toISOString(),
+          end: new Date(CONTRACT_END).toISOString(),
+        },
+        is_partial: false,
+        partial_reason: 'UNKNOWN',
+      },
     };
 
     expect(normalized).toEqual(expected);
@@ -490,6 +508,14 @@ describe('Contract: GET /bff/v1/analytics/rules/:rule_id/impact', () => {
         decisions_changed_count: parseInt64(b.decisions_changed_count),
       })),
       truncated: false,
+      meta: {
+        time_range: {
+          start: new Date(CONTRACT_START).toISOString(),
+          end: new Date(CONTRACT_END).toISOString(),
+        },
+        is_partial: false,
+        partial_reason: 'UNKNOWN',
+      },
     };
 
     expect(normalized).toEqual(expected);
@@ -526,6 +552,14 @@ describe('Contract: GET /bff/v1/jobs/summary', () => {
         completed_jobs: parseInt64(s.completed_jobs),
         failed_jobs: parseInt64(s.failed_jobs),
       })),
+      meta: {
+        time_range: {
+          start: new Date(CONTRACT_START).toISOString(),
+          end: new Date(CONTRACT_END).toISOString(),
+        },
+        is_partial: false,
+        partial_reason: 'UNKNOWN',
+      },
     };
 
     expect(normalized).toEqual(expected);
@@ -542,6 +576,14 @@ describe('Contract: GET /bff/v1/jobs/summary', () => {
         completed_jobs: parseInt64(s.completed_jobs),
         failed_jobs: parseInt64(s.failed_jobs),
       })),
+      meta: {
+        time_range: {
+          start: new Date(CONTRACT_START).toISOString(),
+          end: new Date(CONTRACT_END).toISOString(),
+        },
+        is_partial: false,
+        partial_reason: 'UNKNOWN',
+      },
     };
 
     expect(normalized).toEqual(expected);
@@ -560,6 +602,14 @@ describe('Contract: GET /bff/v1/jobs/summary', () => {
         completed_jobs: parseInt64(s.completed_jobs),
         failed_jobs: parseInt64(s.failed_jobs),
       })),
+      meta: {
+        time_range: {
+          start: new Date(CONTRACT_START).toISOString(),
+          end: new Date(CONTRACT_END).toISOString(),
+        },
+        is_partial: true,
+        partial_reason: 'EMPTY',
+      },
     };
 
     expect(normalized).toEqual(expected);

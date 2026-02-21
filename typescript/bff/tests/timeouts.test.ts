@@ -43,6 +43,37 @@ describe('HttpClient Timeouts and Retries', () => {
     })).rejects.toThrow(/timed out/);
   });
 
+  it('should map downstream cancellation to 408 and stop upstream work', async () => {
+    const client = new HttpClient({ config, logger });
+    const mockPool = mockAgent.get('http://api');
+    const abortController = new AbortController();
+
+    mockPool.intercept({
+      path: '/abort-me',
+      method: 'POST'
+    }).reply(200, { ok: true }).delay(250);
+
+    const startedAt = Date.now();
+    setTimeout(() => abortController.abort(), 20);
+
+    await expect(client.request({
+      method: 'POST',
+      path: '/abort-me',
+      requestId: 'req-abort',
+      timeout: 1000,
+      body: { test: true },
+      signal: abortController.signal
+    })).rejects.toMatchObject({
+      name: 'UpstreamError',
+      statusCode: 408,
+      apiError: {
+        code: 'REQUEST_ABORTED'
+      }
+    });
+
+    expect(Date.now() - startedAt).toBeLessThan(900);
+  });
+
   it('should retry GET requests on 503', async () => {
     const client = new HttpClient({ config, logger });
     const mockPool = mockAgent.get('http://api');

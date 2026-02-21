@@ -19,6 +19,8 @@ import type {
   GetRuleImpactResponse,
 } from '../types/api.js';
 import { parseInt64, timestampToIso } from '../utils/protojson.js';
+import { getRequestAbortSignal } from '../utils/request-signal.js';
+import { normalizeAnalyticsMeta } from '../utils/analytics-meta.js';
 
 export interface AnalyticsRoutesOptions {
   httpClient: HttpClient;
@@ -81,6 +83,8 @@ interface RuleImpactQuery {
   end_time: string;
 }
 
+const HOT_ANALYTICS_CACHE_TTL_MS = 20_000;
+
 /**
  * Analytics routes for operational metrics and dataset insights
  */
@@ -95,6 +99,7 @@ export async function analyticsRoutes(
     '/bff/v1/analytics/overview',
     async (request: FastifyRequest, reply: FastifyReply) => {
       const cacheKey = 'analytics:overview';
+      const requestSignal = getRequestAbortSignal(request, reply);
       // @ts-ignore - tenantId is added by middleware
       const tenantId = request.tenantId || 'default';
       const cached = cache.get<AnalyticsOverviewResponse>(cacheKey, tenantId);
@@ -109,6 +114,7 @@ export async function analyticsRoutes(
             requestId: request.requestId,
             tenantId: request.tenantId,
             target: 'gateway',
+            signal: requestSignal,
           },
           shadow: {
             method: 'GET',
@@ -116,6 +122,7 @@ export async function analyticsRoutes(
             requestId: request.requestId,
             tenantId: request.tenantId,
             target: 'python',
+            signal: requestSignal,
           },
         });
 
@@ -148,6 +155,7 @@ export async function analyticsRoutes(
       reply: FastifyReply
     ) => {
       try {
+        const requestSignal = getRequestAbortSignal(request, reply);
         const { days = 30 } = request.query;
         const cacheKey = `analytics:daily-stats:${days}`;
         // @ts-ignore - tenantId is added by middleware
@@ -161,6 +169,7 @@ export async function analyticsRoutes(
           requestId: request.requestId,
           tenantId: request.tenantId,
           target: 'gateway',
+          signal: requestSignal,
         });
 
         cache.set(cacheKey, response.data, tenantId);
@@ -193,6 +202,7 @@ export async function analyticsRoutes(
       reply: FastifyReply
     ) => {
       try {
+        const requestSignal = getRequestAbortSignal(request, reply);
         const { days = 7, limit = 1000 } = request.query;
 
         const response = await httpClient.request<TransactionDetailsResponse>({
@@ -201,6 +211,7 @@ export async function analyticsRoutes(
           requestId: request.requestId,
           tenantId: request.tenantId,
           target: 'gateway',
+          signal: requestSignal,
         });
 
         return reply.status(response.statusCode).send(response.data);
@@ -231,6 +242,7 @@ export async function analyticsRoutes(
       reply: FastifyReply
     ) => {
       try {
+        const requestSignal = getRequestAbortSignal(request, reply);
         const { limit = 50 } = request.query;
 
         const response = await httpClient.request<RecentAlertsResponse>({
@@ -239,6 +251,7 @@ export async function analyticsRoutes(
           requestId: request.requestId,
           tenantId: request.tenantId,
           target: 'gateway',
+          signal: requestSignal,
         });
 
         return reply.status(response.statusCode).send(response.data);
@@ -256,12 +269,14 @@ export async function analyticsRoutes(
     '/bff/v1/analytics/fingerprint',
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
+        const requestSignal = getRequestAbortSignal(request, reply);
         const response = await httpClient.request<DatasetFingerprintResponse>({
           method: 'GET',
           path: '/analytics/fingerprint',
           requestId: request.requestId,
           tenantId: request.tenantId,
           target: 'gateway',
+          signal: requestSignal,
         });
 
         return reply.status(response.statusCode).send(response.data);
@@ -293,6 +308,7 @@ export async function analyticsRoutes(
       reply: FastifyReply
     ) => {
       try {
+        const requestSignal = getRequestAbortSignal(request, reply);
         const { sample_size = 100, stratify = true } = request.query;
 
         const response = await httpClient.request<FeatureSampleResponse>({
@@ -301,6 +317,7 @@ export async function analyticsRoutes(
           requestId: request.requestId,
           tenantId: request.tenantId,
           target: 'gateway',
+          signal: requestSignal,
         });
 
         return reply.status(response.statusCode).send(response.data);
@@ -338,6 +355,7 @@ export async function analyticsRoutes(
       reply: FastifyReply
     ) => {
       try {
+        const requestSignal = getRequestAbortSignal(request, reply);
         const { rule_id } = request.params;
         const { days = 7 } = request.query;
 
@@ -346,6 +364,7 @@ export async function analyticsRoutes(
           path: `/analytics/rules/${encodeURIComponent(rule_id)}?days=${days}`,
           requestId: request.requestId,
           tenantId: request.tenantId,
+          signal: requestSignal,
         };
 
         if (httpClient.config.enableGoRulesControlPlane) {
@@ -386,6 +405,7 @@ export async function analyticsRoutes(
       reply: FastifyReply
     ) => {
       try {
+        const requestSignal = getRequestAbortSignal(request, reply);
         const { rule_id, days = 7 } = request.query;
 
         const options: any = {
@@ -393,6 +413,7 @@ export async function analyticsRoutes(
           path: `/analytics/attribution?rule_id=${encodeURIComponent(rule_id)}&days=${days}`,
           requestId: request.requestId,
           tenantId: request.tenantId,
+          signal: requestSignal,
         };
 
         if (httpClient.config.enableGoRulesControlPlane) {
@@ -442,6 +463,7 @@ export async function analyticsRoutes(
       reply: FastifyReply
     ) => {
       try {
+        const requestSignal = getRequestAbortSignal(request, reply);
         const payload = {
           ...request.body,
           include_features: request.body.include_features ?? false,
@@ -454,6 +476,7 @@ export async function analyticsRoutes(
           target: 'gateway',
           requestId: request.requestId,
           tenantId: request.tenantId,
+          signal: requestSignal,
         });
 
         const raw = response.data;
@@ -504,6 +527,7 @@ export async function analyticsRoutes(
       reply: FastifyReply
     ) => {
       try {
+        const requestSignal = getRequestAbortSignal(request, reply);
         const { start_time, end_time, group_by = 'day' } = request.query;
         const tenantId = (request as FastifyRequest & { tenantId?: string }).tenantId ?? 'default';
         const cacheKey = `analytics:kpis:${tenantId}:${start_time}:${end_time}:${group_by}`;
@@ -516,6 +540,7 @@ export async function analyticsRoutes(
           requestId: request.requestId,
           tenantId: request.tenantId,
           target: 'gateway',
+          signal: requestSignal,
         });
 
         // Normalize protojson int64 and timestamps
@@ -575,6 +600,7 @@ export async function analyticsRoutes(
       reply: FastifyReply
     ) => {
       try {
+        const requestSignal = getRequestAbortSignal(request, reply);
         const { start_time, end_time, granularity = 'day' } = request.query;
         const tenantId = (request as FastifyRequest & { tenantId?: string }).tenantId ?? 'default';
         const cacheKey = `analytics:volume:${tenantId}:${start_time}:${end_time}:${granularity}`;
@@ -587,6 +613,7 @@ export async function analyticsRoutes(
           requestId: request.requestId,
           tenantId: request.tenantId,
           target: 'gateway',
+          signal: requestSignal,
         });
 
         // Normalize protojson int64 and timestamps
@@ -641,6 +668,7 @@ export async function analyticsRoutes(
       reply: FastifyReply
     ) => {
       try {
+        const requestSignal = getRequestAbortSignal(request, reply);
         const { start_time, end_time, threshold, model_version } = request.query;
         const tenantId = (request as FastifyRequest & { tenantId?: string }).tenantId ?? 'default';
         const cacheKey = `analytics:confusion-matrix:${tenantId}:${start_time}:${end_time}:${threshold ?? ''}:${model_version ?? ''}`;
@@ -659,6 +687,7 @@ export async function analyticsRoutes(
           requestId: request.requestId,
           tenantId: request.tenantId,
           target: 'gateway',
+          signal: requestSignal,
         });
 
         // Normalize protojson int64 count fields to JS numbers
@@ -724,9 +753,13 @@ export async function analyticsRoutes(
       reply: FastifyReply
     ) => {
       try {
+        const requestSignal = getRequestAbortSignal(request, reply);
         const { rule_id } = request.params;
         const { start_time, end_time } = request.query;
-        const tenantId = (request as any).tenantId ?? 'default';
+        const tenantId =
+          (request as FastifyRequest & { tenantId?: string }).tenantId ??
+          (typeof request.headers['x-tenant-id'] === 'string' ? request.headers['x-tenant-id'] : undefined) ??
+          'default';
 
         // Validation
         const start = new Date(start_time);
@@ -750,37 +783,50 @@ export async function analyticsRoutes(
         }
 
         const cacheKey = `analytics:rules:${rule_id}:impact:${tenantId}:${start_time ?? ''}:${end_time ?? ''}`;
-        const cached = cache.get<GetRuleImpactResponse>(cacheKey, tenantId);
-        if (cached) return reply.send(cached);
-
         const searchParams = new URLSearchParams();
         if (start_time) searchParams.set('start_date', start_time);
         if (end_time) searchParams.set('end_date', end_time);
 
-        const response = await httpClient.request<any>({
-          method: 'GET',
-          path: `/analytics/rules/${encodeURIComponent(rule_id)}/impact?${searchParams.toString()}`,
-          requestId: request.requestId,
-          tenantId: request.tenantId,
-          target: 'gateway',
-        });
+        const normalized = await cache.getOrLoad<GetRuleImpactResponse>(
+          cacheKey,
+          tenantId,
+          async () => {
+            const response = await httpClient.request<any>({
+              method: 'GET',
+              path: `/analytics/rules/${encodeURIComponent(rule_id)}/impact?${searchParams.toString()}`,
+              requestId: request.requestId,
+              tenantId: request.tenantId,
+              target: 'gateway',
+              signal: requestSignal,
+            });
 
-        const raw = response.data;
-        const normalized: GetRuleImpactResponse = {
-          rule_id: raw.rule_id,
-          total_triggers: parseInt64(raw.total_triggers) ?? 0,
-          avg_score_delta: Number(raw.avg_score_delta) || 0,
-          daily_buckets: (raw.daily_buckets ?? []).map((b: any) => ({
-            date: b.date,
-            trigger_count: parseInt64(b.trigger_count) ?? 0,
-            avg_score_delta: Number(b.avg_score_delta) || 0,
-            decisions_changed_count: parseInt64(b.decisions_changed_count) ?? 0,
-          })).sort((a: any, b: any) => a.date.localeCompare(b.date)),
-          truncated: false,
-        };
+            const raw = response.data;
+            const dailyBuckets = (raw.daily_buckets ?? []).map((b: any) => ({
+              date: b.date,
+              trigger_count: parseInt64(b.trigger_count) ?? 0,
+              avg_score_delta: Number(b.avg_score_delta) || 0,
+              decisions_changed_count: parseInt64(b.decisions_changed_count) ?? 0,
+            })).sort((a: any, b: any) => a.date.localeCompare(b.date));
 
-        cache.set(cacheKey, normalized, tenantId, 30000); // 30s TTL
-        return reply.status(response.statusCode).send(normalized);
+            const totalTriggers = parseInt64(raw.total_triggers) ?? 0;
+            return {
+              rule_id: raw.rule_id,
+              total_triggers: totalTriggers,
+              avg_score_delta: Number(raw.avg_score_delta) || 0,
+              daily_buckets: dailyBuckets,
+              truncated: false,
+              meta: normalizeAnalyticsMeta({
+                raw,
+                startTime: start_time,
+                endTime: end_time,
+                hasData: totalTriggers > 0 || dailyBuckets.length > 0,
+              }),
+            };
+          },
+          HOT_ANALYTICS_CACHE_TTL_MS
+        );
+
+        return reply.send(normalized);
       } catch (error) {
         if (error instanceof UpstreamError) {
           return reply.status(error.statusCode).send(error.toResponse());

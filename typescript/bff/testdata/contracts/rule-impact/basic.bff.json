@@ -16,5 +16,13 @@
             "decisions_changed_count": 250
         }
     ],
-    "truncated": false
+    "truncated": false,
+    "meta": {
+        "time_range": {
+            "start": "2024-01-01T00:00:00.000Z",
+            "end": "2024-01-10T00:00:00.000Z"
+        },
+        "is_partial": false,
+        "partial_reason": "UNKNOWN"
+    }
 }

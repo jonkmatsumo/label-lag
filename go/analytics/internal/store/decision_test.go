@@ -10,6 +10,8 @@ import (
 	commonv1 "github.com/jonkmatsumo/label-lag/go/common/proto/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -159,4 +161,36 @@ func TestGetRuleImpact(t *testing.T) {
 	assert.Equal(t, int64(100), resp.TotalTriggers)
 	assert.Equal(t, 15.5, resp.AvgScoreDelta)
 	assert.Len(t, resp.DailyBuckets, 2)
+}
+
+func TestGetRuleImpact_CanceledContext(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	resp, err := s.GetRuleImpact(ctx, &pb.GetRuleImpactRequest{RuleId: "rule-1"})
+	require.Nil(t, resp)
+	require.Error(t, err)
+	assert.Equal(t, codes.Canceled, status.Code(err))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestGetRuleImpact_DeadlineExceededContext(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+
+	resp, err := s.GetRuleImpact(ctx, &pb.GetRuleImpactRequest{RuleId: "rule-1"})
+	require.Nil(t, resp)
+	require.Error(t, err)
+	assert.Equal(t, codes.DeadlineExceeded, status.Code(err))
+	require.NoError(t, mock.ExpectationsWereMet())
 }

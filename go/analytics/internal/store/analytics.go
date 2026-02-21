@@ -1230,7 +1230,11 @@ func (s *SQLStore) GetDecisionTrace(ctx context.Context, requestID string, tenan
 }
 
 func (s *SQLStore) GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactRequest) (*pb.GetRuleImpactResponse, error) {
-	queryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	if err := ctx.Err(); err != nil {
+		return nil, db.MapDBError(err)
+	}
+
+	queryCtx, cancel := context.WithTimeout(ctx, hotAnalyticsQueryTimeout)
 	defer cancel()
 
 	var exists bool

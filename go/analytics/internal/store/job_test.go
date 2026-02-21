@@ -9,6 +9,8 @@ import (
 	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -223,4 +225,36 @@ func TestRetryJob(t *testing.T) {
 	newID, err := s.RetryJob(context.Background(), "job-1", "tenant-1")
 	require.NoError(t, err)
 	assert.NotEmpty(t, newID)
+}
+
+func TestGetJobSummary_CanceledContext(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	resp, err := s.GetJobSummary(ctx, &pb.GetJobSummaryRequest{})
+	require.Nil(t, resp)
+	require.Error(t, err)
+	assert.Equal(t, codes.Canceled, status.Code(err))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestGetJobSummary_DeadlineExceededContext(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+
+	resp, err := s.GetJobSummary(ctx, &pb.GetJobSummaryRequest{})
+	require.Nil(t, resp)
+	require.Error(t, err)
+	assert.Equal(t, codes.DeadlineExceeded, status.Code(err))
+	require.NoError(t, mock.ExpectationsWereMet())
 }

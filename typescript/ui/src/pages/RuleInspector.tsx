@@ -22,6 +22,7 @@ import {
   Cell, ComposedChart, Line, Area, AreaChart
 } from 'recharts';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { DataQualityBadge } from '../components/DataQualityBadge';
 import { useTenant } from '../hooks/useTenant';
 import {
   canPublishFromReadiness,
@@ -448,7 +449,7 @@ function RuleImpactTab({ ruleId }: { ruleId: string }) {
 
   const impactQuery = useQuery({
     queryKey: ['analytics', tenantId, 'impact', ruleId],
-    queryFn: () => analyticsApi.getRuleImpact(ruleId)
+    queryFn: ({ signal }) => analyticsApi.getRuleImpact(ruleId, { signal })
   });
 
   if (attributionQuery.isError || impactQuery.isError) {
@@ -520,7 +521,10 @@ function RuleImpactTab({ ruleId }: { ruleId: string }) {
   return (
     <div className="row g-4">
       <div className="col-md-6">
-        <h6 className="fw-bold mb-4 small text-uppercase tracking-wider text-muted">Rule Score Attribution (7d Avg)</h6>
+        <div className="d-flex align-items-center gap-2 mb-4">
+          <h6 className="fw-bold mb-0 small text-uppercase tracking-wider text-muted">Rule Score Attribution (7d Avg)</h6>
+          <DataQualityBadge meta={impactQuery.data?.meta} />
+        </div>
         <div style={{ height: 300, width: '100%' }}>
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={waterfallData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
@@ -540,7 +544,10 @@ function RuleImpactTab({ ruleId }: { ruleId: string }) {
       </div>
 
       <div className="col-md-6">
-        <h6 className="fw-bold mb-4 small text-uppercase tracking-wider text-muted">Daily Impact Trends</h6>
+        <div className="d-flex align-items-center gap-2 mb-4">
+          <h6 className="fw-bold mb-0 small text-uppercase tracking-wider text-muted">Daily Impact Trends</h6>
+          <DataQualityBadge meta={impactQuery.data?.meta} />
+        </div>
         <div style={{ height: 300, width: '100%' }}>
           {buckets.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">

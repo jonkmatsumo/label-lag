@@ -8,6 +8,7 @@ interface CacheEntry<T> {
 
 export class SimpleCache {
   private cache = new Map<string, CacheEntry<unknown>>();
+  private inFlight = new Map<string, Promise<unknown>>();
   private config: Config;
   private logger: pino.Logger;
 
@@ -57,5 +58,39 @@ export class SimpleCache {
     }
 
     this.cache.set(compositeKey, { data, expiry });
+  }
+
+  async getOrLoad<T>(
+    key: string,
+    tenantId: string,
+    loader: () => Promise<T>,
+    ttlMs?: number
+  ): Promise<T> {
+    const cached = this.get<T>(key, tenantId);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    if (!this.config.cacheEnabled) {
+      return loader();
+    }
+
+    const compositeKey = `${tenantId}:${key}`;
+    const inFlight = this.inFlight.get(compositeKey);
+    if (inFlight) {
+      return inFlight as Promise<T>;
+    }
+
+    const loadPromise = loader()
+      .then((result) => {
+        this.set(key, result, tenantId, ttlMs);
+        return result;
+      })
+      .finally(() => {
+        this.inFlight.delete(compositeKey);
+      });
+
+    this.inFlight.set(compositeKey, loadPromise);
+    return loadPromise;
   }
 }

@@ -7,6 +7,7 @@ import { useTenant } from '../hooks/useTenant';
 import { useCursorPagination, type CursorPage } from '../hooks/useCursorPagination';
 import { CursorPaginationControls } from '../components/CursorPaginationControls';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { DataQualityBadge } from '../components/DataQualityBadge';
 import type { Job } from '../types/api';
 import { Activity, CheckCircle, XCircle, Clock } from 'lucide-react';
 
@@ -162,7 +163,7 @@ function JobsSummaryStrip() {
   const { tenantId } = useTenant();
   const summaryQuery = useQuery({
     queryKey: ['jobs', tenantId, 'summary'],
-    queryFn: () => jobsApi.getSummary()
+    queryFn: ({ signal }) => jobsApi.getSummary({ signal })
   });
 
   if (summaryQuery.isError) {
@@ -214,7 +215,12 @@ function JobsSummaryStrip() {
   const successRate = denominator > 0 ? (completed / denominator) * 100 : 100;
 
   return (
-    <div className="row g-3 mb-4">
+    <div className="mb-4">
+      <div className="d-flex align-items-center gap-2 mb-2">
+        <h6 className="fw-bold text-uppercase text-muted small mb-0">Jobs Summary</h6>
+        <DataQualityBadge meta={summaryQuery.data?.meta} />
+      </div>
+      <div className="row g-3">
       <div className="col-lg-3">
         <div className="card h-100 border-0 shadow-sm bg-primary text-white">
           <div className="card-body d-flex flex-column justify-content-center">
@@ -283,6 +289,7 @@ function JobsSummaryStrip() {
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );
