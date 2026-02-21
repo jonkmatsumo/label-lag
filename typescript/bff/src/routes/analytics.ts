@@ -83,6 +83,8 @@ interface RuleImpactQuery {
   end_time: string;
 }
 
+const HOT_ANALYTICS_CACHE_TTL_MS = 20_000;
+
 /**
  * Analytics routes for operational metrics and dataset insights
  */
@@ -754,7 +756,10 @@ export async function analyticsRoutes(
         const requestSignal = getRequestAbortSignal(request, reply);
         const { rule_id } = request.params;
         const { start_time, end_time } = request.query;
-        const tenantId = (request as any).tenantId ?? 'default';
+        const tenantId =
+          (request as FastifyRequest & { tenantId?: string }).tenantId ??
+          (typeof request.headers['x-tenant-id'] === 'string' ? request.headers['x-tenant-id'] : undefined) ??
+          'default';
 
         // Validation
         const start = new Date(start_time);
@@ -778,47 +783,50 @@ export async function analyticsRoutes(
         }
 
         const cacheKey = `analytics:rules:${rule_id}:impact:${tenantId}:${start_time ?? ''}:${end_time ?? ''}`;
-        const cached = cache.get<GetRuleImpactResponse>(cacheKey, tenantId);
-        if (cached) return reply.send(cached);
-
         const searchParams = new URLSearchParams();
         if (start_time) searchParams.set('start_date', start_time);
         if (end_time) searchParams.set('end_date', end_time);
 
-        const response = await httpClient.request<any>({
-          method: 'GET',
-          path: `/analytics/rules/${encodeURIComponent(rule_id)}/impact?${searchParams.toString()}`,
-          requestId: request.requestId,
-          tenantId: request.tenantId,
-          target: 'gateway',
-          signal: requestSignal,
-        });
+        const normalized = await cache.getOrLoad<GetRuleImpactResponse>(
+          cacheKey,
+          tenantId,
+          async () => {
+            const response = await httpClient.request<any>({
+              method: 'GET',
+              path: `/analytics/rules/${encodeURIComponent(rule_id)}/impact?${searchParams.toString()}`,
+              requestId: request.requestId,
+              tenantId: request.tenantId,
+              target: 'gateway',
+              signal: requestSignal,
+            });
 
-        const raw = response.data;
-        const dailyBuckets = (raw.daily_buckets ?? []).map((b: any) => ({
-          date: b.date,
-          trigger_count: parseInt64(b.trigger_count) ?? 0,
-          avg_score_delta: Number(b.avg_score_delta) || 0,
-          decisions_changed_count: parseInt64(b.decisions_changed_count) ?? 0,
-        })).sort((a: any, b: any) => a.date.localeCompare(b.date));
+            const raw = response.data;
+            const dailyBuckets = (raw.daily_buckets ?? []).map((b: any) => ({
+              date: b.date,
+              trigger_count: parseInt64(b.trigger_count) ?? 0,
+              avg_score_delta: Number(b.avg_score_delta) || 0,
+              decisions_changed_count: parseInt64(b.decisions_changed_count) ?? 0,
+            })).sort((a: any, b: any) => a.date.localeCompare(b.date));
 
-        const totalTriggers = parseInt64(raw.total_triggers) ?? 0;
-        const normalized: GetRuleImpactResponse = {
-          rule_id: raw.rule_id,
-          total_triggers: totalTriggers,
-          avg_score_delta: Number(raw.avg_score_delta) || 0,
-          daily_buckets: dailyBuckets,
-          truncated: false,
-          meta: normalizeAnalyticsMeta({
-            raw,
-            startTime: start_time,
-            endTime: end_time,
-            hasData: totalTriggers > 0 || dailyBuckets.length > 0,
-          }),
-        };
+            const totalTriggers = parseInt64(raw.total_triggers) ?? 0;
+            return {
+              rule_id: raw.rule_id,
+              total_triggers: totalTriggers,
+              avg_score_delta: Number(raw.avg_score_delta) || 0,
+              daily_buckets: dailyBuckets,
+              truncated: false,
+              meta: normalizeAnalyticsMeta({
+                raw,
+                startTime: start_time,
+                endTime: end_time,
+                hasData: totalTriggers > 0 || dailyBuckets.length > 0,
+              }),
+            };
+          },
+          HOT_ANALYTICS_CACHE_TTL_MS
+        );
 
-        cache.set(cacheKey, normalized, tenantId, 30000); // 30s TTL
-        return reply.status(response.statusCode).send(normalized);
+        return reply.send(normalized);
       } catch (error) {
         if (error instanceof UpstreamError) {
           return reply.status(error.statusCode).send(error.toResponse());
