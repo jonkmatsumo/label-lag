@@ -609,3 +609,29 @@ export interface ProductionRulesResponse {
   version: string;
   rules: ProductionRule[];
 }
+
+export interface RuleImpactBucket {
+  date: string;
+  trigger_count: number;
+  avg_score_delta: number;
+  decisions_changed_count: number;
+}
+
+export interface GetRuleImpactResponse {
+  rule_id: string;
+  total_triggers: number;
+  avg_score_delta: number;
+  daily_buckets: RuleImpactBucket[];
+  truncated?: boolean;
+}
+
+export interface JobSummaryBucket {
+  bucket_time: string;
+  total_jobs: number;
+  completed_jobs: number;
+  failed_jobs: number;
+}
+
+export interface GetJobSummaryResponse {
+  summaries: JobSummaryBucket[];
+}

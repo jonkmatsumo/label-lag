@@ -294,7 +294,7 @@ func (s *SQLStore) GetJobEvents(ctx context.Context, req *pb.GetJobEventsRequest
 }
 
 func (s *SQLStore) GetJobSummary(ctx context.Context, req *pb.GetJobSummaryRequest) ([]*pb.JobSummaryBucket, error) {
-	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	queryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	query := `

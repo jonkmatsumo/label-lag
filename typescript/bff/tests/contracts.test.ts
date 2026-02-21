@@ -397,3 +397,85 @@ describe('Contract: GET /bff/v1/analytics/confusion-matrix', () => {
     expect(typeof normalized.true_positives).toBe('number');
   });
 });
+
+// ─── Rule Impact (protojson handler with normalization) ──────────────────────
+
+describe('Contract: GET /bff/v1/analytics/rules/:rule_id/impact', () => {
+  it('basic fixture matches normalized BFF output', () => {
+    const raw = loadFixture('rule-impact/basic.json') as any;
+    const expected = loadFixture('rule-impact/basic.bff.json');
+
+    const normalized = {
+      rule_id: raw.rule_id,
+      total_triggers: parseInt64(raw.total_triggers),
+      avg_score_delta: raw.avg_score_delta,
+      daily_buckets: raw.daily_buckets?.map((b: any) => ({
+        date: b.date,
+        trigger_count: parseInt64(b.trigger_count),
+        avg_score_delta: b.avg_score_delta,
+        decisions_changed_count: parseInt64(b.decisions_changed_count),
+      })),
+    };
+
+    expect(normalized).toEqual(expected);
+  });
+
+  it('all count int64 fields are numbers after normalization', () => {
+    const raw = loadFixture('rule-impact/basic.json') as any;
+
+    expect(typeof parseInt64(raw.total_triggers)).toBe('number');
+    expect(typeof parseInt64(raw.daily_buckets[0].trigger_count)).toBe('number');
+    expect(typeof parseInt64(raw.daily_buckets[0].decisions_changed_count)).toBe('number');
+  });
+
+  it('raw count int64 fields are strings before normalization (regression guard)', () => {
+    const raw = loadFixture('rule-impact/basic.json') as any;
+    expect(typeof raw.total_triggers).toBe('string');
+    expect(typeof raw.daily_buckets[0].trigger_count).toBe('string');
+  });
+});
+
+// ─── Jobs Summary (protojson handler with normalization) ───────────────────
+
+describe('Contract: GET /bff/v1/jobs/summary', () => {
+  it('basic fixture matches normalized BFF output', () => {
+    const raw = loadFixture('jobs-summary/basic.json') as any;
+    const expected = loadFixture('jobs-summary/basic.bff.json');
+
+    const normalized = {
+      summaries: raw.summaries?.map((s: any) => ({
+        bucket_time: timestampToIso(s.bucket_time),
+        total_jobs: parseInt64(s.total_jobs),
+        completed_jobs: parseInt64(s.completed_jobs),
+        failed_jobs: parseInt64(s.failed_jobs),
+      })),
+    };
+
+    expect(normalized).toEqual(expected);
+  });
+
+  it('all bucket int64 fields are numbers and timestamps are ISO strings', () => {
+    const raw = loadFixture('jobs-summary/basic.json') as any;
+
+    expect(Array.isArray(raw.summaries)).toBe(true);
+    expect(raw.summaries.length).toBeGreaterThan(0);
+
+    for (const s of raw.summaries) {
+      const ts = timestampToIso(s.bucket_time);
+      const total = parseInt64(s.total_jobs);
+      const completed = parseInt64(s.completed_jobs);
+      const failed = parseInt64(s.failed_jobs);
+
+      expect(typeof ts).toBe('string');
+      expect(ISO_RE.test(ts!)).toBe(true);
+      expect(typeof total).toBe('number');
+      expect(typeof completed).toBe('number');
+      expect(typeof failed).toBe('number');
+    }
+  });
+
+  it('raw int64 strings are NOT numbers before normalization', () => {
+    const raw = loadFixture('jobs-summary/basic.json') as any;
+    expect(typeof raw.summaries[0].total_jobs).toBe('string');
+  });
+});

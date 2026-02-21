@@ -16,6 +16,7 @@ import type {
   KpisResponse,
   VolumeSeriesResponse,
   ConfusionMatrixResponse,
+  GetRuleImpactResponse,
 } from '../types/api.js';
 import { parseInt64, timestampToIso } from '../utils/protojson.js';
 
@@ -73,6 +74,11 @@ interface ConfusionMatrixQuery {
   end_time: string;
   threshold?: number;
   model_version?: string;
+}
+
+interface RuleImpactQuery {
+  start_time?: string;
+  end_time?: string;
 }
 
 /**
@@ -651,6 +657,103 @@ export async function analyticsRoutes(
           recall: raw.recall ?? 0,
           f1_score: raw.f1_score ?? 0,
           insufficient_labels: raw.insufficient_labels ?? false,
+        };
+
+        cache.set(cacheKey, normalized, tenantId, 30000); // 30s TTL
+        return reply.status(response.statusCode).send(normalized);
+      } catch (error) {
+        if (error instanceof UpstreamError) {
+          return reply.status(error.statusCode).send(error.toResponse());
+        }
+        throw error;
+      }
+    }
+  );
+
+  // GET /bff/v1/analytics/rules/:rule_id/impact - Get impact metrics for a rule
+  fastify.get(
+    '/bff/v1/analytics/rules/:rule_id/impact',
+    {
+      schema: {
+        params: {
+          type: 'object',
+          required: ['rule_id'],
+          properties: {
+            rule_id: { type: 'string' },
+          },
+        },
+        querystring: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            start_time: {
+              type: 'string',
+              pattern: '^\\d{4}-\\d{2}-\\d{2}',
+              description: 'ISO date or datetime string (YYYY-MM-DD)',
+            },
+            end_time: {
+              type: 'string',
+              pattern: '^\\d{4}-\\d{2}-\\d{2}',
+              description: 'ISO date or datetime string (YYYY-MM-DD)',
+            },
+          },
+        },
+      },
+    },
+    async (
+      request: FastifyRequest<{
+        Params: RuleAnalyticsParams;
+        Querystring: RuleImpactQuery;
+      }>,
+      reply: FastifyReply
+    ) => {
+      try {
+        const { rule_id } = request.params;
+        const { start_time, end_time } = request.query;
+        const tenantId = (request as any).tenantId ?? 'default';
+
+        // Validation
+        if (start_time && end_time) {
+          const start = new Date(start_time);
+          const end = new Date(end_time);
+          if (start >= end) {
+            return reply.status(400).send({
+              error: {
+                code: 'INVALID_RANGE',
+                message: 'start_time must be before end_time',
+              }
+            });
+          }
+        }
+
+        const cacheKey = `analytics:rules:${rule_id}:impact:${tenantId}:${start_time ?? ''}:${end_time ?? ''}`;
+        const cached = cache.get<GetRuleImpactResponse>(cacheKey, tenantId);
+        if (cached) return reply.send(cached);
+
+        const searchParams = new URLSearchParams();
+        if (start_time) searchParams.set('start_date', start_time);
+        if (end_time) searchParams.set('end_date', end_time);
+
+        const response = await httpClient.request<any>({
+          method: 'GET',
+          path: `/analytics/rules/${encodeURIComponent(rule_id)}/impact?${searchParams.toString()}`,
+          requestId: request.requestId,
+          tenantId: request.tenantId,
+          target: 'gateway',
+        });
+
+        const raw = response.data;
+        const normalized: GetRuleImpactResponse = {
+          rule_id: raw.rule_id,
+          total_triggers: parseInt64(raw.total_triggers) ?? 0,
+          avg_score_delta: Number(raw.avg_score_delta) || 0,
+          daily_buckets: (raw.daily_buckets ?? []).map((b: any) => ({
+            date: b.date,
+            trigger_count: parseInt64(b.trigger_count) ?? 0,
+            avg_score_delta: Number(b.avg_score_delta) || 0,
+            decisions_changed_count: parseInt64(b.decisions_changed_count) ?? 0,
+          })),
+          truncated: false,
         };
 
         cache.set(cacheKey, normalized, tenantId, 30000); // 30s TTL

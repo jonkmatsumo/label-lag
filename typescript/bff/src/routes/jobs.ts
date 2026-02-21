@@ -1,8 +1,12 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { HttpClient, UpstreamError } from '../services/http-client.js';
+import { SimpleCache } from '../services/cache.js';
+import type { GetJobSummaryResponse } from '../types/api.js';
+import { parseInt64, timestampToIso } from '../utils/protojson.js';
 
 export interface JobsRoutesOptions {
   httpClient: HttpClient;
+  cache: SimpleCache;
 }
 
 interface ListJobsQuery {
@@ -16,6 +20,11 @@ interface JobIdParams {
   id: string;
 }
 
+interface JobSummaryQuery {
+  start_time?: string;
+  end_time?: string;
+}
+
 /**
  * Jobs management routes — proxied to orchestrator
  */
@@ -23,7 +32,7 @@ export async function jobsRoutes(
   fastify: FastifyInstance,
   options: JobsRoutesOptions
 ): Promise<void> {
-  const { httpClient } = options;
+  const { httpClient, cache } = options;
 
   // GET /bff/v1/jobs - List jobs with cursor pagination
   fastify.get<{ Querystring: ListJobsQuery }>(
@@ -206,6 +215,88 @@ export async function jobsRoutes(
         });
 
         return reply.status(response.statusCode).send(response.data);
+      } catch (error) {
+        if (error instanceof UpstreamError) {
+          return reply.status(error.statusCode).send(error.toResponse());
+        }
+        throw error;
+      }
+    }
+  );
+
+  // GET /bff/v1/jobs/summary - Get jobs summary (aggregated by hour)
+  fastify.get(
+    '/bff/v1/jobs/summary',
+    {
+      schema: {
+        querystring: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            start_time: {
+              type: 'string',
+              pattern: '^\\d{4}-\\d{2}-\\d{2}',
+              description: 'ISO date or datetime string (YYYY-MM-DD)',
+            },
+            end_time: {
+              type: 'string',
+              pattern: '^\\d{4}-\\d{2}-\\d{2}',
+              description: 'ISO date or datetime string (YYYY-MM-DD)',
+            },
+          },
+        },
+      },
+    },
+    async (
+      request: FastifyRequest<{ Querystring: JobSummaryQuery }>,
+      reply: FastifyReply
+    ) => {
+      try {
+        const { start_time, end_time } = request.query;
+        const tenantId = (request as any).tenantId ?? 'default';
+
+        // Validation
+        if (start_time && end_time) {
+          const start = new Date(start_time);
+          const end = new Date(end_time);
+          if (start >= end) {
+            return reply.status(400).send({
+              error: {
+                code: 'INVALID_RANGE',
+                message: 'start_time must be before end_time',
+              }
+            });
+          }
+        }
+
+        const cacheKey = `jobs:summary:${tenantId}:${start_time ?? ''}:${end_time ?? ''}`;
+        const cached = cache.get<GetJobSummaryResponse>(cacheKey, tenantId);
+        if (cached) return reply.send(cached);
+
+        const searchParams = new URLSearchParams();
+        if (start_time) searchParams.set('start_time', start_time);
+        if (end_time) searchParams.set('end_time', end_time);
+
+        const response = await httpClient.request<any>({
+          method: 'GET',
+          path: `/jobs/summary?${searchParams.toString()}`,
+          requestId: request.requestId,
+          tenantId: request.tenantId,
+          target: 'gateway',
+        });
+
+        const raw = response.data;
+        const normalized: GetJobSummaryResponse = {
+          summaries: (raw.summaries ?? []).map((s: any) => ({
+            bucket_time: timestampToIso(s.bucket_time),
+            total_jobs: parseInt64(s.total_jobs) ?? 0,
+            completed_jobs: parseInt64(s.completed_jobs) ?? 0,
+            failed_jobs: parseInt64(s.failed_jobs) ?? 0,
+          })),
+        };
+
+        cache.set(cacheKey, normalized, tenantId, 30000); // 30s TTL
+        return reply.status(response.statusCode).send(normalized);
       } catch (error) {
         if (error instanceof UpstreamError) {
           return reply.status(error.statusCode).send(error.toResponse());

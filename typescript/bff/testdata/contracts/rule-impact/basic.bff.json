@@ -1,0 +1,19 @@
+{
+    "rule_id": "rule_123",
+    "total_triggers": 1500,
+    "avg_score_delta": 15.5,
+    "daily_buckets": [
+        {
+            "date": "2024-02-20",
+            "trigger_count": 500,
+            "avg_score_delta": 14.2,
+            "decisions_changed_count": 120
+        },
+        {
+            "date": "2024-02-19",
+            "trigger_count": 1000,
+            "avg_score_delta": 16.8,
+            "decisions_changed_count": 250
+        }
+    ]
+}

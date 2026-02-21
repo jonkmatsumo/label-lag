@@ -1,0 +1,16 @@
+{
+    "summaries": [
+        {
+            "bucket_time": "2024-02-20T00:00:00.000Z",
+            "total_jobs": 100,
+            "completed_jobs": 95,
+            "failed_jobs": 5
+        },
+        {
+            "bucket_time": "2024-02-20T01:00:00.000Z",
+            "total_jobs": 150,
+            "completed_jobs": 140,
+            "failed_jobs": 10
+        }
+    ]
+}

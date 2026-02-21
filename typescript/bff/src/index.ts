@@ -127,7 +127,7 @@ async function main(): Promise<void> {
   await fastify.register(rulesDetailRoutes, { httpClient });
   await fastify.register(datasetRoutes, { httpClient, shadowService });
   await fastify.register(mlflowRoutes, { httpClient });
-  await fastify.register(jobsRoutes, { httpClient });
+  await fastify.register(jobsRoutes, { httpClient, cache });
   await fastify.register(decisionsRoutes, { httpClient });
   await fastify.register(trainingRoutes, { httpClient });
   await fastify.register(modelsRoutes, { httpClient });
