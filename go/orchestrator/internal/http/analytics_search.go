@@ -212,8 +212,10 @@ func writeAnalyticsRPCError(w http.ResponseWriter, r *http.Request, err error) {
 			writeJSONError(w, r, http.StatusBadRequest, rpcErr.Message)
 		case codes.NotFound:
 			writeJSONError(w, r, http.StatusNotFound, rpcErr.Message)
-		case codes.DeadlineExceeded, codes.Unavailable:
-			writeJSONError(w, r, http.StatusServiceUnavailable, "analytics backend timeout")
+		case codes.DeadlineExceeded:
+			writeJSONError(w, r, http.StatusGatewayTimeout, "analytics backend timeout")
+		case codes.Unavailable:
+			writeJSONError(w, r, http.StatusServiceUnavailable, "analytics backend unavailable")
 		default:
 			writeJSONError(w, r, http.StatusBadGateway, rpcErr.Message)
 		}
