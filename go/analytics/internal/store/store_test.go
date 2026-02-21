@@ -99,11 +99,7 @@ func TestSearchTransactions(t *testing.T) {
 
 	s := NewSQLStore(db)
 
-	mock.ExpectQuery(`(?s)SELECT COUNT\(\*\) FROM\s*\(.*SELECT em.record_id, em.user_id,.*WHERE em.user_id = \$1 AND gr.amount >= \$2 AND ie.tenant_id = \$3\s*\)\s*as count_query`).
-		WithArgs("user-1", 12.5, "tenant-1").
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
-
-	mock.ExpectQuery(`(?s)SELECT em.record_id, em.user_id,.*WHERE em.user_id = \$1 AND gr.amount >= \$2 AND ie.tenant_id = \$3.*ORDER BY em.created_at DESC LIMIT 25`).
+	mock.ExpectQuery(`(?s)SELECT em.record_id, em.user_id,.*WHERE em.user_id = \$1 AND gr.amount >= \$2 AND ie.tenant_id = \$3.*ORDER BY em.created_at DESC, em.record_id DESC LIMIT 26`).
 		WithArgs("user-1", 12.5, "tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{
 			"record_id",
@@ -128,13 +124,11 @@ func TestSearchTransactions(t *testing.T) {
 		UserId:    "user-1",
 		MinAmount: &minAmount,
 		Limit:     25,
-		Offset:    0,
 		TenantId:  "tenant-1",
 	}
 
-	details, total, err := s.SearchTransactions(context.Background(), req)
+	details, _, _, err := s.SearchTransactions(context.Background(), req)
 	require.NoError(t, err)
-	assert.Equal(t, int64(2), total)
 	assert.Len(t, details, 1)
 	assert.Equal(t, "rec-1", details[0].RecordId)
 }

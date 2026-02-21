@@ -135,23 +135,24 @@ func TestSearchTransactions(t *testing.T) {
 			IsPreFraud:      true,
 		},
 	}
-	expectedTotal := int64(2)
+	expectedNextCursor := "next"
+	expectedTruncated := false
 
 	mockStore.On("SearchTransactions", mock.Anything, mock.Anything).
-		Return(expectedTxs, expectedTotal, nil)
+		Return(expectedTxs, expectedNextCursor, expectedTruncated, nil)
 
 	minAmount := 12.5
 	req := &pb.SearchTransactionsRequest{
 		UserId:    "user-1",
 		MinAmount: &minAmount,
 		Limit:     25,
-		Offset:    0,
 	}
 
 	resp, err := s.SearchTransactions(context.Background(), req)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
-	assert.Equal(t, int64(2), resp.Total)
+	assert.Equal(t, "next", resp.Pagination.NextCursor)
+	assert.False(t, resp.Truncated)
 	assert.Len(t, resp.Transactions, 1)
 	assert.Equal(t, "rec-1", resp.Transactions[0].RecordId)
 	assert.True(t, resp.Transactions[0].IsTrainEligible)
@@ -166,20 +167,21 @@ func TestSearchTransactions_Unfiltered(t *testing.T) {
 	expectedTxs := []*pb.TransactionDetail{
 		{RecordId: "rec-2"},
 	}
-	expectedTotal := int64(5000)
+	expectedNextCursor := ""
+	expectedTruncated := false
 
 	mockStore.On("SearchTransactions", mock.Anything, mock.Anything).
-		Return(expectedTxs, expectedTotal, nil)
+		Return(expectedTxs, expectedNextCursor, expectedTruncated, nil)
 
 	req := &pb.SearchTransactionsRequest{
-		Limit:  10,
-		Offset: 0,
+		Limit: 10,
 	}
 
 	resp, err := s.SearchTransactions(context.Background(), req)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
-	assert.Equal(t, int64(5000), resp.Total)
+	assert.False(t, resp.Truncated)
+	assert.Nil(t, resp.Pagination)
 	assert.Len(t, resp.Transactions, 1)
 	mockStore.AssertExpectations(t)
 }

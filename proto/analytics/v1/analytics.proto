@@ -255,13 +255,15 @@ message SearchTransactionsRequest {
   optional int32 min_score = 8;
   optional int32 max_score = 9;
   int32 limit = 10;
-  int32 offset = 11;
+  common.v1.CursorPageRequest pagination = 16;
+  bool include_features = 12; // Exclude heavy features if false
   string tenant_id = 15;
 }
 
 message SearchTransactionsResponse {
   repeated TransactionDetail transactions = 1;
-  int64 total = 2;
+  common.v1.CursorPageResponse pagination = 3;
+  bool truncated = 4;
 }
 
 message GetRecentAlertsRequest {

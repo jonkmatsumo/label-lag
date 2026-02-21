@@ -16,7 +16,7 @@ type Store interface {
 	// Analytics
 	GetDailyStats(ctx context.Context, cutoffDate time.Time, tenantID string) ([]*pb.DailyStat, error)
 	GetTransactionDetails(ctx context.Context, cutoffDate time.Time, limit, offset int32, tenantID string) ([]*pb.TransactionDetail, error)
-	SearchTransactions(ctx context.Context, req *pb.SearchTransactionsRequest) ([]*pb.TransactionDetail, int64, error)
+	SearchTransactions(ctx context.Context, req *pb.SearchTransactionsRequest) ([]*pb.TransactionDetail, string, bool, error)
 	GetRecentAlerts(ctx context.Context, limit, offset int32, tenantID string) ([]*pb.Alert, error)
 	GetOverviewMetrics(ctx context.Context, tenantID string) (*pb.GetOverviewMetricsResponse, error)
 

@@ -31,12 +31,12 @@ func (m *MockStore) GetTransactionDetails(ctx context.Context, cutoffDate time.T
 	return args.Get(0).([]*pb.TransactionDetail), args.Error(1)
 }
 
-func (m *MockStore) SearchTransactions(ctx context.Context, req *pb.SearchTransactionsRequest) ([]*pb.TransactionDetail, int64, error) {
+func (m *MockStore) SearchTransactions(ctx context.Context, req *pb.SearchTransactionsRequest) ([]*pb.TransactionDetail, string, bool, error) {
 	args := m.Called(ctx, req)
-	if args.Get(0) == nil {
-		return nil, 0, args.Error(2)
+	if args.Get(0) != nil {
+		return args.Get(0).([]*pb.TransactionDetail), args.String(1), args.Bool(2), args.Error(3)
 	}
-	return args.Get(0).([]*pb.TransactionDetail), args.Get(1).(int64), args.Error(2)
+	return nil, args.String(1), args.Bool(2), args.Error(3)
 }
 
 func (m *MockStore) GetRecentAlerts(ctx context.Context, limit, offset int32, tenantID string) ([]*pb.Alert, error) {

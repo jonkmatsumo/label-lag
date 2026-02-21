@@ -193,13 +193,18 @@ export interface SearchTransactionsRequest {
   min_score?: number | undefined;
   max_score?: number | undefined;
   limit: number;
-  offset: number;
+  pagination?:
+    | CursorPageRequest
+    | undefined;
+  /** Exclude heavy features if false */
+  include_features: boolean;
   tenant_id: string;
 }
 
 export interface SearchTransactionsResponse {
   transactions: TransactionDetail[];
-  total: string;
+  pagination?: CursorPageResponse | undefined;
+  truncated: boolean;
 }
 
 export interface GetRecentAlertsRequest {
