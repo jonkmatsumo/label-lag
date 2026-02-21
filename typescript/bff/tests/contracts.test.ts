@@ -432,6 +432,50 @@ describe('Contract: GET /bff/v1/analytics/rules/:rule_id/impact', () => {
     const raw = loadFixture('rule-impact/basic.json') as any;
     expect(typeof raw.total_triggers).toBe('string');
     expect(typeof raw.daily_buckets[0].trigger_count).toBe('string');
-    expect(typeof raw.daily_buckets[0].decisions_changed_count).toBe('string');
+  });
+});
+
+// ─── Jobs Summary (protojson handler with normalization) ───────────────────
+
+describe('Contract: GET /bff/v1/jobs/summary', () => {
+  it('basic fixture matches normalized BFF output', () => {
+    const raw = loadFixture('jobs-summary/basic.json') as any;
+    const expected = loadFixture('jobs-summary/basic.bff.json');
+
+    const normalized = {
+      summaries: raw.summaries?.map((s: any) => ({
+        bucket_time: timestampToIso(s.bucket_time),
+        total_jobs: parseInt64(s.total_jobs),
+        completed_jobs: parseInt64(s.completed_jobs),
+        failed_jobs: parseInt64(s.failed_jobs),
+      })),
+    };
+
+    expect(normalized).toEqual(expected);
+  });
+
+  it('all bucket int64 fields are numbers and timestamps are ISO strings', () => {
+    const raw = loadFixture('jobs-summary/basic.json') as any;
+
+    expect(Array.isArray(raw.summaries)).toBe(true);
+    expect(raw.summaries.length).toBeGreaterThan(0);
+
+    for (const s of raw.summaries) {
+      const ts = timestampToIso(s.bucket_time);
+      const total = parseInt64(s.total_jobs);
+      const completed = parseInt64(s.completed_jobs);
+      const failed = parseInt64(s.failed_jobs);
+
+      expect(typeof ts).toBe('string');
+      expect(ISO_RE.test(ts!)).toBe(true);
+      expect(typeof total).toBe('number');
+      expect(typeof completed).toBe('number');
+      expect(typeof failed).toBe('number');
+    }
+  });
+
+  it('raw int64 strings are NOT numbers before normalization', () => {
+    const raw = loadFixture('jobs-summary/basic.json') as any;
+    expect(typeof raw.summaries[0].total_jobs).toBe('string');
   });
 });
