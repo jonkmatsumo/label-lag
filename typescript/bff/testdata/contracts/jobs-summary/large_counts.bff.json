@@ -1,0 +1,10 @@
+{
+    "summaries": [
+        {
+            "bucket_time": "2024-02-01T00:00:00Z",
+            "total_jobs": 9007199254740991,
+            "completed_jobs": 8000000000000000,
+            "failed_jobs": 1007199254740991
+        }
+    ]
+}

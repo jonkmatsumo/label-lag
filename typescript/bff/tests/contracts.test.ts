@@ -408,16 +408,60 @@ describe('Contract: GET /bff/v1/analytics/rules/:rule_id/impact', () => {
     const normalized = {
       rule_id: raw.rule_id,
       total_triggers: parseInt64(raw.total_triggers),
-      avg_score_delta: raw.avg_score_delta,
+      avg_score_delta: Number(raw.avg_score_delta),
       daily_buckets: raw.daily_buckets?.map((b: any) => ({
         date: b.date,
         trigger_count: parseInt64(b.trigger_count),
-        avg_score_delta: b.avg_score_delta,
+        avg_score_delta: Number(b.avg_score_delta),
         decisions_changed_count: parseInt64(b.decisions_changed_count),
       })),
+      truncated: false,
     };
 
     expect(normalized).toEqual(expected);
+  });
+
+  it('negative_delta fixture matches normalized BFF output', () => {
+    const raw = loadFixture('rule-impact/negative_delta.json') as any;
+    const expected = loadFixture('rule-impact/negative_delta.bff.json');
+
+    const normalized = {
+      rule_id: raw.rule_id,
+      total_triggers: parseInt64(raw.total_triggers),
+      avg_score_delta: Number(raw.avg_score_delta),
+      daily_buckets: raw.daily_buckets?.map((b: any) => ({
+        date: b.date,
+        trigger_count: parseInt64(b.trigger_count),
+        avg_score_delta: Number(b.avg_score_delta),
+        decisions_changed_count: parseInt64(b.decisions_changed_count),
+      })),
+      truncated: false,
+    };
+
+    expect(normalized).toEqual(expected);
+    expect(normalized.avg_score_delta).toBeLessThan(0);
+  });
+
+  it('large_counts fixture handles int64 strings correctly', () => {
+    const raw = loadFixture('rule-impact/large_counts.json') as any;
+    const expected = loadFixture('rule-impact/large_counts.bff.json');
+
+    const normalized = {
+      rule_id: raw.rule_id,
+      total_triggers: parseInt64(raw.total_triggers),
+      avg_score_delta: Number(raw.avg_score_delta),
+      daily_buckets: raw.daily_buckets?.map((b: any) => ({
+        date: b.date,
+        trigger_count: parseInt64(b.trigger_count),
+        avg_score_delta: Number(b.avg_score_delta),
+        decisions_changed_count: parseInt64(b.decisions_changed_count),
+      })),
+      truncated: false,
+    };
+
+    expect(normalized).toEqual(expected);
+    expect(typeof normalized.total_triggers).toBe('number');
+    expect(normalized.total_triggers).toBeGreaterThan(1000000000);
   });
 
   it('all count int64 fields are numbers after normalization', () => {
@@ -452,6 +496,41 @@ describe('Contract: GET /bff/v1/jobs/summary', () => {
     };
 
     expect(normalized).toEqual(expected);
+  });
+
+  it('large_counts fixture handles int64 strings correctly', () => {
+    const raw = loadFixture('jobs-summary/large_counts.json') as any;
+    const expected = loadFixture('jobs-summary/large_counts.bff.json');
+
+    const normalized = {
+      summaries: raw.summaries?.map((s: any) => ({
+        bucket_time: timestampToIso(s.bucket_time),
+        total_jobs: parseInt64(s.total_jobs),
+        completed_jobs: parseInt64(s.completed_jobs),
+        failed_jobs: parseInt64(s.failed_jobs),
+      })),
+    };
+
+    expect(normalized).toEqual(expected);
+    expect(typeof normalized.summaries[0].total_jobs).toBe('number');
+    expect(normalized.summaries[0].total_jobs).toBeGreaterThan(1000000000);
+  });
+
+  it('zero_total fixture matches empty summaries array', () => {
+    const raw = loadFixture('jobs-summary/zero_total.json') as any;
+    const expected = loadFixture('jobs-summary/zero_total.bff.json');
+
+    const normalized = {
+      summaries: (raw.summaries ?? []).map((s: any) => ({
+        bucket_time: timestampToIso(s.bucket_time),
+        total_jobs: parseInt64(s.total_jobs),
+        completed_jobs: parseInt64(s.completed_jobs),
+        failed_jobs: parseInt64(s.failed_jobs),
+      })),
+    };
+
+    expect(normalized).toEqual(expected);
+    expect(normalized.summaries.length).toBe(0);
   });
 
   it('all bucket int64 fields are numbers and timestamps are ISO strings', () => {

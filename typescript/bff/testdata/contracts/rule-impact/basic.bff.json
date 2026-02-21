@@ -15,5 +15,6 @@
             "avg_score_delta": 16.8,
             "decisions_changed_count": 250
         }
-    ]
+    ],
+    "truncated": false
 }
