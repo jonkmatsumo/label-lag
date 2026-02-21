@@ -621,6 +621,7 @@ export interface GetRuleImpactResponse {
   rule_id: string;
   total_triggers: number;
   avg_score_delta: number;
+  /** Guaranteed to be sorted ascending by date */
   daily_buckets: RuleImpactBucket[];
   truncated?: boolean;
 }

@@ -77,8 +77,8 @@ interface ConfusionMatrixQuery {
 }
 
 interface RuleImpactQuery {
-  start_time?: string;
-  end_time?: string;
+  start_time: string;
+  end_time: string;
 }
 
 /**
@@ -684,6 +684,7 @@ export async function analyticsRoutes(
         },
         querystring: {
           type: 'object',
+          required: ['start_time', 'end_time'],
           additionalProperties: false,
           properties: {
             start_time: {
@@ -713,17 +714,24 @@ export async function analyticsRoutes(
         const tenantId = (request as any).tenantId ?? 'default';
 
         // Validation
-        if (start_time && end_time) {
-          const start = new Date(start_time);
-          const end = new Date(end_time);
-          if (start >= end) {
-            return reply.status(400).send({
-              error: {
-                code: 'INVALID_RANGE',
-                message: 'start_time must be before end_time',
-              }
-            });
-          }
+        const start = new Date(start_time);
+        const end = new Date(end_time);
+        if (start >= end) {
+          return reply.status(400).send({
+            error: {
+              code: 'INVALID_RANGE',
+              message: 'start_time must be before end_time',
+            }
+          });
+        }
+        const daysDiff = (end.getTime() - start.getTime()) / (1000 * 3600 * 24);
+        if (daysDiff > 90) {
+          return reply.status(400).send({
+            error: {
+              code: 'INVALID_RANGE',
+              message: 'Time range cannot exceed 90 days',
+            }
+          });
         }
 
         const cacheKey = `analytics:rules:${rule_id}:impact:${tenantId}:${start_time ?? ''}:${end_time ?? ''}`;
@@ -752,7 +760,7 @@ export async function analyticsRoutes(
             trigger_count: parseInt64(b.trigger_count) ?? 0,
             avg_score_delta: Number(b.avg_score_delta) || 0,
             decisions_changed_count: parseInt64(b.decisions_changed_count) ?? 0,
-          })),
+          })).sort((a: any, b: any) => a.date.localeCompare(b.date)),
           truncated: false,
         };
 
