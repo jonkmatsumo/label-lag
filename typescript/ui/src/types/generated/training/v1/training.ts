@@ -49,6 +49,9 @@ export interface TrainRequest {
   reg_lambda: number;
   random_state: number;
   early_stopping_rounds?: number | undefined;
+  min_cal_samples?: number | undefined;
+  min_cal_pos?: number | undefined;
+  min_cal_neg?: number | undefined;
   tenant_id: string;
 }
 

@@ -104,23 +104,23 @@ func (s *Service) SearchTransactions(ctx context.Context, req *pb.SearchTransact
 	if err != nil {
 		return nil, err
 	}
-	offset, err := normalizeOffset(req.Offset)
-	if err != nil {
-		return nil, err
-	}
-
 	req.Limit = limit
-	req.Offset = offset
 
-	transactions, total, err := s.store.SearchTransactions(ctx, req)
+	transactions, nextCursor, truncated, err := s.store.SearchTransactions(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	return &pb.SearchTransactionsResponse{
+	resp := &pb.SearchTransactionsResponse{
 		Transactions: transactions,
-		Total:        total,
-	}, nil
+		Truncated:    truncated,
+	}
+	if nextCursor != "" {
+		resp.Pagination = &commonv1.CursorPageResponse{
+			NextCursor: nextCursor,
+		}
+	}
+	return resp, nil
 }
 
 func (s *Service) GetRecentAlerts(ctx context.Context, req *pb.GetRecentAlertsRequest) (*pb.GetRecentAlertsResponse, error) {

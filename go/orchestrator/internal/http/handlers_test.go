@@ -13,6 +13,7 @@ import (
 	"time"
 
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	commonv1 "github.com/jonkmatsumo/label-lag/go/common/proto/v1"
 	forecastv1 "github.com/jonkmatsumo/label-lag/go/forecast/proto/forecastv1"
 	grpcclient "github.com/jonkmatsumo/label-lag/go/orchestrator/internal/grpc"
 	inferencev1 "github.com/jonkmatsumo/label-lag/go/orchestrator/internal/grpc/inferencev1"
@@ -135,7 +136,10 @@ func TestHandleSearchTransactions(t *testing.T) {
 					BalanceVolatilityZScore: -0.2,
 				},
 			},
-			Total: 1,
+			Pagination: &commonv1.CursorPageResponse{
+				NextCursor: "next-cursor",
+			},
+			Truncated: false,
 		},
 	}
 	handler := NewHandler(HandlerOptions{
@@ -160,8 +164,11 @@ func TestHandleSearchTransactions(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if payload["total"] != float64(1) {
-		t.Fatalf("expected total 1, got %v", payload["total"])
+	if payload["next_cursor"] != "next-cursor" {
+		t.Fatalf("expected next_cursor 'next-cursor', got %v", payload["next_cursor"])
+	}
+	if payload["truncated"] != false {
+		t.Fatalf("expected truncated false, got %v", payload["truncated"])
 	}
 	txs, ok := payload["transactions"].([]any)
 	if !ok || len(txs) != 1 {

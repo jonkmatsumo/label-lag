@@ -190,13 +190,46 @@ describe('Contract: GET /analytics/overview', () => {
 // ─── Transaction Search (encoding/json on proto → numbers, total as number) ──
 
 describe('Contract: POST /analytics/transactions/search', () => {
-  it('with-results fixture has transactions array and numeric total', () => {
+  it('with-results fixture has transactions array and numeric total (legacy)', () => {
     const payload = loadFixture('search/with-results.json') as Record<string, unknown>;
 
     expect(Array.isArray(payload.transactions)).toBe(true);
     // total is a number in the fixture (backend sends number via json.Encode on custom struct)
     expect(typeof payload.total).toBe('number');
     expect(payload.total).toBe((payload.transactions as unknown[]).length);
+  });
+
+  it('cursor_page_1 fixture has next_cursor string and truncated boolean', () => {
+    const payload = loadFixture('search/cursor_page_1.json') as Record<string, unknown>;
+
+    expect(Array.isArray(payload.transactions)).toBe(true);
+    expect(typeof payload.next_cursor).toBe('string');
+    expect((payload.next_cursor as string).length).toBeGreaterThan(0);
+    expect(typeof payload.truncated).toBe('boolean');
+    expect(payload.truncated).toBe(false);
+  });
+
+  it('cursor_page_2 fixture has empty next_cursor string', () => {
+    const payload = loadFixture('search/cursor_page_2.json') as Record<string, unknown>;
+
+    expect(Array.isArray(payload.transactions)).toBe(true);
+    expect(typeof payload.next_cursor).toBe('string');
+    expect((payload.next_cursor as string).length).toBe(0);
+  });
+
+  it('truncated_results fixture has truncated=true', () => {
+    const payload = loadFixture('search/truncated_results.json') as Record<string, unknown>;
+
+    expect(payload.truncated).toBe(true);
+  });
+
+  it('omitted_features fixture lacks numerical/categorical features', () => {
+    const payload = loadFixture('search/omitted_features.json') as Record<string, unknown>;
+
+    const txs = payload.transactions as Array<Record<string, unknown>>;
+    expect(txs.length).toBeGreaterThan(0);
+    expect(txs[0].numerical_features).toBeUndefined();
+    expect(txs[0].categorical_features).toBeUndefined();
   });
 
   it('empty fixture has empty transactions array and zero total', () => {

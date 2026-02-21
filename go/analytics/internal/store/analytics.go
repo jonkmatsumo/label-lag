@@ -150,8 +150,34 @@ func (s *SQLStore) GetTransactionDetails(ctx context.Context, cutoffDate time.Ti
 	return details, nil
 }
 
-func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransactionsRequest) ([]*pb.TransactionDetail, int64, error) {
-	baseQuery := `
+func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransactionsRequest) ([]*pb.TransactionDetail, string, bool, error) {
+	// Parse cursor
+	var lastCreatedAt *time.Time
+	var lastRecordID string
+	if req.Pagination != nil && req.Pagination.Cursor != "" {
+		cursorData, err := db.DecodeCursor(req.Pagination.Cursor)
+		if err == nil && len(cursorData) >= 2 {
+			if t, err := time.Parse(time.RFC3339Nano, fmt.Sprintf("%v", cursorData[0])); err == nil {
+				lastCreatedAt = &t
+			}
+			lastRecordID = fmt.Sprintf("%v", cursorData[1])
+		}
+	}
+
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 25
+	}
+	if limit > 500 {
+		limit = 500
+	}
+
+	featuresSelect := "gr.numerical_features, gr.categorical_features"
+	if !req.IncludeFeatures {
+		featuresSelect = "NULL::jsonb, NULL::jsonb"
+	}
+
+	baseQuery := fmt.Sprintf(`
 		SELECT
 			em.record_id,
 			em.user_id,
@@ -166,12 +192,12 @@ func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransac
 			fs.velocity_24h,
 			fs.amount_to_avg_ratio_30d,
 			fs.balance_volatility_z_score,
-			gr.numerical_features,
-			gr.categorical_features
+			%s
 		FROM evaluation_metadata em
 		LEFT JOIN generated_records gr ON em.record_id = gr.record_id
 		LEFT JOIN feature_snapshots fs ON em.record_id = fs.record_id
-	`
+	`, featuresSelect)
+
 	if req.TenantId != "" {
 		baseQuery += " INNER JOIN inference_events ie ON em.record_id = ie.request_id"
 	}
@@ -213,26 +239,20 @@ func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransac
 		queryBuilder.AddCondition("ie.tenant_id = ?", req.TenantId)
 	}
 
-	// Get total count
-	countQuery, countArgs := queryBuilder.BuildCount()
-	var total int64
+	if lastCreatedAt != nil && lastRecordID != "" {
+		queryBuilder.AddCondition("(em.created_at < ? OR (em.created_at = ? AND em.record_id < ?))", *lastCreatedAt, *lastCreatedAt, lastRecordID)
+	}
+
+	queryBuilder.AddOrderBy("em.created_at DESC, em.record_id DESC")
+	queryBuilder.SetLimit(limit + 1) // Fetch one extra to detect if there's more/truncated
+
+	selectQuery, selectArgs := queryBuilder.BuildSelect()
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	err := s.db.QueryRowContext(queryCtx, countQuery, countArgs...).Scan(&total)
-	if err != nil {
-		return nil, 0, db.MapDBError(err)
-	}
-
-	// Get results
-	queryBuilder.AddOrderBy("em.created_at DESC")
-	queryBuilder.SetLimit(req.Limit)
-	queryBuilder.SetOffset(req.Offset)
-	selectQuery, selectArgs := queryBuilder.BuildSelect()
-
 	rows, err := s.db.QueryContext(queryCtx, selectQuery, selectArgs...)
 	if err != nil {
-		return nil, 0, db.MapDBError(err)
+		return nil, "", false, db.MapDBError(err)
 	}
 	defer rows.Close()
 
@@ -258,24 +278,36 @@ func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransac
 			&numFeaturesJSON,
 			&catFeaturesJSON,
 		); err != nil {
-			return nil, 0, fmt.Errorf("failed to scan search result: %v", err)
+			return nil, "", false, fmt.Errorf("failed to scan search result: %v", err)
 		}
 		d.CreatedAt = timestamppb.New(createdAt)
 
-		if len(numFeaturesJSON) > 0 {
-			if err := json.Unmarshal(numFeaturesJSON, &d.NumericalFeatures); err != nil {
-				return nil, 0, status.Errorf(codes.Internal, "invalid json payload: %v", err)
+		if req.IncludeFeatures {
+			if len(numFeaturesJSON) > 0 {
+				if err := json.Unmarshal(numFeaturesJSON, &d.NumericalFeatures); err != nil {
+					return nil, "", false, status.Errorf(codes.Internal, "invalid json payload: %v", err)
+				}
 			}
-		}
-		if len(catFeaturesJSON) > 0 {
-			if err := json.Unmarshal(catFeaturesJSON, &d.CategoricalFeatures); err != nil {
-				return nil, 0, status.Errorf(codes.Internal, "invalid json payload: %v", err)
+			if len(catFeaturesJSON) > 0 {
+				if err := json.Unmarshal(catFeaturesJSON, &d.CategoricalFeatures); err != nil {
+					return nil, "", false, status.Errorf(codes.Internal, "invalid json payload: %v", err)
+				}
 			}
 		}
 
 		details = append(details, &d)
 	}
-	return details, total, nil
+
+	truncated := false
+	nextCursor := ""
+	if len(details) > int(limit) {
+		truncated = true
+		details = details[:limit]
+		lastItem := details[len(details)-1]
+		nextCursor = db.EncodeCursor(lastItem.CreatedAt.AsTime().Format(time.RFC3339Nano), lastItem.RecordId)
+	}
+
+	return details, nextCursor, truncated, nil
 }
 
 func (s *SQLStore) GetShadowComparison(ctx context.Context, hours int32, tenantID string) (*pb.ShadowModeMetrics, error) {

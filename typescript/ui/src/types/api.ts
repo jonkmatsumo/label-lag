@@ -269,7 +269,6 @@ import type {
   GetDatasetSummaryResponse,
   MetricPoint,
   SearchTransactionsRequest,
-  SearchTransactionsResponse,
   ListRulesResponse,
   GetRuleStatsResponse,
   ListRuleVersionsResponse,
@@ -332,8 +331,18 @@ export type RecentAlertsResponse = GetRecentAlertsResponse;
 export type ListDatasetProfilesResponse = GenListDatasetProfilesResponse;
 export type DatasetSummary = GetDatasetSummaryResponse;
 export type MetricSeriesPoint = MetricPoint;
-export type TransactionSearchRequest = SearchTransactionsRequest;
-export type TransactionSearchResponse = SearchTransactionsResponse;
+export interface TransactionSearchRequest extends Omit<SearchTransactionsRequest, 'offset' | 'limit' | 'include_features'> {
+  cursor?: string;
+  limit?: number;
+  include_features?: boolean;
+}
+
+export interface TransactionSearchResponse {
+  items: import('./generated/analytics/v1/analytics').TransactionDetail[];
+  next_cursor?: string;
+  truncated: boolean;
+  total?: number;
+}
 
 // Backtest aliases
 export type BacktestCompareRequest = CompareBacktestsRequest;

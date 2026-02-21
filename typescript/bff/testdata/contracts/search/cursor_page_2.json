@@ -1,0 +1,16 @@
+{
+    "transactions": [
+        {
+            "record_id": "rec-002",
+            "user_id": "user-002",
+            "amount": 250.0,
+            "created_at": "2024-01-01T11:00:00Z",
+            "is_fraudulent": true,
+            "numerical_features": "{}",
+            "categorical_features": "{}"
+        }
+    ],
+    "next_cursor": "",
+    "truncated": false,
+    "total": 5
+}

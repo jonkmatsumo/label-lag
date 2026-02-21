@@ -323,12 +323,15 @@ export interface TransactionSearchRequest {
   min_score?: number;
   max_score?: number;
   limit?: number;
-  offset?: number;
+  cursor?: string;
+  include_features?: boolean;
 }
 
 export interface TransactionSearchResponse {
-  transactions: TransactionDetail[];
-  total: number;
+  items: TransactionDetail[];
+  next_cursor?: string;
+  truncated: boolean;
+  total?: number;
 }
 
 export interface RecentAlert {

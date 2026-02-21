@@ -9,6 +9,7 @@ import (
 	"time"
 
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	commonv1 "github.com/jonkmatsumo/label-lag/go/common/proto/v1"
 	grpcclient "github.com/jonkmatsumo/label-lag/go/orchestrator/internal/grpc"
 	"google.golang.org/grpc/codes"
 )
@@ -79,17 +80,18 @@ type AnalyticsClient interface {
 }
 
 type searchTransactionsRequest struct {
-	UserID        string   `json:"user_id"`
-	TransactionID string   `json:"transaction_id"`
-	MinAmount     *float64 `json:"min_amount"`
-	MaxAmount     *float64 `json:"max_amount"`
-	StartDate     string   `json:"start_date"`
-	EndDate       string   `json:"end_date"`
-	IsFraudulent  *bool    `json:"is_fraudulent"`
-	MinScore      *int32   `json:"min_score"`
-	MaxScore      *int32   `json:"max_score"`
-	Limit         *int32   `json:"limit"`
-	Offset        *int32   `json:"offset"`
+	UserID          string   `json:"user_id"`
+	TransactionID   string   `json:"transaction_id"`
+	MinAmount       *float64 `json:"min_amount"`
+	MaxAmount       *float64 `json:"max_amount"`
+	StartDate       string   `json:"start_date"`
+	EndDate         string   `json:"end_date"`
+	IsFraudulent    *bool    `json:"is_fraudulent"`
+	MinScore        *int32   `json:"min_score"`
+	MaxScore        *int32   `json:"max_score"`
+	Limit           *int32   `json:"limit"`
+	Cursor          string   `json:"cursor"`
+	IncludeFeatures bool     `json:"include_features"`
 }
 
 type transactionDetailResponse struct {
@@ -110,7 +112,8 @@ type transactionDetailResponse struct {
 
 type searchTransactionsResponse struct {
 	Transactions []transactionDetailResponse `json:"transactions"`
-	Total        int64                       `json:"total"`
+	NextCursor   string                      `json:"next_cursor,omitempty"`
+	Truncated    bool                        `json:"truncated"`
 }
 
 func (h *Handler) handleSearchTransactions(w http.ResponseWriter, r *http.Request) {
@@ -157,9 +160,12 @@ func (h *Handler) handleSearchTransactions(w http.ResponseWriter, r *http.Reques
 	if req.Limit != nil {
 		grpcReq.Limit = *req.Limit
 	}
-	if req.Offset != nil {
-		grpcReq.Offset = *req.Offset
+	if req.Cursor != "" {
+		grpcReq.Pagination = &commonv1.CursorPageRequest{
+			Cursor: req.Cursor,
+		}
 	}
+	grpcReq.IncludeFeatures = req.IncludeFeatures
 	tenantID, err := mustTenantID(r)
 	if err != nil {
 		writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
@@ -198,10 +204,16 @@ func (h *Handler) handleSearchTransactions(w http.ResponseWriter, r *http.Reques
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(searchTransactionsResponse{
+
+	respObj := searchTransactionsResponse{
 		Transactions: transactions,
-		Total:        resp.GetTotal(),
-	})
+		Truncated:    resp.GetTruncated(),
+	}
+	if resp.GetPagination() != nil && resp.GetPagination().GetNextCursor() != "" {
+		respObj.NextCursor = resp.GetPagination().GetNextCursor()
+	}
+
+	_ = json.NewEncoder(w).Encode(respObj)
 }
 
 func writeAnalyticsRPCError(w http.ResponseWriter, r *http.Request, err error) {
