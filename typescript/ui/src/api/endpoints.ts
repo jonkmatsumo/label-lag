@@ -173,12 +173,13 @@ export const analyticsApi = {
     if (rest.model_version) searchParams.set('model_version', rest.model_version);
     return apiClient.get<ConfusionMatrixResponse>(`/bff/v1/analytics/confusion-matrix?${searchParams.toString()}`, signal);
   },
-  getRuleImpact: (ruleId: string, params?: { start_time?: string; end_time?: string }) => {
+  getRuleImpact: (ruleId: string, params?: { start_time?: string; end_time?: string; signal?: AbortSignal }) => {
+    const { signal, ...queryParams } = params ?? {};
     const searchParams = new URLSearchParams();
-    if (params?.start_time) searchParams.set('start_time', params.start_time);
-    if (params?.end_time) searchParams.set('end_time', params.end_time);
+    if (queryParams.start_time) searchParams.set('start_time', queryParams.start_time);
+    if (queryParams.end_time) searchParams.set('end_time', queryParams.end_time);
     const query = searchParams.toString();
-    return apiClient.get<GetRuleImpactResponse>(`/bff/v1/analytics/rules/${encodeURIComponent(ruleId)}/impact${query ? `?${query}` : ''}`);
+    return apiClient.get<GetRuleImpactResponse>(`/bff/v1/analytics/rules/${encodeURIComponent(ruleId)}/impact${query ? `?${query}` : ''}`, signal);
   },
 };
 
@@ -236,12 +237,13 @@ export const jobsApi = {
     apiClient.post<CancelJobResponse>(`/bff/v1/jobs/${encodeURIComponent(jobId)}/cancel`),
   retry: (jobId: string) =>
     apiClient.post<RetryJobResponse>(`/bff/v1/jobs/${encodeURIComponent(jobId)}/retry`),
-  getSummary: (params?: { start_time?: string; end_time?: string }) => {
+  getSummary: (params?: { start_time?: string; end_time?: string; signal?: AbortSignal }) => {
+    const { signal, ...queryParams } = params ?? {};
     const searchParams = new URLSearchParams();
-    if (params?.start_time) searchParams.set('start_time', params.start_time);
-    if (params?.end_time) searchParams.set('end_time', params.end_time);
+    if (queryParams.start_time) searchParams.set('start_time', queryParams.start_time);
+    if (queryParams.end_time) searchParams.set('end_time', queryParams.end_time);
     const query = searchParams.toString();
-    return apiClient.get<GetJobSummaryResponse>(`/bff/v1/jobs/summary${query ? `?${query}` : ''}`);
+    return apiClient.get<GetJobSummaryResponse>(`/bff/v1/jobs/summary${query ? `?${query}` : ''}`, signal);
   },
 };
 

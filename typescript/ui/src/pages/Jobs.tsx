@@ -162,7 +162,7 @@ function JobsSummaryStrip() {
   const { tenantId } = useTenant();
   const summaryQuery = useQuery({
     queryKey: ['jobs', tenantId, 'summary'],
-    queryFn: () => jobsApi.getSummary()
+    queryFn: ({ signal }) => jobsApi.getSummary({ signal })
   });
 
   if (summaryQuery.isError) {

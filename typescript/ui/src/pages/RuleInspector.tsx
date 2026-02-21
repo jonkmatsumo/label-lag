@@ -448,7 +448,7 @@ function RuleImpactTab({ ruleId }: { ruleId: string }) {
 
   const impactQuery = useQuery({
     queryKey: ['analytics', tenantId, 'impact', ruleId],
-    queryFn: () => analyticsApi.getRuleImpact(ruleId)
+    queryFn: ({ signal }) => analyticsApi.getRuleImpact(ruleId, { signal })
   });
 
   if (attributionQuery.isError || impactQuery.isError) {
