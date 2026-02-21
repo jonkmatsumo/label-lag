@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { analyticsApi } from '../api';
 import type { RecentAlert, TransactionSearchRequest, TransactionDetail } from '../types/api';
 import {
   Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart
 } from 'recharts';
-import { Search, ChevronDown, ChevronRight, BarChart3 } from 'lucide-react';
+import { Search, ChevronDown, ChevronRight, BarChart3, ShieldCheck } from 'lucide-react';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { DateRangePicker, KpiCard } from '../components';
 import { useTenant } from '../hooks/useTenant';
@@ -14,18 +15,66 @@ import type { DateRange } from '../components/DateRangePicker';
 export function Analytics() {
   const [daysFilter] = useState(30);
   const { tenantId } = useTenant();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  // New state for dynamic dashboard
-  const [dateRange, setDateRange] = useState<DateRange>(() => {
+  // ── Compute defaults ────────────────────────────────────────────────────────
+  function getDefaults(): { start: string; end: string; granularity: 'hour' | 'day' } {
     const end = new Date();
     const start = new Date();
     start.setDate(end.getDate() - 7);
     return {
       start: start.toISOString().split('T')[0],
       end: end.toISOString().split('T')[0],
+      granularity: 'day',
     };
-  });
-  const [granularity, setGranularity] = useState<'hour' | 'day'>('day');
+  }
+
+  // ── Validate URL param helpers ───────────────────────────────────────────────
+  const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}/;
+  function isValidDate(s: string | null): s is string {
+    return !!s && ISO_DATE_RE.test(s);
+  }
+  function isValidGranularity(s: string | null): s is 'hour' | 'day' {
+    return s === 'hour' || s === 'day';
+  }
+
+  // ── Read params from URL, fall back to defaults if invalid ───────────────────
+  const rawStart = searchParams.get('start_time');
+  const rawEnd = searchParams.get('end_time');
+  const rawGran = searchParams.get('granularity');
+
+  const defaults = getDefaults();
+  const startTime = isValidDate(rawStart) ? rawStart : defaults.start;
+  const endTime = isValidDate(rawEnd) ? rawEnd : defaults.end;
+  const granularity = isValidGranularity(rawGran) ? rawGran : defaults.granularity;
+
+  // ── On mount: if URL params are missing/invalid, replace with defaults once ──
+  useEffect(() => {
+    const needsFix =
+      !isValidDate(rawStart) ||
+      !isValidDate(rawEnd) ||
+      !isValidGranularity(rawGran);
+
+    if (needsFix) {
+      setSearchParams(
+        { start_time: startTime, end_time: endTime, granularity },
+        { replace: true },
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run only on mount
+
+  // ── DateRange object for DateRangePicker ─────────────────────────────────────
+  const dateRange: DateRange = { start: startTime, end: endTime };
+
+  // ── Handlers ─────────────────────────────────────────────────────────────────
+  const handleDateRangeChange = (range: DateRange) => {
+    setSearchParams({ start_time: range.start, end_time: range.end, granularity });
+  };
+
+  const handleGranularityChange = (g: 'hour' | 'day') => {
+    setSearchParams({ start_time: startTime, end_time: endTime, granularity: g });
+  };
 
   // Fetch performance KPIs — signal enables TanStack Query to cancel stale requests
   const kpisQuery = useQuery({
@@ -46,6 +95,17 @@ export function Analytics() {
       start_time: dateRange.start,
       end_time: dateRange.end,
       granularity,
+      signal,
+    }),
+    staleTime: 30_000,
+  });
+
+  // Fetch confusion matrix — signal enables TanStack Query to cancel stale requests
+  const confusionMatrixQuery = useQuery({
+    queryKey: ['analytics', tenantId, 'confusion-matrix', dateRange.start, dateRange.end],
+    queryFn: ({ signal }) => analyticsApi.getConfusionMatrix({
+      start_time: dateRange.start,
+      end_time: dateRange.end,
       signal,
     }),
     staleTime: 30_000,
@@ -84,22 +144,23 @@ export function Analytics() {
 
       {/* KPI Dashboard Controls */}
       <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
-        <DateRangePicker onChange={setDateRange} />
+        <DateRangePicker onChange={handleDateRangeChange} />
         <div className="btn-group btn-group-sm">
           <button
             className={`btn ${granularity === 'hour' ? 'btn-primary' : 'btn-outline-secondary'}`}
-            onClick={() => setGranularity('hour')}
+            onClick={() => handleGranularityChange('hour')}
           >
             Hourly
           </button>
           <button
             className={`btn ${granularity === 'day' ? 'btn-primary' : 'btn-outline-secondary'}`}
-            onClick={() => setGranularity('day')}
+            onClick={() => handleGranularityChange('day')}
           >
             Daily
           </button>
         </div>
       </div>
+
 
       {/* KPI Cards */}
       <div className="row g-3 mb-4">
@@ -157,6 +218,69 @@ export function Analytics() {
               formatter={(val) => formatNumber(val as string | number | null | undefined)}
             />
           </div>
+        </div>
+      </div>
+
+      {/* Model Performance Card (Confusion Matrix) */}
+      <div className="card shadow-sm border-0 mb-4">
+        <div className="card-header bg-white border-bottom py-3 d-flex align-items-center gap-2">
+          <ShieldCheck size={18} className="text-success" />
+          <h3 className="card-title h6 fw-bold mb-0">Model Performance</h3>
+        </div>
+        <div className="card-body" style={{ minHeight: '120px' }}>
+          {confusionMatrixQuery.isLoading ? (
+            <div className="d-flex align-items-center justify-content-center h-100" style={{ minHeight: '100px' }}>
+              <div className="spinner-border spinner-border-sm text-success me-2" />
+              <span className="text-muted small">Loading model performance…</span>
+            </div>
+          ) : confusionMatrixQuery.isError ? (
+            <div className="text-danger small p-2">Failed to load model performance metrics</div>
+          ) : confusionMatrixQuery.data?.insufficient_labels ? (
+            <div className="d-flex align-items-center justify-content-center" style={{ minHeight: '100px' }}>
+              <div className="text-center text-muted">
+                <ShieldCheck size={28} className="mb-2 opacity-25" />
+                <div className="small">Insufficient labeled data for the selected period</div>
+              </div>
+            </div>
+          ) : confusionMatrixQuery.data ? (
+            <div className="row g-4 align-items-start">
+              {/* Precision / Recall / F1 */}
+              <div className="col-md-6">
+                <div className="row g-2">
+                  {([
+                    { label: 'Precision', value: confusionMatrixQuery.data.precision },
+                    { label: 'Recall', value: confusionMatrixQuery.data.recall },
+                    { label: 'F1 Score', value: confusionMatrixQuery.data.f1_score },
+                  ] as { label: string; value: number }[]).map(({ label, value }) => (
+                    <div key={label} className="col-4">
+                      <div className="text-center p-2 bg-light rounded">
+                        <div className="fw-bold fs-6">{(value * 100).toFixed(1)}%</div>
+                        <div className="text-muted" style={{ fontSize: '0.7rem' }}>{label}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* TP / FP / TN / FN compact 2×2 table */}
+              <div className="col-md-6">
+                <div className="row g-1" style={{ maxWidth: '280px' }}>
+                  {([
+                    { label: 'TP', value: confusionMatrixQuery.data.true_positives, bg: 'bg-success-subtle text-success' },
+                    { label: 'FP', value: confusionMatrixQuery.data.false_positives, bg: 'bg-danger-subtle text-danger' },
+                    { label: 'FN', value: confusionMatrixQuery.data.false_negatives, bg: 'bg-warning-subtle text-warning' },
+                    { label: 'TN', value: confusionMatrixQuery.data.true_negatives, bg: 'bg-success-subtle text-success' },
+                  ] as { label: string; value: number; bg: string }[]).map(({ label, value, bg }) => (
+                    <div key={label} className="col-6">
+                      <div className={`text-center p-2 rounded border ${bg}`}>
+                        <div className="fw-bold">{formatNumber(value)}</div>
+                        <div style={{ fontSize: '0.7rem' }}>{label}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
 
