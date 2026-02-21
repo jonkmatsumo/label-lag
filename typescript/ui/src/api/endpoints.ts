@@ -53,6 +53,8 @@ import type {
   KpisResponse,
   VolumeSeriesResponse,
   ConfusionMatrixResponse,
+  GetRuleImpactResponse,
+  GetJobSummaryResponse,
 } from '../types/api';
 
 // Health endpoints
@@ -171,6 +173,13 @@ export const analyticsApi = {
     if (rest.model_version) searchParams.set('model_version', rest.model_version);
     return apiClient.get<ConfusionMatrixResponse>(`/bff/v1/analytics/confusion-matrix?${searchParams.toString()}`, signal);
   },
+  getRuleImpact: (ruleId: string, params?: { start_time?: string; end_time?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.start_time) searchParams.set('start_time', params.start_time);
+    if (params?.end_time) searchParams.set('end_time', params.end_time);
+    const query = searchParams.toString();
+    return apiClient.get<GetRuleImpactResponse>(`/bff/v1/analytics/rules/${encodeURIComponent(ruleId)}/impact${query ? `?${query}` : ''}`);
+  },
 };
 
 // Monitoring endpoints
@@ -227,6 +236,13 @@ export const jobsApi = {
     apiClient.post<CancelJobResponse>(`/bff/v1/jobs/${encodeURIComponent(jobId)}/cancel`),
   retry: (jobId: string) =>
     apiClient.post<RetryJobResponse>(`/bff/v1/jobs/${encodeURIComponent(jobId)}/retry`),
+  getSummary: (params?: { start_time?: string; end_time?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.start_time) searchParams.set('start_time', params.start_time);
+    if (params?.end_time) searchParams.set('end_time', params.end_time);
+    const query = searchParams.toString();
+    return apiClient.get<GetJobSummaryResponse>(`/bff/v1/jobs/summary${query ? `?${query}` : ''}`);
+  },
 };
 
 // Decisions endpoints
