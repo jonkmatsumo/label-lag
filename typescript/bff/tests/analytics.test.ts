@@ -250,4 +250,69 @@ describe('Analytics Routes', () => {
       expect(data.error.request_id).toBeDefined();
     });
   });
+
+  describe('POST /bff/v1/analytics/transactions/search', () => {
+    it('normalizes response into items, next_cursor, and truncated', async () => {
+      ctx.mockGatewayPool.intercept({
+        path: '/analytics/transactions/search',
+        method: 'POST',
+        body: (body) => {
+          const payload = JSON.parse(body);
+          return payload.limit === 10 && payload.include_features === false;
+        }
+      }).reply(200, {
+        transactions: [{ record_id: 'rec-1', amount: 100 }],
+        next_cursor: 'encoded-cursor-value',
+        truncated: false,
+        total: 15
+      });
+
+      const response = await ctx.app.inject({
+        method: 'POST',
+        url: '/bff/v1/analytics/transactions/search',
+        payload: {
+          limit: 10
+        }
+      });
+
+      expect(response.statusCode).toBe(200);
+      const data = response.json();
+      expect(data.items).toHaveLength(1);
+      expect(data.items[0].record_id).toBe('rec-1');
+      expect(data.next_cursor).toBe('encoded-cursor-value');
+      expect(data.truncated).toBe(false);
+      expect(data.total).toBe(15);
+      expect(data.transactions).toBeUndefined(); // Normalized away
+    });
+
+    it('passes include_features flag to upstream', async () => {
+      ctx.mockGatewayPool.intercept({
+        path: '/analytics/transactions/search',
+        method: 'POST',
+        body: (body) => {
+          const payload = JSON.parse(body);
+          return payload.include_features === true;
+        }
+      }).reply(200, {
+        transactions: [{ record_id: 'rec-1' }],
+        next_cursor: '',
+        truncated: true,
+        total: 500
+      });
+
+      const response = await ctx.app.inject({
+        method: 'POST',
+        url: '/bff/v1/analytics/transactions/search',
+        payload: {
+          limit: 50,
+          include_features: true
+        }
+      });
+
+      expect(response.statusCode).toBe(200);
+      const data = response.json();
+      expect(data.items).toHaveLength(1);
+      expect(data.truncated).toBe(true);
+    });
+  });
 });

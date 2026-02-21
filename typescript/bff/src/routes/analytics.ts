@@ -431,7 +431,8 @@ export async function analyticsRoutes(
             min_score: { type: 'integer' },
             max_score: { type: 'integer' },
             limit: { type: 'integer', default: 100 },
-            offset: { type: 'integer', default: 0 },
+            cursor: { type: 'string' },
+            include_features: { type: 'boolean', default: false },
           },
         },
       },
@@ -441,15 +442,29 @@ export async function analyticsRoutes(
       reply: FastifyReply
     ) => {
       try {
-        const response = await httpClient.request<TransactionSearchResponse>({
+        const payload = {
+          ...request.body,
+          include_features: request.body.include_features ?? false,
+        };
+
+        const response = await httpClient.request<any>({
           method: 'POST',
           path: '/analytics/transactions/search',
-          body: request.body,
+          body: payload,
           target: 'gateway',
           requestId: request.requestId,
           tenantId: request.tenantId,
         });
-        return reply.status(response.statusCode).send(response.data);
+
+        const raw = response.data;
+        const normalized: TransactionSearchResponse = {
+          items: raw.transactions || [],
+          next_cursor: raw.next_cursor,
+          truncated: raw.truncated ?? false,
+          total: raw.total,
+        };
+
+        return reply.status(response.statusCode).send(normalized);
       } catch (error) {
         if (error instanceof UpstreamError) {
           return reply.status(error.statusCode).send(error.toResponse());
