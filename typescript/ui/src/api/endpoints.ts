@@ -57,6 +57,26 @@ import type {
   GetJobSummaryResponse,
 } from '../types/api';
 
+export type AnalyticsPartialReason =
+  | 'TIMEOUT'
+  | 'ROW_LIMIT'
+  | 'UPSTREAM_ERROR'
+  | 'EMPTY'
+  | 'UNKNOWN';
+
+export interface AnalyticsResponseMeta {
+  time_range: {
+    start: string;
+    end: string;
+  };
+  is_partial: boolean;
+  partial_reason: AnalyticsPartialReason;
+  sample_rate?: number;
+}
+
+export type GetRuleImpactWithMeta = GetRuleImpactResponse & { meta?: AnalyticsResponseMeta };
+export type GetJobSummaryWithMeta = GetJobSummaryResponse & { meta?: AnalyticsResponseMeta };
+
 // Health endpoints
 export const healthApi = {
   getHealth: () => apiClient.get<HealthResponse>('/bff/v1/health'),
@@ -179,7 +199,7 @@ export const analyticsApi = {
     if (queryParams.start_time) searchParams.set('start_time', queryParams.start_time);
     if (queryParams.end_time) searchParams.set('end_time', queryParams.end_time);
     const query = searchParams.toString();
-    return apiClient.get<GetRuleImpactResponse>(`/bff/v1/analytics/rules/${encodeURIComponent(ruleId)}/impact${query ? `?${query}` : ''}`, signal);
+    return apiClient.get<GetRuleImpactWithMeta>(`/bff/v1/analytics/rules/${encodeURIComponent(ruleId)}/impact${query ? `?${query}` : ''}`, signal);
   },
 };
 
@@ -243,7 +263,7 @@ export const jobsApi = {
     if (queryParams.start_time) searchParams.set('start_time', queryParams.start_time);
     if (queryParams.end_time) searchParams.set('end_time', queryParams.end_time);
     const query = searchParams.toString();
-    return apiClient.get<GetJobSummaryResponse>(`/bff/v1/jobs/summary${query ? `?${query}` : ''}`, signal);
+    return apiClient.get<GetJobSummaryWithMeta>(`/bff/v1/jobs/summary${query ? `?${query}` : ''}`, signal);
   },
 };
 
