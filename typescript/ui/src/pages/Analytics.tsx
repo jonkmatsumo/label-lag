@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { analyticsApi } from '../api';
 import type { RecentAlert, TransactionSearchRequest, TransactionDetail } from '../types/api';
 import {
@@ -10,6 +10,8 @@ import { Search, ChevronDown, ChevronRight, BarChart3, ShieldCheck } from 'lucid
 import { ErrorBanner } from '../components/ErrorBanner';
 import { DateRangePicker, KpiCard } from '../components';
 import { useTenant } from '../hooks/useTenant';
+import { useCursorPagination } from '../hooks/useCursorPagination';
+import { useAnalyticsSearchParams } from '../hooks/useAnalyticsSearchParams';
 import type { DateRange } from '../components/DateRangePicker';
 
 export function Analytics() {
@@ -383,26 +385,28 @@ export function Analytics() {
 
 function TransactionExplorer() {
   const { tenantId } = useTenant();
-  const [filters, setFilters] = useState<TransactionSearchRequest>({
-    user_id: '',
-    transaction_id: '',
-    start_date: '',
-    end_date: '',
+  const { filters, updateParams } = useAnalyticsSearchParams();
+
+  const pagination = useCursorPagination<TransactionDetail>({
+    queryKeyBase: ['analytics', tenantId, 'search'],
+    fetchPage: ({ cursor, limit }) =>
+      analyticsApi.searchTransactions({
+        ...filters,
+        tenant_id: tenantId,
+        cursor,
+        limit,
+        include_features: false, // Prevent overfetching on list view
+      }).then(res => ({
+        items: res.items,
+        nextCursor: res.next_cursor,
+        total: res.total,
+        truncated: res.truncated,
+      })),
     limit: 20,
-    offset: 0,
-    tenant_id: tenantId,
+    filters,
   });
 
-  const searchQuery = useQuery({
-    queryKey: ['analytics', tenantId, 'search', filters],
-    queryFn: () => analyticsApi.searchTransactions({ ...filters, tenant_id: tenantId }),
-    placeholderData: keepPreviousData,
-  });
-
-  const handlePageChange = (newOffset: number) => {
-    setFilters((prev: TransactionSearchRequest) => ({ ...prev, offset: newOffset }));
-  };
-  const totalTransactions = Number(searchQuery.data?.total ?? 0);
+  const totalTransactions = Number(pagination.total ?? 0);
 
   return (
     <div className="card shadow-sm border-0 mt-4 mb-5">
@@ -410,38 +414,50 @@ function TransactionExplorer() {
         <h3 className="card-title h6 fw-bold mb-0">Transaction Explorer</h3>
       </div>
       <div className="card-body">
-        <TransactionFilters filters={filters} onChange={setFilters} />
+        <TransactionFilters filters={filters} onChange={updateParams} />
 
-        {searchQuery.isLoading && !searchQuery.isPlaceholderData ? (
+        {/* Truncation warning */}
+        {pagination.data?.length > 0 && pagination.total === 500 && (
+          <div className="alert alert-warning py-2 small d-flex align-items-center mb-3">
+            <ShieldCheck size={16} className="me-2 flex-shrink-0" />
+            <div><strong>Results truncated to 500 records.</strong> Please use filters or date ranges to narrow your search for older transactions.</div>
+          </div>
+        )}
+
+        {pagination.isLoading ? (
           <div className="text-center p-5"><div className="spinner-border text-primary" /></div>
-        ) : searchQuery.isError ? (
-          <ErrorBanner error={searchQuery.error} title="Error loading transactions" className="alert alert-danger" />
+        ) : pagination.isError ? (
+          <ErrorBanner error={pagination.error} title="Error loading transactions" className="alert alert-danger" />
         ) : (
           <>
-            <TransactionTable data={searchQuery.data?.transactions || []} />
+            <TransactionTable data={pagination.data} />
 
             {/* Pagination Controls */}
-            <div className="d-flex justify-content-between align-items-center mt-3">
-              <div className="small text-muted">
-                Showing {totalTransactions === 0 ? 0 : filters.offset + 1} to {Math.min(filters.offset + (searchQuery.data?.transactions.length || 0), totalTransactions)} of {totalTransactions}
+            {pagination.data.length > 0 && (
+              <div className="d-flex justify-content-between align-items-center mt-3">
+                <div className="small text-muted">
+                  {totalTransactions > 0 ? `Showing page` : `No transactions`}
+                  {totalTransactions > 0 && totalTransactions === 500 ? ' (Truncated)' : ''}
+                </div>
+                <div className="btn-group btn-group-sm">
+                  {/* Since cursor pagination doesn't naturally support 'Previous' easily without a stack, we'll offer Reset and Next */}
+                  <button
+                    className="btn btn-outline-secondary"
+                    disabled={!pagination.cursor}
+                    onClick={() => pagination.reset()}
+                  >
+                    Reset to First Page
+                  </button>
+                  <button
+                    className="btn btn-outline-secondary"
+                    disabled={!pagination.hasNextPage}
+                    onClick={() => pagination.loadNext()}
+                  >
+                    Next Page
+                  </button>
+                </div>
               </div>
-              <div className="btn-group btn-group-sm">
-                <button
-                  className="btn btn-outline-secondary"
-                  disabled={filters.offset === 0}
-                  onClick={() => handlePageChange(Math.max(0, filters.offset - filters.limit))}
-                >
-                  Previous
-                </button>
-                <button
-                  className="btn btn-outline-secondary"
-                  disabled={(filters.offset + filters.limit) >= totalTransactions}
-                  onClick={() => handlePageChange(filters.offset + filters.limit)}
-                >
-                  Next
-                </button>
-              </div>
-            </div>
+            )}
           </>
         )}
       </div>
@@ -449,13 +465,13 @@ function TransactionExplorer() {
   );
 }
 
-function TransactionFilters({ filters, onChange }: { filters: TransactionSearchRequest, onChange: (f: TransactionSearchRequest) => void }) {
+function TransactionFilters({ filters, onChange }: { filters: Partial<TransactionSearchRequest>, onChange: (f: Partial<TransactionSearchRequest>) => void }) {
   const [localFilters, setLocalFilters] = useState(filters);
   const [expanded, setExpanded] = useState(false);
 
   const applyFilters = (e: React.FormEvent) => {
     e.preventDefault();
-    onChange({ ...localFilters, offset: 0 }); // Reset page on filter
+    onChange({ ...localFilters });
   };
 
   return (
