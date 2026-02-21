@@ -3,6 +3,7 @@ import { HttpClient, UpstreamError } from '../services/http-client.js';
 import { SimpleCache } from '../services/cache.js';
 import type { GetJobSummaryResponse } from '../types/api.js';
 import { parseInt64, timestampToIso } from '../utils/protojson.js';
+import { getRequestAbortSignal } from '../utils/request-signal.js';
 
 export interface JobsRoutesOptions {
   httpClient: HttpClient;
@@ -55,6 +56,7 @@ export async function jobsRoutes(
       reply: FastifyReply
     ) => {
       try {
+        const requestSignal = getRequestAbortSignal(request, reply);
         const { job_type, status, limit = 25, cursor } = request.query;
         const query: Record<string, string | number | undefined> = { limit };
         if (job_type) query.job_type = job_type;
@@ -68,6 +70,7 @@ export async function jobsRoutes(
           requestId: request.requestId,
           tenantId: request.tenantId,
           target: 'gateway',
+          signal: requestSignal,
         });
 
         return reply.status(response.statusCode).send(response.data);
@@ -97,6 +100,7 @@ export async function jobsRoutes(
       reply: FastifyReply
     ) => {
       try {
+        const requestSignal = getRequestAbortSignal(request, reply);
         const { id } = request.params;
         const response = await httpClient.request({
           method: 'GET',
@@ -104,6 +108,7 @@ export async function jobsRoutes(
           requestId: request.requestId,
           tenantId: request.tenantId,
           target: 'gateway',
+          signal: requestSignal,
         });
 
         return reply.status(response.statusCode).send(response.data);
@@ -133,6 +138,7 @@ export async function jobsRoutes(
       reply: FastifyReply
     ) => {
       try {
+        const requestSignal = getRequestAbortSignal(request, reply);
         const { id } = request.params;
         const response = await httpClient.request({
           method: 'GET',
@@ -140,6 +146,7 @@ export async function jobsRoutes(
           requestId: request.requestId,
           tenantId: request.tenantId,
           target: 'gateway',
+          signal: requestSignal,
         });
 
         return reply.status(response.statusCode).send(response.data);
@@ -169,6 +176,7 @@ export async function jobsRoutes(
       reply: FastifyReply
     ) => {
       try {
+        const requestSignal = getRequestAbortSignal(request, reply);
         const { id } = request.params;
         const response = await httpClient.request({
           method: 'POST',
@@ -176,6 +184,7 @@ export async function jobsRoutes(
           requestId: request.requestId,
           tenantId: request.tenantId,
           target: 'gateway',
+          signal: requestSignal,
         });
 
         return reply.status(response.statusCode).send(response.data);
@@ -205,6 +214,7 @@ export async function jobsRoutes(
       reply: FastifyReply
     ) => {
       try {
+        const requestSignal = getRequestAbortSignal(request, reply);
         const { id } = request.params;
         const response = await httpClient.request({
           method: 'POST',
@@ -212,6 +222,7 @@ export async function jobsRoutes(
           requestId: request.requestId,
           tenantId: request.tenantId,
           target: 'gateway',
+          signal: requestSignal,
         });
 
         return reply.status(response.statusCode).send(response.data);
@@ -253,6 +264,7 @@ export async function jobsRoutes(
       reply: FastifyReply
     ) => {
       try {
+        const requestSignal = getRequestAbortSignal(request, reply);
         const { start_time, end_time } = request.query;
         const tenantId = (request as any).tenantId ?? 'default';
 
@@ -291,6 +303,7 @@ export async function jobsRoutes(
           requestId: request.requestId,
           tenantId: request.tenantId,
           target: 'gateway',
+          signal: requestSignal,
         });
 
         const raw = response.data;

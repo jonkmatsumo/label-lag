@@ -14,6 +14,7 @@ export interface RequestOptions {
   body?: unknown;
   requestId: string;
   timeout?: number;
+  signal?: AbortSignal;
   target?: 'python' | 'gateway' | 'mlflow';
   query?: Record<string, string | number | boolean | undefined>;
   tenantId?: string;
@@ -81,7 +82,7 @@ export class HttpClient {
   }
 
   private async executeRequest<T>(options: RequestOptions, attempt: number): Promise<HttpResponse<T>> {
-    const { method, path, body, requestId, timeout, target = 'python', query } = options;
+    const { method, path, body, requestId, timeout, target = 'python', query, signal: requestSignal } = options;
     const baseUrl = this.getBaseUrl(target);
 
     // Construct URL with query params
@@ -98,6 +99,10 @@ export class HttpClient {
     // Use specific timeout if provided, else upstream timeout (short), else request timeout (long)
     // Actually per requirement: BFF_UPSTREAM_TIMEOUT_MS default (e.g. 5000), allow endpoint overrides.
     const requestTimeout = timeout ?? this.config.upstreamTimeout;
+    const timeoutSignal = AbortSignal.timeout(requestTimeout);
+    const combinedSignal = requestSignal
+      ? AbortSignal.any([timeoutSignal, requestSignal])
+      : timeoutSignal;
 
     const startTime = Date.now();
     this.logger.debug({ method, url, requestId, attempt }, 'Upstream request started');
@@ -116,7 +121,7 @@ export class HttpClient {
         method,
         headers,
         body: body !== undefined ? JSON.stringify(body) : undefined,
-        signal: AbortSignal.timeout(requestTimeout),
+        signal: combinedSignal,
       });
       const duration = Date.now() - startTime;
 
@@ -163,8 +168,27 @@ export class HttpClient {
         throw error;
       }
 
+      const isAbortError =
+        error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError');
+
+      // Handle cancellation from downstream request lifecycle.
+      if (isAbortError && requestSignal?.aborted && !timeoutSignal.aborted) {
+        this.logger.warn(
+          { method, url, requestId, duration, attempt },
+          'Downstream request aborted by client'
+        );
+        throw new UpstreamError(
+          408,
+          {
+            code: 'REQUEST_ABORTED',
+            message: 'The request was canceled by the client.',
+          },
+          requestId
+        );
+      }
+
       // Handle timeout
-      if (error instanceof Error && error.name === 'TimeoutError') {
+      if (isAbortError) {
         this.logger.error(
           { method, url, requestId, duration, timeout: requestTimeout, attempt },
           'Upstream request timeout'

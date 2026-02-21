@@ -249,6 +249,7 @@ describe('Analytics Routes', () => {
       expect(data.error.message).toBe('The upstream request timed out.');
       expect(data.error.request_id).toBeDefined();
     });
+
   });
 
   describe('POST /bff/v1/analytics/transactions/search', () => {
