@@ -21,8 +21,8 @@ interface JobIdParams {
 }
 
 interface JobSummaryQuery {
-  start_time?: string;
-  end_time?: string;
+  start_time: string;
+  end_time: string;
 }
 
 /**
@@ -231,6 +231,7 @@ export async function jobsRoutes(
       schema: {
         querystring: {
           type: 'object',
+          required: ['start_time', 'end_time'],
           additionalProperties: false,
           properties: {
             start_time: {
@@ -256,17 +257,24 @@ export async function jobsRoutes(
         const tenantId = (request as any).tenantId ?? 'default';
 
         // Validation
-        if (start_time && end_time) {
-          const start = new Date(start_time);
-          const end = new Date(end_time);
-          if (start >= end) {
-            return reply.status(400).send({
-              error: {
-                code: 'INVALID_RANGE',
-                message: 'start_time must be before end_time',
-              }
-            });
-          }
+        const start = new Date(start_time);
+        const end = new Date(end_time);
+        if (start >= end) {
+          return reply.status(400).send({
+            error: {
+              code: 'INVALID_RANGE',
+              message: 'start_time must be before end_time',
+            }
+          });
+        }
+        const daysDiff = (end.getTime() - start.getTime()) / (1000 * 3600 * 24);
+        if (daysDiff > 90) {
+          return reply.status(400).send({
+            error: {
+              code: 'INVALID_RANGE',
+              message: 'Time range cannot exceed 90 days',
+            }
+          });
         }
 
         const cacheKey = `jobs:summary:${tenantId}:${start_time ?? ''}:${end_time ?? ''}`;

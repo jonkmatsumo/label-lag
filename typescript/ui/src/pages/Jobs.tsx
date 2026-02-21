@@ -8,7 +8,7 @@ import { useCursorPagination, type CursorPage } from '../hooks/useCursorPaginati
 import { CursorPaginationControls } from '../components/CursorPaginationControls';
 import { ErrorBanner } from '../components/ErrorBanner';
 import type { Job } from '../types/api';
-import { Activity, CheckCircle, XCircle } from 'lucide-react';
+import { Activity, CheckCircle, XCircle, Clock } from 'lucide-react';
 
 const JOB_STATUSES = ['', 'QUEUED', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED'] as const;
 const JOB_TYPES = ['', 'TRAINING', 'BACKTEST', 'DATA_GENERATION', 'DEPLOYMENT'] as const;
@@ -166,6 +166,21 @@ function JobsSummaryStrip() {
   });
 
   if (summaryQuery.isError) {
+    const error = summaryQuery.error as { status?: number; code?: string; message?: string } | null;
+    const isTimeout =
+      error?.status === 504 ||
+      error?.message?.toLowerCase().includes('timeout') ||
+      error?.code === 'GATEWAY_TIMEOUT';
+
+    if (isTimeout) {
+      return (
+        <div className="p-4 border rounded mb-4 bg-light text-center text-muted">
+          <Clock size={32} className="mb-2 opacity-50" />
+          <h6 className="fw-bold mb-1">Request Timed Out</h6>
+          <p className="small mb-0">The jobs summary took too long to load.</p>
+        </div>
+      );
+    }
     return (
       <div className="mb-4">
         <ErrorBanner error={summaryQuery.error} title="Failed to load jobs summary" />
@@ -192,8 +207,11 @@ function JobsSummaryStrip() {
 
   const summaries = summaryQuery.data?.summaries ?? [];
   const total = summaries.reduce((acc: number, s) => acc + (Number(s.total_jobs) || 0), 0);
+  const completed = summaries.reduce((acc: number, s) => acc + (Number(s.completed_jobs) || 0), 0);
   const failed = summaries.reduce((acc: number, s) => acc + (Number(s.failed_jobs) || 0), 0);
-  const successRate = total > 0 ? ((total - failed) / total) * 100 : 100;
+
+  const denominator = completed + failed;
+  const successRate = denominator > 0 ? (completed / denominator) * 100 : 100;
 
   return (
     <div className="row g-3 mb-4">

@@ -245,11 +245,12 @@ export class HttpClient {
       apiError.code = 'UPSTREAM_AUTH_ERROR';
     }
 
-    // Propagate Go deadline exceeded as 504
-    if (apiError.message.toLowerCase().includes('context deadline exceeded')) {
+    // Propagate upstream timeouts and Go deadline exceeded as 504
+    const errMsg = apiError.message.toLowerCase();
+    if (statusCode === 504 || errMsg.includes('deadline exceeded') || errMsg.includes('timeout')) {
       return new UpstreamError(504, {
         code: 'GATEWAY_TIMEOUT',
-        message: 'The upstream request timed out (deadline exceeded).',
+        message: 'The upstream request timed out.',
       }, requestId, rawBody);
     }
 

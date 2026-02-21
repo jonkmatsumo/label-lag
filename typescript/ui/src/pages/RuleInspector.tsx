@@ -15,7 +15,7 @@ import type {
 import {
   AlertTriangle, CheckCircle, Info, Shield,
   ChevronRight, ChevronDown, User, FileText, Send,
-  History, BarChart2, Diff, ArrowRight
+  History, BarChart2, Diff, ArrowRight, Clock
 } from 'lucide-react';
 import {
   Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -452,21 +452,35 @@ function RuleImpactTab({ ruleId }: { ruleId: string }) {
   });
 
   if (attributionQuery.isError || impactQuery.isError) {
+    const error = (attributionQuery.error || impactQuery.error) as { status?: number; code?: string; message?: string } | null;
+    const isTimeout =
+      error?.status === 504 ||
+      error?.message?.toLowerCase().includes('timeout') ||
+      error?.code === 'GATEWAY_TIMEOUT';
+
     return (
-      <div className="p-4">
-        <ErrorBanner
-          error={attributionQuery.error || impactQuery.error}
-          title="Failed to load rule impact attribution"
-        />
+      <div className="p-4 border rounded bg-light m-4 mt-0">
+        {isTimeout ? (
+          <div className="text-center py-5 text-muted">
+            <Clock size={48} className="mb-3 opacity-25" />
+            <h6 className="fw-bold">Request Timed Out</h6>
+            <p className="small mb-0">The analytics query took too long to complete. This can happen with very large datasets or complex rules.</p>
+          </div>
+        ) : (
+          <ErrorBanner
+            error={error}
+            title="Failed to load rule impact attribution"
+          />
+        )}
       </div>
     );
   }
 
   if (attributionQuery.isLoading || impactQuery.isLoading) {
     return (
-      <div className="text-center py-5">
-        <div className="spinner-border text-primary" />
-        <p className="mt-2 text-muted small">Loading impact data...</p>
+      <div className="text-center py-5 text-muted border rounded bg-light m-4 mt-0" style={{ minHeight: '300px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="spinner-border text-primary mb-3" />
+        <p className="small mb-0">Loading impact data...</p>
       </div>
     );
   }
@@ -474,7 +488,19 @@ function RuleImpactTab({ ruleId }: { ruleId: string }) {
   if (!attributionQuery.data) return <div className="alert alert-info">No attribution data available for this rule.</div>;
 
   const items = attributionQuery.data.items ?? [];
+  const buckets = impactQuery.data?.daily_buckets ?? [];
   const totalMatches = items.reduce((sum, item) => sum + Number(item.volume), 0);
+
+  // If there are literally 0 triggers and 0 items and no buckets/triggers
+  if (totalMatches === 0 && (Number(impactQuery.data?.total_triggers) === 0 || !impactQuery.data?.total_triggers)) {
+    return (
+      <div className="text-center py-5 bg-light rounded border text-muted m-4 mt-0" style={{ minHeight: '300px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <BarChart2 size={48} className="mb-3 opacity-25" />
+        <h6 className="fw-bold">No Impact Data</h6>
+        <p className="small mb-0">This rule has not triggered on any transactions yet.</p>
+      </div>
+    );
+  }
   const netImpact = items.reduce((sum, item) => sum + Number(item.contribution_score), 0);
   const averageImpactPerMatch = totalMatches > 0 ? netImpact / totalMatches : 0;
   const averageDailyImpact = items.length > 0 ? netImpact / items.length : 0;
@@ -487,7 +513,6 @@ function RuleImpactTab({ ruleId }: { ruleId: string }) {
   ];
 
   // Derived from impact buckets.
-  const buckets = impactQuery.data?.daily_buckets ?? [];
   const totalDecisionsChanged = buckets.reduce((sum: number, b) => {
     return sum + (Number(b.decisions_changed_count) || 0);
   }, 0);

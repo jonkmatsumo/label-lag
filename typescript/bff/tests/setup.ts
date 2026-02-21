@@ -98,7 +98,7 @@ export async function createTestApp(config?: Config): Promise<TestContext> {
   await app.register(rulesDetailRoutes, { httpClient });
   await app.register(datasetRoutes, { httpClient });
   await app.register(mlflowRoutes, { httpClient });
-  await app.register(jobsRoutes, { httpClient });
+  await app.register(jobsRoutes, { httpClient, cache });
   await app.register(decisionsRoutes, { httpClient });
   await app.register(trainingRoutes, { httpClient });
   await app.register(modelsRoutes, { httpClient });
