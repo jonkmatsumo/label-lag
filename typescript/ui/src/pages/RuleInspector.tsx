@@ -451,7 +451,26 @@ function RuleImpactTab({ ruleId }: { ruleId: string }) {
     queryFn: () => analyticsApi.getRuleImpact(ruleId)
   });
 
-  if (attributionQuery.isLoading || impactQuery.isLoading) return <div className="text-center py-5"><div className="spinner-border text-primary" /></div>;
+  if (attributionQuery.isError || impactQuery.isError) {
+    return (
+      <div className="p-4">
+        <ErrorBanner
+          error={attributionQuery.error || impactQuery.error}
+          title="Failed to load rule impact attribution"
+        />
+      </div>
+    );
+  }
+
+  if (attributionQuery.isLoading || impactQuery.isLoading) {
+    return (
+      <div className="text-center py-5">
+        <div className="spinner-border text-primary" />
+        <p className="mt-2 text-muted small">Loading impact data...</p>
+      </div>
+    );
+  }
+
   if (!attributionQuery.data) return <div className="alert alert-info">No attribution data available for this rule.</div>;
 
   const items = attributionQuery.data.items ?? [];
@@ -498,17 +517,23 @@ function RuleImpactTab({ ruleId }: { ruleId: string }) {
       <div className="col-md-6">
         <h6 className="fw-bold mb-4 small text-uppercase tracking-wider text-muted">Daily Impact Trends</h6>
         <div style={{ height: 300, width: '100%' }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={impactQuery.data?.daily_buckets ?? []} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="date" />
-              <YAxis yAxisId="left" />
-              <YAxis yAxisId="right" orientation="right" />
-              <Tooltip />
-              <Area yAxisId="left" type="monotone" dataKey="trigger_count" stroke="#8884d8" fill="#8884d8" name="Triggers" />
-              <Area yAxisId="right" type="monotone" dataKey="avg_score_delta" stroke="#82ca9d" fill="#82ca9d" name="Avg Delta" />
-            </AreaChart>
-          </ResponsiveContainer>
+          {buckets.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={buckets} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="date" />
+                <YAxis yAxisId="left" />
+                <YAxis yAxisId="right" orientation="right" />
+                <Tooltip />
+                <Area yAxisId="left" type="monotone" dataKey="trigger_count" stroke="#8884d8" fill="#8884d8" name="Triggers" />
+                <Area yAxisId="right" type="monotone" dataKey="avg_score_delta" stroke="#82ca9d" fill="#82ca9d" name="Avg Delta" />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-100 d-flex align-items-center justify-content-center bg-light border rounded text-muted small">
+              No trend data available for this range
+            </div>
+          )}
         </div>
       </div>
 

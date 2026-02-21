@@ -165,8 +165,30 @@ function JobsSummaryStrip() {
     queryFn: () => jobsApi.getSummary()
   });
 
-  if (summaryQuery.isLoading) return <div className="p-3 border rounded mb-4 bg-light text-center small">Loading summary...</div>;
-  if (!summaryQuery.data || summaryQuery.data.summaries.length === 0) return null;
+  if (summaryQuery.isError) {
+    return (
+      <div className="mb-4">
+        <ErrorBanner error={summaryQuery.error} title="Failed to load jobs summary" />
+      </div>
+    );
+  }
+
+  if (summaryQuery.isLoading) {
+    return (
+      <div className="p-4 border rounded mb-4 bg-light text-center">
+        <div className="spinner-border spinner-border-sm text-primary me-2" />
+        <span className="small text-muted">Loading summary...</span>
+      </div>
+    );
+  }
+
+  if (!summaryQuery.data || summaryQuery.data.summaries.length === 0) {
+    return (
+      <div className="p-3 border rounded mb-4 bg-light text-center small text-muted">
+        No job summary data available for this period.
+      </div>
+    );
+  }
 
   const summaries = summaryQuery.data?.summaries ?? [];
   const total = summaries.reduce((acc: number, s) => acc + (Number(s.total_jobs) || 0), 0);
