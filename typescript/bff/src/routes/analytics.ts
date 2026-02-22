@@ -571,6 +571,12 @@ export async function analyticsRoutes(
             alerts: parseInt64(b.alerts) ?? 0,
             rules_fired: parseInt64(b.rules_fired) ?? 0,
           })),
+          meta: normalizeAnalyticsMeta({
+            raw,
+            startTime: start_time,
+            endTime: end_time,
+            hasData: (parseInt64(raw.total_decisions) ?? 0) > 0,
+          }),
         };
 
         cache.set(cacheKey, normalized, tenantId, 30000); // 30s TTL
@@ -633,11 +639,17 @@ export async function analyticsRoutes(
         // Normalize protojson int64 and timestamps
         const raw = response.data;
         const normalized: VolumeSeriesResponse = {
-          points: (raw.points || []).map((p: any) => ({
+          points: (raw.points ?? []).map((p: any) => ({
             timestamp: timestampToIso(p.timestamp),
             count: parseInt64(p.count) ?? 0,
             alerts: parseInt64(p.alerts) ?? 0,
           })),
+          meta: normalizeAnalyticsMeta({
+            raw,
+            startTime: start_time,
+            endTime: end_time,
+            hasData: (raw.points?.length ?? 0) > 0,
+          }),
         };
 
         cache.set(cacheKey, normalized, tenantId, 30000); // 30s TTL
@@ -714,7 +726,13 @@ export async function analyticsRoutes(
           precision: raw.precision ?? 0,
           recall: raw.recall ?? 0,
           f1_score: raw.f1_score ?? 0,
-          insufficient_labels: raw.insufficient_labels ?? false,
+          insufficient_labels: !!raw.insufficient_labels,
+          meta: normalizeAnalyticsMeta({
+            raw,
+            startTime: start_time,
+            endTime: end_time,
+            hasData: (parseInt64(raw.true_positives) ?? 0) + (parseInt64(raw.false_positives) ?? 0) + (parseInt64(raw.true_negatives) ?? 0) + (parseInt64(raw.false_negatives) ?? 0) > 0,
+          }),
         };
 
         cache.set(cacheKey, normalized, tenantId, 30000); // 30s TTL

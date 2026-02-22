@@ -7,6 +7,7 @@ interface KpiCardProps {
     error?: unknown;
     suffix?: string;
     formatter?: (val: unknown) => string;
+    badge?: React.ReactNode;
 }
 
 export function KpiCard({
@@ -16,13 +17,17 @@ export function KpiCard({
     error,
     suffix,
     formatter,
+    badge,
 }: KpiCardProps) {
     const displayValue = formatter ? formatter(value) : value;
 
     return (
         <div className="card shadow-sm border-0 h-100">
             <div className="card-body p-3">
-                <div className="text-muted small fw-bold text-uppercase mb-1">{label}</div>
+                <div className="d-flex justify-content-between align-items-center mb-1">
+                    <div className="text-muted small fw-bold text-uppercase">{label}</div>
+                    {badge}
+                </div>
 
                 {loading ? (
                     <div className="placeholder-glow">

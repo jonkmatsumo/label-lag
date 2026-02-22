@@ -6,9 +6,10 @@ import type { RecentAlert, TransactionSearchRequest, TransactionDetail } from '.
 import {
   Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart
 } from 'recharts';
-import { Search, ChevronDown, ChevronRight, BarChart3, ShieldCheck } from 'lucide-react';
+import { Search, ChevronDown, ChevronRight, BarChart3, ShieldCheck, LayoutDashboard, Zap, Percent, Gauge, Scale } from 'lucide-react';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { DateRangePicker, KpiCard } from '../components';
+import { DataQualityBadge } from '../components/DataQualityBadge';
 import { useTenant } from '../hooks/useTenant';
 import { useCursorPagination } from '../hooks/useCursorPagination';
 import { useAnalyticsSearchParams } from '../hooks/useAnalyticsSearchParams';
@@ -139,6 +140,10 @@ export function Analytics() {
 
   const formatPercent = (n: number) => `${(n * 100).toFixed(2)}%`;
 
+  const kpis = kpisQuery.data;
+  const volume = volumeQuery.data;
+  const confusionMatrix = confusionMatrixQuery.data;
+
   return (
     <div className="page">
       <h2>Historical Analytics</h2>
@@ -174,6 +179,7 @@ export function Analytics() {
               loading={kpisQuery.isLoading}
               error={kpisQuery.error}
               formatter={(val) => formatNumber(val as string | number | null | undefined)}
+              badge={<DataQualityBadge meta={kpisQuery.data?.meta} />}
             />
           </div>
         </div>
@@ -185,6 +191,7 @@ export function Analytics() {
               loading={kpisQuery.isLoading}
               error={kpisQuery.error}
               formatter={(val) => formatNumber(val as string | number | null | undefined)}
+              badge={<DataQualityBadge meta={kpisQuery.data?.meta} />}
             />
           </div>
         </div>
@@ -196,6 +203,7 @@ export function Analytics() {
               loading={kpisQuery.isLoading}
               error={kpisQuery.error}
               formatter={(val) => `${(Number(val) * 100).toFixed(1)}%`}
+              badge={<DataQualityBadge meta={kpisQuery.data?.meta} />}
             />
           </div>
         </div>
@@ -207,6 +215,7 @@ export function Analytics() {
               loading={kpisQuery.isLoading}
               error={kpisQuery.error}
               formatter={(val) => Number(val).toFixed(2)}
+              badge={<DataQualityBadge meta={kpisQuery.data?.meta} />}
             />
           </div>
         </div>
@@ -218,18 +227,19 @@ export function Analytics() {
               loading={kpisQuery.isLoading}
               error={kpisQuery.error}
               formatter={(val) => formatNumber(val as string | number | null | undefined)}
+              badge={<DataQualityBadge meta={kpisQuery.data?.meta} />}
             />
           </div>
         </div>
       </div>
 
       {/* Model Performance Card (Confusion Matrix) */}
-      <div className="card shadow-sm border-0 mb-4">
-        <div className="card-header bg-white border-bottom py-3 d-flex align-items-center gap-2">
-          <ShieldCheck size={18} className="text-success" />
-          <h3 className="card-title h6 fw-bold mb-0">Model Performance</h3>
-        </div>
-        <div className="card-body" style={{ minHeight: '120px' }}>
+      <div className="card h-100 shadow-sm border-0 mb-4">
+        <div className="card-body p-4">
+          <div className="d-flex justify-content-between align-items-center mb-4">
+            <h5 className="card-title mb-0 fw-bold">Model Precision (Confusion Matrix)</h5>
+            <DataQualityBadge meta={confusionMatrixQuery.data?.meta} />
+          </div>
           {confusionMatrixQuery.isLoading ? (
             <div className="d-flex align-items-center justify-content-center h-100" style={{ minHeight: '100px' }}>
               <div className="spinner-border spinner-border-sm text-success me-2" />
@@ -237,14 +247,14 @@ export function Analytics() {
             </div>
           ) : confusionMatrixQuery.isError ? (
             <div className="text-danger small p-2">Failed to load model performance metrics</div>
-          ) : confusionMatrixQuery.data?.insufficient_labels ? (
+          ) : confusionMatrix?.insufficient_labels ? (
             <div className="d-flex align-items-center justify-content-center" style={{ minHeight: '100px' }}>
               <div className="text-center text-muted">
                 <ShieldCheck size={28} className="mb-2 opacity-25" />
                 <div className="small">Insufficient labeled data for the selected period</div>
               </div>
             </div>
-          ) : confusionMatrixQuery.data ? (
+          ) : confusionMatrix ? (
             <div className="row g-4 align-items-start">
               {/* Precision / Recall / F1 */}
               <div className="col-md-6">
@@ -287,22 +297,33 @@ export function Analytics() {
       </div>
 
       {/* Volume Chart */}
-      <div className="card shadow-sm border-0 mb-4">
-        <div className="card-header bg-white border-bottom py-3 d-flex align-items-center gap-2">
-          <BarChart3 size={18} className="text-primary" />
-          <h3 className="card-title h6 fw-bold mb-0">Transaction & Alert Volume</h3>
-        </div>
-        <div className="card-body" style={{ height: 350 }}>
+      <div className="card h-100 shadow-sm border-0 mb-4">
+        <div className="card-body p-4">
+          <div className="d-flex justify-content-between align-items-center mb-4">
+            <h5 className="card-title mb-0 fw-bold">Anomaly Volume</h5>
+            <div className="d-flex gap-2 align-items-center">
+              <DataQualityBadge meta={volumeQuery.data?.meta} />
+              <select
+                className="form-select form-select-sm"
+                value={granularity}
+                onChange={(e) => handleGranularityChange(e.target.value as 'hour' | 'day')}
+                disabled={volumeQuery.isLoading}
+              >
+                <option value="hour">Hourly</option>
+                <option value="day">Daily</option>
+              </select>
+            </div>
+          </div>
           {volumeQuery.isLoading ? (
             <div className="d-flex align-items-center justify-content-center h-100">
               <div className="spinner-border spinner-border-sm text-primary me-2" /> Loading volume data...
             </div>
           ) : volumeQuery.isError ? (
             <div className="text-danger p-4">Failed to load volume chart</div>
-          ) : volumeQuery.data?.points && volumeQuery.data.points.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
+          ) : volume?.points && volume.points.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
               <ComposedChart
-                data={[...volumeQuery.data.points].sort((a, b) =>
+                data={[...volume.points].sort((a, b) =>
                   new Date(a.timestamp ?? 0).getTime() - new Date(b.timestamp ?? 0).getTime()
                 )}
                 onClick={(data: any) => {
