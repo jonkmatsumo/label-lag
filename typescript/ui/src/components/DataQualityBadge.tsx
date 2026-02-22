@@ -1,4 +1,4 @@
-import type { AnalyticsResponseMeta } from '../api/endpoints';
+import type { AnalyticsResponseMeta } from '../types/api';
 
 function formatPartialReason(reason: AnalyticsResponseMeta['partial_reason']): string {
   switch (reason) {

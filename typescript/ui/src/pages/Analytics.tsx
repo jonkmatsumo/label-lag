@@ -6,7 +6,7 @@ import type { RecentAlert, TransactionSearchRequest, TransactionDetail } from '.
 import {
   Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart
 } from 'recharts';
-import { Search, ChevronDown, ChevronRight, BarChart3, ShieldCheck, LayoutDashboard, Zap, Percent, Gauge, Scale } from 'lucide-react';
+import { Search, ChevronDown, ChevronRight, ShieldCheck } from 'lucide-react';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { DateRangePicker, KpiCard } from '../components';
 import { DataQualityBadge } from '../components/DataQualityBadge';
@@ -175,11 +175,11 @@ export function Analytics() {
           <div style={{ minHeight: '96px' }}>
             <KpiCard
               label="Total Decisions"
-              value={kpisQuery.data?.total_decisions ?? 0}
+              value={kpis?.total_decisions ?? 0}
               loading={kpisQuery.isLoading}
               error={kpisQuery.error}
               formatter={(val) => formatNumber(val as string | number | null | undefined)}
-              badge={<DataQualityBadge meta={kpisQuery.data?.meta} />}
+              badge={<DataQualityBadge meta={kpis?.meta} />}
             />
           </div>
         </div>
@@ -187,11 +187,11 @@ export function Analytics() {
           <div style={{ minHeight: '96px' }}>
             <KpiCard
               label="Total Alerts"
-              value={kpisQuery.data?.total_alerts ?? 0}
+              value={kpis?.total_alerts ?? 0}
               loading={kpisQuery.isLoading}
               error={kpisQuery.error}
               formatter={(val) => formatNumber(val as string | number | null | undefined)}
-              badge={<DataQualityBadge meta={kpisQuery.data?.meta} />}
+              badge={<DataQualityBadge meta={kpis?.meta} />}
             />
           </div>
         </div>
@@ -199,11 +199,11 @@ export function Analytics() {
           <div style={{ minHeight: '96px' }}>
             <KpiCard
               label="Alert Rate"
-              value={kpisQuery.data?.alert_rate ?? 0}
+              value={kpis?.alert_rate ?? 0}
               loading={kpisQuery.isLoading}
               error={kpisQuery.error}
               formatter={(val) => `${(Number(val) * 100).toFixed(1)}%`}
-              badge={<DataQualityBadge meta={kpisQuery.data?.meta} />}
+              badge={<DataQualityBadge meta={kpis?.meta} />}
             />
           </div>
         </div>
@@ -211,11 +211,11 @@ export function Analytics() {
           <div style={{ minHeight: '96px' }}>
             <KpiCard
               label="Avg Risk Score"
-              value={kpisQuery.data?.avg_score ?? 0}
+              value={kpis?.avg_score ?? 0}
               loading={kpisQuery.isLoading}
               error={kpisQuery.error}
               formatter={(val) => Number(val).toFixed(2)}
-              badge={<DataQualityBadge meta={kpisQuery.data?.meta} />}
+              badge={<DataQualityBadge meta={kpis?.meta} />}
             />
           </div>
         </div>
@@ -223,11 +223,11 @@ export function Analytics() {
           <div style={{ minHeight: '96px' }}>
             <KpiCard
               label="Rules Fired"
-              value={kpisQuery.data?.rules_fired_total ?? 0}
+              value={kpis?.rules_fired_total ?? 0}
               loading={kpisQuery.isLoading}
               error={kpisQuery.error}
               formatter={(val) => formatNumber(val as string | number | null | undefined)}
-              badge={<DataQualityBadge meta={kpisQuery.data?.meta} />}
+              badge={<DataQualityBadge meta={kpis?.meta} />}
             />
           </div>
         </div>
@@ -238,7 +238,7 @@ export function Analytics() {
         <div className="card-body p-4">
           <div className="d-flex justify-content-between align-items-center mb-4">
             <h5 className="card-title mb-0 fw-bold">Model Precision (Confusion Matrix)</h5>
-            <DataQualityBadge meta={confusionMatrixQuery.data?.meta} />
+            <DataQualityBadge meta={confusionMatrix?.meta} />
           </div>
           {confusionMatrixQuery.isLoading ? (
             <div className="d-flex align-items-center justify-content-center h-100" style={{ minHeight: '100px' }}>
@@ -302,7 +302,7 @@ export function Analytics() {
           <div className="d-flex justify-content-between align-items-center mb-4">
             <h5 className="card-title mb-0 fw-bold">Anomaly Volume</h5>
             <div className="d-flex gap-2 align-items-center">
-              <DataQualityBadge meta={volumeQuery.data?.meta} />
+              <DataQualityBadge meta={volume?.meta} />
               <select
                 className="form-select form-select-sm"
                 value={granularity}
