@@ -331,7 +331,7 @@ export type RecentAlertsResponse = GetRecentAlertsResponse;
 export type ListDatasetProfilesResponse = GenListDatasetProfilesResponse;
 export type DatasetSummary = GetDatasetSummaryResponse;
 export type MetricSeriesPoint = MetricPoint;
-export interface TransactionSearchRequest extends Omit<SearchTransactionsRequest, 'offset' | 'limit' | 'include_features'> {
+export interface TransactionSearchRequest extends Omit<SearchTransactionsRequest, 'offset' | 'limit' | 'include_features' | 'cursor'> {
   cursor?: string;
   limit?: number;
   include_features?: boolean;

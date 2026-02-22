@@ -154,8 +154,15 @@ func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransac
 	// Parse cursor
 	var lastCreatedAt *time.Time
 	var lastRecordID string
-	if req.Pagination != nil && req.Pagination.Cursor != "" {
-		cursorData, err := db.DecodeCursor(req.Pagination.Cursor)
+
+	// Fallback to pagination.cursor if flat cursor is empty (for backwards compatibility)
+	cursorStr := req.Cursor
+	if cursorStr == "" && req.Pagination != nil {
+		cursorStr = req.Pagination.Cursor
+	}
+
+	if cursorStr != "" {
+		cursorData, err := db.DecodeCursor(cursorStr)
 		if err == nil && len(cursorData) >= 2 {
 			if t, err := time.Parse(time.RFC3339Nano, fmt.Sprintf("%v", cursorData[0])); err == nil {
 				lastCreatedAt = &t
@@ -165,8 +172,10 @@ func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransac
 	}
 
 	limit := req.Limit
+	requestedLimit := limit
 	if limit <= 0 {
-		limit = 25
+		limit = 100
+		requestedLimit = limit
 	}
 	if limit > 500 {
 		limit = 500
@@ -299,9 +308,13 @@ func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransac
 	}
 
 	truncated := false
+	if requestedLimit > 500 {
+		truncated = true
+	}
+
 	nextCursor := ""
 	if len(details) > int(limit) {
-		truncated = true
+		// we fetched limit + 1, so there's a next page.
 		details = details[:limit]
 		lastItem := details[len(details)-1]
 		nextCursor = db.EncodeCursor(lastItem.CreatedAt.AsTime().Format(time.RFC3339Nano), lastItem.RecordId)

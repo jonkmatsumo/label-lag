@@ -93,12 +93,13 @@ func TestGetFeatureSample_Stratified(t *testing.T) {
 }
 
 func TestSearchTransactions(t *testing.T) {
-	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	dbMock, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
 	require.NoError(t, err)
-	defer db.Close()
+	defer dbMock.Close()
 
-	s := NewSQLStore(db)
+	s := NewSQLStore(dbMock)
 
+	// We expect the query to limit to 26 (Limit: 25 + 1)
 	mock.ExpectQuery(`(?s)SELECT em.record_id, em.user_id,.*WHERE em.user_id = \$1 AND gr.amount >= \$2 AND ie.tenant_id = \$3.*ORDER BY em.created_at DESC, em.record_id DESC LIMIT 26`).
 		WithArgs("user-1", 12.5, "tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{
@@ -127,10 +128,40 @@ func TestSearchTransactions(t *testing.T) {
 		TenantId:  "tenant-1",
 	}
 
-	details, _, _, err := s.SearchTransactions(context.Background(), req)
+	details, nextCursor, truncated, err := s.SearchTransactions(context.Background(), req)
 	require.NoError(t, err)
 	assert.Len(t, details, 1)
 	assert.Equal(t, "rec-1", details[0].RecordId)
+	assert.Empty(t, nextCursor)
+	assert.False(t, truncated)
+}
+
+func TestSearchTransactions_Truncated(t *testing.T) {
+	dbMock, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	defer dbMock.Close()
+
+	s := NewSQLStore(dbMock)
+
+	// We expect the query to clamp to 500, but fetch 501
+	mock.ExpectQuery(`(?s)SELECT em.record_id, em.user_id,.*WHERE em.user_id = \$1.*ORDER BY em.created_at DESC, em.record_id DESC LIMIT 501`).
+		WithArgs("user-1").
+		WillReturnRows(sqlmock.NewRows([]string{
+			"record_id", "user_id", "created_at", "is_train_eligible", "is_pre_fraud",
+			"amount", "is_fraudulent", "fraud_type", "is_off_hours_txn", "merchant_risk_score",
+			"velocity_24h", "amount_to_avg_ratio_30d", "balance_volatility_z_score", "numerical_features", "categorical_features",
+		}).AddRow("rec-1", "user-1", time.Now(), true, true, 22.5, false, "none", false, 10, 1, 1.0, -0.3, []byte("{}"), []byte("{}")))
+
+	req := &pb.SearchTransactionsRequest{
+		UserId: "user-1",
+		Limit:  1000, // Should be clamped to 500, and truncated=true
+	}
+
+	details, nextCursor, truncated, err := s.SearchTransactions(context.Background(), req)
+	require.NoError(t, err)
+	assert.Len(t, details, 1)   // Only returned 1 row
+	assert.Empty(t, nextCursor) // Did not exceed our clamped limit
+	assert.True(t, truncated)   // But truncated was set to true because requested > 500
 }
 
 func TestGetDatasetProfile(t *testing.T) {

@@ -264,8 +264,7 @@ describe('Analytics Routes', () => {
       }).reply(200, {
         transactions: [{ record_id: 'rec-1', amount: 100 }],
         next_cursor: 'encoded-cursor-value',
-        truncated: false,
-        total: 15
+        truncated: false
       });
 
       const response = await ctx.app.inject({
@@ -282,7 +281,6 @@ describe('Analytics Routes', () => {
       expect(data.items[0].record_id).toBe('rec-1');
       expect(data.next_cursor).toBe('encoded-cursor-value');
       expect(data.truncated).toBe(false);
-      expect(data.total).toBe(15);
       expect(data.transactions).toBeUndefined(); // Normalized away
     });
 
@@ -297,8 +295,7 @@ describe('Analytics Routes', () => {
       }).reply(200, {
         transactions: [{ record_id: 'rec-1' }],
         next_cursor: '',
-        truncated: true,
-        total: 500
+        truncated: true
       });
 
       const response = await ctx.app.inject({

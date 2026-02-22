@@ -481,10 +481,24 @@ export async function analyticsRoutes(
 
         const raw = response.data;
         const normalized: TransactionSearchResponse = {
-          items: raw.transactions || [],
+          items: (raw.transactions || []).map((tx: any) => ({
+            id: tx.record_id,
+            record_id: tx.record_id,
+            user_id: tx.user_id,
+            amount: tx.amount,
+            timestamp: tx.created_at,
+            created_at: tx.created_at,
+            is_fraud: tx.is_fraudulent,
+            is_fraudulent: tx.is_fraudulent,
+            fraud_type: tx.fraud_type,
+            merchant_risk_score: tx.merchant_risk_score,
+            velocity_24h: tx.velocity_24h,
+            amount_to_avg_ratio_30d: tx.amount_to_avg_ratio_30d,
+            balance_volatility_z_score: tx.balance_volatility_z_score,
+            is_off_hours_txn: tx.is_off_hours_txn,
+          })),
           next_cursor: raw.next_cursor,
-          truncated: raw.truncated ?? false,
-          total: raw.total,
+          truncated: !!raw.truncated,
         };
 
         return reply.status(response.statusCode).send(normalized);

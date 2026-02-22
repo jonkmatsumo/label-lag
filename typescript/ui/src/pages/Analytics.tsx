@@ -301,9 +301,25 @@ export function Analytics() {
             <div className="text-danger p-4">Failed to load volume chart</div>
           ) : volumeQuery.data?.points && volumeQuery.data.points.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={[...volumeQuery.data.points].sort((a, b) =>
-                new Date(a.timestamp ?? 0).getTime() - new Date(b.timestamp ?? 0).getTime()
-              )}>
+              <ComposedChart
+                data={[...volumeQuery.data.points].sort((a, b) =>
+                  new Date(a.timestamp ?? 0).getTime() - new Date(b.timestamp ?? 0).getTime()
+                )}
+                onClick={(data: any) => {
+                  if (data && data.activePayload && data.activePayload.length > 0) {
+                    const point = data.activePayload[0].payload;
+                    const date = new Date(point.timestamp);
+                    const dateStr = date.toISOString().split('T')[0];
+                    // If granularity is hour, we filter for that specific day or range
+                    // For now, let's drill down by setting both start/end to this day
+                    setSearchParams({
+                      ...Object.fromEntries(searchParams),
+                      start_date: dateStr,
+                      end_date: dateStr
+                    });
+                  }
+                }}
+              >
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                 <XAxis
                   dataKey="timestamp"
@@ -399,14 +415,14 @@ function TransactionExplorer() {
       }).then(res => ({
         items: res.items,
         nextCursor: res.next_cursor,
-        total: res.total,
         truncated: res.truncated,
       })),
     limit: 20,
     filters,
   });
 
-  const totalTransactions = Number(pagination.total ?? 0);
+  // No longer use pagination.total since backend doesn't return it for search
+  // Instead, we show 'Truncated' if the server flagged it or we hit the next page state
 
   return (
     <div className="card shadow-sm border-0 mt-4 mb-5">
@@ -417,10 +433,10 @@ function TransactionExplorer() {
         <TransactionFilters filters={filters} onChange={updateParams} />
 
         {/* Truncation warning */}
-        {pagination.data?.length > 0 && pagination.total === 500 && (
+        {pagination.truncated && (
           <div className="alert alert-warning py-2 small d-flex align-items-center mb-3">
             <ShieldCheck size={16} className="me-2 flex-shrink-0" />
-            <div><strong>Results truncated to 500 records.</strong> Please use filters or date ranges to narrow your search for older transactions.</div>
+            <div><strong>Results truncated by server.</strong> Request limit was automatically capped at 500 for performance. Use filters to narrow results.</div>
           </div>
         )}
 
@@ -436,8 +452,8 @@ function TransactionExplorer() {
             {pagination.data.length > 0 && (
               <div className="d-flex justify-content-between align-items-center mt-3">
                 <div className="small text-muted">
-                  {totalTransactions > 0 ? `Showing page` : `No transactions`}
-                  {totalTransactions > 0 && totalTransactions === 500 ? ' (Truncated)' : ''}
+                  {pagination.data.length > 0 ? `Showing page results` : `No transactions`}
+                  {pagination.truncated ? ' (Capped)' : ''}
                 </div>
                 <div className="btn-group btn-group-sm">
                   {/* Since cursor pagination doesn't naturally support 'Previous' easily without a stack, we'll offer Reset and Next */}

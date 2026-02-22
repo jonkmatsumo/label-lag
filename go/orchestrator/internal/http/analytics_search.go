@@ -160,6 +160,9 @@ func (h *Handler) handleSearchTransactions(w http.ResponseWriter, r *http.Reques
 	if req.Limit != nil {
 		grpcReq.Limit = *req.Limit
 	}
+	grpcReq.Cursor = req.Cursor
+
+	// Maintain compatibility with existing pagination object if provided
 	if req.Cursor != "" {
 		grpcReq.Pagination = &commonv1.CursorPageRequest{
 			Cursor: req.Cursor,
@@ -208,8 +211,9 @@ func (h *Handler) handleSearchTransactions(w http.ResponseWriter, r *http.Reques
 	respObj := searchTransactionsResponse{
 		Transactions: transactions,
 		Truncated:    resp.GetTruncated(),
+		NextCursor:   resp.GetNextCursor(),
 	}
-	if resp.GetPagination() != nil && resp.GetPagination().GetNextCursor() != "" {
+	if respObj.NextCursor == "" && resp.GetPagination() != nil {
 		respObj.NextCursor = resp.GetPagination().GetNextCursor()
 	}
 

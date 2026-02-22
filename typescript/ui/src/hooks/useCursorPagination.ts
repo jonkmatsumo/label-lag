@@ -5,6 +5,7 @@ export interface CursorPage<TItem> {
   items: TItem[];
   nextCursor?: string;
   total?: number;
+  truncated?: boolean;
 }
 
 export interface UseCursorPaginationOptions<TItem> {
@@ -26,6 +27,7 @@ export interface UseCursorPaginationResult<TItem> {
   reset: () => void;
   total?: number;
   cursor?: string;
+  truncated?: boolean;
 }
 
 export function useCursorPagination<TItem>(
@@ -81,5 +83,6 @@ export function useCursorPagination<TItem>(
     reset,
     total: query.data?.total,
     cursor,
+    truncated: query.data?.truncated,
   };
 }

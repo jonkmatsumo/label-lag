@@ -193,9 +193,8 @@ export interface SearchTransactionsRequest {
   min_score?: number | undefined;
   max_score?: number | undefined;
   limit: number;
-  pagination?:
-    | CursorPageRequest
-    | undefined;
+  pagination?: CursorPageRequest | undefined;
+  cursor: string;
   /** Exclude heavy features if false */
   include_features: boolean;
   tenant_id: string;
@@ -205,6 +204,7 @@ export interface SearchTransactionsResponse {
   transactions: TransactionDetail[];
   pagination?: CursorPageResponse | undefined;
   truncated: boolean;
+  next_cursor: string;
 }
 
 export interface GetRecentAlertsRequest {

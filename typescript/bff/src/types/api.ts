@@ -331,7 +331,6 @@ export interface TransactionSearchResponse {
   items: TransactionDetail[];
   next_cursor?: string;
   truncated: boolean;
-  total?: number;
 }
 
 export interface RecentAlert {
