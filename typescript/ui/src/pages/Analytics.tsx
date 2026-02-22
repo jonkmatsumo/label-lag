@@ -116,13 +116,13 @@ export function Analytics() {
   // Fetch overview metrics (legacy/static)
   const overviewQuery = useQuery({
     queryKey: ['analytics', tenantId, 'overview'],
-    queryFn: () => analyticsApi.getOverview(daysFilter),
+    queryFn: ({ signal }) => analyticsApi.getOverview(daysFilter, signal),
   });
 
   // Fetch recent alerts for FPR calculation
   const alertsQuery = useQuery({
     queryKey: ['analytics', tenantId, 'alerts'],
-    queryFn: () => analyticsApi.getRecentAlerts(20),
+    queryFn: ({ signal }) => analyticsApi.getRecentAlerts(20, signal),
   });
 
   const toNumber = (value: number | string | undefined | null) => {
@@ -405,13 +405,14 @@ function TransactionExplorer() {
 
   const pagination = useCursorPagination<TransactionDetail>({
     queryKeyBase: ['analytics', tenantId, 'search'],
-    fetchPage: ({ cursor, limit }) =>
+    fetchPage: ({ cursor, limit, signal }) =>
       analyticsApi.searchTransactions({
         ...filters,
         tenant_id: tenantId,
         cursor,
         limit,
         include_features: false, // Prevent overfetching on list view
+        signal,
       }).then(res => ({
         items: res.items,
         nextCursor: res.next_cursor,
