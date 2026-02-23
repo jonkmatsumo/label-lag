@@ -110,10 +110,27 @@ type transactionDetailResponse struct {
 	BalanceVolatilityZScore float64 `json:"balance_volatility_z_score"`
 }
 
+// analyticsMetaResponse maps to AnalyticsResponseMeta in BFF/UI
+type analyticsMetaResponse struct {
+	Truncated      bool  `json:"truncated"`
+	EffectiveLimit int32 `json:"effective_limit"`
+}
+
+func mapAnalyticsMeta(meta *crudv1.AnalyticsMeta) *analyticsMetaResponse {
+	if meta == nil {
+		return nil
+	}
+	return &analyticsMetaResponse{
+		Truncated:      meta.Truncated,
+		EffectiveLimit: meta.EffectiveLimit,
+	}
+}
+
 type searchTransactionsResponse struct {
 	Transactions []transactionDetailResponse `json:"transactions"`
 	NextCursor   string                      `json:"next_cursor,omitempty"`
-	Truncated    bool                        `json:"truncated"`
+	Truncated    bool                        `json:"truncated"` // Deprecated in favor of meta.truncated
+	Meta         *analyticsMetaResponse      `json:"meta,omitempty"`
 }
 
 func (h *Handler) handleSearchTransactions(w http.ResponseWriter, r *http.Request) {
@@ -212,6 +229,7 @@ func (h *Handler) handleSearchTransactions(w http.ResponseWriter, r *http.Reques
 		Transactions: transactions,
 		Truncated:    resp.GetTruncated(),
 		NextCursor:   resp.GetNextCursor(),
+		Meta:         mapAnalyticsMeta(resp.GetMeta()),
 	}
 	if respObj.NextCursor == "" && resp.GetPagination() != nil {
 		respObj.NextCursor = resp.GetPagination().GetNextCursor()

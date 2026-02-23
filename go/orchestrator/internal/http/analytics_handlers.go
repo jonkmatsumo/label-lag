@@ -171,7 +171,10 @@ func (h *Handler) handleAnalyticsTransactions(w http.ResponseWriter, r *http.Req
 		})
 	}
 
-	writeAnalyticsJSON(w, transactionDetailsResponse{Transactions: transactions})
+	writeAnalyticsJSON(w, transactionDetailsResponse{
+		Transactions: transactions,
+		Meta:         mapAnalyticsMeta(resp.GetMeta()),
+	})
 }
 
 func (h *Handler) handleAnalyticsRecentAlerts(w http.ResponseWriter, r *http.Request) {
@@ -234,7 +237,10 @@ func (h *Handler) handleAnalyticsRecentAlerts(w http.ResponseWriter, r *http.Req
 		})
 	}
 
-	writeAnalyticsJSON(w, recentAlertsResponse{Alerts: alerts})
+	writeAnalyticsJSON(w, recentAlertsResponse{
+		Alerts: alerts,
+		Meta:   mapAnalyticsMeta(resp.GetMeta()),
+	})
 }
 
 func (h *Handler) handleAnalyticsFeatureSample(w http.ResponseWriter, r *http.Request) {
@@ -287,7 +293,10 @@ func (h *Handler) handleAnalyticsFeatureSample(w http.ResponseWriter, r *http.Re
 		})
 	}
 
-	writeAnalyticsJSON(w, featureSampleEnvelope{Samples: samples})
+	writeAnalyticsJSON(w, featureSampleEnvelope{
+		Samples: samples,
+		Meta:    mapAnalyticsMeta(resp.GetMeta()),
+	})
 }
 
 func (h *Handler) handleDatasetClear(w http.ResponseWriter, r *http.Request) {
@@ -473,6 +482,7 @@ type dailyStatsResponse struct {
 
 type transactionDetailsResponse struct {
 	Transactions []transactionDetailResponse `json:"transactions"`
+	Meta         *analyticsMetaResponse      `json:"meta,omitempty"`
 }
 
 type alertResponse struct {
@@ -490,7 +500,8 @@ type alertResponse struct {
 }
 
 type recentAlertsResponse struct {
-	Alerts []alertResponse `json:"alerts"`
+	Alerts []alertResponse        `json:"alerts"`
+	Meta   *analyticsMetaResponse `json:"meta,omitempty"`
 }
 
 type featureSampleResponse struct {
@@ -503,6 +514,7 @@ type featureSampleResponse struct {
 
 type featureSampleEnvelope struct {
 	Samples []featureSampleResponse `json:"samples"`
+	Meta    *analyticsMetaResponse  `json:"meta,omitempty"`
 }
 
 type clearDataResponse struct {
