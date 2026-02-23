@@ -5,7 +5,7 @@ import type { GetJobSummaryResponse } from '../types/api.js';
 import { parseInt64, timestampToIso } from '../utils/protojson.js';
 import { getRequestAbortSignal } from '../utils/request-signal.js';
 import { normalizeAnalyticsMeta } from '../utils/analytics-meta.js';
-import { validateAnalyticsQuery } from '../utils/analytics-query-envelope.js';
+import { resolveAnalyticsQueryInput } from '../utils/analytics-query-envelope.js';
 
 export interface JobsRoutesOptions {
   httpClient: HttpClient;
@@ -24,8 +24,10 @@ interface JobIdParams {
 }
 
 interface JobSummaryQuery {
-  start_time: string;
-  end_time: string;
+  start_time?: string;
+  end_time?: string;
+  granularity?: 'hour' | 'day';
+  query?: string;
 }
 
 const HOT_JOBS_CACHE_TTL_MS = 20_000;
@@ -246,7 +248,6 @@ export async function jobsRoutes(
       schema: {
         querystring: {
           type: 'object',
-          required: ['start_time', 'end_time'],
           additionalProperties: false,
           properties: {
             start_time: {
@@ -259,6 +260,8 @@ export async function jobsRoutes(
               pattern: '^\\d{4}-\\d{2}-\\d{2}',
               description: 'ISO date or datetime string (YYYY-MM-DD)',
             },
+            granularity: { type: 'string', enum: ['hour', 'day'] },
+            query: { type: 'string' },
           },
         },
       },
@@ -269,10 +272,19 @@ export async function jobsRoutes(
     ) => {
       try {
         const requestSignal = getRequestAbortSignal(request, reply);
-        const { start_time, end_time } = request.query;
-        const validatedQuery = validateAnalyticsQuery({
-          start_time,
-          end_time,
+        const { start_time, end_time, granularity, query } = request.query;
+        const validatedQuery = resolveAnalyticsQueryInput({
+          query,
+          legacy: {
+            start_time,
+            end_time,
+            granularity,
+          },
+          options: {
+            startField: 'start_time',
+            endField: 'end_time',
+            required: true,
+          },
         });
         if (!validatedQuery.ok) {
           return reply.status(validatedQuery.statusCode).send(validatedQuery.body);

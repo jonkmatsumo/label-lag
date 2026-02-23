@@ -20,6 +20,12 @@ export interface ValidateAnalyticsQueryOptions {
   endField?: string;
 }
 
+export interface ResolveAnalyticsQueryInput {
+  query?: unknown;
+  legacy: AnalyticsQueryEnvelopeInput;
+  options?: ValidateAnalyticsQueryOptions;
+}
+
 interface ValidationErrorEnvelope {
   error: {
     code: 'INVALID_RANGE';
@@ -45,6 +51,8 @@ const MAX_DAYS_BY_GRANULARITY: Record<AnalyticsGranularity, number> = {
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
+export const QUERY_LEGACY_MISMATCH_MESSAGE =
+  'query and legacy time fields must match when both are provided';
 
 function invalidRange(message: string): AnalyticsQueryEnvelopeValidationResult {
   return {
@@ -81,6 +89,17 @@ function parseTimestamp(value: string): Date | null {
   return parsed;
 }
 
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function toOptionalString(value: unknown): string | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  return typeof value === 'string' ? value : undefined;
+}
+
 function normalizeGranularity(
   value: string | undefined,
   fallback: AnalyticsGranularity
@@ -92,6 +111,100 @@ function normalizeGranularity(
     return value;
   }
   return null;
+}
+
+function hasAnyQueryFields(input: AnalyticsQueryEnvelopeInput): boolean {
+  return Boolean(
+    (input.start_time && input.start_time !== '') ||
+      (input.end_time && input.end_time !== '') ||
+      (input.granularity && input.granularity !== '')
+  );
+}
+
+function parseQueryEnvelopeInput(
+  value: unknown
+): AnalyticsQueryEnvelopeValidationResult | { ok: true; value?: AnalyticsQueryEnvelopeInput } {
+  if (value === undefined || value === null || value === '') {
+    return {
+      ok: true,
+      value: undefined,
+    };
+  }
+
+  let queryObject: Record<string, unknown>;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (!isObjectRecord(parsed)) {
+        return invalidRange('query must be a JSON object');
+      }
+      queryObject = parsed;
+    } catch {
+      return invalidRange('query must be a valid JSON object');
+    }
+  } else if (isObjectRecord(value)) {
+    queryObject = value;
+  } else {
+    return invalidRange('query must be a JSON object');
+  }
+
+  const start_time = toOptionalString(queryObject.start_time);
+  const end_time = toOptionalString(queryObject.end_time);
+  const granularity = toOptionalString(queryObject.granularity);
+
+  if (queryObject.start_time !== undefined && start_time === undefined) {
+    return invalidRange('query.start_time must be a string');
+  }
+  if (queryObject.end_time !== undefined && end_time === undefined) {
+    return invalidRange('query.end_time must be a string');
+  }
+  if (queryObject.granularity !== undefined && granularity === undefined) {
+    return invalidRange('query.granularity must be a string');
+  }
+
+  return {
+    ok: true,
+    value: {
+      start_time,
+      end_time,
+      granularity,
+    },
+  };
+}
+
+function timestampsEqual(left: string | undefined, right: string | undefined): boolean {
+  if (left === undefined || right === undefined) {
+    return left === right;
+  }
+  const leftDate = parseTimestamp(left);
+  const rightDate = parseTimestamp(right);
+  if (!leftDate || !rightDate) {
+    return left === right;
+  }
+  return leftDate.getTime() === rightDate.getTime();
+}
+
+function ensureLegacyMatchesQuery(
+  queryValue: AnalyticsQueryEnvelope,
+  legacyRaw: AnalyticsQueryEnvelopeInput,
+  legacyValue: AnalyticsQueryEnvelope
+): AnalyticsQueryEnvelopeValidationResult | { ok: true } {
+  if (legacyRaw.start_time !== undefined) {
+    if (!timestampsEqual(queryValue.start_time, legacyValue.start_time)) {
+      return invalidRange(QUERY_LEGACY_MISMATCH_MESSAGE);
+    }
+  }
+  if (legacyRaw.end_time !== undefined) {
+    if (!timestampsEqual(queryValue.end_time, legacyValue.end_time)) {
+      return invalidRange(QUERY_LEGACY_MISMATCH_MESSAGE);
+    }
+  }
+  if (legacyRaw.granularity !== undefined) {
+    if (queryValue.granularity !== legacyValue.granularity) {
+      return invalidRange(QUERY_LEGACY_MISMATCH_MESSAGE);
+    }
+  }
+  return { ok: true };
 }
 
 export function validateAnalyticsQuery(
@@ -158,6 +271,51 @@ export function validateAnalyticsQuery(
       window_days: windowDays,
     },
   };
+}
+
+export function resolveAnalyticsQueryInput({
+  query,
+  legacy,
+  options = {},
+}: ResolveAnalyticsQueryInput): AnalyticsQueryEnvelopeValidationResult {
+  const parsedQuery = parseQueryEnvelopeInput(query);
+  if (!parsedQuery.ok) {
+    return parsedQuery;
+  }
+
+  const queryInput = parsedQuery.value;
+  if (queryInput && hasAnyQueryFields(queryInput)) {
+    const validatedQuery = validateAnalyticsQuery(queryInput, options);
+    if (!validatedQuery.ok) {
+      return validatedQuery;
+    }
+
+    if (!hasAnyQueryFields(legacy)) {
+      return validatedQuery;
+    }
+
+    const validatedLegacy = validateAnalyticsQuery(legacy, {
+      ...options,
+      required: false,
+      defaultGranularity: validatedQuery.value.granularity,
+    });
+    if (!validatedLegacy.ok) {
+      return validatedLegacy;
+    }
+
+    const matchResult = ensureLegacyMatchesQuery(
+      validatedQuery.value,
+      legacy,
+      validatedLegacy.value
+    );
+    if (!matchResult.ok) {
+      return matchResult;
+    }
+
+    return validatedQuery;
+  }
+
+  return validateAnalyticsQuery(legacy, options);
 }
 
 export const validateAnalyticsQueryEnvelope = validateAnalyticsQuery;

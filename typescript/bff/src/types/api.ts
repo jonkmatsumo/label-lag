@@ -325,6 +325,11 @@ export interface TransactionSearchRequest {
   limit?: number;
   cursor?: string;
   include_features?: boolean;
+  query?: {
+    start_time?: string;
+    end_time?: string;
+    granularity?: 'hour' | 'day';
+  };
 }
 
 export interface TransactionSearchResponse {
