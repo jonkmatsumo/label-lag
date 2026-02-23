@@ -326,7 +326,7 @@ export function Analytics() {
                 data={[...volume.points].sort((a, b) =>
                   new Date(a.timestamp ?? 0).getTime() - new Date(b.timestamp ?? 0).getTime()
                 )}
-                onClick={(data: any) => {
+                onClick={(data: { activePayload?: Array<{ payload: { timestamp: string } }> }) => {
                   if (data && data.activePayload && data.activePayload.length > 0) {
                     const point = data.activePayload[0].payload;
                     const date = new Date(point.timestamp);
