@@ -223,8 +223,15 @@ func (c *AnalyticsClient) SearchTransactions(ctx context.Context, req *crudv1.Se
 	}
 
 	span := trace.SpanFromContext(ctx)
-	windowDays, _ := analyticsWindowDaysFromStrings(req.GetStartDate(), req.GetEndDate())
-	spanSetAnalyticsQueryAttributes(span, "transactions", "none", windowDays)
+	windowDays, ok := analyticsWindowDaysFromStrings(req.GetStartDate(), req.GetEndDate())
+	if !ok && req.GetQuery() != nil {
+		windowDays, _ = analyticsWindowDaysFromProto(req.GetQuery().GetStartTime(), req.GetQuery().GetEndTime())
+	}
+	granularity := "none"
+	if req.GetQuery() != nil {
+		granularity = normalizeAnalyticsGranularity(req.GetQuery().GetGranularity(), "none")
+	}
+	spanSetAnalyticsQueryAttributes(span, "transactions_search", granularity, windowDays)
 
 	if err := c.breaker.Allow(); err != nil {
 		span.SetAttributes(
