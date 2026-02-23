@@ -26,6 +26,11 @@ export interface AnalyticsQueryEnvelope {
   granularity: string;
 }
 
+export interface AnalyticsMeta {
+  truncated: boolean;
+  effective_limit: number;
+}
+
 export interface GetKpisRequest {
   /** @deprecated */
   start_time?:
@@ -238,6 +243,7 @@ export interface SearchTransactionsResponse {
   pagination?: CursorPageResponse | undefined;
   truncated: boolean;
   next_cursor: string;
+  meta?: AnalyticsMeta | undefined;
 }
 
 export interface GetRecentAlertsRequest {
