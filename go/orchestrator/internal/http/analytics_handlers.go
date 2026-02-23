@@ -664,26 +664,26 @@ func (h *Handler) handleGetRuleImpact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req := &crudv1.GetRuleImpactRequest{
-		RuleId:   ruleID,
-		TenantId: tenantID,
+	query := r.URL.Query()
+	startRaw, startTS, err := parseAnalyticsTimeQuery(query, "start_time", "start_date")
+	if err != nil {
+		writeJSONError(w, r, http.StatusBadRequest, "invalid start_date format (RFC3339 required)")
+		return
+	}
+	endRaw, endTS, err := parseAnalyticsTimeQuery(query, "end_time", "end_date")
+	if err != nil {
+		writeJSONError(w, r, http.StatusBadRequest, "invalid end_date format (RFC3339 required)")
+		return
 	}
 
-	if startStr := r.URL.Query().Get("start_date"); startStr != "" {
-		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
-			req.StartDate = timestamppb.New(t)
-		} else {
-			writeJSONError(w, r, http.StatusBadRequest, "invalid start_date format (RFC3339 required)")
-			return
-		}
-	}
-	if endStr := r.URL.Query().Get("end_date"); endStr != "" {
-		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
-			req.EndDate = timestamppb.New(t)
-		} else {
-			writeJSONError(w, r, http.StatusBadRequest, "invalid end_date format (RFC3339 required)")
-			return
-		}
+	granularity := firstNonEmptyQuery(query, "granularity")
+
+	req := &crudv1.GetRuleImpactRequest{
+		RuleId:    ruleID,
+		StartDate: startTS,
+		EndDate:   endTS,
+		TenantId:  tenantID,
+		Query:     buildAnalyticsQueryEnvelope(startRaw, endRaw, granularity),
 	}
 
 	if req.StartDate != nil && req.EndDate != nil && req.StartDate.AsTime().After(req.EndDate.AsTime()) {
@@ -709,31 +709,30 @@ func (h *Handler) handleGetKpis(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req := &crudv1.GetKpisRequest{
-		GroupBy:  r.URL.Query().Get("group_by"),
-		TenantId: tenantID,
+	query := r.URL.Query()
+	startRaw, startTS, err := parseAnalyticsTimeQuery(query, "start_time")
+	if err != nil {
+		writeJSONError(w, r, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
+		return
+	}
+	endRaw, endTS, err := parseAnalyticsTimeQuery(query, "end_time")
+	if err != nil {
+		writeJSONError(w, r, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
+		return
 	}
 
-	if startStr := r.URL.Query().Get("start_time"); startStr != "" {
-		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
-			req.StartTime = timestamppb.New(t)
-		} else {
-			writeJSONError(w, r, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
-			return
-		}
-	}
-	if endStr := r.URL.Query().Get("end_time"); endStr != "" {
-		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
-			req.EndTime = timestamppb.New(t)
-		} else {
-			writeJSONError(w, r, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
-			return
-		}
-	}
-
-	if req.GroupBy != "" && req.GroupBy != "day" && req.GroupBy != "hour" {
+	granularity := firstNonEmptyQuery(query, "granularity", "group_by")
+	if granularity != "" && granularity != "day" && granularity != "hour" {
 		writeJSONError(w, r, http.StatusBadRequest, "invalid group_by (day|hour required)")
 		return
+	}
+
+	req := &crudv1.GetKpisRequest{
+		StartTime: startTS,
+		EndTime:   endTS,
+		GroupBy:   granularity,
+		TenantId:  tenantID,
+		Query:     buildAnalyticsQueryEnvelope(startRaw, endRaw, granularity),
 	}
 
 	if req.StartTime != nil && req.EndTime != nil && req.StartTime.AsTime().After(req.EndTime.AsTime()) {
@@ -759,31 +758,30 @@ func (h *Handler) handleGetVolumeSeries(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	req := &crudv1.GetVolumeSeriesRequest{
-		Granularity: r.URL.Query().Get("granularity"),
-		TenantId:    tenantID,
+	query := r.URL.Query()
+	startRaw, startTS, err := parseAnalyticsTimeQuery(query, "start_time")
+	if err != nil {
+		writeJSONError(w, r, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
+		return
+	}
+	endRaw, endTS, err := parseAnalyticsTimeQuery(query, "end_time")
+	if err != nil {
+		writeJSONError(w, r, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
+		return
 	}
 
-	if startStr := r.URL.Query().Get("start_time"); startStr != "" {
-		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
-			req.StartTime = timestamppb.New(t)
-		} else {
-			writeJSONError(w, r, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
-			return
-		}
-	}
-	if endStr := r.URL.Query().Get("end_time"); endStr != "" {
-		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
-			req.EndTime = timestamppb.New(t)
-		} else {
-			writeJSONError(w, r, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
-			return
-		}
-	}
-
-	if req.Granularity != "" && req.Granularity != "day" && req.Granularity != "hour" {
+	granularity := firstNonEmptyQuery(query, "granularity", "group_by")
+	if granularity != "" && granularity != "day" && granularity != "hour" {
 		writeJSONError(w, r, http.StatusBadRequest, "invalid granularity (day|hour required)")
 		return
+	}
+
+	req := &crudv1.GetVolumeSeriesRequest{
+		StartTime:   startTS,
+		EndTime:     endTS,
+		Granularity: granularity,
+		TenantId:    tenantID,
+		Query:       buildAnalyticsQueryEnvelope(startRaw, endRaw, granularity),
 	}
 
 	if req.StartTime != nil && req.EndTime != nil && req.StartTime.AsTime().After(req.EndTime.AsTime()) {
@@ -809,29 +807,29 @@ func (h *Handler) handleGetConfusionMatrix(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	query := r.URL.Query()
+	startRaw, startTS, err := parseAnalyticsTimeQuery(query, "start_time")
+	if err != nil {
+		writeJSONError(w, r, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
+		return
+	}
+	endRaw, endTS, err := parseAnalyticsTimeQuery(query, "end_time")
+	if err != nil {
+		writeJSONError(w, r, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
+		return
+	}
+
+	granularity := firstNonEmptyQuery(query, "granularity")
+
 	req := &crudv1.GetConfusionMatrixRequest{
-		ModelVersion: r.URL.Query().Get("model_version"),
+		StartTime:    startTS,
+		EndTime:      endTS,
+		ModelVersion: query.Get("model_version"),
 		TenantId:     tenantID,
+		Query:        buildAnalyticsQueryEnvelope(startRaw, endRaw, granularity),
 	}
 
-	if startStr := r.URL.Query().Get("start_time"); startStr != "" {
-		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
-			req.StartTime = timestamppb.New(t)
-		} else {
-			writeJSONError(w, r, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
-			return
-		}
-	}
-	if endStr := r.URL.Query().Get("end_time"); endStr != "" {
-		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
-			req.EndTime = timestamppb.New(t)
-		} else {
-			writeJSONError(w, r, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
-			return
-		}
-	}
-
-	if threshStr := r.URL.Query().Get("threshold"); threshStr != "" {
+	if threshStr := query.Get("threshold"); threshStr != "" {
 		if val, err := strconv.Atoi(threshStr); err == nil {
 			req.Threshold = int32(val)
 		} else {
