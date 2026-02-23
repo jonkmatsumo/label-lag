@@ -98,36 +98,39 @@ export async function analyticsRoutes(
   fastify.get(
     '/bff/v1/analytics/overview',
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const cacheKey = 'analytics:overview';
-      const requestSignal = getRequestAbortSignal(request, reply);
-      // @ts-ignore - tenantId is added by middleware
-      const tenantId = request.tenantId || 'default';
-      const cached = cache.get<AnalyticsOverviewResponse>(cacheKey, tenantId);
-      if (cached) return reply.send(cached);
-
       try {
-        // Shadow Mode: Gateway (Primary) vs Python (Shadow)
-        const response = await shadowService.executeWithShadow<AnalyticsOverviewResponse>({
-          primary: {
-            method: 'GET',
-            path: '/analytics/overview',
-            requestId: request.requestId,
-            tenantId: request.tenantId,
-            target: 'gateway',
-            signal: requestSignal,
+        const cacheKey = 'analytics:overview';
+        const requestSignal = getRequestAbortSignal(request, reply);
+        // @ts-ignore - tenantId is added by middleware
+        const tenantId = request.tenantId || 'default';
+        const normalized = await cache.getOrLoad<AnalyticsOverviewResponse>(
+          cacheKey,
+          tenantId,
+          async () => {
+            const response = await shadowService.executeWithShadow<AnalyticsOverviewResponse>({
+              primary: {
+                method: 'GET',
+                path: '/analytics/overview',
+                requestId: request.requestId,
+                tenantId: request.tenantId,
+                target: 'gateway',
+                signal: requestSignal,
+              },
+              shadow: {
+                method: 'GET',
+                path: '/analytics/overview',
+                requestId: request.requestId,
+                tenantId: request.tenantId,
+                target: 'python',
+                signal: requestSignal,
+              },
+            });
+            return response.data;
           },
-          shadow: {
-            method: 'GET',
-            path: '/analytics/overview',
-            requestId: request.requestId,
-            tenantId: request.tenantId,
-            target: 'python',
-            signal: requestSignal,
-          },
-        });
+          60000 // 1m TTL for overview
+        );
 
-        cache.set(cacheKey, response.data, tenantId);
-        return reply.status(response.statusCode).send(response.data);
+        return reply.send(normalized);
       } catch (error) {
         if (error instanceof UpstreamError) {
           return reply.status(error.statusCode).send(error.toResponse());
@@ -160,20 +163,36 @@ export async function analyticsRoutes(
         const cacheKey = `analytics:daily-stats:${days}`;
         // @ts-ignore - tenantId is added by middleware
         const tenantId = request.tenantId || 'default';
-        const cached = cache.get<DailyStatsResponse>(cacheKey, tenantId);
-        if (cached) return reply.send(cached);
 
-        const response = await httpClient.request<DailyStatsResponse>({
-          method: 'GET',
-          path: `/analytics/daily-stats?days=${days}`,
-          requestId: request.requestId,
-          tenantId: request.tenantId,
-          target: 'gateway',
-          signal: requestSignal,
-        });
+        const normalizedResponse = await cache.getOrLoad<DailyStatsResponse>(
+          cacheKey,
+          tenantId,
+          async () => {
+            const response = await httpClient.request<any>({
+              method: 'GET',
+              path: `/analytics/daily-stats?days=${days}`,
+              requestId: request.requestId,
+              tenantId: request.tenantId,
+              target: 'gateway',
+              signal: requestSignal,
+            });
 
-        cache.set(cacheKey, response.data, tenantId);
-        return reply.status(response.statusCode).send(response.data);
+            const raw = response.data;
+            return {
+              stats: (raw.stats ?? []).map((s: any) => ({
+                date: s.date,
+                total_transactions: parseInt64(s.total_transactions) ?? 0,
+                fraud_transactions: parseInt64(s.fraud_transactions) ?? 0,
+                fraud_rate: s.fraud_rate ?? 0,
+                total_amount: s.total_amount ?? 0,
+              })),
+              period_days: raw.period_days ?? days,
+            };
+          },
+          HOT_ANALYTICS_CACHE_TTL_MS
+        );
+
+        return reply.send(normalizedResponse);
       } catch (error) {
         if (error instanceof UpstreamError) {
           return reply.status(error.statusCode).send(error.toResponse());
@@ -244,17 +263,42 @@ export async function analyticsRoutes(
       try {
         const requestSignal = getRequestAbortSignal(request, reply);
         const { limit = 50 } = request.query;
+        const tenantId =
+          (request as FastifyRequest & { tenantId?: string }).tenantId ??
+          (typeof request.headers['x-tenant-id'] === 'string' ? request.headers['x-tenant-id'] : undefined) ??
+          'default';
+        const cacheKey = `analytics:recent-alerts:${tenantId}:${limit}`;
 
-        const response = await httpClient.request<RecentAlertsResponse>({
-          method: 'GET',
-          path: `/analytics/recent-alerts?limit=${limit}`,
-          requestId: request.requestId,
-          tenantId: request.tenantId,
-          target: 'gateway',
-          signal: requestSignal,
-        });
+        const normalized = await cache.getOrLoad<RecentAlertsResponse>(
+          cacheKey,
+          tenantId,
+          async () => {
+            const response = await httpClient.request<any>({
+              method: 'GET',
+              path: `/analytics/recent-alerts?limit=${limit}`,
+              requestId: request.requestId,
+              tenantId: request.tenantId,
+              target: 'gateway',
+              signal: requestSignal,
+            });
 
-        return reply.status(response.statusCode).send(response.data);
+            const raw = response.data;
+            return {
+              alerts: (raw.alerts ?? []).map((a: any) => ({
+                id: a.id,
+                user_id: a.user_id,
+                amount: a.amount ?? 0,
+                score: a.score ?? 0,
+                created_at: timestampToIso(a.created_at),
+                matched_rules: a.matched_rules ?? [],
+              })),
+              total: parseInt64(raw.total) ?? 0,
+            };
+          },
+          HOT_ANALYTICS_CACHE_TTL_MS
+        );
+
+        return reply.send(normalized);
       } catch (error) {
         if (error instanceof UpstreamError) {
           return reply.status(error.statusCode).send(error.toResponse());
@@ -481,10 +525,24 @@ export async function analyticsRoutes(
 
         const raw = response.data;
         const normalized: TransactionSearchResponse = {
-          items: raw.transactions || [],
+          items: (raw.transactions || []).map((tx: any) => ({
+            id: tx.record_id,
+            record_id: tx.record_id,
+            user_id: tx.user_id,
+            amount: tx.amount,
+            timestamp: tx.created_at,
+            created_at: tx.created_at,
+            is_fraud: tx.is_fraudulent,
+            is_fraudulent: tx.is_fraudulent,
+            fraud_type: tx.fraud_type,
+            merchant_risk_score: tx.merchant_risk_score,
+            velocity_24h: tx.velocity_24h,
+            amount_to_avg_ratio_30d: tx.amount_to_avg_ratio_30d,
+            balance_volatility_z_score: tx.balance_volatility_z_score,
+            is_off_hours_txn: tx.is_off_hours_txn,
+          })),
           next_cursor: raw.next_cursor,
-          truncated: raw.truncated ?? false,
-          total: raw.total,
+          truncated: !!raw.truncated,
         };
 
         return reply.status(response.statusCode).send(normalized);
@@ -531,36 +589,44 @@ export async function analyticsRoutes(
         const { start_time, end_time, group_by = 'day' } = request.query;
         const tenantId = (request as FastifyRequest & { tenantId?: string }).tenantId ?? 'default';
         const cacheKey = `analytics:kpis:${tenantId}:${start_time}:${end_time}:${group_by}`;
-        const cached = cache.get<KpisResponse>(cacheKey, tenantId);
-        if (cached) return reply.send(cached);
+        const normalized = await cache.getOrLoad<KpisResponse>(
+          cacheKey,
+          tenantId,
+          async () => {
+            const response = await httpClient.request<any>({
+              method: 'GET',
+              path: `/kpis?start_time=${encodeURIComponent(start_time)}&end_time=${encodeURIComponent(end_time)}&group_by=${group_by}`,
+              requestId: request.requestId,
+              tenantId: request.tenantId,
+              target: 'gateway',
+              signal: requestSignal,
+            });
 
-        const response = await httpClient.request<any>({
-          method: 'GET',
-          path: `/kpis?start_time=${encodeURIComponent(start_time)}&end_time=${encodeURIComponent(end_time)}&group_by=${group_by}`,
-          requestId: request.requestId,
-          tenantId: request.tenantId,
-          target: 'gateway',
-          signal: requestSignal,
-        });
+            const raw = response.data;
+            return {
+              total_decisions: parseInt64(raw.total_decisions) ?? 0,
+              total_alerts: parseInt64(raw.total_alerts) ?? 0,
+              alert_rate: raw.alert_rate ?? 0,
+              avg_score: raw.avg_score ?? 0,
+              rules_fired_total: parseInt64(raw.rules_fired_total) ?? 0,
+              buckets: raw.buckets?.map((b: any) => ({
+                timestamp: timestampToIso(b.timestamp),
+                decisions: parseInt64(b.decisions) ?? 0,
+                alerts: parseInt64(b.alerts) ?? 0,
+                rules_fired: parseInt64(b.rules_fired) ?? 0,
+              })),
+              meta: normalizeAnalyticsMeta({
+                raw,
+                startTime: start_time,
+                endTime: end_time,
+                hasData: (parseInt64(raw.total_decisions) ?? 0) > 0,
+              }),
+            };
+          },
+          HOT_ANALYTICS_CACHE_TTL_MS
+        );
 
-        // Normalize protojson int64 and timestamps
-        const raw = response.data;
-        const normalized: KpisResponse = {
-          total_decisions: parseInt64(raw.total_decisions) ?? 0,
-          total_alerts: parseInt64(raw.total_alerts) ?? 0,
-          alert_rate: raw.alert_rate ?? 0,
-          avg_score: raw.avg_score ?? 0,
-          rules_fired_total: parseInt64(raw.rules_fired_total) ?? 0,
-          buckets: raw.buckets?.map((b: any) => ({
-            timestamp: timestampToIso(b.timestamp),
-            decisions: parseInt64(b.decisions) ?? 0,
-            alerts: parseInt64(b.alerts) ?? 0,
-            rules_fired: parseInt64(b.rules_fired) ?? 0,
-          })),
-        };
-
-        cache.set(cacheKey, normalized, tenantId, 30000); // 30s TTL
-        return reply.status(response.statusCode).send(normalized);
+        return reply.send(normalized);
       } catch (error) {
         if (error instanceof UpstreamError) {
           return reply.status(error.statusCode).send(error.toResponse());
@@ -604,30 +670,38 @@ export async function analyticsRoutes(
         const { start_time, end_time, granularity = 'day' } = request.query;
         const tenantId = (request as FastifyRequest & { tenantId?: string }).tenantId ?? 'default';
         const cacheKey = `analytics:volume:${tenantId}:${start_time}:${end_time}:${granularity}`;
-        const cached = cache.get<VolumeSeriesResponse>(cacheKey, tenantId);
-        if (cached) return reply.send(cached);
+        const normalized = await cache.getOrLoad<VolumeSeriesResponse>(
+          cacheKey,
+          tenantId,
+          async () => {
+            const response = await httpClient.request<any>({
+              method: 'GET',
+              path: `/volume?start_time=${encodeURIComponent(start_time)}&end_time=${encodeURIComponent(end_time)}&granularity=${granularity}`,
+              requestId: request.requestId,
+              tenantId: request.tenantId,
+              target: 'gateway',
+              signal: requestSignal,
+            });
 
-        const response = await httpClient.request<any>({
-          method: 'GET',
-          path: `/volume?start_time=${encodeURIComponent(start_time)}&end_time=${encodeURIComponent(end_time)}&granularity=${granularity}`,
-          requestId: request.requestId,
-          tenantId: request.tenantId,
-          target: 'gateway',
-          signal: requestSignal,
-        });
+            const raw = response.data;
+            return {
+              points: (raw.points ?? []).map((p: any) => ({
+                timestamp: timestampToIso(p.timestamp),
+                count: parseInt64(p.count) ?? 0,
+                alerts: parseInt64(p.alerts) ?? 0,
+              })),
+              meta: normalizeAnalyticsMeta({
+                raw,
+                startTime: start_time,
+                endTime: end_time,
+                hasData: (raw.points?.length ?? 0) > 0,
+              }),
+            };
+          },
+          HOT_ANALYTICS_CACHE_TTL_MS
+        );
 
-        // Normalize protojson int64 and timestamps
-        const raw = response.data;
-        const normalized: VolumeSeriesResponse = {
-          points: (raw.points || []).map((p: any) => ({
-            timestamp: timestampToIso(p.timestamp),
-            count: parseInt64(p.count) ?? 0,
-            alerts: parseInt64(p.alerts) ?? 0,
-          })),
-        };
-
-        cache.set(cacheKey, normalized, tenantId, 30000); // 30s TTL
-        return reply.status(response.statusCode).send(normalized);
+        return reply.send(normalized);
       } catch (error) {
         if (error instanceof UpstreamError) {
           return reply.status(error.statusCode).send(error.toResponse());
@@ -672,39 +746,48 @@ export async function analyticsRoutes(
         const { start_time, end_time, threshold, model_version } = request.query;
         const tenantId = (request as FastifyRequest & { tenantId?: string }).tenantId ?? 'default';
         const cacheKey = `analytics:confusion-matrix:${tenantId}:${start_time}:${end_time}:${threshold ?? ''}:${model_version ?? ''}`;
-        const cached = cache.get<ConfusionMatrixResponse>(cacheKey, tenantId);
-        if (cached) return reply.send(cached);
+        const normalized = await cache.getOrLoad<ConfusionMatrixResponse>(
+          cacheKey,
+          tenantId,
+          async () => {
+            const searchParams = new URLSearchParams();
+            searchParams.set('start_time', start_time);
+            searchParams.set('end_time', end_time);
+            if (threshold !== undefined) searchParams.set('threshold', String(threshold));
+            if (model_version) searchParams.set('model_version', model_version);
 
-        const searchParams = new URLSearchParams();
-        searchParams.set('start_time', start_time);
-        searchParams.set('end_time', end_time);
-        if (threshold !== undefined) searchParams.set('threshold', String(threshold));
-        if (model_version) searchParams.set('model_version', model_version);
+            const response = await httpClient.request<any>({
+              method: 'GET',
+              path: `/analytics/confusion-matrix?${searchParams.toString()}`,
+              requestId: request.requestId,
+              tenantId: request.tenantId,
+              target: 'gateway',
+              signal: requestSignal,
+            });
 
-        const response = await httpClient.request<any>({
-          method: 'GET',
-          path: `/analytics/confusion-matrix?${searchParams.toString()}`,
-          requestId: request.requestId,
-          tenantId: request.tenantId,
-          target: 'gateway',
-          signal: requestSignal,
-        });
+            // Normalize protojson int64 count fields to JS numbers
+            const raw = response.data;
+            return {
+              true_positives: parseInt64(raw.true_positives) ?? 0,
+              false_positives: parseInt64(raw.false_positives) ?? 0,
+              true_negatives: parseInt64(raw.true_negatives) ?? 0,
+              false_negatives: parseInt64(raw.false_negatives) ?? 0,
+              precision: raw.precision ?? 0,
+              recall: raw.recall ?? 0,
+              f1_score: raw.f1_score ?? 0,
+              insufficient_labels: !!raw.insufficient_labels,
+              meta: normalizeAnalyticsMeta({
+                raw,
+                startTime: start_time,
+                endTime: end_time,
+                hasData: (parseInt64(raw.true_positives) ?? 0) + (parseInt64(raw.false_positives) ?? 0) + (parseInt64(raw.true_negatives) ?? 0) + (parseInt64(raw.false_negatives) ?? 0) > 0,
+              }),
+            };
+          },
+          HOT_ANALYTICS_CACHE_TTL_MS
+        );
 
-        // Normalize protojson int64 count fields to JS numbers
-        const raw = response.data;
-        const normalized: ConfusionMatrixResponse = {
-          true_positives: parseInt64(raw.true_positives) ?? 0,
-          false_positives: parseInt64(raw.false_positives) ?? 0,
-          true_negatives: parseInt64(raw.true_negatives) ?? 0,
-          false_negatives: parseInt64(raw.false_negatives) ?? 0,
-          precision: raw.precision ?? 0,
-          recall: raw.recall ?? 0,
-          f1_score: raw.f1_score ?? 0,
-          insufficient_labels: raw.insufficient_labels ?? false,
-        };
-
-        cache.set(cacheKey, normalized, tenantId, 30000); // 30s TTL
-        return reply.status(response.statusCode).send(normalized);
+        return reply.send(normalized);
       } catch (error) {
         if (error instanceof UpstreamError) {
           return reply.status(error.statusCode).send(error.toResponse());

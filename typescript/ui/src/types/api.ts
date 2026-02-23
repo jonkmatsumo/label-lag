@@ -331,10 +331,11 @@ export type RecentAlertsResponse = GetRecentAlertsResponse;
 export type ListDatasetProfilesResponse = GenListDatasetProfilesResponse;
 export type DatasetSummary = GetDatasetSummaryResponse;
 export type MetricSeriesPoint = MetricPoint;
-export interface TransactionSearchRequest extends Omit<SearchTransactionsRequest, 'offset' | 'limit' | 'include_features'> {
+export interface TransactionSearchRequest extends Omit<SearchTransactionsRequest, 'offset' | 'limit' | 'include_features' | 'cursor'> {
   cursor?: string;
   limit?: number;
   include_features?: boolean;
+  signal?: AbortSignal;
 }
 
 export interface TransactionSearchResponse {
@@ -530,6 +531,23 @@ export interface DriftStatusResponse {
   }>;
 }
 
+export type PartialReason =
+  | 'TIMEOUT'
+  | 'ROW_LIMIT'
+  | 'UPSTREAM_ERROR'
+  | 'EMPTY'
+  | 'UNKNOWN';
+
+export interface AnalyticsResponseMeta {
+  time_range: {
+    start: string;
+    end: string;
+  };
+  is_partial: boolean;
+  partial_reason: PartialReason;
+  sample_rate?: number;
+}
+
 // KPI and Volume types (BFF-normalized)
 export interface BffKpiBucket {
   timestamp: string;
@@ -545,6 +563,7 @@ export interface KpisResponse {
   avg_score: number;
   rules_fired_total: number;
   buckets?: BffKpiBucket[];
+  meta?: AnalyticsResponseMeta;
 }
 
 export interface BffVolumePoint {
@@ -555,6 +574,7 @@ export interface BffVolumePoint {
 
 export interface VolumeSeriesResponse {
   points: BffVolumePoint[];
+  meta?: AnalyticsResponseMeta;
 }
 
 export interface ConfusionMatrixResponse {
@@ -566,4 +586,5 @@ export interface ConfusionMatrixResponse {
   recall: number;
   f1_score: number;
   insufficient_labels: boolean;
+  meta?: AnalyticsResponseMeta;
 }

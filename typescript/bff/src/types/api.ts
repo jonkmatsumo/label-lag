@@ -331,7 +331,6 @@ export interface TransactionSearchResponse {
   items: TransactionDetail[];
   next_cursor?: string;
   truncated: boolean;
-  total?: number;
 }
 
 export interface RecentAlert {
@@ -451,6 +450,7 @@ export interface KpisResponse {
   avg_score: number;
   rules_fired_total: number;
   buckets?: KpiBucket[];
+  meta?: AnalyticsResponseMeta;
 }
 
 export interface VolumePoint {
@@ -461,6 +461,7 @@ export interface VolumePoint {
 
 export interface VolumeSeriesResponse {
   points: VolumePoint[];
+  meta?: AnalyticsResponseMeta;
 }
 
 export interface ConfusionMatrixResponse {
@@ -472,6 +473,7 @@ export interface ConfusionMatrixResponse {
   recall: number;
   f1_score: number;
   insufficient_labels: boolean;
+  meta?: AnalyticsResponseMeta;
 }
 
 // Monitoring types

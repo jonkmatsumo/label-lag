@@ -11,6 +11,5 @@
         }
     ],
     "next_cursor": "base64encodedcursor",
-    "truncated": true,
-    "total": 500
+    "truncated": true
 }

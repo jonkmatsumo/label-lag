@@ -41,7 +41,7 @@ func (s *SQLStore) GetDailyStats(ctx context.Context, cutoffDate time.Time, tena
 		ORDER BY date DESC
 	`, queryDetail)
 
-	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	queryCtx, cancel := context.WithTimeout(ctx, hotAnalyticsQueryTimeout)
 	defer cancel()
 
 	rows, err := s.db.QueryContext(queryCtx, query, args...)
@@ -101,7 +101,7 @@ func (s *SQLStore) GetTransactionDetails(ctx context.Context, cutoffDate time.Ti
 		args = append(args, tenantID)
 	}
 	query += where + " ORDER BY em.created_at DESC LIMIT $2 OFFSET $3"
-	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	queryCtx, cancel := context.WithTimeout(ctx, hotAnalyticsQueryTimeout)
 	defer cancel()
 
 	rows, err := s.db.QueryContext(queryCtx, query, args...)
@@ -154,8 +154,15 @@ func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransac
 	// Parse cursor
 	var lastCreatedAt *time.Time
 	var lastRecordID string
-	if req.Pagination != nil && req.Pagination.Cursor != "" {
-		cursorData, err := db.DecodeCursor(req.Pagination.Cursor)
+
+	// Fallback to pagination.cursor if flat cursor is empty (for backwards compatibility)
+	cursorStr := req.Cursor
+	if cursorStr == "" && req.Pagination != nil {
+		cursorStr = req.Pagination.Cursor
+	}
+
+	if cursorStr != "" {
+		cursorData, err := db.DecodeCursor(cursorStr)
 		if err == nil && len(cursorData) >= 2 {
 			if t, err := time.Parse(time.RFC3339Nano, fmt.Sprintf("%v", cursorData[0])); err == nil {
 				lastCreatedAt = &t
@@ -165,8 +172,10 @@ func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransac
 	}
 
 	limit := req.Limit
+	requestedLimit := limit
 	if limit <= 0 {
-		limit = 25
+		limit = 100
+		requestedLimit = limit
 	}
 	if limit > 500 {
 		limit = 500
@@ -247,7 +256,7 @@ func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransac
 	queryBuilder.SetLimit(limit + 1) // Fetch one extra to detect if there's more/truncated
 
 	selectQuery, selectArgs := queryBuilder.BuildSelect()
-	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	queryCtx, cancel := context.WithTimeout(ctx, hotAnalyticsQueryTimeout)
 	defer cancel()
 
 	rows, err := s.db.QueryContext(queryCtx, selectQuery, selectArgs...)
@@ -299,9 +308,13 @@ func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransac
 	}
 
 	truncated := false
+	if requestedLimit > 500 {
+		truncated = true
+	}
+
 	nextCursor := ""
 	if len(details) > int(limit) {
-		truncated = true
+		// we fetched limit + 1, so there's a next page.
 		details = details[:limit]
 		lastItem := details[len(details)-1]
 		nextCursor = db.EncodeCursor(lastItem.CreatedAt.AsTime().Format(time.RFC3339Nano), lastItem.RecordId)
@@ -344,7 +357,7 @@ func (s *SQLStore) GetShadowComparison(ctx context.Context, hours int32, tenantI
 			COALESCE(AVG(shadow_score), 0) as shadow_score_mean
 		FROM metrics_raw
 	`, tenantFilter)
-	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	queryCtx, cancel := context.WithTimeout(ctx, hotAnalyticsQueryTimeout)
 	defer cancel()
 
 	var m pb.ShadowModeMetrics
@@ -397,7 +410,7 @@ func (s *SQLStore) GetRecentAlerts(ctx context.Context, limit, offset int32, ten
 	}
 	query += " ORDER BY ie.ts DESC LIMIT $1 OFFSET $2"
 
-	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	queryCtx, cancel := context.WithTimeout(ctx, hotAnalyticsQueryTimeout)
 	defer cancel()
 
 	rows, err := s.db.QueryContext(queryCtx, query, args...)
@@ -457,7 +470,7 @@ func (s *SQLStore) GetOverviewMetrics(ctx context.Context, tenantID string) (*pb
 		%[1]s
 	`, tenantFilter)
 
-	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	queryCtx, cancel := context.WithTimeout(ctx, hotAnalyticsQueryTimeout)
 	defer cancel()
 
 	var resp pb.GetOverviewMetricsResponse
@@ -1347,7 +1360,7 @@ func (s *SQLStore) GetConfusionMatrix(ctx context.Context, req *pb.GetConfusionM
 		WHERE %s
 	`, threshold, threshold, threshold, threshold, whereStmt)
 
-	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	queryCtx, cancel := context.WithTimeout(ctx, hotAnalyticsQueryTimeout)
 	defer cancel()
 
 	var tp, fp, tn, fn, missing int64
@@ -1421,7 +1434,7 @@ func (s *SQLStore) GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.Get
 
 	resp := &pb.GetKpisResponse{}
 	var sumScore int64
-	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	queryCtx, cancel := context.WithTimeout(ctx, hotAnalyticsQueryTimeout)
 	defer cancel()
 
 	err := s.db.QueryRowContext(queryCtx, summaryQuery, args...).Scan(
@@ -1501,7 +1514,7 @@ func (s *SQLStore) GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesR
 		ORDER BY %s ASC
 	`, timeCol, tableName, whereStmt, timeCol)
 
-	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	queryCtx, cancel := context.WithTimeout(ctx, hotAnalyticsQueryTimeout)
 	defer cancel()
 
 	rows, err := s.db.QueryContext(queryCtx, query, args...)

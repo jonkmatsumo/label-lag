@@ -57,25 +57,9 @@ import type {
   GetJobSummaryResponse,
 } from '../types/api';
 
-export type AnalyticsPartialReason =
-  | 'TIMEOUT'
-  | 'ROW_LIMIT'
-  | 'UPSTREAM_ERROR'
-  | 'EMPTY'
-  | 'UNKNOWN';
-
-export interface AnalyticsResponseMeta {
-  time_range: {
-    start: string;
-    end: string;
-  };
-  is_partial: boolean;
-  partial_reason: AnalyticsPartialReason;
-  sample_rate?: number;
-}
-
-export type GetRuleImpactWithMeta = GetRuleImpactResponse & { meta?: AnalyticsResponseMeta };
-export type GetJobSummaryWithMeta = GetJobSummaryResponse & { meta?: AnalyticsResponseMeta };
+// AnalyticsResponseMeta and PartialReason are now imported from ../types/api
+export type GetRuleImpactWithMeta = GetRuleImpactResponse & { meta?: import('../types/api').AnalyticsResponseMeta };
+export type GetJobSummaryWithMeta = GetJobSummaryResponse & { meta?: import('../types/api').AnalyticsResponseMeta };
 
 // Health endpoints
 export const healthApi = {
@@ -156,18 +140,20 @@ export const backtestApi = {
 
 // Analytics endpoints
 export const analyticsApi = {
-  getOverview: (days?: number) =>
-    apiClient.get<AnalyticsOverviewResponse>(`/bff/v1/analytics/overview${days ? `?days=${days}` : ''}`),
-  getDailyStats: (days = 30) =>
-    apiClient.get<DailyStatsResponse>(`/bff/v1/analytics/daily-stats?days=${days}`),
-  getRecentAlerts: (limit = 50) =>
-    apiClient.get<RecentAlertsResponse>(`/bff/v1/analytics/recent-alerts?limit=${limit}`),
-  getRuleAnalytics: (ruleId: string, days = 7) =>
-    apiClient.get<RuleAnalyticsResponse>(`/bff/v1/analytics/rules/${encodeURIComponent(ruleId)}?days=${days}`),
-  getAttribution: (ruleId: string, days = 7) =>
-    apiClient.get<RuleAttributionResponse>(`/bff/v1/analytics/attribution?rule_id=${encodeURIComponent(ruleId)}&days=${days}`),
-  searchTransactions: (request: TransactionSearchRequest) =>
-    apiClient.post<TransactionSearchResponse>('/bff/v1/analytics/transactions/search', request),
+  getOverview: (days?: number, signal?: AbortSignal) =>
+    apiClient.get<AnalyticsOverviewResponse>(`/bff/v1/analytics/overview${days ? `?days=${days}` : ''}`, signal),
+  getDailyStats: (days = 30, signal?: AbortSignal) =>
+    apiClient.get<DailyStatsResponse>(`/bff/v1/analytics/daily-stats?days=${days}`, signal),
+  getRecentAlerts: (limit = 50, signal?: AbortSignal) =>
+    apiClient.get<RecentAlertsResponse>(`/bff/v1/analytics/recent-alerts?limit=${limit}`, signal),
+  getRuleAnalytics: (ruleId: string, days = 7, signal?: AbortSignal) =>
+    apiClient.get<RuleAnalyticsResponse>(`/bff/v1/analytics/rules/${encodeURIComponent(ruleId)}?days=${days}`, signal),
+  getAttribution: (ruleId: string, days = 7, signal?: AbortSignal) =>
+    apiClient.get<RuleAttributionResponse>(`/bff/v1/analytics/attribution?rule_id=${encodeURIComponent(ruleId)}&days=${days}`, signal),
+  searchTransactions: (request: TransactionSearchRequest) => {
+    const { signal, ...rest } = request;
+    return apiClient.post<TransactionSearchResponse>('/bff/v1/analytics/transactions/search', rest, signal);
+  },
   getKpis: (params: { start_time: string; end_time: string; group_by?: 'hour' | 'day'; signal?: AbortSignal }) => {
     const { signal, ...rest } = params;
     const searchParams = new URLSearchParams();

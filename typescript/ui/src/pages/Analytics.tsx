@@ -6,9 +6,10 @@ import type { RecentAlert, TransactionSearchRequest, TransactionDetail } from '.
 import {
   Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart
 } from 'recharts';
-import { Search, ChevronDown, ChevronRight, BarChart3, ShieldCheck } from 'lucide-react';
+import { Search, ChevronDown, ChevronRight, ShieldCheck } from 'lucide-react';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { DateRangePicker, KpiCard } from '../components';
+import { DataQualityBadge } from '../components/DataQualityBadge';
 import { useTenant } from '../hooks/useTenant';
 import { useCursorPagination } from '../hooks/useCursorPagination';
 import { useAnalyticsSearchParams } from '../hooks/useAnalyticsSearchParams';
@@ -116,13 +117,13 @@ export function Analytics() {
   // Fetch overview metrics (legacy/static)
   const overviewQuery = useQuery({
     queryKey: ['analytics', tenantId, 'overview'],
-    queryFn: () => analyticsApi.getOverview(daysFilter),
+    queryFn: ({ signal }) => analyticsApi.getOverview(daysFilter, signal),
   });
 
   // Fetch recent alerts for FPR calculation
   const alertsQuery = useQuery({
     queryKey: ['analytics', tenantId, 'alerts'],
-    queryFn: () => analyticsApi.getRecentAlerts(20),
+    queryFn: ({ signal }) => analyticsApi.getRecentAlerts(20, signal),
   });
 
   const toNumber = (value: number | string | undefined | null) => {
@@ -138,6 +139,10 @@ export function Analytics() {
   };
 
   const formatPercent = (n: number) => `${(n * 100).toFixed(2)}%`;
+
+  const kpis = kpisQuery.data;
+  const volume = volumeQuery.data;
+  const confusionMatrix = confusionMatrixQuery.data;
 
   return (
     <div className="page">
@@ -170,10 +175,11 @@ export function Analytics() {
           <div style={{ minHeight: '96px' }}>
             <KpiCard
               label="Total Decisions"
-              value={kpisQuery.data?.total_decisions ?? 0}
+              value={kpis?.total_decisions ?? 0}
               loading={kpisQuery.isLoading}
               error={kpisQuery.error}
               formatter={(val) => formatNumber(val as string | number | null | undefined)}
+              badge={<DataQualityBadge meta={kpis?.meta} />}
             />
           </div>
         </div>
@@ -181,10 +187,11 @@ export function Analytics() {
           <div style={{ minHeight: '96px' }}>
             <KpiCard
               label="Total Alerts"
-              value={kpisQuery.data?.total_alerts ?? 0}
+              value={kpis?.total_alerts ?? 0}
               loading={kpisQuery.isLoading}
               error={kpisQuery.error}
               formatter={(val) => formatNumber(val as string | number | null | undefined)}
+              badge={<DataQualityBadge meta={kpis?.meta} />}
             />
           </div>
         </div>
@@ -192,10 +199,11 @@ export function Analytics() {
           <div style={{ minHeight: '96px' }}>
             <KpiCard
               label="Alert Rate"
-              value={kpisQuery.data?.alert_rate ?? 0}
+              value={kpis?.alert_rate ?? 0}
               loading={kpisQuery.isLoading}
               error={kpisQuery.error}
               formatter={(val) => `${(Number(val) * 100).toFixed(1)}%`}
+              badge={<DataQualityBadge meta={kpis?.meta} />}
             />
           </div>
         </div>
@@ -203,10 +211,11 @@ export function Analytics() {
           <div style={{ minHeight: '96px' }}>
             <KpiCard
               label="Avg Risk Score"
-              value={kpisQuery.data?.avg_score ?? 0}
+              value={kpis?.avg_score ?? 0}
               loading={kpisQuery.isLoading}
               error={kpisQuery.error}
               formatter={(val) => Number(val).toFixed(2)}
+              badge={<DataQualityBadge meta={kpis?.meta} />}
             />
           </div>
         </div>
@@ -214,22 +223,23 @@ export function Analytics() {
           <div style={{ minHeight: '96px' }}>
             <KpiCard
               label="Rules Fired"
-              value={kpisQuery.data?.rules_fired_total ?? 0}
+              value={kpis?.rules_fired_total ?? 0}
               loading={kpisQuery.isLoading}
               error={kpisQuery.error}
               formatter={(val) => formatNumber(val as string | number | null | undefined)}
+              badge={<DataQualityBadge meta={kpis?.meta} />}
             />
           </div>
         </div>
       </div>
 
       {/* Model Performance Card (Confusion Matrix) */}
-      <div className="card shadow-sm border-0 mb-4">
-        <div className="card-header bg-white border-bottom py-3 d-flex align-items-center gap-2">
-          <ShieldCheck size={18} className="text-success" />
-          <h3 className="card-title h6 fw-bold mb-0">Model Performance</h3>
-        </div>
-        <div className="card-body" style={{ minHeight: '120px' }}>
+      <div className="card h-100 shadow-sm border-0 mb-4">
+        <div className="card-body p-4">
+          <div className="d-flex justify-content-between align-items-center mb-4">
+            <h5 className="card-title mb-0 fw-bold">Model Precision (Confusion Matrix)</h5>
+            <DataQualityBadge meta={confusionMatrix?.meta} />
+          </div>
           {confusionMatrixQuery.isLoading ? (
             <div className="d-flex align-items-center justify-content-center h-100" style={{ minHeight: '100px' }}>
               <div className="spinner-border spinner-border-sm text-success me-2" />
@@ -237,14 +247,14 @@ export function Analytics() {
             </div>
           ) : confusionMatrixQuery.isError ? (
             <div className="text-danger small p-2">Failed to load model performance metrics</div>
-          ) : confusionMatrixQuery.data?.insufficient_labels ? (
+          ) : confusionMatrix?.insufficient_labels ? (
             <div className="d-flex align-items-center justify-content-center" style={{ minHeight: '100px' }}>
               <div className="text-center text-muted">
                 <ShieldCheck size={28} className="mb-2 opacity-25" />
                 <div className="small">Insufficient labeled data for the selected period</div>
               </div>
             </div>
-          ) : confusionMatrixQuery.data ? (
+          ) : confusionMatrix ? (
             <div className="row g-4 align-items-start">
               {/* Precision / Recall / F1 */}
               <div className="col-md-6">
@@ -287,23 +297,50 @@ export function Analytics() {
       </div>
 
       {/* Volume Chart */}
-      <div className="card shadow-sm border-0 mb-4">
-        <div className="card-header bg-white border-bottom py-3 d-flex align-items-center gap-2">
-          <BarChart3 size={18} className="text-primary" />
-          <h3 className="card-title h6 fw-bold mb-0">Transaction & Alert Volume</h3>
-        </div>
-        <div className="card-body" style={{ height: 350 }}>
+      <div className="card h-100 shadow-sm border-0 mb-4">
+        <div className="card-body p-4">
+          <div className="d-flex justify-content-between align-items-center mb-4">
+            <h5 className="card-title mb-0 fw-bold">Anomaly Volume</h5>
+            <div className="d-flex gap-2 align-items-center">
+              <DataQualityBadge meta={volume?.meta} />
+              <select
+                className="form-select form-select-sm"
+                value={granularity}
+                onChange={(e) => handleGranularityChange(e.target.value as 'hour' | 'day')}
+                disabled={volumeQuery.isLoading}
+              >
+                <option value="hour">Hourly</option>
+                <option value="day">Daily</option>
+              </select>
+            </div>
+          </div>
           {volumeQuery.isLoading ? (
             <div className="d-flex align-items-center justify-content-center h-100">
               <div className="spinner-border spinner-border-sm text-primary me-2" /> Loading volume data...
             </div>
           ) : volumeQuery.isError ? (
             <div className="text-danger p-4">Failed to load volume chart</div>
-          ) : volumeQuery.data?.points && volumeQuery.data.points.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={[...volumeQuery.data.points].sort((a, b) =>
-                new Date(a.timestamp ?? 0).getTime() - new Date(b.timestamp ?? 0).getTime()
-              )}>
+          ) : volume?.points && volume.points.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <ComposedChart
+                data={[...volume.points].sort((a, b) =>
+                  new Date(a.timestamp ?? 0).getTime() - new Date(b.timestamp ?? 0).getTime()
+                )}
+                onClick={(data: { activePayload?: Array<{ payload: { timestamp: string } }> }) => {
+                  if (data && data.activePayload && data.activePayload.length > 0) {
+                    const point = data.activePayload[0].payload;
+                    const date = new Date(point.timestamp);
+                    const dateStr = date.toISOString().split('T')[0];
+                    // If granularity is hour, we filter for that specific day or range
+                    // For now, let's drill down by setting both start/end to this day
+                    setSearchParams({
+                      ...Object.fromEntries(searchParams),
+                      start_date: dateStr,
+                      end_date: dateStr
+                    });
+                  }
+                }}
+              >
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                 <XAxis
                   dataKey="timestamp"
@@ -389,24 +426,25 @@ function TransactionExplorer() {
 
   const pagination = useCursorPagination<TransactionDetail>({
     queryKeyBase: ['analytics', tenantId, 'search'],
-    fetchPage: ({ cursor, limit }) =>
+    fetchPage: ({ cursor, limit, signal }) =>
       analyticsApi.searchTransactions({
         ...filters,
         tenant_id: tenantId,
         cursor,
         limit,
         include_features: false, // Prevent overfetching on list view
+        signal,
       }).then(res => ({
         items: res.items,
         nextCursor: res.next_cursor,
-        total: res.total,
         truncated: res.truncated,
       })),
     limit: 20,
     filters,
   });
 
-  const totalTransactions = Number(pagination.total ?? 0);
+  // No longer use pagination.total since backend doesn't return it for search
+  // Instead, we show 'Truncated' if the server flagged it or we hit the next page state
 
   return (
     <div className="card shadow-sm border-0 mt-4 mb-5">
@@ -417,10 +455,10 @@ function TransactionExplorer() {
         <TransactionFilters filters={filters} onChange={updateParams} />
 
         {/* Truncation warning */}
-        {pagination.data?.length > 0 && pagination.total === 500 && (
+        {pagination.truncated && (
           <div className="alert alert-warning py-2 small d-flex align-items-center mb-3">
             <ShieldCheck size={16} className="me-2 flex-shrink-0" />
-            <div><strong>Results truncated to 500 records.</strong> Please use filters or date ranges to narrow your search for older transactions.</div>
+            <div><strong>Results truncated by server.</strong> Request limit was automatically capped at 500 for performance. Use filters to narrow results.</div>
           </div>
         )}
 
@@ -436,8 +474,8 @@ function TransactionExplorer() {
             {pagination.data.length > 0 && (
               <div className="d-flex justify-content-between align-items-center mt-3">
                 <div className="small text-muted">
-                  {totalTransactions > 0 ? `Showing page` : `No transactions`}
-                  {totalTransactions > 0 && totalTransactions === 500 ? ' (Truncated)' : ''}
+                  {pagination.data.length > 0 ? `Showing page results` : `No transactions`}
+                  {pagination.truncated ? ' (Capped)' : ''}
                 </div>
                 <div className="btn-group btn-group-sm">
                   {/* Since cursor pagination doesn't naturally support 'Previous' easily without a stack, we'll offer Reset and Next */}

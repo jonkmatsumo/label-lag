@@ -1,4 +1,5 @@
 {
   "transactions": [],
-  "total": 0
+  "next_cursor": "",
+  "truncated": false
 }

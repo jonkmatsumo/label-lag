@@ -192,13 +192,11 @@ describe('Contract: GET /analytics/overview', () => {
 // ─── Transaction Search (encoding/json on proto → numbers, total as number) ──
 
 describe('Contract: POST /analytics/transactions/search', () => {
-  it('with-results fixture has transactions array and numeric total (legacy)', () => {
+  it('with-results fixture has transactions array', () => {
     const payload = loadFixture('search/with-results.json') as Record<string, unknown>;
 
     expect(Array.isArray(payload.transactions)).toBe(true);
-    // total is a number in the fixture (backend sends number via json.Encode on custom struct)
-    expect(typeof payload.total).toBe('number');
-    expect(payload.total).toBe((payload.transactions as unknown[]).length);
+    expect((payload.transactions as unknown[]).length).toBeGreaterThan(0);
   });
 
   it('cursor_page_1 fixture has next_cursor string and truncated boolean', () => {
@@ -234,12 +232,11 @@ describe('Contract: POST /analytics/transactions/search', () => {
     expect(txs[0].categorical_features).toBeUndefined();
   });
 
-  it('empty fixture has empty transactions array and zero total', () => {
+  it('empty fixture has empty transactions array', () => {
     const payload = loadFixture('search/empty.json') as Record<string, unknown>;
 
     expect(Array.isArray(payload.transactions)).toBe(true);
     expect((payload.transactions as unknown[]).length).toBe(0);
-    expect(payload.total).toBe(0);
   });
 });
 

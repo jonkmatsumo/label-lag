@@ -5,11 +5,12 @@ export interface CursorPage<TItem> {
   items: TItem[];
   nextCursor?: string;
   total?: number;
+  truncated?: boolean;
 }
 
 export interface UseCursorPaginationOptions<TItem> {
   queryKeyBase: unknown[];
-  fetchPage: (params: { cursor?: string; limit: number }) => Promise<CursorPage<TItem>>;
+  fetchPage: (params: { cursor?: string; limit: number; signal?: AbortSignal }) => Promise<CursorPage<TItem>>;
   limit?: number;
   filters?: Record<string, unknown>;
   enabled?: boolean;
@@ -26,6 +27,7 @@ export interface UseCursorPaginationResult<TItem> {
   reset: () => void;
   total?: number;
   cursor?: string;
+  truncated?: boolean;
 }
 
 export function useCursorPagination<TItem>(
@@ -47,12 +49,12 @@ export function useCursorPagination<TItem>(
 
   const query = useQuery({
     queryKey,
-    queryFn: () => {
+    queryFn: ({ signal }) => {
       // Guard: never send both cursor and offset
       if (cursor && filters?.offset !== undefined) {
         throw new Error('Cannot provide both cursor and offset');
       }
-      return fetchPage({ cursor, limit });
+      return fetchPage({ cursor, limit, signal });
     },
     placeholderData: keepPreviousData,
     enabled,
@@ -81,5 +83,6 @@ export function useCursorPagination<TItem>(
     reset,
     total: query.data?.total,
     cursor,
+    truncated: query.data?.truncated,
   };
 }
