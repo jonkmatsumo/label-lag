@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var (
@@ -138,12 +139,93 @@ func (c *AnalyticsClient) withMetadata(ctx context.Context) context.Context {
 	return ctx
 }
 
+func parseAnalyticsQueryTime(value string) (time.Time, bool) {
+	if value == "" {
+		return time.Time{}, false
+	}
+	if parsed, err := time.Parse(time.RFC3339, value); err == nil {
+		return parsed.UTC(), true
+	}
+	// Accept date-only values for compatibility with existing clients.
+	if parsed, err := time.Parse("2006-01-02", value); err == nil {
+		return parsed.UTC(), true
+	}
+	return time.Time{}, false
+}
+
+func analyticsWindowDays(start, end time.Time) int64 {
+	if !end.After(start) {
+		return 0
+	}
+	const day = 24 * time.Hour
+	duration := end.Sub(start)
+	// Deterministic ceil(duration/day) for non-zero positive durations.
+	return int64((duration + day - 1) / day)
+}
+
+func analyticsWindowDaysFromProto(start, end *timestamppb.Timestamp) (int64, bool) {
+	if start == nil || end == nil {
+		return 0, false
+	}
+	startTime := start.AsTime().UTC()
+	endTime := end.AsTime().UTC()
+	if !endTime.After(startTime) {
+		return 0, false
+	}
+	return analyticsWindowDays(startTime, endTime), true
+}
+
+func analyticsWindowDaysFromStrings(start, end string) (int64, bool) {
+	startTime, okStart := parseAnalyticsQueryTime(start)
+	endTime, okEnd := parseAnalyticsQueryTime(end)
+	if !okStart || !okEnd || !endTime.After(startTime) {
+		return 0, false
+	}
+	return analyticsWindowDays(startTime, endTime), true
+}
+
+func normalizeAnalyticsGranularity(value, fallback string) string {
+	normalized := value
+	if normalized == "" {
+		normalized = fallback
+	}
+	switch normalized {
+	case "day", "hour", "none":
+		return normalized
+	default:
+		return "unknown"
+	}
+}
+
+func spanSetAnalyticsQueryAttributes(span trace.Span, queryType, granularity string, windowDays int64) {
+	attrs := []attribute.KeyValue{
+		attribute.String("analytics.query_type", queryType),
+	}
+	if granularity != "" {
+		attrs = append(attrs, attribute.String("analytics.granularity", granularity))
+	}
+	if windowDays > 0 {
+		attrs = append(attrs, attribute.Int64("analytics.window_days", windowDays))
+	}
+	span.SetAttributes(attrs...)
+}
+
+func spanSetAnalyticsResultAttributes(span trace.Span, resultCount int64, truncated bool) {
+	span.SetAttributes(
+		attribute.Int64("analytics.result_count", resultCount),
+		attribute.Bool("analytics.truncated", truncated),
+	)
+}
+
 func (c *AnalyticsClient) SearchTransactions(ctx context.Context, req *crudv1.SearchTransactionsRequest) (*crudv1.SearchTransactionsResponse, error) {
 	if req == nil {
 		return nil, fmt.Errorf("nil request")
 	}
 
 	span := trace.SpanFromContext(ctx)
+	windowDays, _ := analyticsWindowDaysFromStrings(req.GetStartDate(), req.GetEndDate())
+	spanSetAnalyticsQueryAttributes(span, "transactions", "none", windowDays)
+
 	if err := c.breaker.Allow(); err != nil {
 		span.SetAttributes(
 			attribute.String("analytics.breaker_state", c.breaker.State().String()),
@@ -169,6 +251,7 @@ func (c *AnalyticsClient) SearchTransactions(ctx context.Context, req *crudv1.Se
 	if err != nil {
 		return nil, mapRPCError(err)
 	}
+	spanSetAnalyticsResultAttributes(span, int64(len(resp.GetTransactions())), resp.GetTruncated())
 	return resp, nil
 }
 
@@ -1046,6 +1129,16 @@ func (c *AnalyticsClient) GetRuleImpact(ctx context.Context, req *crudv1.GetRule
 	}
 
 	span := trace.SpanFromContext(ctx)
+	windowDays, ok := analyticsWindowDaysFromProto(req.GetStartDate(), req.GetEndDate())
+	if !ok && req.GetQuery() != nil {
+		windowDays, _ = analyticsWindowDaysFromStrings(req.GetQuery().GetStartTime(), req.GetQuery().GetEndTime())
+	}
+	granularity := "day"
+	if req.GetQuery() != nil {
+		granularity = normalizeAnalyticsGranularity(req.GetQuery().GetGranularity(), "day")
+	}
+	spanSetAnalyticsQueryAttributes(span, "rule_impact", granularity, windowDays)
+
 	if err := c.breaker.Allow(); err != nil {
 		span.SetAttributes(
 			attribute.String("analytics.breaker_state", c.breaker.State().String()),
@@ -1071,6 +1164,7 @@ func (c *AnalyticsClient) GetRuleImpact(ctx context.Context, req *crudv1.GetRule
 	if err != nil {
 		return nil, mapRPCError(err)
 	}
+	spanSetAnalyticsResultAttributes(span, int64(len(resp.GetDailyBuckets())), false)
 	return resp, nil
 }
 
@@ -1080,6 +1174,16 @@ func (c *AnalyticsClient) GetKpis(ctx context.Context, req *crudv1.GetKpisReques
 	}
 
 	span := trace.SpanFromContext(ctx)
+	windowDays, ok := analyticsWindowDaysFromProto(req.GetStartTime(), req.GetEndTime())
+	if !ok && req.GetQuery() != nil {
+		windowDays, _ = analyticsWindowDaysFromStrings(req.GetQuery().GetStartTime(), req.GetQuery().GetEndTime())
+	}
+	granularity := normalizeAnalyticsGranularity(req.GetGroupBy(), "day")
+	if req.GetQuery() != nil {
+		granularity = normalizeAnalyticsGranularity(req.GetQuery().GetGranularity(), granularity)
+	}
+	spanSetAnalyticsQueryAttributes(span, "kpis", granularity, windowDays)
+
 	if err := c.breaker.Allow(); err != nil {
 		span.SetAttributes(
 			attribute.String("analytics.breaker_state", c.breaker.State().String()),
@@ -1105,6 +1209,7 @@ func (c *AnalyticsClient) GetKpis(ctx context.Context, req *crudv1.GetKpisReques
 	if err != nil {
 		return nil, mapRPCError(err)
 	}
+	spanSetAnalyticsResultAttributes(span, int64(len(resp.GetBuckets())), false)
 	return resp, nil
 }
 
@@ -1114,6 +1219,16 @@ func (c *AnalyticsClient) GetVolumeSeries(ctx context.Context, req *crudv1.GetVo
 	}
 
 	span := trace.SpanFromContext(ctx)
+	windowDays, ok := analyticsWindowDaysFromProto(req.GetStartTime(), req.GetEndTime())
+	if !ok && req.GetQuery() != nil {
+		windowDays, _ = analyticsWindowDaysFromStrings(req.GetQuery().GetStartTime(), req.GetQuery().GetEndTime())
+	}
+	granularity := normalizeAnalyticsGranularity(req.GetGranularity(), "day")
+	if req.GetQuery() != nil {
+		granularity = normalizeAnalyticsGranularity(req.GetQuery().GetGranularity(), granularity)
+	}
+	spanSetAnalyticsQueryAttributes(span, "volume", granularity, windowDays)
+
 	if err := c.breaker.Allow(); err != nil {
 		span.SetAttributes(
 			attribute.String("analytics.breaker_state", c.breaker.State().String()),
@@ -1139,6 +1254,7 @@ func (c *AnalyticsClient) GetVolumeSeries(ctx context.Context, req *crudv1.GetVo
 	if err != nil {
 		return nil, mapRPCError(err)
 	}
+	spanSetAnalyticsResultAttributes(span, int64(len(resp.GetPoints())), false)
 	return resp, nil
 }
 
@@ -1148,6 +1264,16 @@ func (c *AnalyticsClient) GetConfusionMatrix(ctx context.Context, req *crudv1.Ge
 	}
 
 	span := trace.SpanFromContext(ctx)
+	windowDays, ok := analyticsWindowDaysFromProto(req.GetStartTime(), req.GetEndTime())
+	if !ok && req.GetQuery() != nil {
+		windowDays, _ = analyticsWindowDaysFromStrings(req.GetQuery().GetStartTime(), req.GetQuery().GetEndTime())
+	}
+	granularity := "day"
+	if req.GetQuery() != nil {
+		granularity = normalizeAnalyticsGranularity(req.GetQuery().GetGranularity(), "day")
+	}
+	spanSetAnalyticsQueryAttributes(span, "confusion_matrix", granularity, windowDays)
+
 	if err := c.breaker.Allow(); err != nil {
 		span.SetAttributes(
 			attribute.String("analytics.breaker_state", c.breaker.State().String()),
@@ -1173,6 +1299,8 @@ func (c *AnalyticsClient) GetConfusionMatrix(ctx context.Context, req *crudv1.Ge
 	if err != nil {
 		return nil, mapRPCError(err)
 	}
+	resultCount := resp.GetTruePositives() + resp.GetFalsePositives() + resp.GetTrueNegatives() + resp.GetFalseNegatives()
+	spanSetAnalyticsResultAttributes(span, resultCount, false)
 	return resp, nil
 }
 
@@ -1488,6 +1616,16 @@ func (c *AnalyticsClient) GetJobSummary(ctx context.Context, req *crudv1.GetJobS
 	}
 
 	span := trace.SpanFromContext(ctx)
+	windowDays, ok := analyticsWindowDaysFromProto(req.GetStartTime(), req.GetEndTime())
+	if !ok && req.GetQuery() != nil {
+		windowDays, _ = analyticsWindowDaysFromStrings(req.GetQuery().GetStartTime(), req.GetQuery().GetEndTime())
+	}
+	granularity := "day"
+	if req.GetQuery() != nil {
+		granularity = normalizeAnalyticsGranularity(req.GetQuery().GetGranularity(), "day")
+	}
+	spanSetAnalyticsQueryAttributes(span, "jobs_summary", granularity, windowDays)
+
 	if err := c.breaker.Allow(); err != nil {
 		span.SetAttributes(
 			attribute.String("analytics.breaker_state", c.breaker.State().String()),
@@ -1513,6 +1651,7 @@ func (c *AnalyticsClient) GetJobSummary(ctx context.Context, req *crudv1.GetJobS
 	if err != nil {
 		return nil, mapRPCError(err)
 	}
+	spanSetAnalyticsResultAttributes(span, int64(len(resp.GetSummaries())), false)
 	return resp, nil
 }
 

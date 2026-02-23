@@ -100,11 +100,18 @@ service AnalyticsService {
   rpc ReportTrainingRun(ReportTrainingRunRequest) returns (ReportTrainingRunResponse);
 }
 
+message AnalyticsQueryEnvelope {
+  string start_time = 1;  // RFC3339
+  string end_time = 2;  // RFC3339
+  string granularity = 3;  // "hour" | "day"
+}
+
 message GetKpisRequest {
-  google.protobuf.Timestamp start_time = 1;
-  google.protobuf.Timestamp end_time = 2;
-  string group_by = 3; // "hour" | "day"
+  google.protobuf.Timestamp start_time = 1 [deprecated = true];
+  google.protobuf.Timestamp end_time = 2 [deprecated = true];
+  string group_by = 3 [deprecated = true]; // "hour" | "day"
   string tenant_id = 15;
+  AnalyticsQueryEnvelope query = 16;
 }
 
 message KpiBucket {
@@ -124,10 +131,11 @@ message GetKpisResponse {
 }
 
 message GetVolumeSeriesRequest {
-  google.protobuf.Timestamp start_time = 1;
-  google.protobuf.Timestamp end_time = 2;
-  string granularity = 3; // "hour" | "day"
+  google.protobuf.Timestamp start_time = 1 [deprecated = true];
+  google.protobuf.Timestamp end_time = 2 [deprecated = true];
+  string granularity = 3 [deprecated = true]; // "hour" | "day"
   string tenant_id = 15;
+  AnalyticsQueryEnvelope query = 16;
 }
 
 message VolumePoint {
@@ -141,11 +149,12 @@ message GetVolumeSeriesResponse {
 }
 
 message GetConfusionMatrixRequest {
-  google.protobuf.Timestamp start_time = 1;
-  google.protobuf.Timestamp end_time = 2;
+  google.protobuf.Timestamp start_time = 1 [deprecated = true];
+  google.protobuf.Timestamp end_time = 2 [deprecated = true];
   string model_version = 3;
   int32 threshold = 4; // Optional: custom score threshold
   string tenant_id = 15;
+  AnalyticsQueryEnvelope query = 16;
 }
 
 message GetConfusionMatrixResponse {
@@ -776,9 +785,10 @@ message GetDecisionTraceResponse {
 
 message GetRuleImpactRequest {
   string rule_id = 1;
-  google.protobuf.Timestamp start_date = 2;
-  google.protobuf.Timestamp end_date = 3;
+  google.protobuf.Timestamp start_date = 2 [deprecated = true];
+  google.protobuf.Timestamp end_date = 3 [deprecated = true];
   string tenant_id = 15;
+  AnalyticsQueryEnvelope query = 16;
 }
 
 message RuleImpactBucket {
@@ -952,9 +962,10 @@ message GetJobEventsResponse {
 }
 
 message GetJobSummaryRequest {
-  google.protobuf.Timestamp start_time = 1;
-  google.protobuf.Timestamp end_time = 2;
+  google.protobuf.Timestamp start_time = 1 [deprecated = true];
+  google.protobuf.Timestamp end_time = 2 [deprecated = true];
   string tenant_id = 15;
+  AnalyticsQueryEnvelope query = 16;
 }
 
 message JobSummaryBucket {

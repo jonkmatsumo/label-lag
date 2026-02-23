@@ -178,22 +178,21 @@ func (h *Handler) handleGetJobSummary(w http.ResponseWriter, r *http.Request) {
 		TenantId: tenantID,
 	}
 
-	if startStr := r.URL.Query().Get("start_time"); startStr != "" {
-		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
-			req.StartTime = timestamppb.New(t)
-		} else {
-			writeJSONError(w, r, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
-			return
-		}
+	query := r.URL.Query()
+	startRaw, startTS, err := parseAnalyticsTimeQuery(query, "start_time")
+	if err != nil {
+		writeJSONError(w, r, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
+		return
 	}
-	if endStr := r.URL.Query().Get("end_time"); endStr != "" {
-		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
-			req.EndTime = timestamppb.New(t)
-		} else {
-			writeJSONError(w, r, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
-			return
-		}
+	endRaw, endTS, err := parseAnalyticsTimeQuery(query, "end_time")
+	if err != nil {
+		writeJSONError(w, r, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
+		return
 	}
+	granularity := firstNonEmptyQuery(query, "granularity")
+	req.StartTime = startTS
+	req.EndTime = endTS
+	req.Query = buildAnalyticsQueryEnvelope(startRaw, endRaw, granularity)
 
 	resp, err := h.analyticsClient.GetJobSummary(r.Context(), req)
 	if err != nil {

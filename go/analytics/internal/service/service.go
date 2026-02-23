@@ -758,6 +758,13 @@ func (s *Service) GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactReques
 		return nil, status.Error(codes.InvalidArgument, "rule_id required")
 	}
 
+	startDate, endDate, err := mergeWindowFromEnvelope(req.StartDate, req.EndDate, req.GetQuery())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "query.start_time and query.end_time must be RFC3339 or YYYY-MM-DD")
+	}
+	req.StartDate = startDate
+	req.EndDate = endDate
+
 	if req.StartDate == nil {
 		cutoff := time.Now().AddDate(0, 0, -int(defaultRuleImpactDays))
 		req.StartDate = timestamppb.New(cutoff)
@@ -775,6 +782,14 @@ func (s *Service) GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.GetK
 		return nil, status.Error(codes.InvalidArgument, "request required")
 	}
 
+	startTime, endTime, err := mergeWindowFromEnvelope(req.StartTime, req.EndTime, req.GetQuery())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "query.start_time and query.end_time must be RFC3339 or YYYY-MM-DD")
+	}
+	req.StartTime = startTime
+	req.EndTime = endTime
+	req.GroupBy = mergeGranularityFromEnvelope(req.GroupBy, req.GetQuery(), "")
+
 	if req.GroupBy != "" && req.GroupBy != "day" && req.GroupBy != "hour" {
 		return nil, status.Error(codes.InvalidArgument, "group_by must be 'day' or 'hour'")
 	}
@@ -787,8 +802,8 @@ func (s *Service) GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.GetK
 		}
 
 		duration := end.Sub(start)
-		if req.GroupBy == "hour" && duration > 7*24*time.Hour {
-			return nil, status.Error(codes.InvalidArgument, "hourly KPI range exceeds maximum of 7 days")
+		if req.GroupBy == "hour" && duration > 14*24*time.Hour {
+			return nil, status.Error(codes.InvalidArgument, "hourly KPI range exceeds maximum of 14 days")
 		}
 		if (req.GroupBy == "day" || req.GroupBy == "") && duration > 90*24*time.Hour {
 			return nil, status.Error(codes.InvalidArgument, "daily KPI range exceeds maximum of 90 days")
@@ -802,6 +817,14 @@ func (s *Service) GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesRe
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request required")
 	}
+
+	startTime, endTime, err := mergeWindowFromEnvelope(req.StartTime, req.EndTime, req.GetQuery())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "query.start_time and query.end_time must be RFC3339 or YYYY-MM-DD")
+	}
+	req.StartTime = startTime
+	req.EndTime = endTime
+	req.Granularity = mergeGranularityFromEnvelope(req.Granularity, req.GetQuery(), "")
 
 	if req.Granularity != "day" && req.Granularity != "hour" {
 		if req.Granularity == "" {
@@ -819,8 +842,8 @@ func (s *Service) GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesRe
 		}
 
 		duration := end.Sub(start)
-		if req.Granularity == "hour" && duration > 7*24*time.Hour {
-			return nil, status.Error(codes.InvalidArgument, "hourly volume range exceeds maximum of 7 days")
+		if req.Granularity == "hour" && duration > 14*24*time.Hour {
+			return nil, status.Error(codes.InvalidArgument, "hourly volume range exceeds maximum of 14 days")
 		}
 		if req.Granularity == "day" && duration > 90*24*time.Hour {
 			return nil, status.Error(codes.InvalidArgument, "daily volume range exceeds maximum of 90 days")
@@ -834,6 +857,13 @@ func (s *Service) GetConfusionMatrix(ctx context.Context, req *pb.GetConfusionMa
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request required")
 	}
+
+	startTime, endTime, err := mergeWindowFromEnvelope(req.StartTime, req.EndTime, req.GetQuery())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "query.start_time and query.end_time must be RFC3339 or YYYY-MM-DD")
+	}
+	req.StartTime = startTime
+	req.EndTime = endTime
 
 	if req.StartTime != nil && req.EndTime != nil && req.StartTime.AsTime().After(req.EndTime.AsTime()) {
 		return nil, status.Error(codes.InvalidArgument, "start_time must be <= end_time")

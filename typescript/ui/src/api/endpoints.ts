@@ -61,6 +61,24 @@ import type {
 export type GetRuleImpactWithMeta = GetRuleImpactResponse & { meta?: import('../types/api').AnalyticsResponseMeta };
 export type GetJobSummaryWithMeta = GetJobSummaryResponse & { meta?: import('../types/api').AnalyticsResponseMeta };
 
+export type AnalyticsQueryGranularity = 'hour' | 'day';
+
+export interface AnalyticsQueryEnvelopeParams {
+  start_time: string;
+  end_time: string;
+  granularity?: AnalyticsQueryGranularity;
+}
+
+function buildAnalyticsQueryEnvelopeSearchParams(
+  envelope: AnalyticsQueryEnvelopeParams
+): URLSearchParams {
+  const searchParams = new URLSearchParams();
+  searchParams.set('start_time', envelope.start_time);
+  searchParams.set('end_time', envelope.end_time);
+  if (envelope.granularity) searchParams.set('granularity', envelope.granularity);
+  return searchParams;
+}
+
 // Health endpoints
 export const healthApi = {
   getHealth: () => apiClient.get<HealthResponse>('/bff/v1/health'),
@@ -154,29 +172,21 @@ export const analyticsApi = {
     const { signal, ...rest } = request;
     return apiClient.post<TransactionSearchResponse>('/bff/v1/analytics/transactions/search', rest, signal);
   },
-  getKpis: (params: { start_time: string; end_time: string; group_by?: 'hour' | 'day'; signal?: AbortSignal }) => {
-    const { signal, ...rest } = params;
-    const searchParams = new URLSearchParams();
-    searchParams.set('start_time', rest.start_time);
-    searchParams.set('end_time', rest.end_time);
-    if (rest.group_by) searchParams.set('group_by', rest.group_by);
+  getKpis: (params: AnalyticsQueryEnvelopeParams & { signal?: AbortSignal }) => {
+    const { signal, ...envelope } = params;
+    const searchParams = buildAnalyticsQueryEnvelopeSearchParams(envelope);
     return apiClient.get<KpisResponse>(`/bff/v1/kpis?${searchParams.toString()}`, signal);
   },
-  getVolume: (params: { start_time: string; end_time: string; granularity?: 'hour' | 'day'; signal?: AbortSignal }) => {
-    const { signal, ...rest } = params;
-    const searchParams = new URLSearchParams();
-    searchParams.set('start_time', rest.start_time);
-    searchParams.set('end_time', rest.end_time);
-    if (rest.granularity) searchParams.set('granularity', rest.granularity);
+  getVolume: (params: AnalyticsQueryEnvelopeParams & { signal?: AbortSignal }) => {
+    const { signal, ...envelope } = params;
+    const searchParams = buildAnalyticsQueryEnvelopeSearchParams(envelope);
     return apiClient.get<VolumeSeriesResponse>(`/bff/v1/volume?${searchParams.toString()}`, signal);
   },
-  getConfusionMatrix: (params: { start_time: string; end_time: string; threshold?: number; model_version?: string; signal?: AbortSignal }) => {
-    const { signal, ...rest } = params;
-    const searchParams = new URLSearchParams();
-    searchParams.set('start_time', rest.start_time);
-    searchParams.set('end_time', rest.end_time);
-    if (rest.threshold !== undefined) searchParams.set('threshold', String(rest.threshold));
-    if (rest.model_version) searchParams.set('model_version', rest.model_version);
+  getConfusionMatrix: (params: AnalyticsQueryEnvelopeParams & { threshold?: number; model_version?: string; signal?: AbortSignal }) => {
+    const { signal, threshold, model_version, ...envelope } = params;
+    const searchParams = buildAnalyticsQueryEnvelopeSearchParams(envelope);
+    if (threshold !== undefined) searchParams.set('threshold', String(threshold));
+    if (model_version) searchParams.set('model_version', model_version);
     return apiClient.get<ConfusionMatrixResponse>(`/bff/v1/analytics/confusion-matrix?${searchParams.toString()}`, signal);
   },
   getRuleImpact: (ruleId: string, params?: { start_time?: string; end_time?: string; signal?: AbortSignal }) => {

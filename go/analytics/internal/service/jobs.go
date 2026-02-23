@@ -93,6 +93,13 @@ func (s *Service) GetJobEvents(ctx context.Context, req *pb.GetJobEventsRequest)
 }
 
 func (s *Service) GetJobSummary(ctx context.Context, req *pb.GetJobSummaryRequest) (*pb.GetJobSummaryResponse, error) {
+	startTime, endTime, err := mergeWindowFromEnvelope(req.StartTime, req.EndTime, req.GetQuery())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "query.start_time and query.end_time must be RFC3339 or YYYY-MM-DD")
+	}
+	req.StartTime = startTime
+	req.EndTime = endTime
+
 	if req.StartTime != nil && req.EndTime != nil && req.StartTime.AsTime().After(req.EndTime.AsTime()) {
 		return nil, status.Error(codes.InvalidArgument, "start_time must be <= end_time")
 	}

@@ -5,6 +5,7 @@ import type { GetJobSummaryResponse } from '../types/api.js';
 import { parseInt64, timestampToIso } from '../utils/protojson.js';
 import { getRequestAbortSignal } from '../utils/request-signal.js';
 import { normalizeAnalyticsMeta } from '../utils/analytics-meta.js';
+import { validateAnalyticsQueryEnvelope } from '../utils/analytics-query-envelope.js';
 
 export interface JobsRoutesOptions {
   httpClient: HttpClient;
@@ -269,36 +270,23 @@ export async function jobsRoutes(
       try {
         const requestSignal = getRequestAbortSignal(request, reply);
         const { start_time, end_time } = request.query;
+        const validatedQuery = validateAnalyticsQueryEnvelope({
+          start_time,
+          end_time,
+        });
+        if (!validatedQuery.ok) {
+          return reply.status(validatedQuery.statusCode).send(validatedQuery.body);
+        }
+        const queryEnvelope = validatedQuery.value;
         const tenantId =
           (request as FastifyRequest & { tenantId?: string }).tenantId ??
           (typeof request.headers['x-tenant-id'] === 'string' ? request.headers['x-tenant-id'] : undefined) ??
           'default';
 
-        // Validation
-        const start = new Date(start_time);
-        const end = new Date(end_time);
-        if (start >= end) {
-          return reply.status(400).send({
-            error: {
-              code: 'INVALID_RANGE',
-              message: 'start_time must be before end_time',
-            }
-          });
-        }
-        const daysDiff = (end.getTime() - start.getTime()) / (1000 * 3600 * 24);
-        if (daysDiff > 90) {
-          return reply.status(400).send({
-            error: {
-              code: 'INVALID_RANGE',
-              message: 'Time range cannot exceed 90 days',
-            }
-          });
-        }
-
-        const cacheKey = `jobs:summary:${tenantId}:${start_time ?? ''}:${end_time ?? ''}`;
+        const cacheKey = `jobs:summary:${tenantId}:${queryEnvelope.start_time}:${queryEnvelope.end_time}`;
         const searchParams = new URLSearchParams();
-        if (start_time) searchParams.set('start_time', start_time);
-        if (end_time) searchParams.set('end_time', end_time);
+        searchParams.set('start_time', queryEnvelope.start_time);
+        searchParams.set('end_time', queryEnvelope.end_time);
 
         const normalized = await cache.getOrLoad<GetJobSummaryResponse>(
           cacheKey,
@@ -325,8 +313,8 @@ export async function jobsRoutes(
               summaries,
               meta: normalizeAnalyticsMeta({
                 raw,
-                startTime: start_time,
-                endTime: end_time,
+                startTime: queryEnvelope.start_time,
+                endTime: queryEnvelope.end_time,
                 hasData: summaries.length > 0,
               }),
             };

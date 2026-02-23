@@ -17,14 +17,32 @@ export enum ReadinessStatus {
   UNRECOGNIZED = "UNRECOGNIZED",
 }
 
+export interface AnalyticsQueryEnvelope {
+  /** RFC3339 */
+  start_time: string;
+  /** RFC3339 */
+  end_time: string;
+  /** "hour" | "day" */
+  granularity: string;
+}
+
 export interface GetKpisRequest {
-  start_time?: Date | undefined;
+  /** @deprecated */
+  start_time?:
+    | Date
+    | undefined;
+  /** @deprecated */
   end_time?:
     | Date
     | undefined;
-  /** "hour" | "day" */
+  /**
+   * "hour" | "day"
+   *
+   * @deprecated
+   */
   group_by: string;
   tenant_id: string;
+  query?: AnalyticsQueryEnvelope | undefined;
 }
 
 export interface KpiBucket {
@@ -44,13 +62,22 @@ export interface GetKpisResponse {
 }
 
 export interface GetVolumeSeriesRequest {
-  start_time?: Date | undefined;
+  /** @deprecated */
+  start_time?:
+    | Date
+    | undefined;
+  /** @deprecated */
   end_time?:
     | Date
     | undefined;
-  /** "hour" | "day" */
+  /**
+   * "hour" | "day"
+   *
+   * @deprecated
+   */
   granularity: string;
   tenant_id: string;
+  query?: AnalyticsQueryEnvelope | undefined;
 }
 
 export interface VolumePoint {
@@ -64,12 +91,17 @@ export interface GetVolumeSeriesResponse {
 }
 
 export interface GetConfusionMatrixRequest {
-  start_time?: Date | undefined;
+  /** @deprecated */
+  start_time?:
+    | Date
+    | undefined;
+  /** @deprecated */
   end_time?: Date | undefined;
   model_version: string;
   /** Optional: custom score threshold */
   threshold: number;
   tenant_id: string;
+  query?: AnalyticsQueryEnvelope | undefined;
 }
 
 export interface GetConfusionMatrixResponse {
@@ -743,9 +775,14 @@ export interface GetDecisionTraceResponse {
 
 export interface GetRuleImpactRequest {
   rule_id: string;
-  start_date?: Date | undefined;
+  /** @deprecated */
+  start_date?:
+    | Date
+    | undefined;
+  /** @deprecated */
   end_date?: Date | undefined;
   tenant_id: string;
+  query?: AnalyticsQueryEnvelope | undefined;
 }
 
 export interface RuleImpactBucket {
@@ -935,9 +972,14 @@ export interface GetJobEventsResponse {
 }
 
 export interface GetJobSummaryRequest {
-  start_time?: Date | undefined;
+  /** @deprecated */
+  start_time?:
+    | Date
+    | undefined;
+  /** @deprecated */
   end_time?: Date | undefined;
   tenant_id: string;
+  query?: AnalyticsQueryEnvelope | undefined;
 }
 
 export interface JobSummaryBucket {

@@ -331,6 +331,7 @@ export interface TransactionSearchResponse {
   items: TransactionDetail[];
   next_cursor?: string;
   truncated: boolean;
+  meta?: AnalyticsResponseMeta;
 }
 
 export interface RecentAlert {
@@ -637,6 +638,9 @@ export interface AnalyticsResponseMeta {
   is_partial: boolean;
   partial_reason: PartialReason;
   sample_rate?: number;
+  truncated: boolean;
+  partial: boolean;
+  effective_limit?: number;
 }
 
 export interface GetRuleImpactResponse {

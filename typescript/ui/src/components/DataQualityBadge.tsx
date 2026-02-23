@@ -16,7 +16,12 @@ function formatPartialReason(reason: AnalyticsResponseMeta['partial_reason']): s
 }
 
 export function DataQualityBadge({ meta }: { meta?: AnalyticsResponseMeta }) {
-  if (!meta?.is_partial) {
+  if (!meta) {
+    return null;
+  }
+
+  const isPartial = meta.partial ?? meta.is_partial;
+  if (!isPartial) {
     return null;
   }
 
