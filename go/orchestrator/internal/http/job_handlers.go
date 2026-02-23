@@ -179,12 +179,12 @@ func (h *Handler) handleGetJobSummary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := r.URL.Query()
-	startRaw, startTS, err := parseAnalyticsTimeQuery(query, "start_time")
+	startTS, err := parseAnalyticsTimeQuery(query, "start_time")
 	if err != nil {
 		writeJSONError(w, r, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
 		return
 	}
-	endRaw, endTS, err := parseAnalyticsTimeQuery(query, "end_time")
+	endTS, err := parseAnalyticsTimeQuery(query, "end_time")
 	if err != nil {
 		writeJSONError(w, r, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
 		return
@@ -192,7 +192,7 @@ func (h *Handler) handleGetJobSummary(w http.ResponseWriter, r *http.Request) {
 	granularity := firstNonEmptyQuery(query, "granularity")
 	req.StartTime = startTS
 	req.EndTime = endTS
-	req.Query = buildAnalyticsQueryEnvelope(startRaw, endRaw, granularity)
+	req.Query = buildAnalyticsQueryEnvelope(startTS, endTS, granularity)
 
 	resp, err := h.analyticsClient.GetJobSummary(r.Context(), req)
 	if err != nil {

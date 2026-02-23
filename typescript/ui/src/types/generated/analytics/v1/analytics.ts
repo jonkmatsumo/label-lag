@@ -18,10 +18,10 @@ export enum ReadinessStatus {
 }
 
 export interface AnalyticsQueryEnvelope {
-  /** RFC3339 */
-  start_time: string;
-  /** RFC3339 */
-  end_time: string;
+  start_time?: Date | undefined;
+  end_time?:
+    | Date
+    | undefined;
   /** "hour" | "day" */
   granularity: string;
 }
@@ -230,6 +230,7 @@ export interface SearchTransactionsRequest {
   /** Exclude heavy features if false */
   include_features: boolean;
   tenant_id: string;
+  query?: AnalyticsQueryEnvelope | undefined;
 }
 
 export interface SearchTransactionsResponse {
@@ -312,6 +313,7 @@ export interface GetBacktestFeaturesRequest {
   start_date?: Date | undefined;
   end_date?: Date | undefined;
   tenant_id: string;
+  query?: AnalyticsQueryEnvelope | undefined;
 }
 
 export interface BacktestFeatureVector {
@@ -370,6 +372,7 @@ export interface ListDatasetProfilesRequest {
   offset: number;
   tenant_id: string;
   pagination?: CursorPageRequest | undefined;
+  query?: AnalyticsQueryEnvelope | undefined;
 }
 
 export interface ListBacktestResultsRequest {
@@ -379,6 +382,7 @@ export interface ListBacktestResultsRequest {
   limit: number;
   offset: number;
   tenant_id: string;
+  query?: AnalyticsQueryEnvelope | undefined;
 }
 
 export interface ListBacktestResultsResponse {
@@ -738,6 +742,7 @@ export interface ListDecisionsRequest {
   offset: number;
   tenant_id: string;
   pagination?: CursorPageRequest | undefined;
+  query?: AnalyticsQueryEnvelope | undefined;
 }
 
 export interface ListDecisionsResponse {
@@ -924,6 +929,7 @@ export interface ListJobsRequest {
   offset: number;
   tenant_id: string;
   pagination?: CursorPageRequest | undefined;
+  query?: AnalyticsQueryEnvelope | undefined;
 }
 
 export interface ListJobsResponse {
@@ -1109,6 +1115,7 @@ export interface GetMetricSeriesRequest {
   start_date?: Date | undefined;
   end_date?: Date | undefined;
   tenant_id: string;
+  query?: AnalyticsQueryEnvelope | undefined;
 }
 
 export interface GetMetricSeriesResponse {

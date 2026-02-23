@@ -1131,7 +1131,7 @@ func (c *AnalyticsClient) GetRuleImpact(ctx context.Context, req *crudv1.GetRule
 	span := trace.SpanFromContext(ctx)
 	windowDays, ok := analyticsWindowDaysFromProto(req.GetStartDate(), req.GetEndDate())
 	if !ok && req.GetQuery() != nil {
-		windowDays, _ = analyticsWindowDaysFromStrings(req.GetQuery().GetStartTime(), req.GetQuery().GetEndTime())
+		windowDays, _ = analyticsWindowDaysFromProto(req.GetQuery().GetStartTime(), req.GetQuery().GetEndTime())
 	}
 	granularity := "day"
 	if req.GetQuery() != nil {
@@ -1176,7 +1176,7 @@ func (c *AnalyticsClient) GetKpis(ctx context.Context, req *crudv1.GetKpisReques
 	span := trace.SpanFromContext(ctx)
 	windowDays, ok := analyticsWindowDaysFromProto(req.GetStartTime(), req.GetEndTime())
 	if !ok && req.GetQuery() != nil {
-		windowDays, _ = analyticsWindowDaysFromStrings(req.GetQuery().GetStartTime(), req.GetQuery().GetEndTime())
+		windowDays, _ = analyticsWindowDaysFromProto(req.GetQuery().GetStartTime(), req.GetQuery().GetEndTime())
 	}
 	granularity := normalizeAnalyticsGranularity(req.GetGroupBy(), "day")
 	if req.GetQuery() != nil {
@@ -1221,7 +1221,7 @@ func (c *AnalyticsClient) GetVolumeSeries(ctx context.Context, req *crudv1.GetVo
 	span := trace.SpanFromContext(ctx)
 	windowDays, ok := analyticsWindowDaysFromProto(req.GetStartTime(), req.GetEndTime())
 	if !ok && req.GetQuery() != nil {
-		windowDays, _ = analyticsWindowDaysFromStrings(req.GetQuery().GetStartTime(), req.GetQuery().GetEndTime())
+		windowDays, _ = analyticsWindowDaysFromProto(req.GetQuery().GetStartTime(), req.GetQuery().GetEndTime())
 	}
 	granularity := normalizeAnalyticsGranularity(req.GetGranularity(), "day")
 	if req.GetQuery() != nil {
@@ -1266,7 +1266,7 @@ func (c *AnalyticsClient) GetConfusionMatrix(ctx context.Context, req *crudv1.Ge
 	span := trace.SpanFromContext(ctx)
 	windowDays, ok := analyticsWindowDaysFromProto(req.GetStartTime(), req.GetEndTime())
 	if !ok && req.GetQuery() != nil {
-		windowDays, _ = analyticsWindowDaysFromStrings(req.GetQuery().GetStartTime(), req.GetQuery().GetEndTime())
+		windowDays, _ = analyticsWindowDaysFromProto(req.GetQuery().GetStartTime(), req.GetQuery().GetEndTime())
 	}
 	granularity := "day"
 	if req.GetQuery() != nil {
@@ -1618,7 +1618,7 @@ func (c *AnalyticsClient) GetJobSummary(ctx context.Context, req *crudv1.GetJobS
 	span := trace.SpanFromContext(ctx)
 	windowDays, ok := analyticsWindowDaysFromProto(req.GetStartTime(), req.GetEndTime())
 	if !ok && req.GetQuery() != nil {
-		windowDays, _ = analyticsWindowDaysFromStrings(req.GetQuery().GetStartTime(), req.GetQuery().GetEndTime())
+		windowDays, _ = analyticsWindowDaysFromProto(req.GetQuery().GetStartTime(), req.GetQuery().GetEndTime())
 	}
 	granularity := "day"
 	if req.GetQuery() != nil {

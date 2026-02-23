@@ -33,22 +33,26 @@ func parseAnalyticsTime(raw string) (*timestamppb.Timestamp, error) {
 	return nil, fmt.Errorf("invalid analytics timestamp: %s", raw)
 }
 
-func parseAnalyticsTimeQuery(values url.Values, keys ...string) (string, *timestamppb.Timestamp, error) {
+func parseAnalyticsTimeQuery(values url.Values, keys ...string) (*timestamppb.Timestamp, error) {
 	raw := firstNonEmptyQuery(values, keys...)
 	parsed, err := parseAnalyticsTime(raw)
 	if err != nil {
-		return raw, nil, err
+		return nil, err
 	}
-	return raw, parsed, nil
+	return parsed, nil
 }
 
-func buildAnalyticsQueryEnvelope(startRaw, endRaw, granularity string) *crudv1.AnalyticsQueryEnvelope {
-	if startRaw == "" && endRaw == "" && granularity == "" {
+func buildAnalyticsQueryEnvelope(
+	startTime *timestamppb.Timestamp,
+	endTime *timestamppb.Timestamp,
+	granularity string,
+) *crudv1.AnalyticsQueryEnvelope {
+	if startTime == nil && endTime == nil && granularity == "" {
 		return nil
 	}
 	return &crudv1.AnalyticsQueryEnvelope{
-		StartTime:   startRaw,
-		EndTime:     endRaw,
+		StartTime:   startTime,
+		EndTime:     endTime,
 		Granularity: granularity,
 	}
 }
