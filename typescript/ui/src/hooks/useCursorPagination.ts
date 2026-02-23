@@ -6,6 +6,7 @@ export interface CursorPage<TItem> {
   nextCursor?: string;
   total?: number;
   truncated?: boolean;
+  effectiveLimit?: number;
 }
 
 export interface UseCursorPaginationOptions<TItem> {
@@ -28,6 +29,7 @@ export interface UseCursorPaginationResult<TItem> {
   total?: number;
   cursor?: string;
   truncated?: boolean;
+  effectiveLimit?: number;
 }
 
 export function useCursorPagination<TItem>(
@@ -84,5 +86,6 @@ export function useCursorPagination<TItem>(
     total: query.data?.total,
     cursor,
     truncated: query.data?.truncated,
+    effectiveLimit: query.data?.effectiveLimit,
   };
 }
