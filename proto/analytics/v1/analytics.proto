@@ -171,6 +171,7 @@ message GetConfusionMatrixResponse {
   double recall = 6;
   double f1_score = 7;
   bool insufficient_labels = 8;
+  AnalyticsMeta meta = 10;
 }
 
 message GetDatasetProfileRequest {
@@ -256,6 +257,7 @@ message TransactionDetail {
 
 message GetTransactionDetailsResponse {
   repeated TransactionDetail transactions = 1;
+  AnalyticsMeta meta = 2;
 }
 
 message SearchTransactionsRequest {
@@ -306,6 +308,7 @@ message Alert {
 
 message GetRecentAlertsResponse {
   repeated Alert alerts = 1;
+  AnalyticsMeta meta = 2;
 }
 
 message GetOverviewMetricsRequest {
@@ -343,6 +346,7 @@ message FeatureSample {
 
 message GetFeatureSampleResponse {
   repeated FeatureSample samples = 1;
+  AnalyticsMeta meta = 2;
 }
 
 
@@ -430,6 +434,7 @@ message ListBacktestResultsRequest {
 
 message ListBacktestResultsResponse {
   repeated BacktestResult results = 1;
+  AnalyticsMeta meta = 2;
 }
 
 message GetBacktestResultRequest {
@@ -641,6 +646,7 @@ message ListRuleVersionsRequest {
 message ListRuleVersionsResponse {
   repeated Rule versions = 1;
   int64 total = 2;
+  AnalyticsMeta meta = 3;
 }
 
 message GetRuleVersionRequest {
@@ -732,6 +738,7 @@ message RuleStats {
 
 message GetRuleStatsResponse {
   repeated RuleStats stats = 1;
+  AnalyticsMeta meta = 2;
 }
 
 message GetAttributionRequest {
@@ -764,6 +771,7 @@ message ListDecisionsRequest {
 message ListDecisionsResponse {
   repeated DecisionSummary decisions = 1;
   common.v1.CursorPageResponse pagination = 2;
+  AnalyticsMeta meta = 3;
 }
 
 message DecisionSummary {
@@ -814,10 +822,12 @@ message GetRuleImpactResponse {
   int64 total_triggers = 2;
   double avg_score_delta = 3;
   repeated RuleImpactBucket daily_buckets = 4;
+  AnalyticsMeta meta = 5;
 }
 
 message GetAttributionResponse {
   repeated DailyAttribution items = 1;
+  AnalyticsMeta meta = 2;
 }
 
 // Feature Hydration (Phase 6)
@@ -931,6 +941,7 @@ message ListJobsRequest {
 message ListJobsResponse {
   repeated Job jobs = 1;
   common.v1.CursorPageResponse pagination = 2;
+  AnalyticsMeta meta = 3;
 }
 
 message GetJobRequest {
@@ -971,6 +982,8 @@ message GetJobEventsRequest {
 
 message GetJobEventsResponse {
   repeated JobEvent events = 1;
+  int32 total = 2;
+  AnalyticsMeta meta = 3;
 }
 
 message GetJobSummaryRequest {
@@ -989,6 +1002,7 @@ message JobSummaryBucket {
 
 message GetJobSummaryResponse {
   repeated JobSummaryBucket summaries = 1;
+  AnalyticsMeta meta = 2;
 }
 
 message DatasetProfile {
@@ -1012,6 +1026,7 @@ message GetDatasetSummaryResponse {
 message ListDatasetProfilesResponse {
   repeated DatasetProfile profiles = 1;
   common.v1.CursorPageResponse pagination = 2;
+  AnalyticsMeta meta = 3;
 }
 
 message GetLatestDatasetProfileRequest {
@@ -1069,6 +1084,7 @@ message ListTrainingRunsRequest {
 message ListTrainingRunsResponse {
   repeated TrainingRun runs = 1;
   common.v1.CursorPageResponse pagination = 2;
+  AnalyticsMeta meta = 3;
 }
 
 message ListModelVersionsRequest {
@@ -1082,6 +1098,7 @@ message ListModelVersionsRequest {
 message ListModelVersionsResponse {
   repeated TrainingRun versions = 1; // lightweight summary using TrainingRun
   common.v1.CursorPageResponse pagination = 2;
+  AnalyticsMeta meta = 3;
 }
 
 message GetTrainingRunRequest {
@@ -1110,6 +1127,7 @@ message GetMetricSeriesRequest {
 
 message GetMetricSeriesResponse {
   repeated MetricPoint points = 1;
+  AnalyticsMeta meta = 2;
 }
 
 message ReportTrainingRunRequest {
