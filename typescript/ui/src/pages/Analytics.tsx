@@ -424,7 +424,7 @@ function TransactionExplorer() {
       }).then(res => ({
         items: res.items,
         nextCursor: res.next_cursor,
-        truncated: res.truncated,
+        truncated: res.meta.truncated,
       })),
     limit: 20,
     filters,

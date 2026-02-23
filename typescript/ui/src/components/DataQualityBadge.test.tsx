@@ -3,35 +3,25 @@ import { render, screen } from '@testing-library/react';
 import { DataQualityBadge } from './DataQualityBadge';
 
 describe('DataQualityBadge', () => {
-  it('renders partial indicator when is_partial is true', () => {
+  it('renders partial indicator from meta.partial', () => {
     render(
       <DataQualityBadge
         meta={{
-          time_range: {
-            start: '2024-01-01T00:00:00.000Z',
-            end: '2024-01-07T00:00:00.000Z',
-          },
-          is_partial: true,
-          partial_reason: 'ROW_LIMIT',
           truncated: true,
           partial: true,
+          effective_limit: 500,
         }}
       />
     );
 
-    expect(screen.getByTestId('data-quality-badge')).toHaveTextContent('Partial (row limit)');
+    expect(screen.getByTestId('data-quality-badge')).toHaveTextContent('Partial (truncated)');
+    expect(screen.getByTestId('data-quality-badge')).toHaveTextContent('limit 500');
   });
 
-  it('does not render when is_partial is false', () => {
+  it('does not render when meta.partial is false', () => {
     render(
       <DataQualityBadge
         meta={{
-          time_range: {
-            start: '2024-01-01T00:00:00.000Z',
-            end: '2024-01-07T00:00:00.000Z',
-          },
-          is_partial: false,
-          partial_reason: 'UNKNOWN',
           truncated: false,
           partial: false,
         }}

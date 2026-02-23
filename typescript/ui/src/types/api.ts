@@ -341,9 +341,8 @@ export interface TransactionSearchRequest extends Omit<SearchTransactionsRequest
 export interface TransactionSearchResponse {
   items: import('./generated/analytics/v1/analytics').TransactionDetail[];
   next_cursor?: string;
-  truncated: boolean;
   total?: number;
-  meta?: AnalyticsResponseMeta;
+  meta: AnalyticsResponseMeta;
 }
 
 // Backtest aliases
@@ -532,21 +531,7 @@ export interface DriftStatusResponse {
   }>;
 }
 
-export type PartialReason =
-  | 'TIMEOUT'
-  | 'ROW_LIMIT'
-  | 'UPSTREAM_ERROR'
-  | 'EMPTY'
-  | 'UNKNOWN';
-
 export interface AnalyticsResponseMeta {
-  time_range: {
-    start: string;
-    end: string;
-  };
-  is_partial: boolean;
-  partial_reason: PartialReason;
-  sample_rate?: number;
   truncated: boolean;
   partial: boolean;
   effective_limit?: number;
