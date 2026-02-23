@@ -21,7 +21,7 @@ import type {
 import { parseInt64, timestampToIso } from '../utils/protojson.js';
 import { getRequestAbortSignal } from '../utils/request-signal.js';
 import { normalizeAnalyticsMeta } from '../utils/analytics-meta.js';
-import { validateAnalyticsQueryEnvelope } from '../utils/analytics-query-envelope.js';
+import { validateAnalyticsQuery } from '../utils/analytics-query-envelope.js';
 
 export interface AnalyticsRoutesOptions {
   httpClient: HttpClient;
@@ -510,9 +510,26 @@ export async function analyticsRoutes(
     ) => {
       try {
         const requestSignal = getRequestAbortSignal(request, reply);
+        const validatedQuery = validateAnalyticsQuery(
+          {
+            start_time: request.body.start_date,
+            end_time: request.body.end_date,
+          },
+          {
+            required: false,
+            startField: 'start_date',
+            endField: 'end_date',
+          }
+        );
+        if (!validatedQuery.ok) {
+          return reply.status(validatedQuery.statusCode).send(validatedQuery.body);
+        }
+
         const payload = {
           ...request.body,
           include_features: request.body.include_features ?? false,
+          ...(validatedQuery.value.start_time ? { start_date: validatedQuery.value.start_time } : {}),
+          ...(validatedQuery.value.end_time ? { end_date: validatedQuery.value.end_time } : {}),
         };
 
         const response = await httpClient.request<any>({
@@ -600,7 +617,7 @@ export async function analyticsRoutes(
       try {
         const requestSignal = getRequestAbortSignal(request, reply);
         const { start_time, end_time, group_by, granularity } = request.query;
-        const validatedQuery = validateAnalyticsQueryEnvelope({
+        const validatedQuery = validateAnalyticsQuery({
           start_time,
           end_time,
           granularity: granularity ?? group_by,
@@ -692,7 +709,7 @@ export async function analyticsRoutes(
       try {
         const requestSignal = getRequestAbortSignal(request, reply);
         const { start_time, end_time, granularity } = request.query;
-        const validatedQuery = validateAnalyticsQueryEnvelope({
+        const validatedQuery = validateAnalyticsQuery({
           start_time,
           end_time,
           granularity,
@@ -778,7 +795,7 @@ export async function analyticsRoutes(
       try {
         const requestSignal = getRequestAbortSignal(request, reply);
         const { start_time, end_time, threshold, model_version } = request.query;
-        const validatedQuery = validateAnalyticsQueryEnvelope({
+        const validatedQuery = validateAnalyticsQuery({
           start_time,
           end_time,
         });
@@ -882,7 +899,7 @@ export async function analyticsRoutes(
         const requestSignal = getRequestAbortSignal(request, reply);
         const { rule_id } = request.params;
         const { start_time, end_time } = request.query;
-        const validatedQuery = validateAnalyticsQueryEnvelope({
+        const validatedQuery = validateAnalyticsQuery({
           start_time,
           end_time,
         });

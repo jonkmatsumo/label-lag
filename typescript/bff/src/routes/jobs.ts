@@ -5,7 +5,7 @@ import type { GetJobSummaryResponse } from '../types/api.js';
 import { parseInt64, timestampToIso } from '../utils/protojson.js';
 import { getRequestAbortSignal } from '../utils/request-signal.js';
 import { normalizeAnalyticsMeta } from '../utils/analytics-meta.js';
-import { validateAnalyticsQueryEnvelope } from '../utils/analytics-query-envelope.js';
+import { validateAnalyticsQuery } from '../utils/analytics-query-envelope.js';
 
 export interface JobsRoutesOptions {
   httpClient: HttpClient;
@@ -270,7 +270,7 @@ export async function jobsRoutes(
       try {
         const requestSignal = getRequestAbortSignal(request, reply);
         const { start_time, end_time } = request.query;
-        const validatedQuery = validateAnalyticsQueryEnvelope({
+        const validatedQuery = validateAnalyticsQuery({
           start_time,
           end_time,
         });
