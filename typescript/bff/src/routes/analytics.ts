@@ -21,6 +21,7 @@ import type {
 import { parseInt64, timestampToIso } from '../utils/protojson.js';
 import { getRequestAbortSignal } from '../utils/request-signal.js';
 import { normalizeAnalyticsMeta } from '../utils/analytics-meta.js';
+import { validateAnalyticsQueryEnvelope } from '../utils/analytics-query-envelope.js';
 
 export interface AnalyticsRoutesOptions {
   httpClient: HttpClient;
@@ -63,6 +64,7 @@ interface KpiQuery {
   start_time: string;
   end_time: string;
   group_by?: 'hour' | 'day';
+  granularity?: 'hour' | 'day';
 }
 
 interface VolumeQuery {
@@ -576,6 +578,7 @@ export async function analyticsRoutes(
               description: 'ISO date or datetime string (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ssZ)',
             },
             group_by: { type: 'string', enum: ['hour', 'day'], default: 'day' },
+            granularity: { type: 'string', enum: ['hour', 'day'] },
           },
         },
       },
@@ -586,16 +589,27 @@ export async function analyticsRoutes(
     ) => {
       try {
         const requestSignal = getRequestAbortSignal(request, reply);
-        const { start_time, end_time, group_by = 'day' } = request.query;
+        const { start_time, end_time, group_by, granularity } = request.query;
+        const validatedQuery = validateAnalyticsQueryEnvelope({
+          start_time,
+          end_time,
+          granularity: granularity ?? group_by,
+        });
+        if (!validatedQuery.ok) {
+          return reply.status(validatedQuery.statusCode).send(validatedQuery.body);
+        }
+
+        const queryEnvelope = validatedQuery.value;
+        const groupBy = queryEnvelope.granularity;
         const tenantId = (request as FastifyRequest & { tenantId?: string }).tenantId ?? 'default';
-        const cacheKey = `analytics:kpis:${tenantId}:${start_time}:${end_time}:${group_by}`;
+        const cacheKey = `analytics:kpis:${tenantId}:${queryEnvelope.start_time}:${queryEnvelope.end_time}:${groupBy}`;
         const normalized = await cache.getOrLoad<KpisResponse>(
           cacheKey,
           tenantId,
           async () => {
             const response = await httpClient.request<any>({
               method: 'GET',
-              path: `/kpis?start_time=${encodeURIComponent(start_time)}&end_time=${encodeURIComponent(end_time)}&group_by=${group_by}`,
+              path: `/kpis?start_time=${encodeURIComponent(queryEnvelope.start_time)}&end_time=${encodeURIComponent(queryEnvelope.end_time)}&group_by=${groupBy}`,
               requestId: request.requestId,
               tenantId: request.tenantId,
               target: 'gateway',
@@ -617,8 +631,8 @@ export async function analyticsRoutes(
               })),
               meta: normalizeAnalyticsMeta({
                 raw,
-                startTime: start_time,
-                endTime: end_time,
+                startTime: queryEnvelope.start_time,
+                endTime: queryEnvelope.end_time,
                 hasData: (parseInt64(raw.total_decisions) ?? 0) > 0,
               }),
             };
@@ -667,16 +681,26 @@ export async function analyticsRoutes(
     ) => {
       try {
         const requestSignal = getRequestAbortSignal(request, reply);
-        const { start_time, end_time, granularity = 'day' } = request.query;
+        const { start_time, end_time, granularity } = request.query;
+        const validatedQuery = validateAnalyticsQueryEnvelope({
+          start_time,
+          end_time,
+          granularity,
+        });
+        if (!validatedQuery.ok) {
+          return reply.status(validatedQuery.statusCode).send(validatedQuery.body);
+        }
+
+        const queryEnvelope = validatedQuery.value;
         const tenantId = (request as FastifyRequest & { tenantId?: string }).tenantId ?? 'default';
-        const cacheKey = `analytics:volume:${tenantId}:${start_time}:${end_time}:${granularity}`;
+        const cacheKey = `analytics:volume:${tenantId}:${queryEnvelope.start_time}:${queryEnvelope.end_time}:${queryEnvelope.granularity}`;
         const normalized = await cache.getOrLoad<VolumeSeriesResponse>(
           cacheKey,
           tenantId,
           async () => {
             const response = await httpClient.request<any>({
               method: 'GET',
-              path: `/volume?start_time=${encodeURIComponent(start_time)}&end_time=${encodeURIComponent(end_time)}&granularity=${granularity}`,
+              path: `/volume?start_time=${encodeURIComponent(queryEnvelope.start_time)}&end_time=${encodeURIComponent(queryEnvelope.end_time)}&granularity=${queryEnvelope.granularity}`,
               requestId: request.requestId,
               tenantId: request.tenantId,
               target: 'gateway',
@@ -692,8 +716,8 @@ export async function analyticsRoutes(
               })),
               meta: normalizeAnalyticsMeta({
                 raw,
-                startTime: start_time,
-                endTime: end_time,
+                startTime: queryEnvelope.start_time,
+                endTime: queryEnvelope.end_time,
                 hasData: (raw.points?.length ?? 0) > 0,
               }),
             };
@@ -744,15 +768,24 @@ export async function analyticsRoutes(
       try {
         const requestSignal = getRequestAbortSignal(request, reply);
         const { start_time, end_time, threshold, model_version } = request.query;
+        const validatedQuery = validateAnalyticsQueryEnvelope({
+          start_time,
+          end_time,
+        });
+        if (!validatedQuery.ok) {
+          return reply.status(validatedQuery.statusCode).send(validatedQuery.body);
+        }
+
+        const queryEnvelope = validatedQuery.value;
         const tenantId = (request as FastifyRequest & { tenantId?: string }).tenantId ?? 'default';
-        const cacheKey = `analytics:confusion-matrix:${tenantId}:${start_time}:${end_time}:${threshold ?? ''}:${model_version ?? ''}`;
+        const cacheKey = `analytics:confusion-matrix:${tenantId}:${queryEnvelope.start_time}:${queryEnvelope.end_time}:${threshold ?? ''}:${model_version ?? ''}`;
         const normalized = await cache.getOrLoad<ConfusionMatrixResponse>(
           cacheKey,
           tenantId,
           async () => {
             const searchParams = new URLSearchParams();
-            searchParams.set('start_time', start_time);
-            searchParams.set('end_time', end_time);
+            searchParams.set('start_time', queryEnvelope.start_time);
+            searchParams.set('end_time', queryEnvelope.end_time);
             if (threshold !== undefined) searchParams.set('threshold', String(threshold));
             if (model_version) searchParams.set('model_version', model_version);
 
@@ -778,8 +811,8 @@ export async function analyticsRoutes(
               insufficient_labels: !!raw.insufficient_labels,
               meta: normalizeAnalyticsMeta({
                 raw,
-                startTime: start_time,
-                endTime: end_time,
+                startTime: queryEnvelope.start_time,
+                endTime: queryEnvelope.end_time,
                 hasData: (parseInt64(raw.true_positives) ?? 0) + (parseInt64(raw.false_positives) ?? 0) + (parseInt64(raw.true_negatives) ?? 0) + (parseInt64(raw.false_negatives) ?? 0) > 0,
               }),
             };
@@ -839,36 +872,23 @@ export async function analyticsRoutes(
         const requestSignal = getRequestAbortSignal(request, reply);
         const { rule_id } = request.params;
         const { start_time, end_time } = request.query;
+        const validatedQuery = validateAnalyticsQueryEnvelope({
+          start_time,
+          end_time,
+        });
+        if (!validatedQuery.ok) {
+          return reply.status(validatedQuery.statusCode).send(validatedQuery.body);
+        }
+        const queryEnvelope = validatedQuery.value;
         const tenantId =
           (request as FastifyRequest & { tenantId?: string }).tenantId ??
           (typeof request.headers['x-tenant-id'] === 'string' ? request.headers['x-tenant-id'] : undefined) ??
           'default';
 
-        // Validation
-        const start = new Date(start_time);
-        const end = new Date(end_time);
-        if (start >= end) {
-          return reply.status(400).send({
-            error: {
-              code: 'INVALID_RANGE',
-              message: 'start_time must be before end_time',
-            }
-          });
-        }
-        const daysDiff = (end.getTime() - start.getTime()) / (1000 * 3600 * 24);
-        if (daysDiff > 90) {
-          return reply.status(400).send({
-            error: {
-              code: 'INVALID_RANGE',
-              message: 'Time range cannot exceed 90 days',
-            }
-          });
-        }
-
-        const cacheKey = `analytics:rules:${rule_id}:impact:${tenantId}:${start_time ?? ''}:${end_time ?? ''}`;
+        const cacheKey = `analytics:rules:${rule_id}:impact:${tenantId}:${queryEnvelope.start_time}:${queryEnvelope.end_time}`;
         const searchParams = new URLSearchParams();
-        if (start_time) searchParams.set('start_date', start_time);
-        if (end_time) searchParams.set('end_date', end_time);
+        searchParams.set('start_date', queryEnvelope.start_time);
+        searchParams.set('end_date', queryEnvelope.end_time);
 
         const normalized = await cache.getOrLoad<GetRuleImpactResponse>(
           cacheKey,
@@ -900,8 +920,8 @@ export async function analyticsRoutes(
               truncated: false,
               meta: normalizeAnalyticsMeta({
                 raw,
-                startTime: start_time,
-                endTime: end_time,
+                startTime: queryEnvelope.start_time,
+                endTime: queryEnvelope.end_time,
                 hasData: totalTriggers > 0 || dailyBuckets.length > 0,
               }),
             };
