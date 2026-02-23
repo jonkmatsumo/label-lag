@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { analyticsApi } from '../api';
 import type { RecentAlert, TransactionSearchRequest, TransactionDetail } from '../types/api';
@@ -79,6 +79,20 @@ export function Analytics() {
     queryFn: ({ signal }) => analyticsApi.getRecentAlerts(20, signal),
   });
 
+  const hourlyWindowDays = useMemo(() => {
+    if (granularity !== 'hour') {
+      return 0;
+    }
+    const start = new Date(dateRange.start);
+    const end = new Date(dateRange.end);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return 0;
+    }
+    return (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+  }, [dateRange.end, dateRange.start, granularity]);
+
+  const showHourlyWindowHint = granularity === 'hour' && hourlyWindowDays > 60;
+
   const toNumber = (value: number | string | undefined | null) => {
     const parsed = typeof value === 'string' ? Number(value) : value ?? 0;
     return Number.isFinite(parsed) ? parsed : 0;
@@ -120,6 +134,11 @@ export function Analytics() {
           </button>
         </div>
       </div>
+      {showHourlyWindowHint && (
+        <div className="alert alert-warning py-2 px-3 small mb-4">
+          Hourly windows over 60 days may be rejected by the server. Use daily granularity or shorten the range.
+        </div>
+      )}
       {/* KPI Cards */}
       <div className="row g-3 mb-4">
         <div className="col-md">
