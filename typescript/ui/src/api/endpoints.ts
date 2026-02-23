@@ -69,6 +69,22 @@ export interface AnalyticsQueryEnvelopeParams {
   granularity?: AnalyticsQueryGranularity;
 }
 
+export interface BuildAnalyticsQueryEnvelopeParams {
+  start: string;
+  end: string;
+  granularity?: AnalyticsQueryGranularity;
+}
+
+export function buildAnalyticsQueryEnvelope(
+  params: BuildAnalyticsQueryEnvelopeParams
+): AnalyticsQueryEnvelopeParams {
+  return {
+    start_time: params.start,
+    end_time: params.end,
+    ...(params.granularity ? { granularity: params.granularity } : {}),
+  };
+}
+
 function buildAnalyticsQueryEnvelopeSearchParams(
   envelope: AnalyticsQueryEnvelopeParams
 ): URLSearchParams {

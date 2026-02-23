@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { analyticsApi } from '../api';
+import { analyticsApi, buildAnalyticsQueryEnvelope } from '../api';
 import type { RecentAlert, TransactionSearchRequest, TransactionDetail } from '../types/api';
 import {
   Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart
@@ -19,7 +19,6 @@ export function Analytics() {
   const [daysFilter] = useState(30);
   const { tenantId } = useTenant();
   const {
-    query: analyticsQuery,
     dateRange,
     granularity,
     setDateRange,
@@ -27,6 +26,15 @@ export function Analytics() {
     searchParams,
     setSearchParams,
   } = useAnalyticsQueryEnvelope();
+  const analyticsQuery = useMemo(
+    () =>
+      buildAnalyticsQueryEnvelope({
+        start: dateRange.start,
+        end: dateRange.end,
+        granularity,
+      }),
+    [dateRange.end, dateRange.start, granularity]
+  );
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
   const handleDateRangeChange = (range: DateRange) => {
