@@ -343,6 +343,7 @@ export interface TransactionSearchResponse {
   next_cursor?: string;
   truncated: boolean;
   total?: number;
+  meta?: AnalyticsResponseMeta;
 }
 
 // Backtest aliases
@@ -546,6 +547,9 @@ export interface AnalyticsResponseMeta {
   is_partial: boolean;
   partial_reason: PartialReason;
   sample_rate?: number;
+  truncated: boolean;
+  partial: boolean;
+  effective_limit?: number;
 }
 
 // KPI and Volume types (BFF-normalized)

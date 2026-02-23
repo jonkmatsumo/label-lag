@@ -29,6 +29,19 @@ function getRawMeta(raw: Record<string, unknown>): Record<string, unknown> | und
   return undefined;
 }
 
+function toFiniteNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return undefined;
+}
+
 interface NormalizeAnalyticsMetaOptions {
   raw: Record<string, unknown>;
   startTime: string;
@@ -45,9 +58,12 @@ export function normalizeAnalyticsMeta(options: NormalizeAnalyticsMetaOptions): 
 
   const rawIsPartial = rawMeta?.is_partial ?? raw.is_partial;
   const explicitIsPartial = typeof rawIsPartial === 'boolean' ? rawIsPartial : undefined;
+  const rawPartial = rawMeta?.partial ?? raw.partial;
+  const explicitPartial = typeof rawPartial === 'boolean' ? rawPartial : undefined;
+  const truncated = rawMeta?.truncated === true || raw.truncated === true;
 
   if (partialReason === 'UNKNOWN') {
-    if (raw.truncated === true) {
+    if (truncated) {
       partialReason = 'ROW_LIMIT';
     } else if (!hasData) {
       partialReason = 'EMPTY';
@@ -61,6 +77,8 @@ export function normalizeAnalyticsMeta(options: NormalizeAnalyticsMetaOptions): 
       : undefined;
 
   const isPartial = explicitIsPartial ?? partialReason !== 'UNKNOWN';
+  const partial = explicitPartial ?? isPartial;
+  const effectiveLimit = toFiniteNumber(rawMeta?.effective_limit ?? raw.effective_limit);
 
   return {
     time_range: {
@@ -69,6 +87,9 @@ export function normalizeAnalyticsMeta(options: NormalizeAnalyticsMetaOptions): 
     },
     is_partial: isPartial,
     partial_reason: partialReason,
+    truncated,
+    partial,
     ...(sampleRate !== undefined ? { sample_rate: sampleRate } : {}),
+    ...(effectiveLimit !== undefined ? { effective_limit: effectiveLimit } : {}),
   };
 }

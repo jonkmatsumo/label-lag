@@ -455,6 +455,8 @@ describe('Contract: GET /bff/v1/analytics/rules/:rule_id/impact', () => {
         },
         is_partial: false,
         partial_reason: 'UNKNOWN',
+        truncated: false,
+        partial: false,
       },
     };
 
@@ -483,6 +485,8 @@ describe('Contract: GET /bff/v1/analytics/rules/:rule_id/impact', () => {
         },
         is_partial: false,
         partial_reason: 'UNKNOWN',
+        truncated: false,
+        partial: false,
       },
     };
 
@@ -512,6 +516,8 @@ describe('Contract: GET /bff/v1/analytics/rules/:rule_id/impact', () => {
         },
         is_partial: false,
         partial_reason: 'UNKNOWN',
+        truncated: false,
+        partial: false,
       },
     };
 
@@ -556,6 +562,8 @@ describe('Contract: GET /bff/v1/jobs/summary', () => {
         },
         is_partial: false,
         partial_reason: 'UNKNOWN',
+        truncated: false,
+        partial: false,
       },
     };
 
@@ -580,6 +588,8 @@ describe('Contract: GET /bff/v1/jobs/summary', () => {
         },
         is_partial: false,
         partial_reason: 'UNKNOWN',
+        truncated: false,
+        partial: false,
       },
     };
 
@@ -606,6 +616,8 @@ describe('Contract: GET /bff/v1/jobs/summary', () => {
         },
         is_partial: true,
         partial_reason: 'EMPTY',
+        truncated: false,
+        partial: true,
       },
     };
 

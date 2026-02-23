@@ -526,25 +526,35 @@ export async function analyticsRoutes(
         });
 
         const raw = response.data;
+        const normalizedItems = (raw.transactions || []).map((tx: any) => ({
+          id: tx.record_id,
+          record_id: tx.record_id,
+          user_id: tx.user_id,
+          amount: tx.amount,
+          timestamp: tx.created_at,
+          created_at: tx.created_at,
+          is_fraud: tx.is_fraudulent,
+          is_fraudulent: tx.is_fraudulent,
+          fraud_type: tx.fraud_type,
+          merchant_risk_score: tx.merchant_risk_score,
+          velocity_24h: tx.velocity_24h,
+          amount_to_avg_ratio_30d: tx.amount_to_avg_ratio_30d,
+          balance_volatility_z_score: tx.balance_volatility_z_score,
+          is_off_hours_txn: tx.is_off_hours_txn,
+        }));
         const normalized: TransactionSearchResponse = {
-          items: (raw.transactions || []).map((tx: any) => ({
-            id: tx.record_id,
-            record_id: tx.record_id,
-            user_id: tx.user_id,
-            amount: tx.amount,
-            timestamp: tx.created_at,
-            created_at: tx.created_at,
-            is_fraud: tx.is_fraudulent,
-            is_fraudulent: tx.is_fraudulent,
-            fraud_type: tx.fraud_type,
-            merchant_risk_score: tx.merchant_risk_score,
-            velocity_24h: tx.velocity_24h,
-            amount_to_avg_ratio_30d: tx.amount_to_avg_ratio_30d,
-            balance_volatility_z_score: tx.balance_volatility_z_score,
-            is_off_hours_txn: tx.is_off_hours_txn,
-          })),
+          items: normalizedItems,
           next_cursor: raw.next_cursor,
           truncated: !!raw.truncated,
+          meta: normalizeAnalyticsMeta({
+            raw: {
+              ...raw,
+              effective_limit: payload.limit,
+            },
+            startTime: payload.start_date ?? '',
+            endTime: payload.end_date ?? '',
+            hasData: normalizedItems.length > 0,
+          }),
         };
 
         return reply.status(response.statusCode).send(normalized);
@@ -912,12 +922,13 @@ export async function analyticsRoutes(
             })).sort((a: any, b: any) => a.date.localeCompare(b.date));
 
             const totalTriggers = parseInt64(raw.total_triggers) ?? 0;
+            const truncated = raw.truncated === true;
             return {
               rule_id: raw.rule_id,
               total_triggers: totalTriggers,
               avg_score_delta: Number(raw.avg_score_delta) || 0,
               daily_buckets: dailyBuckets,
-              truncated: false,
+              truncated,
               meta: normalizeAnalyticsMeta({
                 raw,
                 startTime: queryEnvelope.start_time,

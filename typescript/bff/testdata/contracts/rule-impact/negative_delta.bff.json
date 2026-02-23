@@ -17,6 +17,8 @@
             "end": "2024-01-10T00:00:00.000Z"
         },
         "is_partial": false,
-        "partial_reason": "UNKNOWN"
+        "partial_reason": "UNKNOWN",
+        "truncated": false,
+        "partial": false
     }
 }

@@ -13,6 +13,8 @@ describe('DataQualityBadge', () => {
           },
           is_partial: true,
           partial_reason: 'ROW_LIMIT',
+          truncated: true,
+          partial: true,
         }}
       />
     );
@@ -30,6 +32,8 @@ describe('DataQualityBadge', () => {
           },
           is_partial: false,
           partial_reason: 'UNKNOWN',
+          truncated: false,
+          partial: false,
         }}
       />
     );
