@@ -325,6 +325,11 @@ export interface TransactionSearchRequest {
   limit?: number;
   cursor?: string;
   include_features?: boolean;
+  query?: {
+    start_time?: string;
+    end_time?: string;
+    granularity?: 'hour' | 'day';
+  };
 }
 
 export interface TransactionSearchResponse {
@@ -623,21 +628,7 @@ export interface RuleImpactBucket {
   decisions_changed_count: number;
 }
 
-export type PartialReason =
-  | 'TIMEOUT'
-  | 'ROW_LIMIT'
-  | 'UPSTREAM_ERROR'
-  | 'EMPTY'
-  | 'UNKNOWN';
-
 export interface AnalyticsResponseMeta {
-  time_range: {
-    start: string;
-    end: string;
-  };
-  is_partial: boolean;
-  partial_reason: PartialReason;
-  sample_rate?: number;
   truncated: boolean;
   partial: boolean;
   effective_limit?: number;

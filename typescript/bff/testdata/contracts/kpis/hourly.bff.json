@@ -17,5 +17,9 @@
             "alerts": 96,
             "rules_fired": 280
         }
-    ]
+    ],
+    "meta": {
+        "truncated": false,
+        "partial": false
+    }
 }

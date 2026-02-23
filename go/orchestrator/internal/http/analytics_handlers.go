@@ -665,12 +665,12 @@ func (h *Handler) handleGetRuleImpact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := r.URL.Query()
-	startRaw, startTS, err := parseAnalyticsTimeQuery(query, "start_time", "start_date")
+	startTS, err := parseAnalyticsTimeQuery(query, "start_time", "start_date")
 	if err != nil {
 		writeJSONError(w, r, http.StatusBadRequest, "invalid start_date format (RFC3339 required)")
 		return
 	}
-	endRaw, endTS, err := parseAnalyticsTimeQuery(query, "end_time", "end_date")
+	endTS, err := parseAnalyticsTimeQuery(query, "end_time", "end_date")
 	if err != nil {
 		writeJSONError(w, r, http.StatusBadRequest, "invalid end_date format (RFC3339 required)")
 		return
@@ -683,7 +683,7 @@ func (h *Handler) handleGetRuleImpact(w http.ResponseWriter, r *http.Request) {
 		StartDate: startTS,
 		EndDate:   endTS,
 		TenantId:  tenantID,
-		Query:     buildAnalyticsQueryEnvelope(startRaw, endRaw, granularity),
+		Query:     buildAnalyticsQueryEnvelope(startTS, endTS, granularity),
 	}
 
 	if req.StartDate != nil && req.EndDate != nil && req.StartDate.AsTime().After(req.EndDate.AsTime()) {
@@ -710,12 +710,12 @@ func (h *Handler) handleGetKpis(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := r.URL.Query()
-	startRaw, startTS, err := parseAnalyticsTimeQuery(query, "start_time")
+	startTS, err := parseAnalyticsTimeQuery(query, "start_time")
 	if err != nil {
 		writeJSONError(w, r, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
 		return
 	}
-	endRaw, endTS, err := parseAnalyticsTimeQuery(query, "end_time")
+	endTS, err := parseAnalyticsTimeQuery(query, "end_time")
 	if err != nil {
 		writeJSONError(w, r, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
 		return
@@ -732,7 +732,7 @@ func (h *Handler) handleGetKpis(w http.ResponseWriter, r *http.Request) {
 		EndTime:   endTS,
 		GroupBy:   granularity,
 		TenantId:  tenantID,
-		Query:     buildAnalyticsQueryEnvelope(startRaw, endRaw, granularity),
+		Query:     buildAnalyticsQueryEnvelope(startTS, endTS, granularity),
 	}
 
 	if req.StartTime != nil && req.EndTime != nil && req.StartTime.AsTime().After(req.EndTime.AsTime()) {
@@ -759,12 +759,12 @@ func (h *Handler) handleGetVolumeSeries(w http.ResponseWriter, r *http.Request) 
 	}
 
 	query := r.URL.Query()
-	startRaw, startTS, err := parseAnalyticsTimeQuery(query, "start_time")
+	startTS, err := parseAnalyticsTimeQuery(query, "start_time")
 	if err != nil {
 		writeJSONError(w, r, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
 		return
 	}
-	endRaw, endTS, err := parseAnalyticsTimeQuery(query, "end_time")
+	endTS, err := parseAnalyticsTimeQuery(query, "end_time")
 	if err != nil {
 		writeJSONError(w, r, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
 		return
@@ -781,7 +781,7 @@ func (h *Handler) handleGetVolumeSeries(w http.ResponseWriter, r *http.Request) 
 		EndTime:     endTS,
 		Granularity: granularity,
 		TenantId:    tenantID,
-		Query:       buildAnalyticsQueryEnvelope(startRaw, endRaw, granularity),
+		Query:       buildAnalyticsQueryEnvelope(startTS, endTS, granularity),
 	}
 
 	if req.StartTime != nil && req.EndTime != nil && req.StartTime.AsTime().After(req.EndTime.AsTime()) {
@@ -808,12 +808,12 @@ func (h *Handler) handleGetConfusionMatrix(w http.ResponseWriter, r *http.Reques
 	}
 
 	query := r.URL.Query()
-	startRaw, startTS, err := parseAnalyticsTimeQuery(query, "start_time")
+	startTS, err := parseAnalyticsTimeQuery(query, "start_time")
 	if err != nil {
 		writeJSONError(w, r, http.StatusBadRequest, "invalid start_time format (RFC3339 required)")
 		return
 	}
-	endRaw, endTS, err := parseAnalyticsTimeQuery(query, "end_time")
+	endTS, err := parseAnalyticsTimeQuery(query, "end_time")
 	if err != nil {
 		writeJSONError(w, r, http.StatusBadRequest, "invalid end_time format (RFC3339 required)")
 		return
@@ -826,7 +826,7 @@ func (h *Handler) handleGetConfusionMatrix(w http.ResponseWriter, r *http.Reques
 		EndTime:      endTS,
 		ModelVersion: query.Get("model_version"),
 		TenantId:     tenantID,
-		Query:        buildAnalyticsQueryEnvelope(startRaw, endRaw, granularity),
+		Query:        buildAnalyticsQueryEnvelope(startTS, endTS, granularity),
 	}
 
 	if threshStr := query.Get("threshold"); threshStr != "" {

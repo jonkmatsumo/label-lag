@@ -16,8 +16,6 @@ import { parseInt64, timestampToIso } from '../src/utils/protojson.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixtureDir = join(__dirname, '..', 'testdata', 'contracts');
-const CONTRACT_START = '2024-01-01';
-const CONTRACT_END = '2024-01-10';
 
 function loadFixture(relativePath: string): unknown {
   const fullPath = join(fixtureDir, relativePath);
@@ -261,6 +259,10 @@ describe('Contract: GET /bff/v1/kpis', () => {
         alerts: parseInt64(b.alerts),
         rules_fired: parseInt64(b.rules_fired),
       })),
+      meta: {
+        truncated: false,
+        partial: false,
+      },
     };
 
     expect(normalized).toEqual(expected);
@@ -333,6 +335,10 @@ describe('Contract: GET /bff/v1/volume', () => {
         count: parseInt64(p.count),
         alerts: parseInt64(p.alerts),
       })),
+      meta: {
+        truncated: false,
+        partial: false,
+      },
     };
 
     expect(normalized).toEqual(expected);
@@ -379,6 +385,10 @@ describe('Contract: GET /bff/v1/analytics/confusion-matrix', () => {
       recall: raw.recall,
       f1_score: raw.f1_score,
       insufficient_labels: raw.insufficient_labels,
+      meta: {
+        truncated: false,
+        partial: false,
+      },
     };
 
     expect(normalized).toEqual(expected);
@@ -422,6 +432,10 @@ describe('Contract: GET /bff/v1/analytics/confusion-matrix', () => {
       recall: raw.recall,
       f1_score: raw.f1_score,
       insufficient_labels: raw.insufficient_labels,
+      meta: {
+        truncated: false,
+        partial: true,
+      },
     };
 
     expect(normalized).toEqual(expected);
@@ -449,12 +463,6 @@ describe('Contract: GET /bff/v1/analytics/rules/:rule_id/impact', () => {
       })),
       truncated: false,
       meta: {
-        time_range: {
-          start: new Date(CONTRACT_START).toISOString(),
-          end: new Date(CONTRACT_END).toISOString(),
-        },
-        is_partial: false,
-        partial_reason: 'UNKNOWN',
         truncated: false,
         partial: false,
       },
@@ -479,12 +487,6 @@ describe('Contract: GET /bff/v1/analytics/rules/:rule_id/impact', () => {
       })),
       truncated: false,
       meta: {
-        time_range: {
-          start: new Date(CONTRACT_START).toISOString(),
-          end: new Date(CONTRACT_END).toISOString(),
-        },
-        is_partial: false,
-        partial_reason: 'UNKNOWN',
         truncated: false,
         partial: false,
       },
@@ -510,12 +512,6 @@ describe('Contract: GET /bff/v1/analytics/rules/:rule_id/impact', () => {
       })),
       truncated: false,
       meta: {
-        time_range: {
-          start: new Date(CONTRACT_START).toISOString(),
-          end: new Date(CONTRACT_END).toISOString(),
-        },
-        is_partial: false,
-        partial_reason: 'UNKNOWN',
         truncated: false,
         partial: false,
       },
@@ -556,12 +552,6 @@ describe('Contract: GET /bff/v1/jobs/summary', () => {
         failed_jobs: parseInt64(s.failed_jobs),
       })),
       meta: {
-        time_range: {
-          start: new Date(CONTRACT_START).toISOString(),
-          end: new Date(CONTRACT_END).toISOString(),
-        },
-        is_partial: false,
-        partial_reason: 'UNKNOWN',
         truncated: false,
         partial: false,
       },
@@ -582,12 +572,6 @@ describe('Contract: GET /bff/v1/jobs/summary', () => {
         failed_jobs: parseInt64(s.failed_jobs),
       })),
       meta: {
-        time_range: {
-          start: new Date(CONTRACT_START).toISOString(),
-          end: new Date(CONTRACT_END).toISOString(),
-        },
-        is_partial: false,
-        partial_reason: 'UNKNOWN',
         truncated: false,
         partial: false,
       },
@@ -610,12 +594,6 @@ describe('Contract: GET /bff/v1/jobs/summary', () => {
         failed_jobs: parseInt64(s.failed_jobs),
       })),
       meta: {
-        time_range: {
-          start: new Date(CONTRACT_START).toISOString(),
-          end: new Date(CONTRACT_END).toISOString(),
-        },
-        is_partial: true,
-        partial_reason: 'EMPTY',
         truncated: false,
         partial: true,
       },

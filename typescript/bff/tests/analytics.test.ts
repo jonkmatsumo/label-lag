@@ -281,6 +281,11 @@ describe('Analytics Routes', () => {
       expect(data.items[0].record_id).toBe('rec-1');
       expect(data.next_cursor).toBe('encoded-cursor-value');
       expect(data.truncated).toBe(false);
+      expect(data.meta).toEqual({
+        truncated: false,
+        partial: false,
+        effective_limit: 10,
+      });
       expect(data.transactions).toBeUndefined(); // Normalized away
     });
 
@@ -311,6 +316,43 @@ describe('Analytics Routes', () => {
       const data = response.json();
       expect(data.items).toHaveLength(1);
       expect(data.truncated).toBe(true);
+      expect(data.meta).toEqual({
+        truncated: true,
+        partial: true,
+        effective_limit: 50,
+      });
+    });
+
+    it('returns 400 for invalid time range', async () => {
+      const response = await ctx.app.inject({
+        method: 'POST',
+        url: '/bff/v1/analytics/transactions/search',
+        payload: {
+          start_date: '2024-01-31',
+          end_date: '2024-01-01',
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      const data = response.json();
+      expect(data.error.code).toBe('INVALID_RANGE');
+      expect(data.error.message).toContain('start_date must be before end_date');
+    });
+
+    it('returns 400 for invalid timestamp format', async () => {
+      const response = await ctx.app.inject({
+        method: 'POST',
+        url: '/bff/v1/analytics/transactions/search',
+        payload: {
+          start_date: '2024-01-01',
+          end_date: '01/10/2024',
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      const data = response.json();
+      expect(data.error.code).toBe('INVALID_RANGE');
+      expect(data.error.message).toContain('valid ISO timestamps');
     });
   });
 });

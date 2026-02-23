@@ -1,27 +1,9 @@
 package service
 
 import (
-	"fmt"
-	"time"
-
 	pb "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
-
-const analyticsDateLayout = "2006-01-02"
-
-func parseAnalyticsEnvelopeTime(raw string) (*timestamppb.Timestamp, error) {
-	if raw == "" {
-		return nil, nil
-	}
-	if parsed, err := time.Parse(time.RFC3339, raw); err == nil {
-		return timestamppb.New(parsed), nil
-	}
-	if parsed, err := time.Parse(analyticsDateLayout, raw); err == nil {
-		return timestamppb.New(parsed), nil
-	}
-	return nil, fmt.Errorf("invalid time format: %s", raw)
-}
 
 func mergeWindowFromEnvelope(
 	legacyStart *timestamppb.Timestamp,
@@ -30,19 +12,12 @@ func mergeWindowFromEnvelope(
 ) (*timestamppb.Timestamp, *timestamppb.Timestamp, error) {
 	start := legacyStart
 	end := legacyEnd
-	var err error
 
-	if start == nil && query != nil && query.GetStartTime() != "" {
-		start, err = parseAnalyticsEnvelopeTime(query.GetStartTime())
-		if err != nil {
-			return nil, nil, err
-		}
+	if start == nil && query != nil && query.GetStartTime() != nil {
+		start = query.GetStartTime()
 	}
-	if end == nil && query != nil && query.GetEndTime() != "" {
-		end, err = parseAnalyticsEnvelopeTime(query.GetEndTime())
-		if err != nil {
-			return nil, nil, err
-		}
+	if end == nil && query != nil && query.GetEndTime() != nil {
+		end = query.GetEndTime()
 	}
 	return start, end, nil
 }

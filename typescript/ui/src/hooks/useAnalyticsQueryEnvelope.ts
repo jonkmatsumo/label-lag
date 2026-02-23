@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { DateRange } from '../components/DateRangePicker';
+import { buildAnalyticsQueryEnvelope } from '../api/endpoints';
 import type { AnalyticsQueryEnvelopeParams, AnalyticsQueryGranularity } from '../api/endpoints';
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}/;
@@ -17,10 +18,18 @@ function getDefaultEnvelope(): AnalyticsQueryEnvelopeParams {
   const end = new Date();
   const start = new Date();
   start.setDate(end.getDate() - 7);
-  return {
-    start_time: start.toISOString().split('T')[0],
-    end_time: end.toISOString().split('T')[0],
+  return buildAnalyticsQueryEnvelope({
+    start: start.toISOString().split('T')[0],
+    end: end.toISOString().split('T')[0],
     granularity: 'day',
+  });
+}
+
+function toSearchParamsInit(envelope: AnalyticsQueryEnvelopeParams): Record<string, string> {
+  return {
+    start_time: envelope.start_time,
+    end_time: envelope.end_time,
+    granularity: envelope.granularity ?? 'day',
   };
 }
 
@@ -59,32 +68,34 @@ export function useAnalyticsQueryEnvelope() {
 
   const setDateRange = useCallback(
     (range: DateRange) => {
-      setSearchParams({
-        start_time: range.start,
-        end_time: range.end,
+      const next = buildAnalyticsQueryEnvelope({
+        start: range.start,
+        end: range.end,
         granularity,
       });
+      setSearchParams(toSearchParamsInit(next));
     },
     [granularity, setSearchParams]
   );
 
   const setGranularity = useCallback(
     (nextGranularity: AnalyticsQueryGranularity) => {
-      setSearchParams({
-        start_time: startTime,
-        end_time: endTime,
+      const next = buildAnalyticsQueryEnvelope({
+        start: startTime,
+        end: endTime,
         granularity: nextGranularity,
       });
+      setSearchParams(toSearchParamsInit(next));
     },
     [endTime, setSearchParams, startTime]
   );
 
   return {
-    query: {
-      start_time: startTime,
-      end_time: endTime,
+    query: buildAnalyticsQueryEnvelope({
+      start: startTime,
+      end: endTime,
       granularity,
-    } as AnalyticsQueryEnvelopeParams,
+    }) as AnalyticsQueryEnvelopeParams,
     dateRange: {
       start: startTime,
       end: endTime,

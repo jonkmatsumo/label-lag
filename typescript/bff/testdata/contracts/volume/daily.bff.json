@@ -10,5 +10,9 @@
             "count": 1200,
             "alerts": 40
         }
-    ]
+    ],
+    "meta": {
+        "truncated": false,
+        "partial": false
+    }
 }

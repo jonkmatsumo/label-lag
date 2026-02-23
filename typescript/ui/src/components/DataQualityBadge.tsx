@@ -1,44 +1,24 @@
 import type { AnalyticsResponseMeta } from '../types/api';
 
-function formatPartialReason(reason: AnalyticsResponseMeta['partial_reason']): string {
-  switch (reason) {
-    case 'TIMEOUT':
-      return 'Partial (timeout)';
-    case 'ROW_LIMIT':
-      return 'Partial (row limit)';
-    case 'UPSTREAM_ERROR':
-      return 'Partial (upstream error)';
-    case 'EMPTY':
-      return 'No data in range';
-    default:
-      return 'Partial data';
-  }
-}
-
 export function DataQualityBadge({ meta }: { meta?: AnalyticsResponseMeta }) {
-  if (!meta) {
+  if (!meta || !meta.partial) {
     return null;
   }
 
-  const isPartial = meta.partial ?? meta.is_partial;
-  if (!isPartial) {
-    return null;
-  }
-
-  const label = formatPartialReason(meta.partial_reason);
-  const sampleSuffix =
-    typeof meta.sample_rate === 'number'
-      ? ` \u2022 ${(meta.sample_rate * 100).toFixed(0)}% sample`
+  const label = meta.truncated ? 'Partial (truncated)' : 'Partial data';
+  const limitSuffix =
+    typeof meta.effective_limit === 'number'
+      ? ` | limit ${meta.effective_limit}`
       : '';
 
   return (
     <span
       className="badge rounded-pill text-bg-warning fw-semibold"
-      title={`Data quality: ${meta.partial_reason}`}
+      title={meta.truncated ? 'Data quality: server-side limit reached' : 'Data quality: partial result'}
       data-testid="data-quality-badge"
     >
       {label}
-      {sampleSuffix}
+      {limitSuffix}
     </span>
   );
 }

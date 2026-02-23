@@ -21,7 +21,9 @@ import type {
 import { parseInt64, timestampToIso } from '../utils/protojson.js';
 import { getRequestAbortSignal } from '../utils/request-signal.js';
 import { normalizeAnalyticsMeta } from '../utils/analytics-meta.js';
-import { validateAnalyticsQueryEnvelope } from '../utils/analytics-query-envelope.js';
+import {
+  resolveAnalyticsQueryInput,
+} from '../utils/analytics-query-envelope.js';
 
 export interface AnalyticsRoutesOptions {
   httpClient: HttpClient;
@@ -61,28 +63,34 @@ interface RuleAttributionQuery {
 }
 
 interface KpiQuery {
-  start_time: string;
-  end_time: string;
+  start_time?: string;
+  end_time?: string;
   group_by?: 'hour' | 'day';
   granularity?: 'hour' | 'day';
+  query?: string;
 }
 
 interface VolumeQuery {
-  start_time: string;
-  end_time: string;
+  start_time?: string;
+  end_time?: string;
   granularity?: 'hour' | 'day';
+  query?: string;
 }
 
 interface ConfusionMatrixQuery {
-  start_time: string;
-  end_time: string;
+  start_time?: string;
+  end_time?: string;
   threshold?: number;
   model_version?: string;
+  granularity?: 'hour' | 'day';
+  query?: string;
 }
 
 interface RuleImpactQuery {
-  start_time: string;
-  end_time: string;
+  start_time?: string;
+  end_time?: string;
+  granularity?: 'hour' | 'day';
+  query?: string;
 }
 
 const HOT_ANALYTICS_CACHE_TTL_MS = 20_000;
@@ -500,6 +508,15 @@ export async function analyticsRoutes(
             limit: { type: 'integer', default: 100 },
             cursor: { type: 'string' },
             include_features: { type: 'boolean', default: false },
+            query: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                start_time: { type: 'string' },
+                end_time: { type: 'string' },
+                granularity: { type: 'string', enum: ['hour', 'day'] },
+              },
+            },
           },
         },
       },
@@ -510,9 +527,28 @@ export async function analyticsRoutes(
     ) => {
       try {
         const requestSignal = getRequestAbortSignal(request, reply);
+        const { query, ...restBody } = request.body;
+        const validatedQuery = resolveAnalyticsQueryInput({
+          query,
+          legacy: {
+            start_time: restBody.start_date,
+            end_time: restBody.end_date,
+          },
+          options: {
+            required: false,
+            startField: 'start_date',
+            endField: 'end_date',
+          },
+        });
+        if (!validatedQuery.ok) {
+          return reply.status(validatedQuery.statusCode).send(validatedQuery.body);
+        }
+
         const payload = {
-          ...request.body,
-          include_features: request.body.include_features ?? false,
+          ...restBody,
+          include_features: restBody.include_features ?? false,
+          ...(validatedQuery.value.start_time ? { start_date: validatedQuery.value.start_time } : {}),
+          ...(validatedQuery.value.end_time ? { end_date: validatedQuery.value.end_time } : {}),
         };
 
         const response = await httpClient.request<any>({
@@ -551,8 +587,6 @@ export async function analyticsRoutes(
               ...raw,
               effective_limit: payload.limit,
             },
-            startTime: payload.start_date ?? '',
-            endTime: payload.end_date ?? '',
             hasData: normalizedItems.length > 0,
           }),
         };
@@ -574,7 +608,6 @@ export async function analyticsRoutes(
       schema: {
         querystring: {
           type: 'object',
-          required: ['start_time', 'end_time'],
           additionalProperties: false,
           properties: {
             start_time: {
@@ -589,6 +622,7 @@ export async function analyticsRoutes(
             },
             group_by: { type: 'string', enum: ['hour', 'day'], default: 'day' },
             granularity: { type: 'string', enum: ['hour', 'day'] },
+            query: { type: 'string' },
           },
         },
       },
@@ -599,11 +633,27 @@ export async function analyticsRoutes(
     ) => {
       try {
         const requestSignal = getRequestAbortSignal(request, reply);
-        const { start_time, end_time, group_by, granularity } = request.query;
-        const validatedQuery = validateAnalyticsQueryEnvelope({
-          start_time,
-          end_time,
-          granularity: granularity ?? group_by,
+        const { start_time, end_time, group_by, granularity, query } = request.query;
+        if (granularity && group_by && granularity !== group_by) {
+          return reply.status(400).send({
+            error: {
+              code: 'INVALID_RANGE',
+              message: 'group_by and granularity must match when both are provided',
+            },
+          });
+        }
+
+        const validatedQuery = resolveAnalyticsQueryInput({
+          query,
+          legacy: {
+            start_time,
+            end_time,
+            granularity: granularity ?? group_by,
+          },
+          options: {
+            startField: 'start_time',
+            endField: 'end_time',
+          },
         });
         if (!validatedQuery.ok) {
           return reply.status(validatedQuery.statusCode).send(validatedQuery.body);
@@ -641,8 +691,6 @@ export async function analyticsRoutes(
               })),
               meta: normalizeAnalyticsMeta({
                 raw,
-                startTime: queryEnvelope.start_time,
-                endTime: queryEnvelope.end_time,
                 hasData: (parseInt64(raw.total_decisions) ?? 0) > 0,
               }),
             };
@@ -667,7 +715,6 @@ export async function analyticsRoutes(
       schema: {
         querystring: {
           type: 'object',
-          required: ['start_time', 'end_time'],
           additionalProperties: false,
           properties: {
             start_time: {
@@ -681,6 +728,7 @@ export async function analyticsRoutes(
               description: 'ISO date or datetime string (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ssZ)',
             },
             granularity: { type: 'string', enum: ['hour', 'day'], default: 'day' },
+            query: { type: 'string' },
           },
         },
       },
@@ -691,11 +739,18 @@ export async function analyticsRoutes(
     ) => {
       try {
         const requestSignal = getRequestAbortSignal(request, reply);
-        const { start_time, end_time, granularity } = request.query;
-        const validatedQuery = validateAnalyticsQueryEnvelope({
-          start_time,
-          end_time,
-          granularity,
+        const { start_time, end_time, granularity, query } = request.query;
+        const validatedQuery = resolveAnalyticsQueryInput({
+          query,
+          legacy: {
+            start_time,
+            end_time,
+            granularity,
+          },
+          options: {
+            startField: 'start_time',
+            endField: 'end_time',
+          },
         });
         if (!validatedQuery.ok) {
           return reply.status(validatedQuery.statusCode).send(validatedQuery.body);
@@ -726,8 +781,6 @@ export async function analyticsRoutes(
               })),
               meta: normalizeAnalyticsMeta({
                 raw,
-                startTime: queryEnvelope.start_time,
-                endTime: queryEnvelope.end_time,
                 hasData: (raw.points?.length ?? 0) > 0,
               }),
             };
@@ -752,7 +805,6 @@ export async function analyticsRoutes(
       schema: {
         querystring: {
           type: 'object',
-          required: ['start_time', 'end_time'],
           additionalProperties: false,
           properties: {
             start_time: {
@@ -767,6 +819,8 @@ export async function analyticsRoutes(
             },
             threshold: { type: 'number', minimum: 0, maximum: 100 },
             model_version: { type: 'string' },
+            granularity: { type: 'string', enum: ['hour', 'day'] },
+            query: { type: 'string' },
           },
         },
       },
@@ -777,10 +831,19 @@ export async function analyticsRoutes(
     ) => {
       try {
         const requestSignal = getRequestAbortSignal(request, reply);
-        const { start_time, end_time, threshold, model_version } = request.query;
-        const validatedQuery = validateAnalyticsQueryEnvelope({
-          start_time,
-          end_time,
+        const { start_time, end_time, threshold, model_version, granularity, query } = request.query;
+        const validatedQuery = resolveAnalyticsQueryInput({
+          query,
+          legacy: {
+            start_time,
+            end_time,
+            granularity,
+          },
+          options: {
+            startField: 'start_time',
+            endField: 'end_time',
+            required: true,
+          },
         });
         if (!validatedQuery.ok) {
           return reply.status(validatedQuery.statusCode).send(validatedQuery.body);
@@ -821,8 +884,6 @@ export async function analyticsRoutes(
               insufficient_labels: !!raw.insufficient_labels,
               meta: normalizeAnalyticsMeta({
                 raw,
-                startTime: queryEnvelope.start_time,
-                endTime: queryEnvelope.end_time,
                 hasData: (parseInt64(raw.true_positives) ?? 0) + (parseInt64(raw.false_positives) ?? 0) + (parseInt64(raw.true_negatives) ?? 0) + (parseInt64(raw.false_negatives) ?? 0) > 0,
               }),
             };
@@ -854,7 +915,6 @@ export async function analyticsRoutes(
         },
         querystring: {
           type: 'object',
-          required: ['start_time', 'end_time'],
           additionalProperties: false,
           properties: {
             start_time: {
@@ -867,6 +927,8 @@ export async function analyticsRoutes(
               pattern: '^\\d{4}-\\d{2}-\\d{2}',
               description: 'ISO date or datetime string (YYYY-MM-DD)',
             },
+            granularity: { type: 'string', enum: ['hour', 'day'] },
+            query: { type: 'string' },
           },
         },
       },
@@ -881,10 +943,19 @@ export async function analyticsRoutes(
       try {
         const requestSignal = getRequestAbortSignal(request, reply);
         const { rule_id } = request.params;
-        const { start_time, end_time } = request.query;
-        const validatedQuery = validateAnalyticsQueryEnvelope({
-          start_time,
-          end_time,
+        const { start_time, end_time, granularity, query } = request.query;
+        const validatedQuery = resolveAnalyticsQueryInput({
+          query,
+          legacy: {
+            start_time,
+            end_time,
+            granularity,
+          },
+          options: {
+            startField: 'start_time',
+            endField: 'end_time',
+            required: true,
+          },
         });
         if (!validatedQuery.ok) {
           return reply.status(validatedQuery.statusCode).send(validatedQuery.body);
@@ -931,8 +1002,6 @@ export async function analyticsRoutes(
               truncated,
               meta: normalizeAnalyticsMeta({
                 raw,
-                startTime: queryEnvelope.start_time,
-                endTime: queryEnvelope.end_time,
                 hasData: totalTriggers > 0 || dailyBuckets.length > 0,
               }),
             };
