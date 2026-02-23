@@ -5,12 +5,6 @@
     "daily_buckets": [],
     "truncated": false,
     "meta": {
-        "time_range": {
-            "start": "2024-01-01T00:00:00.000Z",
-            "end": "2024-01-10T00:00:00.000Z"
-        },
-        "is_partial": true,
-        "partial_reason": "EMPTY",
         "truncated": false,
         "partial": true
     }

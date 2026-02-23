@@ -568,8 +568,6 @@ export async function analyticsRoutes(
               ...raw,
               effective_limit: payload.limit,
             },
-            startTime: payload.start_date ?? '',
-            endTime: payload.end_date ?? '',
             hasData: normalizedItems.length > 0,
           }),
         };
@@ -658,8 +656,6 @@ export async function analyticsRoutes(
               })),
               meta: normalizeAnalyticsMeta({
                 raw,
-                startTime: queryEnvelope.start_time,
-                endTime: queryEnvelope.end_time,
                 hasData: (parseInt64(raw.total_decisions) ?? 0) > 0,
               }),
             };
@@ -743,8 +739,6 @@ export async function analyticsRoutes(
               })),
               meta: normalizeAnalyticsMeta({
                 raw,
-                startTime: queryEnvelope.start_time,
-                endTime: queryEnvelope.end_time,
                 hasData: (raw.points?.length ?? 0) > 0,
               }),
             };
@@ -838,8 +832,6 @@ export async function analyticsRoutes(
               insufficient_labels: !!raw.insufficient_labels,
               meta: normalizeAnalyticsMeta({
                 raw,
-                startTime: queryEnvelope.start_time,
-                endTime: queryEnvelope.end_time,
                 hasData: (parseInt64(raw.true_positives) ?? 0) + (parseInt64(raw.false_positives) ?? 0) + (parseInt64(raw.true_negatives) ?? 0) + (parseInt64(raw.false_negatives) ?? 0) > 0,
               }),
             };
@@ -948,8 +940,6 @@ export async function analyticsRoutes(
               truncated,
               meta: normalizeAnalyticsMeta({
                 raw,
-                startTime: queryEnvelope.start_time,
-                endTime: queryEnvelope.end_time,
                 hasData: totalTriggers > 0 || dailyBuckets.length > 0,
               }),
             };

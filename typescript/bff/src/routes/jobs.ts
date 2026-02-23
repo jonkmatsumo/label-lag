@@ -313,8 +313,6 @@ export async function jobsRoutes(
               summaries,
               meta: normalizeAnalyticsMeta({
                 raw,
-                startTime: queryEnvelope.start_time,
-                endTime: queryEnvelope.end_time,
                 hasData: summaries.length > 0,
               }),
             };

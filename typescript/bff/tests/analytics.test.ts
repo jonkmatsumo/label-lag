@@ -281,6 +281,11 @@ describe('Analytics Routes', () => {
       expect(data.items[0].record_id).toBe('rec-1');
       expect(data.next_cursor).toBe('encoded-cursor-value');
       expect(data.truncated).toBe(false);
+      expect(data.meta).toEqual({
+        truncated: false,
+        partial: false,
+        effective_limit: 10,
+      });
       expect(data.transactions).toBeUndefined(); // Normalized away
     });
 
@@ -311,6 +316,11 @@ describe('Analytics Routes', () => {
       const data = response.json();
       expect(data.items).toHaveLength(1);
       expect(data.truncated).toBe(true);
+      expect(data.meta).toEqual({
+        truncated: true,
+        partial: true,
+        effective_limit: 50,
+      });
     });
 
     it('returns 400 for invalid time range', async () => {
