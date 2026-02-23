@@ -11,10 +11,7 @@ import (
 )
 
 func (s *Service) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRunsRequest) (*pb.ListTrainingRunsResponse, error) {
-	limit, err := normalizeLimit(req.Limit, 50, 250, "limit")
-	if err != nil {
-		return nil, err
-	}
+	limit, truncated := normalizeLimit(req.Limit, 50, 250)
 	offset, err := normalizeOffset(req.Offset)
 	if err != nil {
 		return nil, err
@@ -36,6 +33,10 @@ func (s *Service) ListTrainingRuns(ctx context.Context, req *pb.ListTrainingRuns
 		Pagination: &commonv1.CursorPageResponse{
 			NextCursor: nextCursor,
 		},
+		Meta: &pb.AnalyticsMeta{
+			EffectiveLimit: limit,
+			Truncated:      truncated,
+		},
 	}
 	if req.Pagination == nil || req.Pagination.Cursor == "" {
 		resp.Pagination.Total = &total
@@ -48,10 +49,7 @@ func (s *Service) ListModelVersions(ctx context.Context, req *pb.ListModelVersio
 		return nil, status.Error(codes.InvalidArgument, "model_name required")
 	}
 
-	limit, err := normalizeLimit(req.Limit, 50, 250, "limit")
-	if err != nil {
-		return nil, err
-	}
+	limit, truncated := normalizeLimit(req.Limit, 50, 250)
 	offset, err := normalizeOffset(req.Offset)
 	if err != nil {
 		return nil, err
@@ -68,6 +66,10 @@ func (s *Service) ListModelVersions(ctx context.Context, req *pb.ListModelVersio
 		Versions: versions,
 		Pagination: &commonv1.CursorPageResponse{
 			NextCursor: nextCursor,
+		},
+		Meta: &pb.AnalyticsMeta{
+			EffectiveLimit: limit,
+			Truncated:      truncated,
 		},
 	}
 	if req.Pagination == nil || req.Pagination.Cursor == "" {
@@ -112,6 +114,9 @@ func (s *Service) GetMetricSeries(ctx context.Context, req *pb.GetMetricSeriesRe
 
 	return &pb.GetMetricSeriesResponse{
 		Points: points,
+		Meta: &pb.AnalyticsMeta{
+			Truncated: false,
+		},
 	}, nil
 }
 

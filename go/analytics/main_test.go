@@ -136,10 +136,13 @@ func TestSearchTransactions(t *testing.T) {
 		},
 	}
 	expectedNextCursor := "next"
-	expectedTruncated := false
+	expectedMeta := &pb.AnalyticsMeta{
+		EffectiveLimit: 25,
+		Truncated:      false,
+	}
 
 	mockStore.On("SearchTransactions", mock.Anything, mock.Anything).
-		Return(expectedTxs, expectedNextCursor, expectedTruncated, nil)
+		Return(expectedTxs, expectedNextCursor, expectedMeta, nil).Once()
 
 	minAmount := 12.5
 	req := &pb.SearchTransactionsRequest{
@@ -152,7 +155,7 @@ func TestSearchTransactions(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	assert.Equal(t, "next", resp.Pagination.NextCursor)
-	assert.False(t, resp.Truncated)
+	assert.False(t, resp.Meta.Truncated)
 	assert.Len(t, resp.Transactions, 1)
 	assert.Equal(t, "rec-1", resp.Transactions[0].RecordId)
 	assert.True(t, resp.Transactions[0].IsTrainEligible)
@@ -168,10 +171,13 @@ func TestSearchTransactions_Unfiltered(t *testing.T) {
 		{RecordId: "rec-2"},
 	}
 	expectedNextCursor := ""
-	expectedTruncated := false
+	expectedMeta := &pb.AnalyticsMeta{
+		EffectiveLimit: 10,
+		Truncated:      false,
+	}
 
 	mockStore.On("SearchTransactions", mock.Anything, mock.Anything).
-		Return(expectedTxs, expectedNextCursor, expectedTruncated, nil)
+		Return(expectedTxs, expectedNextCursor, expectedMeta, nil).Once()
 
 	req := &pb.SearchTransactionsRequest{
 		Limit: 10,
@@ -180,7 +186,7 @@ func TestSearchTransactions_Unfiltered(t *testing.T) {
 	resp, err := s.SearchTransactions(context.Background(), req)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
-	assert.False(t, resp.Truncated)
+	assert.False(t, resp.Meta.Truncated)
 	assert.Nil(t, resp.Pagination)
 	assert.Len(t, resp.Transactions, 1)
 	mockStore.AssertExpectations(t)

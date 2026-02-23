@@ -10,6 +10,8 @@ import (
 	"github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestGetDailyStats(t *testing.T) {
@@ -128,12 +130,13 @@ func TestSearchTransactions(t *testing.T) {
 		TenantId:  "tenant-1",
 	}
 
-	details, nextCursor, truncated, err := s.SearchTransactions(context.Background(), req)
+	details, nextCursor, meta, err := s.SearchTransactions(context.Background(), req)
 	require.NoError(t, err)
 	assert.Len(t, details, 1)
 	assert.Equal(t, "rec-1", details[0].RecordId)
 	assert.Empty(t, nextCursor)
-	assert.False(t, truncated)
+	assert.NotNil(t, meta)
+	assert.False(t, meta.Truncated)
 }
 
 func TestSearchTransactions_Truncated(t *testing.T) {
@@ -157,11 +160,100 @@ func TestSearchTransactions_Truncated(t *testing.T) {
 		Limit:  1000, // Should be clamped to 500, and truncated=true
 	}
 
-	details, nextCursor, truncated, err := s.SearchTransactions(context.Background(), req)
+	details, nextCursor, meta, err := s.SearchTransactions(context.Background(), req)
 	require.NoError(t, err)
 	assert.Len(t, details, 1)   // Only returned 1 row
 	assert.Empty(t, nextCursor) // Did not exceed our clamped limit
-	assert.True(t, truncated)   // But truncated was set to true because requested > 500
+	assert.NotNil(t, meta)
+	assert.True(t, meta.Truncated) // But truncated was set to true because requested > 500
+	assert.Equal(t, int32(500), meta.EffectiveLimit)
+}
+
+func TestSearchTransactions_InvalidCursorReturnsInvalidArgument(t *testing.T) {
+	dbMock, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	defer dbMock.Close()
+
+	s := NewSQLStore(dbMock)
+
+	_, _, _, err = s.SearchTransactions(context.Background(), &pb.SearchTransactionsRequest{
+		Cursor: "not-a-valid-cursor",
+		Limit:  25,
+	})
+	require.Error(t, err)
+	st, ok := status.FromError(err)
+	require.True(t, ok)
+	assert.Equal(t, codes.InvalidArgument, st.Code())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestSearchTransactions_CursorPagination_NoGapsOrDuplicates(t *testing.T) {
+	dbMock, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	defer dbMock.Close()
+
+	s := NewSQLStore(dbMock)
+	cols := []string{
+		"record_id", "user_id", "created_at", "is_train_eligible", "is_pre_fraud",
+		"amount", "is_fraudulent", "fraud_type", "is_off_hours_txn", "merchant_risk_score",
+		"velocity_24h", "amount_to_avg_ratio_30d", "balance_volatility_z_score", "numerical_features", "categorical_features",
+	}
+	firstTS := time.Date(2025, 1, 10, 12, 0, 0, 0, time.UTC)
+	secondTS := firstTS.Add(-1 * time.Minute)
+	thirdTS := secondTS.Add(-1 * time.Minute)
+	fourthTS := thirdTS.Add(-1 * time.Minute)
+
+	mock.ExpectQuery(`(?s)SELECT em.record_id, em.user_id,.*ORDER BY em.created_at DESC, em.record_id DESC LIMIT 3`).
+		WillReturnRows(sqlmock.NewRows(cols).
+			AddRow("rec-3", "user-1", firstTS, true, false, 30.0, false, "", false, 10, 1, 1.0, 0.1, []byte("{}"), []byte("{}")).
+			AddRow("rec-2", "user-1", firstTS, true, false, 20.0, false, "", false, 9, 1, 1.0, 0.1, []byte("{}"), []byte("{}")).
+			AddRow("rec-1", "user-1", secondTS, true, false, 10.0, false, "", false, 8, 1, 1.0, 0.1, []byte("{}"), []byte("{}")))
+
+	page1, nextCursor, meta1, err := s.SearchTransactions(context.Background(), &pb.SearchTransactionsRequest{
+		Limit: 2,
+	})
+	require.NoError(t, err)
+	require.Len(t, page1, 2)
+	require.NotEmpty(t, nextCursor)
+	require.NotNil(t, meta1)
+	assert.False(t, meta1.Truncated)
+	assert.Equal(t, "rec-3", page1[0].RecordId)
+	assert.Equal(t, "rec-2", page1[1].RecordId)
+
+	decoded, err := decodeTransactionCursor(nextCursor)
+	require.NoError(t, err)
+	require.NotNil(t, decoded)
+	assert.Equal(t, "rec-2", decoded.RecordId)
+	assert.True(t, firstTS.Equal(decoded.CreatedAt))
+
+	mock.ExpectQuery(`(?s)SELECT em.record_id, em.user_id,.*WHERE \(em.created_at < \$1 OR \(em.created_at = \$2 AND em.record_id < \$3\)\).*ORDER BY em.created_at DESC, em.record_id DESC LIMIT 3`).
+		WithArgs(decoded.CreatedAt, decoded.CreatedAt, decoded.RecordId).
+		WillReturnRows(sqlmock.NewRows(cols).
+			AddRow("rec-1", "user-1", secondTS, true, false, 10.0, false, "", false, 8, 1, 1.0, 0.1, []byte("{}"), []byte("{}")).
+			AddRow("rec-0", "user-1", thirdTS, true, false, 9.0, false, "", false, 7, 1, 1.0, 0.1, []byte("{}"), []byte("{}")).
+			AddRow("rec--1", "user-1", fourthTS, true, false, 8.0, false, "", false, 6, 1, 1.0, 0.1, []byte("{}"), []byte("{}")))
+
+	page2, nextCursor2, meta2, err := s.SearchTransactions(context.Background(), &pb.SearchTransactionsRequest{
+		Limit:  2,
+		Cursor: nextCursor,
+	})
+	require.NoError(t, err)
+	require.Len(t, page2, 2)
+	require.NotNil(t, meta2)
+	assert.False(t, meta2.Truncated)
+	assert.Equal(t, "rec-1", page2[0].RecordId)
+	assert.Equal(t, "rec-0", page2[1].RecordId)
+	assert.NotEmpty(t, nextCursor2)
+
+	seen := map[string]struct{}{}
+	for _, tx := range append(page1, page2...) {
+		if _, exists := seen[tx.RecordId]; exists {
+			t.Fatalf("duplicate record across pages: %s", tx.RecordId)
+		}
+		seen[tx.RecordId] = struct{}{}
+	}
+
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestGetDatasetProfile(t *testing.T) {

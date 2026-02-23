@@ -57,10 +57,7 @@ func (s *Service) GetDatasetSummary(ctx context.Context, req *pb.GetDatasetSumma
 }
 
 func (s *Service) ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetProfilesRequest) (*pb.ListDatasetProfilesResponse, error) {
-	limit, err := normalizeLimit(req.Limit, 50, 250, "limit")
-	if err != nil {
-		return nil, err
-	}
+	limit, truncated := normalizeLimit(req.Limit, 50, 250)
 	offset, err := normalizeOffset(req.Offset)
 	if err != nil {
 		return nil, err
@@ -81,6 +78,10 @@ func (s *Service) ListDatasetProfiles(ctx context.Context, req *pb.ListDatasetPr
 		Profiles: profiles,
 		Pagination: &commonv1.CursorPageResponse{
 			NextCursor: nextCursor,
+		},
+		Meta: &pb.AnalyticsMeta{
+			EffectiveLimit: limit,
+			Truncated:      truncated,
 		},
 	}
 	if req.Pagination == nil || req.Pagination.Cursor == "" {
