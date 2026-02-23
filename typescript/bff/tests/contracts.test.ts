@@ -207,6 +207,18 @@ describe('Contract: POST /analytics/transactions/search', () => {
     expect(payload.truncated).toBe(false);
   });
 
+  it('cursor_page_1.bff fixture preserves opaque cursor and normalized meta', () => {
+    const payload = loadFixture('search/cursor_page_1.bff.json') as Record<string, unknown>;
+
+    expect(Array.isArray(payload.items)).toBe(true);
+    expect((payload.items as unknown[]).length).toBeGreaterThan(0);
+    expect(typeof payload.next_cursor).toBe('string');
+    expect((payload.next_cursor as string).length).toBeGreaterThan(0);
+    const meta = payload.meta as Record<string, unknown>;
+    expect(meta.truncated).toBe(false);
+    expect(meta.partial).toBe(false);
+  });
+
   it('cursor_page_2 fixture has empty next_cursor string', () => {
     const payload = loadFixture('search/cursor_page_2.json') as Record<string, unknown>;
 
@@ -215,10 +227,39 @@ describe('Contract: POST /analytics/transactions/search', () => {
     expect((payload.next_cursor as string).length).toBe(0);
   });
 
+  it('cursor_page_2.bff fixture has empty next_cursor and normalized item shape', () => {
+    const payload = loadFixture('search/cursor_page_2.bff.json') as Record<string, unknown>;
+
+    expect(Array.isArray(payload.items)).toBe(true);
+    expect((payload.items as unknown[]).length).toBeGreaterThan(0);
+    expect(typeof payload.next_cursor).toBe('string');
+    expect((payload.next_cursor as string).length).toBe(0);
+  });
+
   it('truncated_results fixture has truncated=true', () => {
     const payload = loadFixture('search/truncated_results.json') as Record<string, unknown>;
 
     expect(payload.truncated).toBe(true);
+  });
+
+  it('meta_truncated fixture has truncated=true in meta', () => {
+    const payload = loadFixture('search/meta_truncated.json') as Record<string, unknown>;
+
+    expect(payload.meta).toBeDefined();
+    const meta = payload.meta as Record<string, unknown>;
+    expect(meta.truncated).toBe(true);
+    expect(meta.effective_limit).toBe(500);
+  });
+
+  it('meta_truncated.bff fixture has truncated meta and effective_limit', () => {
+    const payload = loadFixture('search/meta_truncated.bff.json') as Record<string, unknown>;
+
+    const items = payload.items as unknown[];
+    expect(items.length).toBeGreaterThan(0);
+    const meta = payload.meta as Record<string, unknown>;
+    expect(meta.truncated).toBe(true);
+    expect(meta.partial).toBe(true);
+    expect(meta.effective_limit).toBe(500);
   });
 
   it('omitted_features fixture lacks numerical/categorical features', () => {

@@ -1,0 +1,21 @@
+{
+  "items": [
+    {
+      "id": "rec-limit",
+      "record_id": "rec-limit",
+      "user_id": "user-val",
+      "amount": 99.99,
+      "timestamp": "2024-01-01T12:00:00Z",
+      "created_at": "2024-01-01T12:00:00Z",
+      "is_fraud": true,
+      "is_fraudulent": true
+    }
+  ],
+  "next_cursor": "next-cursor-val",
+  "truncated": true,
+  "meta": {
+    "truncated": true,
+    "partial": true,
+    "effective_limit": 500
+  }
+}
