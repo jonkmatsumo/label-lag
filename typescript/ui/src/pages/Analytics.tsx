@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { analyticsApi } from '../api';
 import type { RecentAlert, TransactionSearchRequest, TransactionDetail } from '../types/api';
@@ -13,79 +12,36 @@ import { DataQualityBadge } from '../components/DataQualityBadge';
 import { useTenant } from '../hooks/useTenant';
 import { useCursorPagination } from '../hooks/useCursorPagination';
 import { useAnalyticsSearchParams } from '../hooks/useAnalyticsSearchParams';
+import { useAnalyticsQueryEnvelope } from '../hooks/useAnalyticsQueryEnvelope';
 import type { DateRange } from '../components/DateRangePicker';
 
 export function Analytics() {
   const [daysFilter] = useState(30);
   const { tenantId } = useTenant();
-  const [searchParams, setSearchParams] = useSearchParams();
-
-  // ── Compute defaults ────────────────────────────────────────────────────────
-  function getDefaults(): { start: string; end: string; granularity: 'hour' | 'day' } {
-    const end = new Date();
-    const start = new Date();
-    start.setDate(end.getDate() - 7);
-    return {
-      start: start.toISOString().split('T')[0],
-      end: end.toISOString().split('T')[0],
-      granularity: 'day',
-    };
-  }
-
-  // ── Validate URL param helpers ───────────────────────────────────────────────
-  const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}/;
-  function isValidDate(s: string | null): s is string {
-    return !!s && ISO_DATE_RE.test(s);
-  }
-  function isValidGranularity(s: string | null): s is 'hour' | 'day' {
-    return s === 'hour' || s === 'day';
-  }
-
-  // ── Read params from URL, fall back to defaults if invalid ───────────────────
-  const rawStart = searchParams.get('start_time');
-  const rawEnd = searchParams.get('end_time');
-  const rawGran = searchParams.get('granularity');
-
-  const defaults = getDefaults();
-  const startTime = isValidDate(rawStart) ? rawStart : defaults.start;
-  const endTime = isValidDate(rawEnd) ? rawEnd : defaults.end;
-  const granularity = isValidGranularity(rawGran) ? rawGran : defaults.granularity;
-
-  // ── On mount: if URL params are missing/invalid, replace with defaults once ──
-  useEffect(() => {
-    const needsFix =
-      !isValidDate(rawStart) ||
-      !isValidDate(rawEnd) ||
-      !isValidGranularity(rawGran);
-
-    if (needsFix) {
-      setSearchParams(
-        { start_time: startTime, end_time: endTime, granularity },
-        { replace: true },
-      );
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // run only on mount
-
-  // ── DateRange object for DateRangePicker ─────────────────────────────────────
-  const dateRange: DateRange = { start: startTime, end: endTime };
+  const {
+    query: analyticsQuery,
+    dateRange,
+    granularity,
+    setDateRange,
+    setGranularity,
+    searchParams,
+    setSearchParams,
+  } = useAnalyticsQueryEnvelope();
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
   const handleDateRangeChange = (range: DateRange) => {
-    setSearchParams({ start_time: range.start, end_time: range.end, granularity });
+    setDateRange(range);
   };
 
   const handleGranularityChange = (g: 'hour' | 'day') => {
-    setSearchParams({ start_time: startTime, end_time: endTime, granularity: g });
+    setGranularity(g);
   };
 
   // Fetch performance KPIs — signal enables TanStack Query to cancel stale requests
   const kpisQuery = useQuery({
     queryKey: ['analytics', tenantId, 'kpis', dateRange.start, dateRange.end, granularity],
     queryFn: ({ signal }) => analyticsApi.getKpis({
-      start_time: dateRange.start,
-      end_time: dateRange.end,
-      group_by: granularity,
+      ...analyticsQuery,
       signal,
     }),
     staleTime: 30_000,
@@ -95,9 +51,7 @@ export function Analytics() {
   const volumeQuery = useQuery({
     queryKey: ['analytics', tenantId, 'volume', dateRange.start, dateRange.end, granularity],
     queryFn: ({ signal }) => analyticsApi.getVolume({
-      start_time: dateRange.start,
-      end_time: dateRange.end,
-      granularity,
+      ...analyticsQuery,
       signal,
     }),
     staleTime: 30_000,
@@ -107,8 +61,7 @@ export function Analytics() {
   const confusionMatrixQuery = useQuery({
     queryKey: ['analytics', tenantId, 'confusion-matrix', dateRange.start, dateRange.end],
     queryFn: ({ signal }) => analyticsApi.getConfusionMatrix({
-      start_time: dateRange.start,
-      end_time: dateRange.end,
+      ...analyticsQuery,
       signal,
     }),
     staleTime: 30_000,
@@ -167,8 +120,6 @@ export function Analytics() {
           </button>
         </div>
       </div>
-
-
       {/* KPI Cards */}
       <div className="row g-3 mb-4">
         <div className="col-md">
@@ -326,10 +277,19 @@ export function Analytics() {
                 data={[...volume.points].sort((a, b) =>
                   new Date(a.timestamp ?? 0).getTime() - new Date(b.timestamp ?? 0).getTime()
                 )}
-                onClick={(data: { activePayload?: Array<{ payload: { timestamp: string } }> }) => {
-                  if (data && data.activePayload && data.activePayload.length > 0) {
-                    const point = data.activePayload[0].payload;
-                    const date = new Date(point.timestamp);
+                onClick={(eventState) => {
+                  const activePayload = (
+                    eventState as
+                      | {
+                          activePayload?: Array<{
+                            payload?: { timestamp?: string };
+                          }>;
+                        }
+                      | undefined
+                  )?.activePayload;
+                  const timestamp = activePayload?.[0]?.payload?.timestamp;
+                  if (timestamp) {
+                    const date = new Date(timestamp);
                     const dateStr = date.toISOString().split('T')[0];
                     // If granularity is hour, we filter for that specific day or range
                     // For now, let's drill down by setting both start/end to this day
