@@ -545,6 +545,15 @@ export interface BffKpiBucket {
   rules_fired: number;
 }
 
+export interface KpisPeriodResponse {
+  total_decisions: number;
+  total_alerts: number;
+  alert_rate: number;
+  avg_score: number;
+  rules_fired_total: number;
+  buckets?: BffKpiBucket[];
+}
+
 export interface KpisResponse {
   total_decisions: number;
   total_alerts: number;
@@ -552,6 +561,8 @@ export interface KpisResponse {
   avg_score: number;
   rules_fired_total: number;
   buckets?: BffKpiBucket[];
+  current?: KpisPeriodResponse;
+  previous?: KpisPeriodResponse;
   meta?: AnalyticsResponseMeta;
 }
 
@@ -561,8 +572,14 @@ export interface BffVolumePoint {
   alerts: number;
 }
 
+export interface VolumeSeriesPeriodResponse {
+  points: BffVolumePoint[];
+}
+
 export interface VolumeSeriesResponse {
   points: BffVolumePoint[];
+  current?: VolumeSeriesPeriodResponse;
+  previous?: VolumeSeriesPeriodResponse;
   meta?: AnalyticsResponseMeta;
 }
 

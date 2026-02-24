@@ -67,12 +67,14 @@ export interface AnalyticsQueryEnvelopeParams {
   start_time: string;
   end_time: string;
   granularity?: AnalyticsQueryGranularity;
+  compare_to_previous?: boolean;
 }
 
 export interface BuildAnalyticsQueryEnvelopeParams {
   start: string;
   end: string;
   granularity?: AnalyticsQueryGranularity;
+  compareToPrevious?: boolean;
 }
 
 export function buildAnalyticsQueryEnvelope(
@@ -82,6 +84,7 @@ export function buildAnalyticsQueryEnvelope(
     start_time: params.start,
     end_time: params.end,
     ...(params.granularity ? { granularity: params.granularity } : {}),
+    ...(params.compareToPrevious ? { compare_to_previous: true } : {}),
   };
 }
 
@@ -92,6 +95,7 @@ function buildAnalyticsQueryEnvelopeSearchParams(
   searchParams.set('start_time', envelope.start_time);
   searchParams.set('end_time', envelope.end_time);
   if (envelope.granularity) searchParams.set('granularity', envelope.granularity);
+  if (envelope.compare_to_previous) searchParams.set('compare_to_previous', 'true');
   return searchParams;
 }
 
@@ -200,7 +204,11 @@ export const analyticsApi = {
   },
   getConfusionMatrix: (params: AnalyticsQueryEnvelopeParams & { threshold?: number; model_version?: string; signal?: AbortSignal }) => {
     const { signal, threshold, model_version, ...envelope } = params;
-    const searchParams = buildAnalyticsQueryEnvelopeSearchParams(envelope);
+    const searchParams = buildAnalyticsQueryEnvelopeSearchParams({
+      start_time: envelope.start_time,
+      end_time: envelope.end_time,
+      granularity: envelope.granularity,
+    });
     if (threshold !== undefined) searchParams.set('threshold', String(threshold));
     if (model_version) searchParams.set('model_version', model_version);
     return apiClient.get<ConfusionMatrixResponse>(`/bff/v1/analytics/confusion-matrix?${searchParams.toString()}`, signal);

@@ -697,6 +697,8 @@ type stubAnalyticsClient struct {
 	getJobResp                  *crudv1.GetJobResponse
 	getJobEventsResp            *crudv1.GetJobEventsResponse
 	getJobSummaryResp           *crudv1.GetJobSummaryResponse
+	getKpisResp                 *crudv1.GetKpisResponse
+	getVolumeSeriesResp         *crudv1.GetVolumeSeriesResponse
 	listTrainingRunsResp        *crudv1.ListTrainingRunsResponse
 	getTrainingRunResp          *crudv1.GetTrainingRunResponse
 	listModelVersionsResp       *crudv1.ListModelVersionsResponse
@@ -715,6 +717,8 @@ type stubAnalyticsClient struct {
 	lastFeatureSampleReq       *crudv1.GetFeatureSampleRequest
 	lastDatasetSummaryReq      *crudv1.GetDatasetSummaryRequest
 	lastGetJobEventsReq        *crudv1.GetJobEventsRequest
+	lastGetKpisReq             *crudv1.GetKpisRequest
+	lastGetVolumeSeriesReq     *crudv1.GetVolumeSeriesRequest
 	lastBacktestResultsReq     *crudv1.ListBacktestResultsRequest
 	lastClearAllDataReq        *crudv1.ClearAllDataRequest
 	lastListDecisionsReq       *crudv1.ListDecisionsRequest
@@ -862,10 +866,18 @@ func (s *stubAnalyticsClient) GetRuleImpact(ctx context.Context, req *crudv1.Get
 }
 
 func (s *stubAnalyticsClient) GetKpis(ctx context.Context, req *crudv1.GetKpisRequest) (*crudv1.GetKpisResponse, error) {
+	s.lastGetKpisReq = req
+	if s.getKpisResp != nil {
+		return s.getKpisResp, s.err
+	}
 	return &crudv1.GetKpisResponse{}, s.err
 }
 
 func (s *stubAnalyticsClient) GetVolumeSeries(ctx context.Context, req *crudv1.GetVolumeSeriesRequest) (*crudv1.GetVolumeSeriesResponse, error) {
+	s.lastGetVolumeSeriesReq = req
+	if s.getVolumeSeriesResp != nil {
+		return s.getVolumeSeriesResp, s.err
+	}
 	return &crudv1.GetVolumeSeriesResponse{}, s.err
 }
 

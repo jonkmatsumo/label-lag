@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { analyticsApi, buildAnalyticsQueryEnvelope } from '../api';
 import type { RecentAlert, TransactionDetail } from '../types/api';
 import {
@@ -21,8 +22,10 @@ export function Analytics() {
   const {
     dateRange,
     granularity,
+    compareToPrevious,
     setDateRange,
     setGranularity,
+    setCompareToPrevious,
   } = useAnalyticsQueryEnvelope();
   const { setTimeWindow } = useAnalyticsExplorerSearchParams();
   const analyticsQuery = useMemo(
@@ -31,8 +34,9 @@ export function Analytics() {
         start: dateRange.start,
         end: dateRange.end,
         granularity,
+        compareToPrevious,
       }),
-    [dateRange.end, dateRange.start, granularity]
+    [compareToPrevious, dateRange.end, dateRange.start, granularity]
   );
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
@@ -46,7 +50,7 @@ export function Analytics() {
 
   // Fetch performance KPIs — signal enables TanStack Query to cancel stale requests
   const kpisQuery = useQuery({
-    queryKey: ['analytics', tenantId, 'kpis', dateRange.start, dateRange.end, granularity],
+    queryKey: ['analytics', tenantId, 'kpis', dateRange.start, dateRange.end, granularity, compareToPrevious],
     queryFn: ({ signal }) => analyticsApi.getKpis({
       ...analyticsQuery,
       signal,
@@ -56,7 +60,7 @@ export function Analytics() {
 
   // Fetch volume timeseries — signal enables TanStack Query to cancel stale requests
   const volumeQuery = useQuery({
-    queryKey: ['analytics', tenantId, 'volume', dateRange.start, dateRange.end, granularity],
+    queryKey: ['analytics', tenantId, 'volume', dateRange.start, dateRange.end, granularity, compareToPrevious],
     queryFn: ({ signal }) => analyticsApi.getVolume({
       ...analyticsQuery,
       signal,
@@ -117,6 +121,77 @@ export function Analytics() {
   const kpis = kpisQuery.data;
   const volume = volumeQuery.data;
   const confusionMatrix = confusionMatrixQuery.data;
+  const currentKpis = kpis?.current ?? kpis;
+  const previousKpis = kpis?.previous;
+  const sortPoints = <T extends { timestamp?: string }>(points: T[]): T[] =>
+    [...points].sort((a, b) => new Date(a.timestamp ?? 0).getTime() - new Date(b.timestamp ?? 0).getTime());
+  const currentVolumePoints = sortPoints(volume?.current?.points ?? volume?.points ?? []);
+  const previousVolumePoints = sortPoints(volume?.previous?.points ?? []);
+  const volumeChartData = currentVolumePoints.map((point, index) => ({
+    ...point,
+    previous_count: previousVolumePoints[index]?.count,
+  }));
+
+  type DeltaFormatOptions = {
+    metricFormatter: (value: number) => string;
+    deltaFormatter?: (value: number) => string;
+  };
+
+  const getDeltaLabel = (
+    current: number | undefined,
+    previous: number | undefined,
+    options: DeltaFormatOptions
+  ): string | undefined => {
+    if (previous === undefined || current === undefined) {
+      return undefined;
+    }
+    const absoluteDelta = current - previous;
+    const absoluteLabel = (options.deltaFormatter ?? options.metricFormatter)(absoluteDelta);
+    const percentLabel =
+      previous === 0
+        ? absoluteDelta === 0
+          ? '0.0%'
+          : 'n/a'
+        : `${((absoluteDelta / Math.abs(previous)) * 100).toFixed(1)}%`;
+    const direction = absoluteDelta > 0 ? '+' : '';
+    return `vs previous: ${direction}${absoluteLabel} (${direction}${percentLabel})`;
+  };
+
+  const getDeltaTone = (current: number | undefined, previous: number | undefined): 'positive' | 'negative' | 'neutral' => {
+    if (previous === undefined || current === undefined || current === previous) {
+      return 'neutral';
+    }
+    return current > previous ? 'positive' : 'negative';
+  };
+
+  const totalDecisionsDelta = getDeltaLabel(
+    currentKpis?.total_decisions,
+    previousKpis?.total_decisions,
+    { metricFormatter: (value) => formatNumber(value) }
+  );
+  const totalAlertsDelta = getDeltaLabel(
+    currentKpis?.total_alerts,
+    previousKpis?.total_alerts,
+    { metricFormatter: (value) => formatNumber(value) }
+  );
+  const alertRateDelta = getDeltaLabel(
+    currentKpis?.alert_rate,
+    previousKpis?.alert_rate,
+    {
+      metricFormatter: (value) => `${(value * 100).toFixed(1)}%`,
+      deltaFormatter: (value) => `${(value * 100).toFixed(1)}pp`,
+    }
+  );
+  const avgScoreDelta = getDeltaLabel(
+    currentKpis?.avg_score,
+    previousKpis?.avg_score,
+    { metricFormatter: (value) => value.toFixed(2) }
+  );
+  const rulesFiredDelta = getDeltaLabel(
+    currentKpis?.rules_fired_total,
+    previousKpis?.rules_fired_total,
+    { metricFormatter: (value) => formatNumber(value) }
+  );
 
   return (
     <div className="page">
@@ -126,19 +201,33 @@ export function Analytics() {
       {/* KPI Dashboard Controls */}
       <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
         <DateRangePicker onChange={handleDateRangeChange} />
-        <div className="btn-group btn-group-sm">
-          <button
-            className={`btn ${granularity === 'hour' ? 'btn-primary' : 'btn-outline-secondary'}`}
-            onClick={() => handleGranularityChange('hour')}
-          >
-            Hourly
-          </button>
-          <button
-            className={`btn ${granularity === 'day' ? 'btn-primary' : 'btn-outline-secondary'}`}
-            onClick={() => handleGranularityChange('day')}
-          >
-            Daily
-          </button>
+        <div className="d-flex align-items-center gap-3 flex-wrap">
+          <div className="btn-group btn-group-sm">
+            <button
+              className={`btn ${granularity === 'hour' ? 'btn-primary' : 'btn-outline-secondary'}`}
+              onClick={() => handleGranularityChange('hour')}
+            >
+              Hourly
+            </button>
+            <button
+              className={`btn ${granularity === 'day' ? 'btn-primary' : 'btn-outline-secondary'}`}
+              onClick={() => handleGranularityChange('day')}
+            >
+              Daily
+            </button>
+          </div>
+          <div className="form-check form-switch m-0">
+            <input
+              id="compare-to-previous"
+              type="checkbox"
+              className="form-check-input"
+              checked={compareToPrevious}
+              onChange={(event) => setCompareToPrevious(event.target.checked)}
+            />
+            <label htmlFor="compare-to-previous" className="form-check-label small fw-semibold">
+              Compare to previous period
+            </label>
+          </div>
         </div>
       </div>
       {showHourlyWindowHint && (
@@ -152,11 +241,13 @@ export function Analytics() {
           <div style={{ minHeight: '96px' }}>
             <KpiCard
               label="Total Decisions"
-              value={kpis?.total_decisions ?? 0}
+              value={currentKpis?.total_decisions ?? 0}
               loading={kpisQuery.isLoading}
               error={kpisQuery.error}
               formatter={(val) => formatNumber(val as string | number | null | undefined)}
               badge={<DataQualityBadge meta={kpis?.meta} />}
+              deltaLabel={totalDecisionsDelta}
+              deltaTone={getDeltaTone(currentKpis?.total_decisions, previousKpis?.total_decisions)}
             />
           </div>
         </div>
@@ -164,11 +255,13 @@ export function Analytics() {
           <div style={{ minHeight: '96px' }}>
             <KpiCard
               label="Total Alerts"
-              value={kpis?.total_alerts ?? 0}
+              value={currentKpis?.total_alerts ?? 0}
               loading={kpisQuery.isLoading}
               error={kpisQuery.error}
               formatter={(val) => formatNumber(val as string | number | null | undefined)}
               badge={<DataQualityBadge meta={kpis?.meta} />}
+              deltaLabel={totalAlertsDelta}
+              deltaTone={getDeltaTone(currentKpis?.total_alerts, previousKpis?.total_alerts)}
             />
           </div>
         </div>
@@ -176,11 +269,13 @@ export function Analytics() {
           <div style={{ minHeight: '96px' }}>
             <KpiCard
               label="Alert Rate"
-              value={kpis?.alert_rate ?? 0}
+              value={currentKpis?.alert_rate ?? 0}
               loading={kpisQuery.isLoading}
               error={kpisQuery.error}
               formatter={(val) => `${(Number(val) * 100).toFixed(1)}%`}
               badge={<DataQualityBadge meta={kpis?.meta} />}
+              deltaLabel={alertRateDelta}
+              deltaTone={getDeltaTone(currentKpis?.alert_rate, previousKpis?.alert_rate)}
             />
           </div>
         </div>
@@ -188,11 +283,13 @@ export function Analytics() {
           <div style={{ minHeight: '96px' }}>
             <KpiCard
               label="Avg Risk Score"
-              value={kpis?.avg_score ?? 0}
+              value={currentKpis?.avg_score ?? 0}
               loading={kpisQuery.isLoading}
               error={kpisQuery.error}
               formatter={(val) => Number(val).toFixed(2)}
               badge={<DataQualityBadge meta={kpis?.meta} />}
+              deltaLabel={avgScoreDelta}
+              deltaTone={getDeltaTone(currentKpis?.avg_score, previousKpis?.avg_score)}
             />
           </div>
         </div>
@@ -200,11 +297,13 @@ export function Analytics() {
           <div style={{ minHeight: '96px' }}>
             <KpiCard
               label="Rules Fired"
-              value={kpis?.rules_fired_total ?? 0}
+              value={currentKpis?.rules_fired_total ?? 0}
               loading={kpisQuery.isLoading}
               error={kpisQuery.error}
               formatter={(val) => formatNumber(val as string | number | null | undefined)}
               badge={<DataQualityBadge meta={kpis?.meta} />}
+              deltaLabel={rulesFiredDelta}
+              deltaTone={getDeltaTone(currentKpis?.rules_fired_total, previousKpis?.rules_fired_total)}
             />
           </div>
         </div>
@@ -297,23 +396,22 @@ export function Analytics() {
             </div>
           ) : volumeQuery.isError ? (
             <div className="text-danger p-4">Failed to load volume chart</div>
-          ) : volume?.points && volume.points.length > 0 ? (
+          ) : volumeChartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <ComposedChart
-                data={[...volume.points].sort((a, b) =>
-                  new Date(a.timestamp ?? 0).getTime() - new Date(b.timestamp ?? 0).getTime()
-                )}
+                data={volumeChartData}
                 onClick={(eventState) => {
-                  const activePayload = (
+                  const chartEvent = (
                     eventState as
                       | {
+                          activeLabel?: string;
                           activePayload?: Array<{
                             payload?: { timestamp?: string };
                           }>;
                         }
                       | undefined
-                  )?.activePayload;
-                  const timestamp = activePayload?.[0]?.payload?.timestamp;
+                  );
+                  const timestamp = chartEvent?.activeLabel ?? chartEvent?.activePayload?.[0]?.payload?.timestamp;
                   if (timestamp) {
                     const date = new Date(timestamp);
                     const dateStr = date.toISOString().split('T')[0];
@@ -343,6 +441,17 @@ export function Analytics() {
                 <Legend />
                 <Bar dataKey="count" name="Decisions" fill="#cfe2ff" radius={[4, 4, 0, 0]} />
                 <Line type="monotone" dataKey="alerts" name="Alerts" stroke="#dc3545" strokeWidth={2} dot={{ r: 3 }} />
+                {compareToPrevious && previousVolumePoints.length > 0 && (
+                  <Line
+                    type="monotone"
+                    dataKey="previous_count"
+                    name="Previous period"
+                    stroke="#6c757d"
+                    strokeWidth={2}
+                    strokeDasharray="5 4"
+                    dot={false}
+                  />
+                )}
               </ComposedChart>
             </ResponsiveContainer>
           ) : (
@@ -605,57 +714,133 @@ function TransactionFilters({ filters, onChange }: { filters: AnalyticsExplorerF
   );
 }
 
-function TransactionTable({ data }: { data: TransactionDetail[] }) {
-  return (
-    <div className="table-responsive">
-      <table className="table table-hover align-middle mb-0">
-        <thead className="table-light">
-          <tr>
-            <th>Timestamp</th>
-            <th>User ID</th>
-            <th>Amount</th>
-            <th>Status</th>
-            <th>Score</th>
-            <th>Fraud Type</th>
-            <th className="text-end">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.length === 0 ? (
+const TRANSACTION_TABLE_COLUMN_WIDTHS = ['18%', '16%', '12%', '12%', '17%', '13%', '12%'] as const;
+const TRANSACTION_TABLE_ROW_HEIGHT = 58;
+
+export function TransactionTable({ data }: { data: TransactionDetail[] }) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: data.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: () => TRANSACTION_TABLE_ROW_HEIGHT,
+    initialRect: {
+      width: 0,
+      height: 520,
+    },
+    overscan: 8,
+  });
+  const virtualRows = rowVirtualizer.getVirtualItems();
+  const rowsToRender = virtualRows.length > 0
+    ? virtualRows
+    : Array.from({ length: Math.min(data.length, 40) }, (_, index) => ({
+      index,
+      start: index * TRANSACTION_TABLE_ROW_HEIGHT,
+      size: TRANSACTION_TABLE_ROW_HEIGHT,
+    }));
+
+  const renderColgroup = () => (
+    <colgroup>
+      {TRANSACTION_TABLE_COLUMN_WIDTHS.map((width, index) => (
+        <col key={`${width}-${index}`} style={{ width }} />
+      ))}
+    </colgroup>
+  );
+
+  const renderHeader = () => (
+    <thead className="table-light">
+      <tr>
+        <th>Timestamp</th>
+        <th>User ID</th>
+        <th>Amount</th>
+        <th>Status</th>
+        <th>Score</th>
+        <th>Fraud Type</th>
+        <th className="text-end">Actions</th>
+      </tr>
+    </thead>
+  );
+
+  if (data.length === 0) {
+    return (
+      <div className="table-responsive">
+        <table className="table table-hover align-middle mb-0">
+          {renderColgroup()}
+          {renderHeader()}
+          <tbody>
             <tr><td colSpan={7} className="text-center p-4 text-muted">No transactions found matching filters</td></tr>
-          ) : (
-            data.map((tx) => (
-              <tr key={tx.record_id}>
-                <td className="small text-muted">{tx.created_at ? new Date(tx.created_at).toLocaleString() : '-'}</td>
-                <td className="font-monospace small">{tx.user_id}</td>
-                <td className="fw-bold">${tx.amount.toFixed(2)}</td>
-                <td>
-                  {tx.is_fraudulent ? (
-                    <span className="badge bg-danger-subtle text-danger border border-danger-subtle">FRAUD</span>
-                  ) : (
-                    <span className="badge bg-success-subtle text-success border border-success-subtle">LEGIT</span>
-                  )}
-                </td>
-                <td>
-                  <div className="d-flex align-items-center gap-2">
-                    <div className="progress flex-grow-1" style={{ height: '6px', width: '60px' }}>
-                      <div
-                        className={`progress-bar ${tx.is_fraudulent ? 'bg-danger' : 'bg-primary'}`}
-                        style={{ width: `${(tx.merchant_risk_score || 0)}%` }}
-                      />
-                    </div>
-                    <span className="small">{tx.merchant_risk_score || '--'}</span>
-                  </div>
-                </td>
-                <td className="small">{tx.fraud_type || '--'}</td>
-                <td className="text-end">
-                  <button className="btn btn-sm btn-outline-primary py-0 px-2" style={{ fontSize: '0.7rem' }}>Details</button>
-                </td>
-              </tr>
-            ))
-          )}
-        </tbody>
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border rounded overflow-hidden">
+      <table className="table table-hover align-middle mb-0">
+        {renderColgroup()}
+        {renderHeader()}
       </table>
+      <div
+        ref={scrollContainerRef}
+        className="table-responsive"
+        style={{ maxHeight: '520px', overflowY: 'auto' }}
+        data-testid="transaction-table-scroll"
+      >
+        <table className="table table-hover align-middle mb-0">
+          {renderColgroup()}
+          <tbody
+            style={{
+              display: 'block',
+              height: `${rowVirtualizer.getTotalSize()}px`,
+              position: 'relative',
+            }}
+          >
+            {rowsToRender.map((virtualRow) => {
+              const tx = data[virtualRow.index];
+              return (
+                <tr
+                  key={tx.record_id}
+                  style={{
+                    display: 'table',
+                    tableLayout: 'fixed',
+                    width: '100%',
+                    position: 'absolute',
+                    transform: `translateY(${virtualRow.start}px)`,
+                    height: `${virtualRow.size}px`,
+                  }}
+                  data-index={virtualRow.index}
+                >
+                  <td className="small text-muted">{tx.created_at ? new Date(tx.created_at).toLocaleString() : '-'}</td>
+                  <td className="font-monospace small">{tx.user_id}</td>
+                  <td className="fw-bold">${tx.amount.toFixed(2)}</td>
+                  <td>
+                    {tx.is_fraudulent ? (
+                      <span className="badge bg-danger-subtle text-danger border border-danger-subtle">FRAUD</span>
+                    ) : (
+                      <span className="badge bg-success-subtle text-success border border-success-subtle">LEGIT</span>
+                    )}
+                  </td>
+                  <td>
+                    <div className="d-flex align-items-center gap-2">
+                      <div className="progress flex-grow-1" style={{ height: '6px', width: '60px' }}>
+                        <div
+                          className={`progress-bar ${tx.is_fraudulent ? 'bg-danger' : 'bg-primary'}`}
+                          style={{ width: `${(tx.merchant_risk_score || 0)}%` }}
+                        />
+                      </div>
+                      <span className="small">{tx.merchant_risk_score || '--'}</span>
+                    </div>
+                  </td>
+                  <td className="small">{tx.fraud_type || '--'}</td>
+                  <td className="text-end">
+                    <button className="btn btn-sm btn-outline-primary py-0 px-2" style={{ fontSize: '0.7rem' }}>Details</button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

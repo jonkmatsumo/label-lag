@@ -263,6 +263,95 @@ describe('Analytics Routes', () => {
 
   });
 
+  describe('GET /bff/v1/kpis + /bff/v1/volume compare mode', () => {
+    it('normalizes compare_to_previous KPI response and keeps top-level current fields', async () => {
+      ctx.mockGatewayPool.intercept({
+        path: '/kpis?start_time=2024-01-01&end_time=2024-01-10&group_by=day&compare_to_previous=true',
+        method: 'GET',
+      }).reply(200, {
+        total_decisions: '100',
+        total_alerts: '10',
+        alert_rate: 0.1,
+        avg_score: 42.5,
+        rules_fired_total: '25',
+        current: {
+          total_decisions: '100',
+          total_alerts: '10',
+          alert_rate: 0.1,
+          avg_score: 42.5,
+          rules_fired_total: '25',
+          buckets: [
+            { timestamp: '2024-01-01T00:00:00Z', total_decisions: '100', total_alerts: '10', rules_fired_total: '25' },
+          ],
+        },
+        previous: {
+          total_decisions: '90',
+          total_alerts: '9',
+          alert_rate: 0.1,
+          avg_score: 40.5,
+          rules_fired_total: '20',
+          buckets: [
+            { timestamp: '2023-12-22T00:00:00Z', total_decisions: '90', total_alerts: '9', rules_fired_total: '20' },
+          ],
+        },
+        meta: {
+          partial: false,
+        },
+      });
+
+      const response = await ctx.app.inject({
+        method: 'GET',
+        url: '/bff/v1/kpis?start_time=2024-01-01&end_time=2024-01-10&granularity=day&compare_to_previous=true',
+      });
+
+      expect(response.statusCode).toBe(200);
+      const data = response.json();
+      expect(data.total_decisions).toBe(100);
+      expect(data.current.total_decisions).toBe(100);
+      expect(data.previous.total_decisions).toBe(90);
+      expect(data.current.buckets[0].timestamp).toBe('2024-01-01T00:00:00Z');
+      expect(data.previous.buckets[0].timestamp).toBe('2023-12-22T00:00:00Z');
+      expect(data.meta).toEqual({ truncated: false, partial: false });
+    });
+
+    it('normalizes compare_to_previous volume response and keeps top-level points as current', async () => {
+      ctx.mockGatewayPool.intercept({
+        path: '/volume?start_time=2024-01-01&end_time=2024-01-10&granularity=day&compare_to_previous=true',
+        method: 'GET',
+      }).reply(200, {
+        points: [
+          { timestamp: '2024-01-01T00:00:00Z', count: '100', alerts: '10' },
+        ],
+        current: {
+          points: [
+            { timestamp: '2024-01-01T00:00:00Z', count: '100', alerts: '10' },
+          ],
+        },
+        previous: {
+          points: [
+            { timestamp: '2023-12-22T00:00:00Z', count: '90', alerts: '9' },
+          ],
+        },
+        meta: {
+          partial: true,
+        },
+      });
+
+      const response = await ctx.app.inject({
+        method: 'GET',
+        url: '/bff/v1/volume?start_time=2024-01-01&end_time=2024-01-10&granularity=day&compare_to_previous=true',
+      });
+
+      expect(response.statusCode).toBe(200);
+      const data = response.json();
+      expect(data.points).toEqual(data.current.points);
+      expect(data.previous.points).toHaveLength(1);
+      expect(data.current.points[0].timestamp).toBe('2024-01-01T00:00:00Z');
+      expect(data.previous.points[0].timestamp).toBe('2023-12-22T00:00:00Z');
+      expect(data.meta).toEqual({ truncated: false, partial: true });
+    });
+  });
+
   describe('POST /bff/v1/analytics/transactions/search', () => {
     it('normalizes response into items, next_cursor, and truncated', async () => {
       ctx.mockGatewayPool.intercept({

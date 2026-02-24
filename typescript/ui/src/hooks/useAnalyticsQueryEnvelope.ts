@@ -14,6 +14,10 @@ function isValidGranularity(value: string | null): value is AnalyticsQueryGranul
   return value === 'hour' || value === 'day';
 }
 
+function isValidCompareToPrevious(value: string | null): boolean {
+  return value === null || value === 'true' || value === 'false';
+}
+
 function getDefaultEnvelope(): AnalyticsQueryEnvelopeParams {
   const end = new Date();
   const start = new Date();
@@ -32,18 +36,21 @@ export function useAnalyticsQueryEnvelope() {
   const rawStart = searchParams.get('start_time');
   const rawEnd = searchParams.get('end_time');
   const rawGranularity = searchParams.get('granularity');
+  const rawCompareToPrevious = searchParams.get('compare_to_previous');
 
   const startTime = isValidDate(rawStart) ? rawStart : defaults.start_time;
   const endTime = isValidDate(rawEnd) ? rawEnd : defaults.end_time;
   const granularity = isValidGranularity(rawGranularity)
     ? rawGranularity
     : defaults.granularity ?? 'day';
+  const compareToPrevious = rawCompareToPrevious === 'true';
 
   useEffect(() => {
     const needsFix =
       !isValidDate(rawStart) ||
       !isValidDate(rawEnd) ||
-      !isValidGranularity(rawGranularity);
+      !isValidGranularity(rawGranularity) ||
+      !isValidCompareToPrevious(rawCompareToPrevious);
     if (needsFix) {
       setSearchParams(
         (prev) => {
@@ -51,6 +58,7 @@ export function useAnalyticsQueryEnvelope() {
           next.set('start_time', startTime);
           next.set('end_time', endTime);
           next.set('granularity', granularity);
+          next.delete('compare_to_previous');
           return next;
         },
         { replace: true }
@@ -66,16 +74,22 @@ export function useAnalyticsQueryEnvelope() {
         start: range.start,
         end: range.end,
         granularity,
+        compareToPrevious,
       });
       setSearchParams((prev) => {
         const params = new URLSearchParams(prev);
         params.set('start_time', next.start_time);
         params.set('end_time', next.end_time);
         params.set('granularity', next.granularity ?? 'day');
+        if (next.compare_to_previous) {
+          params.set('compare_to_previous', 'true');
+        } else {
+          params.delete('compare_to_previous');
+        }
         return params;
       });
     },
-    [granularity, setSearchParams]
+    [compareToPrevious, granularity, setSearchParams]
   );
 
   const setGranularity = useCallback(
@@ -84,16 +98,37 @@ export function useAnalyticsQueryEnvelope() {
         start: startTime,
         end: endTime,
         granularity: nextGranularity,
+        compareToPrevious,
       });
       setSearchParams((prev) => {
         const params = new URLSearchParams(prev);
         params.set('start_time', next.start_time);
         params.set('end_time', next.end_time);
         params.set('granularity', next.granularity ?? 'day');
+        if (next.compare_to_previous) {
+          params.set('compare_to_previous', 'true');
+        } else {
+          params.delete('compare_to_previous');
+        }
         return params;
       });
     },
-    [endTime, setSearchParams, startTime]
+    [compareToPrevious, endTime, setSearchParams, startTime]
+  );
+
+  const setCompareToPrevious = useCallback(
+    (enabled: boolean) => {
+      setSearchParams((prev) => {
+        const params = new URLSearchParams(prev);
+        if (enabled) {
+          params.set('compare_to_previous', 'true');
+        } else {
+          params.delete('compare_to_previous');
+        }
+        return params;
+      });
+    },
+    [setSearchParams]
   );
 
   return {
@@ -101,14 +136,17 @@ export function useAnalyticsQueryEnvelope() {
       start: startTime,
       end: endTime,
       granularity,
+      compareToPrevious,
     }) as AnalyticsQueryEnvelopeParams,
     dateRange: {
       start: startTime,
       end: endTime,
     } as DateRange,
     granularity,
+    compareToPrevious,
     setDateRange,
     setGranularity,
+    setCompareToPrevious,
     searchParams,
     setSearchParams,
   };

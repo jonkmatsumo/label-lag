@@ -827,6 +827,9 @@ func (s *Service) GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.GetK
 			return nil, status.Error(codes.InvalidArgument, "start_time must be <= end_time")
 		}
 	}
+	if req.CompareToPrevious && (req.StartTime == nil || req.EndTime == nil) {
+		return nil, status.Error(codes.InvalidArgument, "compare_to_previous requires both start_time and end_time")
+	}
 
 	resp, err := s.store.GetKpis(ctx, req)
 	if err != nil {
@@ -867,6 +870,9 @@ func (s *Service) GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesRe
 		if start.After(end) {
 			return nil, status.Error(codes.InvalidArgument, "start_time must be <= end_time")
 		}
+	}
+	if req.CompareToPrevious && (req.StartTime == nil || req.EndTime == nil) {
+		return nil, status.Error(codes.InvalidArgument, "compare_to_previous requires both start_time and end_time")
 	}
 
 	resp, err := s.store.GetVolumeSeries(ctx, req)
