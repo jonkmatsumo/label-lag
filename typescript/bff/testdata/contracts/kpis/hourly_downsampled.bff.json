@@ -1,0 +1,31 @@
+{
+    "total_decisions": 300000,
+    "total_alerts": 9000,
+    "alert_rate": 0.03,
+    "avg_score": 41.2,
+    "rules_fired_total": 25000,
+    "buckets": [
+        {
+            "timestamp": "2024-01-01T00:00:00.000Z",
+            "decisions": 12000,
+            "alerts": 360,
+            "rules_fired": 980
+        },
+        {
+            "timestamp": "2024-01-02T00:00:00.000Z",
+            "decisions": 11500,
+            "alerts": 345,
+            "rules_fired": 940
+        },
+        {
+            "timestamp": "2024-01-03T00:00:00.000Z",
+            "decisions": 11100,
+            "alerts": 332,
+            "rules_fired": 910
+        }
+    ],
+    "meta": {
+        "truncated": false,
+        "partial": true
+    }
+}
