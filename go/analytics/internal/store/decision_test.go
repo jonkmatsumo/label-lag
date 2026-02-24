@@ -149,7 +149,7 @@ func TestGetRuleImpact(t *testing.T) {
 		WithArgs("rule-1", "tenant-1", startDate).
 		WillReturnRows(sqlmock.NewRows([]string{"count", "avg"}).AddRow(100, 15.5))
 
-	mock.ExpectQuery(`SELECT DATE\(ie.ts\) as date, COUNT\(\*\), COALESCE\(AVG\(ri.score_delta\), 0\), SUM`).
+	mock.ExpectQuery(`SELECT DATE\(ie.ts\) as date, COUNT\(\*\), COALESCE\(AVG\(ri.score_delta\), 0\), SUM.*ORDER BY date DESC\s+LIMIT 2001`).
 		WithArgs("rule-1", "tenant-1", startDate).
 		WillReturnRows(sqlmock.NewRows([]string{"date", "count", "avg", "changes"}).
 			AddRow(time.Now().UTC(), 50, 14.0, 5).
@@ -161,6 +161,43 @@ func TestGetRuleImpact(t *testing.T) {
 	assert.Equal(t, int64(100), resp.TotalTriggers)
 	assert.Equal(t, 15.5, resp.AvgScoreDelta)
 	assert.Len(t, resp.DailyBuckets, 2)
+	assert.False(t, resp.Meta.Partial)
+	assert.True(t, resp.DailyBuckets[0].Date <= resp.DailyBuckets[1].Date)
+}
+
+func TestGetRuleImpact_TruncatesDailyBucketsToCap(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+	req := &pb.GetRuleImpactRequest{
+		RuleId:   "rule-1",
+		TenantId: "tenant-1",
+	}
+
+	mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM rules WHERE rule_id = \$1\)`).
+		WithArgs("rule-1").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+
+	mock.ExpectQuery(`SELECT COUNT\(\*\), COALESCE\(AVG\(ri.score_delta\), 0\)`).
+		WithArgs("rule-1", "tenant-1").
+		WillReturnRows(sqlmock.NewRows([]string{"count", "avg"}).AddRow(5000, 1.5))
+
+	rows := sqlmock.NewRows([]string{"date", "count", "avg", "changes"})
+	now := time.Now().UTC().Truncate(24 * time.Hour)
+	for i := 0; i < MaxPointsDaily+1; i++ {
+		rows.AddRow(now.AddDate(0, 0, -i), int64(1), 1.0, int64(0))
+	}
+	mock.ExpectQuery(`SELECT DATE\(ie.ts\) as date, COUNT\(\*\), COALESCE\(AVG\(ri.score_delta\), 0\), SUM.*ORDER BY date DESC\s+LIMIT 2001`).
+		WithArgs("rule-1", "tenant-1").
+		WillReturnRows(rows)
+
+	resp, err := s.GetRuleImpact(context.Background(), req)
+	require.NoError(t, err)
+	require.Len(t, resp.DailyBuckets, MaxPointsDaily)
+	assert.True(t, resp.Meta.Partial)
+	assert.True(t, resp.DailyBuckets[0].Date <= resp.DailyBuckets[len(resp.DailyBuckets)-1].Date)
 }
 
 func TestGetRuleImpact_CanceledContext(t *testing.T) {

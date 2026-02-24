@@ -109,6 +109,7 @@ message AnalyticsQueryEnvelope {
 message AnalyticsMeta {
   bool truncated = 1;
   int32 effective_limit = 2;
+  bool partial = 3;
 }
 
 message GetKpisRequest {
@@ -133,6 +134,7 @@ message GetKpisResponse {
   double avg_score = 4;
   int64 rules_fired_total = 5;
   repeated KpiBucket buckets = 6;
+  AnalyticsMeta meta = 7;
 }
 
 message GetVolumeSeriesRequest {
@@ -151,6 +153,7 @@ message VolumePoint {
 
 message GetVolumeSeriesResponse {
   repeated VolumePoint points = 1;
+  AnalyticsMeta meta = 2;
 }
 
 message GetConfusionMatrixRequest {
