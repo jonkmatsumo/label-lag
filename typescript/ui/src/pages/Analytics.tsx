@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { analyticsApi, buildAnalyticsQueryEnvelope } from '../api';
 import type { RecentAlert, TransactionDetail } from '../types/api';
 import {
@@ -713,57 +714,121 @@ function TransactionFilters({ filters, onChange }: { filters: AnalyticsExplorerF
   );
 }
 
+const TRANSACTION_TABLE_COLUMN_WIDTHS = ['18%', '16%', '12%', '12%', '17%', '13%', '12%'] as const;
+const TRANSACTION_TABLE_ROW_HEIGHT = 58;
+
 function TransactionTable({ data }: { data: TransactionDetail[] }) {
-  return (
-    <div className="table-responsive">
-      <table className="table table-hover align-middle mb-0">
-        <thead className="table-light">
-          <tr>
-            <th>Timestamp</th>
-            <th>User ID</th>
-            <th>Amount</th>
-            <th>Status</th>
-            <th>Score</th>
-            <th>Fraud Type</th>
-            <th className="text-end">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.length === 0 ? (
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: data.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: () => TRANSACTION_TABLE_ROW_HEIGHT,
+    overscan: 8,
+  });
+
+  const renderColgroup = () => (
+    <colgroup>
+      {TRANSACTION_TABLE_COLUMN_WIDTHS.map((width, index) => (
+        <col key={`${width}-${index}`} style={{ width }} />
+      ))}
+    </colgroup>
+  );
+
+  const renderHeader = () => (
+    <thead className="table-light">
+      <tr>
+        <th>Timestamp</th>
+        <th>User ID</th>
+        <th>Amount</th>
+        <th>Status</th>
+        <th>Score</th>
+        <th>Fraud Type</th>
+        <th className="text-end">Actions</th>
+      </tr>
+    </thead>
+  );
+
+  if (data.length === 0) {
+    return (
+      <div className="table-responsive">
+        <table className="table table-hover align-middle mb-0">
+          {renderColgroup()}
+          {renderHeader()}
+          <tbody>
             <tr><td colSpan={7} className="text-center p-4 text-muted">No transactions found matching filters</td></tr>
-          ) : (
-            data.map((tx) => (
-              <tr key={tx.record_id}>
-                <td className="small text-muted">{tx.created_at ? new Date(tx.created_at).toLocaleString() : '-'}</td>
-                <td className="font-monospace small">{tx.user_id}</td>
-                <td className="fw-bold">${tx.amount.toFixed(2)}</td>
-                <td>
-                  {tx.is_fraudulent ? (
-                    <span className="badge bg-danger-subtle text-danger border border-danger-subtle">FRAUD</span>
-                  ) : (
-                    <span className="badge bg-success-subtle text-success border border-success-subtle">LEGIT</span>
-                  )}
-                </td>
-                <td>
-                  <div className="d-flex align-items-center gap-2">
-                    <div className="progress flex-grow-1" style={{ height: '6px', width: '60px' }}>
-                      <div
-                        className={`progress-bar ${tx.is_fraudulent ? 'bg-danger' : 'bg-primary'}`}
-                        style={{ width: `${(tx.merchant_risk_score || 0)}%` }}
-                      />
-                    </div>
-                    <span className="small">{tx.merchant_risk_score || '--'}</span>
-                  </div>
-                </td>
-                <td className="small">{tx.fraud_type || '--'}</td>
-                <td className="text-end">
-                  <button className="btn btn-sm btn-outline-primary py-0 px-2" style={{ fontSize: '0.7rem' }}>Details</button>
-                </td>
-              </tr>
-            ))
-          )}
-        </tbody>
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border rounded overflow-hidden">
+      <table className="table table-hover align-middle mb-0">
+        {renderColgroup()}
+        {renderHeader()}
       </table>
+      <div
+        ref={scrollContainerRef}
+        className="table-responsive"
+        style={{ maxHeight: '520px', overflowY: 'auto' }}
+        data-testid="transaction-table-scroll"
+      >
+        <table className="table table-hover align-middle mb-0">
+          {renderColgroup()}
+          <tbody
+            style={{
+              display: 'block',
+              height: `${rowVirtualizer.getTotalSize()}px`,
+              position: 'relative',
+            }}
+          >
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+              const tx = data[virtualRow.index];
+              return (
+                <tr
+                  key={tx.record_id}
+                  style={{
+                    display: 'table',
+                    tableLayout: 'fixed',
+                    width: '100%',
+                    position: 'absolute',
+                    transform: `translateY(${virtualRow.start}px)`,
+                    height: `${virtualRow.size}px`,
+                  }}
+                  data-index={virtualRow.index}
+                >
+                  <td className="small text-muted">{tx.created_at ? new Date(tx.created_at).toLocaleString() : '-'}</td>
+                  <td className="font-monospace small">{tx.user_id}</td>
+                  <td className="fw-bold">${tx.amount.toFixed(2)}</td>
+                  <td>
+                    {tx.is_fraudulent ? (
+                      <span className="badge bg-danger-subtle text-danger border border-danger-subtle">FRAUD</span>
+                    ) : (
+                      <span className="badge bg-success-subtle text-success border border-success-subtle">LEGIT</span>
+                    )}
+                  </td>
+                  <td>
+                    <div className="d-flex align-items-center gap-2">
+                      <div className="progress flex-grow-1" style={{ height: '6px', width: '60px' }}>
+                        <div
+                          className={`progress-bar ${tx.is_fraudulent ? 'bg-danger' : 'bg-primary'}`}
+                          style={{ width: `${(tx.merchant_risk_score || 0)}%` }}
+                        />
+                      </div>
+                      <span className="small">{tx.merchant_risk_score || '--'}</span>
+                    </div>
+                  </td>
+                  <td className="small">{tx.fraud_type || '--'}</td>
+                  <td className="text-end">
+                    <button className="btn btn-sm btn-outline-primary py-0 px-2" style={{ fontSize: '0.7rem' }}>Details</button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
