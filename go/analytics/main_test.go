@@ -192,6 +192,30 @@ func TestSearchTransactions_Unfiltered(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
+func TestGetKpis_CompareToPreviousRequiresWindow(t *testing.T) {
+	mockStore := new(store.MockStore)
+	s := service.NewService(mockStore, nil)
+
+	_, err := s.GetKpis(context.Background(), &pb.GetKpisRequest{
+		CompareToPrevious: true,
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	assert.Contains(t, err.Error(), "compare_to_previous requires both start_time and end_time")
+}
+
+func TestGetVolumeSeries_CompareToPreviousRequiresWindow(t *testing.T) {
+	mockStore := new(store.MockStore)
+	s := service.NewService(mockStore, nil)
+
+	_, err := s.GetVolumeSeries(context.Background(), &pb.GetVolumeSeriesRequest{
+		CompareToPrevious: true,
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	assert.Contains(t, err.Error(), "compare_to_previous requires both start_time and end_time")
+}
+
 // ============================================================================
 // Go Generator Integration Tests
 // ============================================================================

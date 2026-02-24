@@ -49,6 +49,7 @@ export interface GetKpisRequest {
   group_by: string;
   tenant_id: string;
   query?: AnalyticsQueryEnvelope | undefined;
+  compare_to_previous: boolean;
 }
 
 export interface KpiBucket {
@@ -56,6 +57,15 @@ export interface KpiBucket {
   total_decisions: string;
   total_alerts: string;
   avg_score: number;
+}
+
+export interface KpisPeriod {
+  total_decisions: string;
+  total_alerts: string;
+  alert_rate: number;
+  avg_score: number;
+  rules_fired_total: string;
+  buckets: KpiBucket[];
 }
 
 export interface GetKpisResponse {
@@ -66,6 +76,8 @@ export interface GetKpisResponse {
   rules_fired_total: string;
   buckets: KpiBucket[];
   meta?: AnalyticsMeta | undefined;
+  current?: KpisPeriod | undefined;
+  previous?: KpisPeriod | undefined;
 }
 
 export interface GetVolumeSeriesRequest {
@@ -85,6 +97,7 @@ export interface GetVolumeSeriesRequest {
   granularity: string;
   tenant_id: string;
   query?: AnalyticsQueryEnvelope | undefined;
+  compare_to_previous: boolean;
 }
 
 export interface VolumePoint {
@@ -93,9 +106,15 @@ export interface VolumePoint {
   alerts: string;
 }
 
+export interface VolumeSeriesPeriod {
+  points: VolumePoint[];
+}
+
 export interface GetVolumeSeriesResponse {
   points: VolumePoint[];
   meta?: AnalyticsMeta | undefined;
+  current?: VolumeSeriesPeriod | undefined;
+  previous?: VolumeSeriesPeriod | undefined;
 }
 
 export interface GetConfusionMatrixRequest {

@@ -47,8 +47,49 @@ func TestGetKpis(t *testing.T) {
 	assert.Equal(t, int64(10), resp.TotalAlerts)
 	assert.Equal(t, 50.0, resp.AvgScore)
 	assert.Len(t, resp.Buckets, 2)
+	require.NotNil(t, resp.Current)
+	assert.Equal(t, resp.TotalDecisions, resp.Current.TotalDecisions)
 	assert.False(t, resp.Meta.Partial)
 	assert.True(t, resp.Buckets[0].Timestamp.AsTime().Before(resp.Buckets[1].Timestamp.AsTime()))
+}
+
+func TestGetKpis_CompareToPrevious(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+
+	start := time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2024, 1, 12, 0, 0, 0, 0, time.UTC)
+	prevStart := time.Date(2024, 1, 8, 0, 0, 0, 0, time.UTC)
+	prevEnd := start
+
+	req := &pb.GetKpisRequest{
+		StartTime:         timestamppb.New(start),
+		EndTime:           timestamppb.New(end),
+		CompareToPrevious: true,
+	}
+
+	mock.ExpectQuery(`SELECT .* FROM aggregates_daily`).
+		WithArgs(start, end).
+		WillReturnRows(sqlmock.NewRows([]string{"decisions", "alerts", "score", "fired"}).
+			AddRow(100, 10, 5000, 200))
+
+	mock.ExpectQuery(`SELECT .* FROM aggregates_daily`).
+		WithArgs(prevStart, prevEnd).
+		WillReturnRows(sqlmock.NewRows([]string{"decisions", "alerts", "score", "fired"}).
+			AddRow(80, 8, 3600, 160))
+
+	resp, err := s.GetKpis(context.Background(), req)
+	require.NoError(t, err)
+	require.NotNil(t, resp.Current)
+	require.NotNil(t, resp.Previous)
+	assert.Equal(t, int64(100), resp.TotalDecisions)
+	assert.Equal(t, int64(100), resp.Current.TotalDecisions)
+	assert.Equal(t, int64(80), resp.Previous.TotalDecisions)
+	assert.Equal(t, int64(160), resp.Previous.RulesFiredTotal)
+	assert.False(t, resp.Meta.Partial)
 }
 
 func TestGetVolumeSeries(t *testing.T) {
@@ -70,7 +111,51 @@ func TestGetVolumeSeries(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, resp.Points, 1)
 	assert.Equal(t, int64(10), resp.Points[0].Count)
+	require.NotNil(t, resp.Current)
+	assert.Equal(t, resp.Points[0].Count, resp.Current.Points[0].Count)
 	assert.False(t, resp.Meta.Partial)
+}
+
+func TestGetVolumeSeries_CompareToPrevious(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+
+	start := time.Date(2024, 1, 10, 10, 0, 0, 0, time.UTC)
+	end := time.Date(2024, 1, 10, 12, 0, 0, 0, time.UTC)
+	prevStart := time.Date(2024, 1, 10, 8, 0, 0, 0, time.UTC)
+	prevEnd := start
+
+	req := &pb.GetVolumeSeriesRequest{
+		Granularity:       "hour",
+		StartTime:         timestamppb.New(start),
+		EndTime:           timestamppb.New(end),
+		CompareToPrevious: true,
+	}
+
+	mock.ExpectQuery(`SELECT hour, total_decisions, total_alerts\s+FROM aggregates_hourly\s+WHERE .*ORDER BY hour DESC\s+LIMIT 1001`).
+		WithArgs(start, end).
+		WillReturnRows(sqlmock.NewRows([]string{"hour", "count", "alerts"}).
+			AddRow(end, 30, 3).
+			AddRow(start, 10, 1))
+
+	mock.ExpectQuery(`SELECT hour, total_decisions, total_alerts\s+FROM aggregates_hourly\s+WHERE .*ORDER BY hour DESC\s+LIMIT 1001`).
+		WithArgs(prevStart, prevEnd).
+		WillReturnRows(sqlmock.NewRows([]string{"hour", "count", "alerts"}).
+			AddRow(prevEnd, 20, 2).
+			AddRow(prevStart, 8, 1))
+
+	resp, err := s.GetVolumeSeries(context.Background(), req)
+	require.NoError(t, err)
+	require.NotNil(t, resp.Current)
+	require.NotNil(t, resp.Previous)
+	require.Len(t, resp.Points, 2)
+	require.Len(t, resp.Current.Points, 2)
+	require.Len(t, resp.Previous.Points, 2)
+	assert.Equal(t, int64(10), resp.Points[0].Count)
+	assert.Equal(t, int64(20), resp.Previous.Points[1].Count)
 }
 
 func TestGetVolumeSeries_DownsamplesHourlyToDailyWhenWindowExceedsCap(t *testing.T) {

@@ -118,6 +118,7 @@ message GetKpisRequest {
   string group_by = 3 [deprecated = true]; // "hour" | "day"
   string tenant_id = 15;
   AnalyticsQueryEnvelope query = 16;
+  bool compare_to_previous = 17;
 }
 
 message KpiBucket {
@@ -125,6 +126,15 @@ message KpiBucket {
   int64 total_decisions = 2;
   int64 total_alerts = 3;
   double avg_score = 4;
+}
+
+message KpisPeriod {
+  int64 total_decisions = 1;
+  int64 total_alerts = 2;
+  double alert_rate = 3;
+  double avg_score = 4;
+  int64 rules_fired_total = 5;
+  repeated KpiBucket buckets = 6;
 }
 
 message GetKpisResponse {
@@ -135,6 +145,8 @@ message GetKpisResponse {
   int64 rules_fired_total = 5;
   repeated KpiBucket buckets = 6;
   AnalyticsMeta meta = 7;
+  KpisPeriod current = 8;
+  KpisPeriod previous = 9;
 }
 
 message GetVolumeSeriesRequest {
@@ -143,6 +155,7 @@ message GetVolumeSeriesRequest {
   string granularity = 3 [deprecated = true]; // "hour" | "day"
   string tenant_id = 15;
   AnalyticsQueryEnvelope query = 16;
+  bool compare_to_previous = 17;
 }
 
 message VolumePoint {
@@ -151,9 +164,15 @@ message VolumePoint {
   int64 alerts = 3;
 }
 
+message VolumeSeriesPeriod {
+  repeated VolumePoint points = 1;
+}
+
 message GetVolumeSeriesResponse {
   repeated VolumePoint points = 1;
   AnalyticsMeta meta = 2;
+  VolumeSeriesPeriod current = 3;
+  VolumeSeriesPeriod previous = 4;
 }
 
 message GetConfusionMatrixRequest {

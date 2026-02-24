@@ -1414,8 +1414,13 @@ func (s *SQLStore) GetConfusionMatrix(ctx context.Context, req *pb.GetConfusionM
 	return resp, nil
 }
 
-func (s *SQLStore) GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.GetKpisResponse, error) {
-	seriesPlan := buildTimeSeriesPlan(req.GroupBy, req.StartTime, req.EndTime)
+func (s *SQLStore) queryKpisPeriod(
+	ctx context.Context,
+	groupBy string,
+	startTime *timestamppb.Timestamp,
+	endTime *timestamppb.Timestamp,
+) (*pb.KpisPeriod, bool, error) {
+	seriesPlan := buildTimeSeriesPlan(groupBy, startTime, endTime)
 	tableName := "aggregates_daily"
 	timeCol := "date"
 	if seriesPlan.effectiveGranularity == "hour" {
@@ -1426,12 +1431,12 @@ func (s *SQLStore) GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.Get
 	whereClauses := []string{"1=1"}
 	args := []interface{}{}
 
-	if req.StartTime != nil {
-		args = append(args, req.StartTime.AsTime())
+	if startTime != nil {
+		args = append(args, startTime.AsTime())
 		whereClauses = append(whereClauses, fmt.Sprintf("%s >= $%d", timeCol, len(args)))
 	}
-	if req.EndTime != nil {
-		args = append(args, req.EndTime.AsTime())
+	if endTime != nil {
+		args = append(args, endTime.AsTime())
 		whereClauses = append(whereClauses, fmt.Sprintf("%s <= $%d", timeCol, len(args)))
 	}
 
@@ -1444,39 +1449,36 @@ func (s *SQLStore) GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.Get
 			COALESCE(SUM(total_alerts), 0),
 			COALESCE(SUM(sum_score), 0),
 			COALESCE(SUM(rules_fired_total), 0)
-		FROM %s
-		WHERE %s
-	`, tableName, whereStmt)
+			FROM %s
+			WHERE %s
+		`, tableName, whereStmt)
 
-	resp := &pb.GetKpisResponse{
-		Meta: &pb.AnalyticsMeta{
-			Partial: seriesPlan.partial,
-		},
-	}
+	period := &pb.KpisPeriod{}
+	partial := seriesPlan.partial
 	var sumScore int64
 	queryCtx, cancel := context.WithTimeout(ctx, hotAnalyticsQueryTimeout)
 	defer cancel()
 
 	err := s.db.QueryRowContext(queryCtx, summaryQuery, args...).Scan(
-		&resp.TotalDecisions,
-		&resp.TotalAlerts,
+		&period.TotalDecisions,
+		&period.TotalAlerts,
 		&sumScore,
-		&resp.RulesFiredTotal,
+		&period.RulesFiredTotal,
 	)
 	if err != nil {
-		return nil, db.MapDBError(err)
+		return nil, false, db.MapDBError(err)
 	}
 
-	if resp.TotalDecisions > 0 {
-		resp.AlertRate = float64(resp.TotalAlerts) / float64(resp.TotalDecisions)
-		resp.AvgScore = float64(sumScore) / float64(resp.TotalDecisions)
+	if period.TotalDecisions > 0 {
+		period.AlertRate = float64(period.TotalAlerts) / float64(period.TotalDecisions)
+		period.AvgScore = float64(sumScore) / float64(period.TotalDecisions)
 	}
 
 	// Buckets query if group_by is set
-	if req.GroupBy != "" {
+	if groupBy != "" {
 		bucketsQuery := fmt.Sprintf(`
-			SELECT
-				%s,
+				SELECT
+					%s,
 				total_decisions,
 				total_alerts,
 				CASE WHEN total_decisions > 0 THEN sum_score::float / total_decisions ELSE 0 END
@@ -1484,11 +1486,11 @@ func (s *SQLStore) GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.Get
 			WHERE %s
 			ORDER BY %s DESC
 			LIMIT %d
-		`, timeCol, tableName, whereStmt, timeCol, seriesPlan.pointCap+1)
+			`, timeCol, tableName, whereStmt, timeCol, seriesPlan.pointCap+1)
 
 		rows, err := s.db.QueryContext(queryCtx, bucketsQuery, args...)
 		if err != nil {
-			return nil, db.MapDBError(err)
+			return nil, false, db.MapDBError(err)
 		}
 		defer rows.Close()
 
@@ -1497,7 +1499,7 @@ func (s *SQLStore) GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.Get
 			var b pb.KpiBucket
 			var ts time.Time
 			if err := rows.Scan(&ts, &b.TotalDecisions, &b.TotalAlerts, &b.AvgScore); err != nil {
-				return nil, fmt.Errorf("failed to scan kpi bucket: %v", err)
+				return nil, false, fmt.Errorf("failed to scan kpi bucket: %v", err)
 			}
 			b.Timestamp = timestamppb.New(ts)
 			bucketsDesc = append(bucketsDesc, &b)
@@ -1505,20 +1507,76 @@ func (s *SQLStore) GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.Get
 
 		if len(bucketsDesc) > seriesPlan.pointCap {
 			bucketsDesc = bucketsDesc[:seriesPlan.pointCap]
-			resp.Meta.Partial = true
+			partial = true
 		}
 
 		// Return chronological order for deterministic chart rendering.
 		for i := len(bucketsDesc) - 1; i >= 0; i-- {
-			resp.Buckets = append(resp.Buckets, bucketsDesc[i])
+			period.Buckets = append(period.Buckets, bucketsDesc[i])
+		}
+	}
+
+	return period, partial, nil
+}
+
+func buildPreviousPeriodWindow(
+	startTime *timestamppb.Timestamp,
+	endTime *timestamppb.Timestamp,
+) (*timestamppb.Timestamp, *timestamppb.Timestamp) {
+	if startTime == nil || endTime == nil {
+		return nil, nil
+	}
+
+	currentStart := startTime.AsTime().UTC()
+	currentEnd := endTime.AsTime().UTC()
+	duration := currentEnd.Sub(currentStart)
+	previousEnd := currentStart
+	previousStart := previousEnd.Add(-duration)
+
+	return timestamppb.New(previousStart), timestamppb.New(previousEnd)
+}
+
+func (s *SQLStore) GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.GetKpisResponse, error) {
+	current, currentPartial, err := s.queryKpisPeriod(ctx, req.GroupBy, req.StartTime, req.EndTime)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &pb.GetKpisResponse{
+		TotalDecisions:  current.TotalDecisions,
+		TotalAlerts:     current.TotalAlerts,
+		AlertRate:       current.AlertRate,
+		AvgScore:        current.AvgScore,
+		RulesFiredTotal: current.RulesFiredTotal,
+		Buckets:         current.Buckets,
+		Current:         current,
+		Meta: &pb.AnalyticsMeta{
+			Partial: currentPartial,
+		},
+	}
+
+	if req.CompareToPrevious {
+		prevStart, prevEnd := buildPreviousPeriodWindow(req.StartTime, req.EndTime)
+		if prevStart != nil && prevEnd != nil {
+			previous, previousPartial, err := s.queryKpisPeriod(ctx, req.GroupBy, prevStart, prevEnd)
+			if err != nil {
+				return nil, err
+			}
+			resp.Previous = previous
+			resp.Meta.Partial = resp.Meta.Partial || previousPartial
 		}
 	}
 
 	return resp, nil
 }
 
-func (s *SQLStore) GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesRequest) (*pb.GetVolumeSeriesResponse, error) {
-	seriesPlan := buildTimeSeriesPlan(req.Granularity, req.StartTime, req.EndTime)
+func (s *SQLStore) queryVolumePeriod(
+	ctx context.Context,
+	granularity string,
+	startTime *timestamppb.Timestamp,
+	endTime *timestamppb.Timestamp,
+) (*pb.VolumeSeriesPeriod, bool, error) {
+	seriesPlan := buildTimeSeriesPlan(granularity, startTime, endTime)
 	tableName := "aggregates_daily"
 	timeCol := "date"
 	if seriesPlan.effectiveGranularity == "hour" {
@@ -1529,12 +1587,12 @@ func (s *SQLStore) GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesR
 	whereClauses := []string{"1=1"}
 	args := []interface{}{}
 
-	if req.StartTime != nil {
-		args = append(args, req.StartTime.AsTime())
+	if startTime != nil {
+		args = append(args, startTime.AsTime())
 		whereClauses = append(whereClauses, fmt.Sprintf("%s >= $%d", timeCol, len(args)))
 	}
-	if req.EndTime != nil {
-		args = append(args, req.EndTime.AsTime())
+	if endTime != nil {
+		args = append(args, endTime.AsTime())
 		whereClauses = append(whereClauses, fmt.Sprintf("%s <= $%d", timeCol, len(args)))
 	}
 
@@ -1553,21 +1611,18 @@ func (s *SQLStore) GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesR
 
 	rows, err := s.db.QueryContext(queryCtx, query, args...)
 	if err != nil {
-		return nil, db.MapDBError(err)
+		return nil, false, db.MapDBError(err)
 	}
 	defer rows.Close()
 
-	resp := &pb.GetVolumeSeriesResponse{
-		Meta: &pb.AnalyticsMeta{
-			Partial: seriesPlan.partial,
-		},
-	}
+	period := &pb.VolumeSeriesPeriod{}
+	partial := seriesPlan.partial
 	pointsDesc := make([]*pb.VolumePoint, 0, seriesPlan.pointCap+1)
 	for rows.Next() {
 		var p pb.VolumePoint
 		var ts time.Time
 		if err := rows.Scan(&ts, &p.Count, &p.Alerts); err != nil {
-			return nil, fmt.Errorf("failed to scan volume point: %v", err)
+			return nil, false, fmt.Errorf("failed to scan volume point: %v", err)
 		}
 		p.Timestamp = timestamppb.New(ts)
 		pointsDesc = append(pointsDesc, &p)
@@ -1575,12 +1630,40 @@ func (s *SQLStore) GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesR
 
 	if len(pointsDesc) > seriesPlan.pointCap {
 		pointsDesc = pointsDesc[:seriesPlan.pointCap]
-		resp.Meta.Partial = true
+		partial = true
 	}
 
 	// Return chronological order for deterministic chart rendering.
 	for i := len(pointsDesc) - 1; i >= 0; i-- {
-		resp.Points = append(resp.Points, pointsDesc[i])
+		period.Points = append(period.Points, pointsDesc[i])
+	}
+
+	return period, partial, nil
+}
+
+func (s *SQLStore) GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesRequest) (*pb.GetVolumeSeriesResponse, error) {
+	current, currentPartial, err := s.queryVolumePeriod(ctx, req.Granularity, req.StartTime, req.EndTime)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &pb.GetVolumeSeriesResponse{
+		Points:   current.Points,
+		Current:  current,
+		Meta:     &pb.AnalyticsMeta{Partial: currentPartial},
+		Previous: nil,
+	}
+
+	if req.CompareToPrevious {
+		prevStart, prevEnd := buildPreviousPeriodWindow(req.StartTime, req.EndTime)
+		if prevStart != nil && prevEnd != nil {
+			previous, previousPartial, err := s.queryVolumePeriod(ctx, req.Granularity, prevStart, prevEnd)
+			if err != nil {
+				return nil, err
+			}
+			resp.Previous = previous
+			resp.Meta.Partial = resp.Meta.Partial || previousPartial
+		}
 	}
 
 	return resp, nil
