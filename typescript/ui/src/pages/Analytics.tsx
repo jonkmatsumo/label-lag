@@ -21,8 +21,10 @@ export function Analytics() {
   const {
     dateRange,
     granularity,
+    compareToPrevious,
     setDateRange,
     setGranularity,
+    setCompareToPrevious,
   } = useAnalyticsQueryEnvelope();
   const { setTimeWindow } = useAnalyticsExplorerSearchParams();
   const analyticsQuery = useMemo(
@@ -31,8 +33,9 @@ export function Analytics() {
         start: dateRange.start,
         end: dateRange.end,
         granularity,
+        compareToPrevious,
       }),
-    [dateRange.end, dateRange.start, granularity]
+    [compareToPrevious, dateRange.end, dateRange.start, granularity]
   );
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
@@ -46,7 +49,7 @@ export function Analytics() {
 
   // Fetch performance KPIs — signal enables TanStack Query to cancel stale requests
   const kpisQuery = useQuery({
-    queryKey: ['analytics', tenantId, 'kpis', dateRange.start, dateRange.end, granularity],
+    queryKey: ['analytics', tenantId, 'kpis', dateRange.start, dateRange.end, granularity, compareToPrevious],
     queryFn: ({ signal }) => analyticsApi.getKpis({
       ...analyticsQuery,
       signal,
@@ -56,7 +59,7 @@ export function Analytics() {
 
   // Fetch volume timeseries — signal enables TanStack Query to cancel stale requests
   const volumeQuery = useQuery({
-    queryKey: ['analytics', tenantId, 'volume', dateRange.start, dateRange.end, granularity],
+    queryKey: ['analytics', tenantId, 'volume', dateRange.start, dateRange.end, granularity, compareToPrevious],
     queryFn: ({ signal }) => analyticsApi.getVolume({
       ...analyticsQuery,
       signal,
@@ -117,6 +120,77 @@ export function Analytics() {
   const kpis = kpisQuery.data;
   const volume = volumeQuery.data;
   const confusionMatrix = confusionMatrixQuery.data;
+  const currentKpis = kpis?.current ?? kpis;
+  const previousKpis = kpis?.previous;
+  const sortPoints = <T extends { timestamp?: string }>(points: T[]): T[] =>
+    [...points].sort((a, b) => new Date(a.timestamp ?? 0).getTime() - new Date(b.timestamp ?? 0).getTime());
+  const currentVolumePoints = sortPoints(volume?.current?.points ?? volume?.points ?? []);
+  const previousVolumePoints = sortPoints(volume?.previous?.points ?? []);
+  const volumeChartData = currentVolumePoints.map((point, index) => ({
+    ...point,
+    previous_count: previousVolumePoints[index]?.count,
+  }));
+
+  type DeltaFormatOptions = {
+    metricFormatter: (value: number) => string;
+    deltaFormatter?: (value: number) => string;
+  };
+
+  const getDeltaLabel = (
+    current: number | undefined,
+    previous: number | undefined,
+    options: DeltaFormatOptions
+  ): string | undefined => {
+    if (previous === undefined || current === undefined) {
+      return undefined;
+    }
+    const absoluteDelta = current - previous;
+    const absoluteLabel = (options.deltaFormatter ?? options.metricFormatter)(absoluteDelta);
+    const percentLabel =
+      previous === 0
+        ? absoluteDelta === 0
+          ? '0.0%'
+          : 'n/a'
+        : `${((absoluteDelta / Math.abs(previous)) * 100).toFixed(1)}%`;
+    const direction = absoluteDelta > 0 ? '+' : '';
+    return `vs previous: ${direction}${absoluteLabel} (${direction}${percentLabel})`;
+  };
+
+  const getDeltaTone = (current: number | undefined, previous: number | undefined): 'positive' | 'negative' | 'neutral' => {
+    if (previous === undefined || current === undefined || current === previous) {
+      return 'neutral';
+    }
+    return current > previous ? 'positive' : 'negative';
+  };
+
+  const totalDecisionsDelta = getDeltaLabel(
+    currentKpis?.total_decisions,
+    previousKpis?.total_decisions,
+    { metricFormatter: (value) => formatNumber(value) }
+  );
+  const totalAlertsDelta = getDeltaLabel(
+    currentKpis?.total_alerts,
+    previousKpis?.total_alerts,
+    { metricFormatter: (value) => formatNumber(value) }
+  );
+  const alertRateDelta = getDeltaLabel(
+    currentKpis?.alert_rate,
+    previousKpis?.alert_rate,
+    {
+      metricFormatter: (value) => `${(value * 100).toFixed(1)}%`,
+      deltaFormatter: (value) => `${(value * 100).toFixed(1)}pp`,
+    }
+  );
+  const avgScoreDelta = getDeltaLabel(
+    currentKpis?.avg_score,
+    previousKpis?.avg_score,
+    { metricFormatter: (value) => value.toFixed(2) }
+  );
+  const rulesFiredDelta = getDeltaLabel(
+    currentKpis?.rules_fired_total,
+    previousKpis?.rules_fired_total,
+    { metricFormatter: (value) => formatNumber(value) }
+  );
 
   return (
     <div className="page">
@@ -126,19 +200,33 @@ export function Analytics() {
       {/* KPI Dashboard Controls */}
       <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
         <DateRangePicker onChange={handleDateRangeChange} />
-        <div className="btn-group btn-group-sm">
-          <button
-            className={`btn ${granularity === 'hour' ? 'btn-primary' : 'btn-outline-secondary'}`}
-            onClick={() => handleGranularityChange('hour')}
-          >
-            Hourly
-          </button>
-          <button
-            className={`btn ${granularity === 'day' ? 'btn-primary' : 'btn-outline-secondary'}`}
-            onClick={() => handleGranularityChange('day')}
-          >
-            Daily
-          </button>
+        <div className="d-flex align-items-center gap-3 flex-wrap">
+          <div className="btn-group btn-group-sm">
+            <button
+              className={`btn ${granularity === 'hour' ? 'btn-primary' : 'btn-outline-secondary'}`}
+              onClick={() => handleGranularityChange('hour')}
+            >
+              Hourly
+            </button>
+            <button
+              className={`btn ${granularity === 'day' ? 'btn-primary' : 'btn-outline-secondary'}`}
+              onClick={() => handleGranularityChange('day')}
+            >
+              Daily
+            </button>
+          </div>
+          <div className="form-check form-switch m-0">
+            <input
+              id="compare-to-previous"
+              type="checkbox"
+              className="form-check-input"
+              checked={compareToPrevious}
+              onChange={(event) => setCompareToPrevious(event.target.checked)}
+            />
+            <label htmlFor="compare-to-previous" className="form-check-label small fw-semibold">
+              Compare to previous period
+            </label>
+          </div>
         </div>
       </div>
       {showHourlyWindowHint && (
@@ -152,11 +240,13 @@ export function Analytics() {
           <div style={{ minHeight: '96px' }}>
             <KpiCard
               label="Total Decisions"
-              value={kpis?.total_decisions ?? 0}
+              value={currentKpis?.total_decisions ?? 0}
               loading={kpisQuery.isLoading}
               error={kpisQuery.error}
               formatter={(val) => formatNumber(val as string | number | null | undefined)}
               badge={<DataQualityBadge meta={kpis?.meta} />}
+              deltaLabel={totalDecisionsDelta}
+              deltaTone={getDeltaTone(currentKpis?.total_decisions, previousKpis?.total_decisions)}
             />
           </div>
         </div>
@@ -164,11 +254,13 @@ export function Analytics() {
           <div style={{ minHeight: '96px' }}>
             <KpiCard
               label="Total Alerts"
-              value={kpis?.total_alerts ?? 0}
+              value={currentKpis?.total_alerts ?? 0}
               loading={kpisQuery.isLoading}
               error={kpisQuery.error}
               formatter={(val) => formatNumber(val as string | number | null | undefined)}
               badge={<DataQualityBadge meta={kpis?.meta} />}
+              deltaLabel={totalAlertsDelta}
+              deltaTone={getDeltaTone(currentKpis?.total_alerts, previousKpis?.total_alerts)}
             />
           </div>
         </div>
@@ -176,11 +268,13 @@ export function Analytics() {
           <div style={{ minHeight: '96px' }}>
             <KpiCard
               label="Alert Rate"
-              value={kpis?.alert_rate ?? 0}
+              value={currentKpis?.alert_rate ?? 0}
               loading={kpisQuery.isLoading}
               error={kpisQuery.error}
               formatter={(val) => `${(Number(val) * 100).toFixed(1)}%`}
               badge={<DataQualityBadge meta={kpis?.meta} />}
+              deltaLabel={alertRateDelta}
+              deltaTone={getDeltaTone(currentKpis?.alert_rate, previousKpis?.alert_rate)}
             />
           </div>
         </div>
@@ -188,11 +282,13 @@ export function Analytics() {
           <div style={{ minHeight: '96px' }}>
             <KpiCard
               label="Avg Risk Score"
-              value={kpis?.avg_score ?? 0}
+              value={currentKpis?.avg_score ?? 0}
               loading={kpisQuery.isLoading}
               error={kpisQuery.error}
               formatter={(val) => Number(val).toFixed(2)}
               badge={<DataQualityBadge meta={kpis?.meta} />}
+              deltaLabel={avgScoreDelta}
+              deltaTone={getDeltaTone(currentKpis?.avg_score, previousKpis?.avg_score)}
             />
           </div>
         </div>
@@ -200,11 +296,13 @@ export function Analytics() {
           <div style={{ minHeight: '96px' }}>
             <KpiCard
               label="Rules Fired"
-              value={kpis?.rules_fired_total ?? 0}
+              value={currentKpis?.rules_fired_total ?? 0}
               loading={kpisQuery.isLoading}
               error={kpisQuery.error}
               formatter={(val) => formatNumber(val as string | number | null | undefined)}
               badge={<DataQualityBadge meta={kpis?.meta} />}
+              deltaLabel={rulesFiredDelta}
+              deltaTone={getDeltaTone(currentKpis?.rules_fired_total, previousKpis?.rules_fired_total)}
             />
           </div>
         </div>
@@ -297,23 +395,22 @@ export function Analytics() {
             </div>
           ) : volumeQuery.isError ? (
             <div className="text-danger p-4">Failed to load volume chart</div>
-          ) : volume?.points && volume.points.length > 0 ? (
+          ) : volumeChartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <ComposedChart
-                data={[...volume.points].sort((a, b) =>
-                  new Date(a.timestamp ?? 0).getTime() - new Date(b.timestamp ?? 0).getTime()
-                )}
+                data={volumeChartData}
                 onClick={(eventState) => {
-                  const activePayload = (
+                  const chartEvent = (
                     eventState as
                       | {
+                          activeLabel?: string;
                           activePayload?: Array<{
                             payload?: { timestamp?: string };
                           }>;
                         }
                       | undefined
-                  )?.activePayload;
-                  const timestamp = activePayload?.[0]?.payload?.timestamp;
+                  );
+                  const timestamp = chartEvent?.activeLabel ?? chartEvent?.activePayload?.[0]?.payload?.timestamp;
                   if (timestamp) {
                     const date = new Date(timestamp);
                     const dateStr = date.toISOString().split('T')[0];
@@ -343,6 +440,17 @@ export function Analytics() {
                 <Legend />
                 <Bar dataKey="count" name="Decisions" fill="#cfe2ff" radius={[4, 4, 0, 0]} />
                 <Line type="monotone" dataKey="alerts" name="Alerts" stroke="#dc3545" strokeWidth={2} dot={{ r: 3 }} />
+                {compareToPrevious && previousVolumePoints.length > 0 && (
+                  <Line
+                    type="monotone"
+                    dataKey="previous_count"
+                    name="Previous period"
+                    stroke="#6c757d"
+                    strokeWidth={2}
+                    strokeDasharray="5 4"
+                    dot={false}
+                  />
+                )}
               </ComposedChart>
             </ResponsiveContainer>
           ) : (
