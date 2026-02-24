@@ -14,6 +14,7 @@ import { useTenant } from '../hooks/useTenant';
 import { useCursorPagination } from '../hooks/useCursorPagination';
 import { useAnalyticsExplorerSearchParams, type AnalyticsExplorerFilters } from '../hooks/useAnalyticsExplorerSearchParams';
 import { useAnalyticsQueryEnvelope } from '../hooks/useAnalyticsQueryEnvelope';
+import { formatKpiDelta, getDeltaTone } from './analyticsDeltas';
 import type { DateRange } from '../components/DateRangePicker';
 
 export function Analytics() {
@@ -132,49 +133,17 @@ export function Analytics() {
     previous_count: previousVolumePoints[index]?.count,
   }));
 
-  type DeltaFormatOptions = {
-    metricFormatter: (value: number) => string;
-    deltaFormatter?: (value: number) => string;
-  };
-
-  const getDeltaLabel = (
-    current: number | undefined,
-    previous: number | undefined,
-    options: DeltaFormatOptions
-  ): string | undefined => {
-    if (previous === undefined || current === undefined) {
-      return undefined;
-    }
-    const absoluteDelta = current - previous;
-    const absoluteLabel = (options.deltaFormatter ?? options.metricFormatter)(absoluteDelta);
-    const percentLabel =
-      previous === 0
-        ? absoluteDelta === 0
-          ? '0.0%'
-          : 'n/a'
-        : `${((absoluteDelta / Math.abs(previous)) * 100).toFixed(1)}%`;
-    const direction = absoluteDelta > 0 ? '+' : '';
-    return `vs previous: ${direction}${absoluteLabel} (${direction}${percentLabel})`;
-  };
-
-  const getDeltaTone = (current: number | undefined, previous: number | undefined): 'positive' | 'negative' | 'neutral' => {
-    if (previous === undefined || current === undefined || current === previous) {
-      return 'neutral';
-    }
-    return current > previous ? 'positive' : 'negative';
-  };
-
-  const totalDecisionsDelta = getDeltaLabel(
+  const totalDecisionsDelta = formatKpiDelta(
     currentKpis?.total_decisions,
     previousKpis?.total_decisions,
     { metricFormatter: (value) => formatNumber(value) }
   );
-  const totalAlertsDelta = getDeltaLabel(
+  const totalAlertsDelta = formatKpiDelta(
     currentKpis?.total_alerts,
     previousKpis?.total_alerts,
     { metricFormatter: (value) => formatNumber(value) }
   );
-  const alertRateDelta = getDeltaLabel(
+  const alertRateDelta = formatKpiDelta(
     currentKpis?.alert_rate,
     previousKpis?.alert_rate,
     {
@@ -182,12 +151,12 @@ export function Analytics() {
       deltaFormatter: (value) => `${(value * 100).toFixed(1)}pp`,
     }
   );
-  const avgScoreDelta = getDeltaLabel(
+  const avgScoreDelta = formatKpiDelta(
     currentKpis?.avg_score,
     previousKpis?.avg_score,
     { metricFormatter: (value) => value.toFixed(2) }
   );
-  const rulesFiredDelta = getDeltaLabel(
+  const rulesFiredDelta = formatKpiDelta(
     currentKpis?.rules_fired_total,
     previousKpis?.rules_fired_total,
     { metricFormatter: (value) => formatNumber(value) }
