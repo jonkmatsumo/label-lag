@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { HttpClient, UpstreamError } from '../services/http-client.js';
+import { normalizeAnalyticsMeta } from '../utils/analytics-meta.js';
 
 export interface TrainingRoutesOptions {
     httpClient: HttpClient;
@@ -35,7 +36,7 @@ export async function trainingRoutes(
                     properties: {
                         model_name: { type: 'string' },
                         status: { type: 'string' },
-                        limit: { type: 'integer', minimum: 1, maximum: 100, default: 25 },
+                        limit: { type: 'integer', minimum: 1, maximum: 10000, default: 25 },
                         cursor: { type: 'string' },
                     },
                 },
@@ -61,7 +62,25 @@ export async function trainingRoutes(
                     target: 'gateway',
                 });
 
-                return reply.status(response.statusCode).send(response.data);
+                if (
+                    typeof response.data !== 'object' ||
+                    response.data === null ||
+                    Array.isArray(response.data)
+                ) {
+                    return reply.status(response.statusCode).send(response.data);
+                }
+
+                const raw = response.data as Record<string, unknown>;
+                const runs = Array.isArray(raw.runs) ? raw.runs : [];
+                const normalized = {
+                    ...raw,
+                    meta: normalizeAnalyticsMeta({
+                        raw,
+                        hasData: runs.length > 0,
+                    }),
+                };
+
+                return reply.status(response.statusCode).send(normalized);
             } catch (error) {
                 if (error instanceof UpstreamError) {
                     return reply.status(error.statusCode).send(error.toResponse());
