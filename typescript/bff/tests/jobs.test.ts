@@ -1,6 +1,17 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { Dispatcher, setGlobalDispatcher } from 'undici';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createTestApp, createTestConfig, TestContext } from './setup';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+function loadJobsFixture<T = unknown>(name: string): T {
+    const fixturePath = path.resolve(__dirname, '../testdata/contracts/jobs', name);
+    return JSON.parse(readFileSync(fixturePath, 'utf8')) as T;
+}
 
 describe('Jobs Routes', () => {
     let ctx: TestContext;
@@ -15,6 +26,31 @@ describe('Jobs Routes', () => {
         await ctx.app.close();
         setGlobalDispatcher(originalDispatcher);
         await ctx.mockAgent.close();
+    });
+
+    describe('GET /bff/v1/jobs', () => {
+        it('accepts oversized limit requests and preserves clamp metadata', async () => {
+            const upstream = loadJobsFixture('list_clamped.json');
+            const expected = loadJobsFixture('list_clamped.bff.json');
+
+            ctx.mockGatewayPool.intercept({
+                path: '/jobs?limit=9999',
+                method: 'GET',
+            }).reply(200, upstream);
+
+            const response = await ctx.app.inject({
+                method: 'GET',
+                url: '/bff/v1/jobs?limit=9999',
+            });
+
+            expect(response.statusCode).toBe(200);
+            const data = response.json();
+            expect(data).toEqual(expected);
+            expect(data.jobs).toHaveLength(250);
+            expect(data.meta.truncated).toBe(true);
+            expect(data.meta.partial).toBe(true);
+            expect(data.meta.effective_limit).toBe(250);
+        });
     });
 
     describe('GET /bff/v1/jobs/summary', () => {

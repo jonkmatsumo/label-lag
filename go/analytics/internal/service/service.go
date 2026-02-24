@@ -826,17 +826,18 @@ func (s *Service) GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.GetK
 		if start.After(end) {
 			return nil, status.Error(codes.InvalidArgument, "start_time must be <= end_time")
 		}
-
-		duration := end.Sub(start)
-		if req.GroupBy == "hour" && duration > 14*24*time.Hour {
-			return nil, status.Error(codes.InvalidArgument, "hourly KPI range exceeds maximum of 14 days")
-		}
-		if (req.GroupBy == "day" || req.GroupBy == "") && duration > 90*24*time.Hour {
-			return nil, status.Error(codes.InvalidArgument, "daily KPI range exceeds maximum of 90 days")
-		}
 	}
 
-	return s.store.GetKpis(ctx, req)
+	resp, err := s.store.GetKpis(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if resp != nil && resp.Meta == nil {
+		resp.Meta = &pb.AnalyticsMeta{
+			Truncated: false,
+		}
+	}
+	return resp, nil
 }
 
 func (s *Service) GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesRequest) (*pb.GetVolumeSeriesResponse, error) {
@@ -866,17 +867,18 @@ func (s *Service) GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesRe
 		if start.After(end) {
 			return nil, status.Error(codes.InvalidArgument, "start_time must be <= end_time")
 		}
-
-		duration := end.Sub(start)
-		if req.Granularity == "hour" && duration > 14*24*time.Hour {
-			return nil, status.Error(codes.InvalidArgument, "hourly volume range exceeds maximum of 14 days")
-		}
-		if req.Granularity == "day" && duration > 90*24*time.Hour {
-			return nil, status.Error(codes.InvalidArgument, "daily volume range exceeds maximum of 90 days")
-		}
 	}
 
-	return s.store.GetVolumeSeries(ctx, req)
+	resp, err := s.store.GetVolumeSeries(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if resp != nil && resp.Meta == nil {
+		resp.Meta = &pb.AnalyticsMeta{
+			Truncated: false,
+		}
+	}
+	return resp, nil
 }
 
 func (s *Service) GetConfusionMatrix(ctx context.Context, req *pb.GetConfusionMatrixRequest) (*pb.GetConfusionMatrixResponse, error) {

@@ -29,6 +29,7 @@ export interface AnalyticsQueryEnvelope {
 export interface AnalyticsMeta {
   truncated: boolean;
   effective_limit: number;
+  partial: boolean;
 }
 
 export interface GetKpisRequest {
@@ -64,6 +65,7 @@ export interface GetKpisResponse {
   avg_score: number;
   rules_fired_total: string;
   buckets: KpiBucket[];
+  meta?: AnalyticsMeta | undefined;
 }
 
 export interface GetVolumeSeriesRequest {
@@ -93,6 +95,7 @@ export interface VolumePoint {
 
 export interface GetVolumeSeriesResponse {
   points: VolumePoint[];
+  meta?: AnalyticsMeta | undefined;
 }
 
 export interface GetConfusionMatrixRequest {

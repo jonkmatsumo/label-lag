@@ -16,6 +16,8 @@ import { parseInt64, timestampToIso } from '../src/utils/protojson.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixtureDir = join(__dirname, '..', 'testdata', 'contracts');
+const MAX_POINTS_HOURLY = 1000;
+const MAX_POINTS_DAILY = 2000;
 
 function loadFixture(relativePath: string): unknown {
   const fullPath = join(fixtureDir, relativePath);
@@ -361,6 +363,33 @@ describe('Contract: GET /bff/v1/kpis', () => {
     expect(ISO_RE.test(ts!)).toBe(true);
     expect(typeof parseInt64(b.decisions)).toBe('number');
   });
+
+  it('downsampled hourly fixture keeps partial meta and capped bucket count', () => {
+    const raw = loadFixture('kpis/hourly_downsampled.json') as any;
+    const expected = loadFixture('kpis/hourly_downsampled.bff.json');
+
+    const normalized = {
+      total_decisions: parseInt64(raw.total_decisions),
+      total_alerts: parseInt64(raw.total_alerts),
+      alert_rate: raw.alert_rate,
+      avg_score: raw.avg_score,
+      rules_fired_total: parseInt64(raw.rules_fired_total),
+      buckets: raw.buckets?.map((b: any) => ({
+        timestamp: timestampToIso(b.timestamp),
+        decisions: parseInt64(b.decisions),
+        alerts: parseInt64(b.alerts),
+        rules_fired: parseInt64(b.rules_fired),
+      })),
+      meta: {
+        truncated: false,
+        partial: true,
+      },
+    };
+
+    expect(normalized).toEqual(expected);
+    expect(normalized.meta.partial).toBe(true);
+    expect(normalized.buckets.length).toBeLessThanOrEqual(MAX_POINTS_DAILY);
+  });
 });
 
 // ─── Volume (protojson handler with normalization) ──────────────────────────
@@ -407,6 +436,28 @@ describe('Contract: GET /bff/v1/volume', () => {
     const raw = loadFixture('volume/daily.json') as any;
     expect(typeof raw.points[0].count).toBe('string');
     expect(typeof raw.points[0].alerts).toBe('string');
+  });
+
+  it('downsampled hourly fixture keeps partial meta and capped point count', () => {
+    const raw = loadFixture('volume/hourly_downsampled.json') as any;
+    const expected = loadFixture('volume/hourly_downsampled.bff.json');
+
+    const normalized = {
+      points: raw.points?.map((p: any) => ({
+        timestamp: timestampToIso(p.timestamp),
+        count: parseInt64(p.count),
+        alerts: parseInt64(p.alerts),
+      })),
+      meta: {
+        truncated: false,
+        partial: true,
+      },
+    };
+
+    expect(normalized).toEqual(expected);
+    expect(normalized.meta.partial).toBe(true);
+    expect(normalized.points.length).toBeLessThanOrEqual(MAX_POINTS_DAILY);
+    expect(normalized.points.length).toBeLessThanOrEqual(MAX_POINTS_HOURLY);
   });
 });
 

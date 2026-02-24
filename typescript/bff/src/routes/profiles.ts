@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { HttpClient, UpstreamError } from '../services/http-client.js';
+import { normalizeAnalyticsMeta } from '../utils/analytics-meta.js';
 
 export interface ProfilesRoutesOptions {
     httpClient: HttpClient;
@@ -40,7 +41,7 @@ export async function profilesRoutes(
                 querystring: {
                     type: 'object',
                     properties: {
-                        limit: { type: 'integer', minimum: 1, maximum: 100, default: 25 },
+                        limit: { type: 'integer', minimum: 1, maximum: 10000, default: 25 },
                         cursor: { type: 'string' },
                     },
                 },
@@ -64,7 +65,25 @@ export async function profilesRoutes(
                     target: 'gateway',
                 });
 
-                return reply.status(response.statusCode).send(response.data);
+                if (
+                    typeof response.data !== 'object' ||
+                    response.data === null ||
+                    Array.isArray(response.data)
+                ) {
+                    return reply.status(response.statusCode).send(response.data);
+                }
+
+                const raw = response.data as Record<string, unknown>;
+                const profiles = Array.isArray(raw.profiles) ? raw.profiles : [];
+                const normalized = {
+                    ...raw,
+                    meta: normalizeAnalyticsMeta({
+                        raw,
+                        hasData: profiles.length > 0,
+                    }),
+                };
+
+                return reply.status(response.statusCode).send(normalized);
             } catch (error) {
                 if (error instanceof UpstreamError) {
                     return reply.status(error.statusCode).send(error.toResponse());

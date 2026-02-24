@@ -1,0 +1,23 @@
+{
+    "points": [
+        {
+            "timestamp": "2024-01-01T00:00:00.000Z",
+            "count": 1000,
+            "alerts": 30
+        },
+        {
+            "timestamp": "2024-01-02T00:00:00.000Z",
+            "count": 970,
+            "alerts": 28
+        },
+        {
+            "timestamp": "2024-01-03T00:00:00.000Z",
+            "count": 940,
+            "alerts": 26
+        }
+    ],
+    "meta": {
+        "truncated": false,
+        "partial": true
+    }
+}

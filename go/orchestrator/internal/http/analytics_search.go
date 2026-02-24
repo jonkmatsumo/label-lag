@@ -114,6 +114,7 @@ type transactionDetailResponse struct {
 type analyticsMetaResponse struct {
 	Truncated      bool  `json:"truncated"`
 	EffectiveLimit int32 `json:"effective_limit"`
+	Partial        bool  `json:"partial"`
 }
 
 func mapAnalyticsMeta(meta *crudv1.AnalyticsMeta) *analyticsMetaResponse {
@@ -123,6 +124,7 @@ func mapAnalyticsMeta(meta *crudv1.AnalyticsMeta) *analyticsMetaResponse {
 	return &analyticsMetaResponse{
 		Truncated:      meta.Truncated,
 		EffectiveLimit: meta.EffectiveLimit,
+		Partial:        meta.Partial,
 	}
 }
 

@@ -1261,6 +1261,9 @@ func (s *SQLStore) GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactReque
 
 	resp := &pb.GetRuleImpactResponse{
 		RuleId: req.RuleId,
+		Meta: &pb.AnalyticsMeta{
+			Truncated: false,
+		},
 	}
 
 	baseWhere := "WHERE ri.rule_id = $1"
@@ -1303,7 +1306,8 @@ func (s *SQLStore) GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactReque
 		%s
 		GROUP BY date
 		ORDER BY date DESC
-	`, baseWhere)
+		LIMIT %d
+	`, baseWhere, MaxPointsDaily+1)
 
 	rows, err := s.db.QueryContext(queryCtx, bucketsQuery, args...)
 	if err != nil {
@@ -1311,6 +1315,7 @@ func (s *SQLStore) GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactReque
 	}
 	defer rows.Close()
 
+	bucketsDesc := make([]*pb.RuleImpactBucket, 0, MaxPointsDaily+1)
 	for rows.Next() {
 		var b pb.RuleImpactBucket
 		var date time.Time
@@ -1318,7 +1323,17 @@ func (s *SQLStore) GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactReque
 			return nil, fmt.Errorf("failed to scan bucket: %v", err)
 		}
 		b.Date = date.Format("2006-01-02")
-		resp.DailyBuckets = append(resp.DailyBuckets, &b)
+		bucketsDesc = append(bucketsDesc, &b)
+	}
+
+	if len(bucketsDesc) > MaxPointsDaily {
+		bucketsDesc = bucketsDesc[:MaxPointsDaily]
+		resp.Meta.Partial = true
+	}
+
+	// Return chronological order for deterministic rendering/consumption.
+	for i := len(bucketsDesc) - 1; i >= 0; i-- {
+		resp.DailyBuckets = append(resp.DailyBuckets, bucketsDesc[i])
 	}
 
 	return resp, nil
@@ -1400,9 +1415,10 @@ func (s *SQLStore) GetConfusionMatrix(ctx context.Context, req *pb.GetConfusionM
 }
 
 func (s *SQLStore) GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.GetKpisResponse, error) {
+	seriesPlan := buildTimeSeriesPlan(req.GroupBy, req.StartTime, req.EndTime)
 	tableName := "aggregates_daily"
 	timeCol := "date"
-	if req.GroupBy == "hour" {
+	if seriesPlan.effectiveGranularity == "hour" {
 		tableName = "aggregates_hourly"
 		timeCol = "hour"
 	}
@@ -1432,7 +1448,11 @@ func (s *SQLStore) GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.Get
 		WHERE %s
 	`, tableName, whereStmt)
 
-	resp := &pb.GetKpisResponse{}
+	resp := &pb.GetKpisResponse{
+		Meta: &pb.AnalyticsMeta{
+			Partial: seriesPlan.partial,
+		},
+	}
 	var sumScore int64
 	queryCtx, cancel := context.WithTimeout(ctx, hotAnalyticsQueryTimeout)
 	defer cancel()
@@ -1462,8 +1482,9 @@ func (s *SQLStore) GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.Get
 				CASE WHEN total_decisions > 0 THEN sum_score::float / total_decisions ELSE 0 END
 			FROM %s
 			WHERE %s
-			ORDER BY %s ASC
-		`, timeCol, tableName, whereStmt, timeCol)
+			ORDER BY %s DESC
+			LIMIT %d
+		`, timeCol, tableName, whereStmt, timeCol, seriesPlan.pointCap+1)
 
 		rows, err := s.db.QueryContext(queryCtx, bucketsQuery, args...)
 		if err != nil {
@@ -1471,6 +1492,7 @@ func (s *SQLStore) GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.Get
 		}
 		defer rows.Close()
 
+		bucketsDesc := make([]*pb.KpiBucket, 0, seriesPlan.pointCap+1)
 		for rows.Next() {
 			var b pb.KpiBucket
 			var ts time.Time
@@ -1478,7 +1500,17 @@ func (s *SQLStore) GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.Get
 				return nil, fmt.Errorf("failed to scan kpi bucket: %v", err)
 			}
 			b.Timestamp = timestamppb.New(ts)
-			resp.Buckets = append(resp.Buckets, &b)
+			bucketsDesc = append(bucketsDesc, &b)
+		}
+
+		if len(bucketsDesc) > seriesPlan.pointCap {
+			bucketsDesc = bucketsDesc[:seriesPlan.pointCap]
+			resp.Meta.Partial = true
+		}
+
+		// Return chronological order for deterministic chart rendering.
+		for i := len(bucketsDesc) - 1; i >= 0; i-- {
+			resp.Buckets = append(resp.Buckets, bucketsDesc[i])
 		}
 	}
 
@@ -1486,9 +1518,10 @@ func (s *SQLStore) GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.Get
 }
 
 func (s *SQLStore) GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesRequest) (*pb.GetVolumeSeriesResponse, error) {
+	seriesPlan := buildTimeSeriesPlan(req.Granularity, req.StartTime, req.EndTime)
 	tableName := "aggregates_daily"
 	timeCol := "date"
-	if req.Granularity == "hour" {
+	if seriesPlan.effectiveGranularity == "hour" {
 		tableName = "aggregates_hourly"
 		timeCol = "hour"
 	}
@@ -1511,8 +1544,9 @@ func (s *SQLStore) GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesR
 		SELECT %s, total_decisions, total_alerts
 		FROM %s
 		WHERE %s
-		ORDER BY %s ASC
-	`, timeCol, tableName, whereStmt, timeCol)
+		ORDER BY %s DESC
+		LIMIT %d
+	`, timeCol, tableName, whereStmt, timeCol, seriesPlan.pointCap+1)
 
 	queryCtx, cancel := context.WithTimeout(ctx, hotAnalyticsQueryTimeout)
 	defer cancel()
@@ -1523,7 +1557,12 @@ func (s *SQLStore) GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesR
 	}
 	defer rows.Close()
 
-	resp := &pb.GetVolumeSeriesResponse{}
+	resp := &pb.GetVolumeSeriesResponse{
+		Meta: &pb.AnalyticsMeta{
+			Partial: seriesPlan.partial,
+		},
+	}
+	pointsDesc := make([]*pb.VolumePoint, 0, seriesPlan.pointCap+1)
 	for rows.Next() {
 		var p pb.VolumePoint
 		var ts time.Time
@@ -1531,7 +1570,17 @@ func (s *SQLStore) GetVolumeSeries(ctx context.Context, req *pb.GetVolumeSeriesR
 			return nil, fmt.Errorf("failed to scan volume point: %v", err)
 		}
 		p.Timestamp = timestamppb.New(ts)
-		resp.Points = append(resp.Points, &p)
+		pointsDesc = append(pointsDesc, &p)
+	}
+
+	if len(pointsDesc) > seriesPlan.pointCap {
+		pointsDesc = pointsDesc[:seriesPlan.pointCap]
+		resp.Meta.Partial = true
+	}
+
+	// Return chronological order for deterministic chart rendering.
+	for i := len(pointsDesc) - 1; i >= 0; i-- {
+		resp.Points = append(resp.Points, pointsDesc[i])
 	}
 
 	return resp, nil
