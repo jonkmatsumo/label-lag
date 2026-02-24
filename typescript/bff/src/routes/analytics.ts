@@ -67,6 +67,7 @@ interface KpiQuery {
   end_time?: string;
   group_by?: 'hour' | 'day';
   granularity?: 'hour' | 'day';
+  compare_to_previous?: boolean;
   query?: string;
 }
 
@@ -74,6 +75,7 @@ interface VolumeQuery {
   start_time?: string;
   end_time?: string;
   granularity?: 'hour' | 'day';
+  compare_to_previous?: boolean;
   query?: string;
 }
 
@@ -110,6 +112,32 @@ function toFiniteNumber(value: unknown): number | undefined {
     }
   }
   return undefined;
+}
+
+function normalizeKpiPeriod(raw: Record<string, unknown>) {
+  return {
+    total_decisions: parseInt64(raw.total_decisions) ?? 0,
+    total_alerts: parseInt64(raw.total_alerts) ?? 0,
+    alert_rate: toFiniteNumber(raw.alert_rate) ?? 0,
+    avg_score: toFiniteNumber(raw.avg_score) ?? 0,
+    rules_fired_total: parseInt64(raw.rules_fired_total) ?? 0,
+    buckets: (raw.buckets as any[] | undefined)?.map((b: any) => ({
+      timestamp: timestampToIso(b.timestamp),
+      decisions: parseInt64(b.decisions ?? b.total_decisions) ?? 0,
+      alerts: parseInt64(b.alerts ?? b.total_alerts) ?? 0,
+      rules_fired: parseInt64(b.rules_fired ?? b.rules_fired_total) ?? 0,
+    })),
+  };
+}
+
+function normalizeVolumePeriod(raw: Record<string, unknown>) {
+  return {
+    points: (raw.points as any[] | undefined)?.map((p: any) => ({
+      timestamp: timestampToIso(p.timestamp),
+      count: parseInt64(p.count) ?? 0,
+      alerts: parseInt64(p.alerts) ?? 0,
+    })) ?? [],
+  };
 }
 
 /**
@@ -637,6 +665,7 @@ export async function analyticsRoutes(
             },
             group_by: { type: 'string', enum: ['hour', 'day'] },
             granularity: { type: 'string', enum: ['hour', 'day'] },
+            compare_to_previous: { type: 'boolean' },
             query: { type: 'string' },
           },
         },
@@ -648,7 +677,7 @@ export async function analyticsRoutes(
     ) => {
       try {
         const requestSignal = getRequestAbortSignal(request, reply);
-        const { start_time, end_time, group_by, granularity, query } = request.query;
+        const { start_time, end_time, group_by, granularity, compare_to_previous, query } = request.query;
         if (granularity && group_by && granularity !== group_by) {
           return reply.status(400).send({
             error: {
@@ -677,15 +706,24 @@ export async function analyticsRoutes(
 
         const queryEnvelope = validatedQuery.value;
         const groupBy = queryEnvelope.granularity;
+        const compareFlag = compare_to_previous === true;
         const tenantId = (request as FastifyRequest & { tenantId?: string }).tenantId ?? 'default';
-        const cacheKey = `analytics:kpis:${tenantId}:${queryEnvelope.start_time}:${queryEnvelope.end_time}:${groupBy}`;
+        const cacheKey = `analytics:kpis:${tenantId}:${queryEnvelope.start_time}:${queryEnvelope.end_time}:${groupBy}:compare=${compareFlag ? '1' : '0'}`;
         const normalized = await cache.getOrLoad<KpisResponse>(
           cacheKey,
           tenantId,
           async () => {
+            const searchParams = new URLSearchParams();
+            searchParams.set('start_time', queryEnvelope.start_time);
+            searchParams.set('end_time', queryEnvelope.end_time);
+            searchParams.set('group_by', groupBy);
+            if (compareFlag) {
+              searchParams.set('compare_to_previous', 'true');
+            }
+
             const response = await httpClient.request<any>({
               method: 'GET',
-              path: `/kpis?start_time=${encodeURIComponent(queryEnvelope.start_time)}&end_time=${encodeURIComponent(queryEnvelope.end_time)}&group_by=${groupBy}`,
+              path: `/kpis?${searchParams.toString()}`,
               requestId: request.requestId,
               tenantId: request.tenantId,
               target: 'gateway',
@@ -693,21 +731,27 @@ export async function analyticsRoutes(
             });
 
             const raw = response.data;
+            const currentRaw =
+              typeof raw.current === 'object' && raw.current !== null
+                ? (raw.current as Record<string, unknown>)
+                : (raw as Record<string, unknown>);
+            const current = normalizeKpiPeriod(currentRaw);
+            const previous =
+              typeof raw.previous === 'object' && raw.previous !== null
+                ? normalizeKpiPeriod(raw.previous as Record<string, unknown>)
+                : undefined;
             return {
-              total_decisions: parseInt64(raw.total_decisions) ?? 0,
-              total_alerts: parseInt64(raw.total_alerts) ?? 0,
-              alert_rate: raw.alert_rate ?? 0,
-              avg_score: raw.avg_score ?? 0,
-              rules_fired_total: parseInt64(raw.rules_fired_total) ?? 0,
-              buckets: raw.buckets?.map((b: any) => ({
-                timestamp: timestampToIso(b.timestamp),
-                decisions: parseInt64(b.decisions) ?? 0,
-                alerts: parseInt64(b.alerts) ?? 0,
-                rules_fired: parseInt64(b.rules_fired) ?? 0,
-              })),
+              total_decisions: current.total_decisions,
+              total_alerts: current.total_alerts,
+              alert_rate: current.alert_rate,
+              avg_score: current.avg_score,
+              rules_fired_total: current.rules_fired_total,
+              buckets: current.buckets,
+              current,
+              ...(previous ? { previous } : {}),
               meta: normalizeAnalyticsMeta({
                 raw,
-                hasData: (parseInt64(raw.total_decisions) ?? 0) > 0,
+                hasData: current.total_decisions > 0 || (previous?.total_decisions ?? 0) > 0,
               }),
             };
           },
@@ -744,6 +788,7 @@ export async function analyticsRoutes(
               description: 'ISO date or datetime string (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ssZ)',
             },
             granularity: { type: 'string', enum: ['hour', 'day'] },
+            compare_to_previous: { type: 'boolean' },
             query: { type: 'string' },
           },
         },
@@ -755,7 +800,7 @@ export async function analyticsRoutes(
     ) => {
       try {
         const requestSignal = getRequestAbortSignal(request, reply);
-        const { start_time, end_time, granularity, query } = request.query;
+        const { start_time, end_time, granularity, compare_to_previous, query } = request.query;
         const validatedQuery = resolveAnalyticsQueryInput({
           query,
           legacy: {
@@ -774,15 +819,24 @@ export async function analyticsRoutes(
         }
 
         const queryEnvelope = validatedQuery.value;
+        const compareFlag = compare_to_previous === true;
         const tenantId = (request as FastifyRequest & { tenantId?: string }).tenantId ?? 'default';
-        const cacheKey = `analytics:volume:${tenantId}:${queryEnvelope.start_time}:${queryEnvelope.end_time}:${queryEnvelope.granularity}`;
+        const cacheKey = `analytics:volume:${tenantId}:${queryEnvelope.start_time}:${queryEnvelope.end_time}:${queryEnvelope.granularity}:compare=${compareFlag ? '1' : '0'}`;
         const normalized = await cache.getOrLoad<VolumeSeriesResponse>(
           cacheKey,
           tenantId,
           async () => {
+            const searchParams = new URLSearchParams();
+            searchParams.set('start_time', queryEnvelope.start_time);
+            searchParams.set('end_time', queryEnvelope.end_time);
+            searchParams.set('granularity', queryEnvelope.granularity);
+            if (compareFlag) {
+              searchParams.set('compare_to_previous', 'true');
+            }
+
             const response = await httpClient.request<any>({
               method: 'GET',
-              path: `/volume?start_time=${encodeURIComponent(queryEnvelope.start_time)}&end_time=${encodeURIComponent(queryEnvelope.end_time)}&granularity=${queryEnvelope.granularity}`,
+              path: `/volume?${searchParams.toString()}`,
               requestId: request.requestId,
               tenantId: request.tenantId,
               target: 'gateway',
@@ -790,15 +844,22 @@ export async function analyticsRoutes(
             });
 
             const raw = response.data;
+            const currentRaw =
+              typeof raw.current === 'object' && raw.current !== null
+                ? (raw.current as Record<string, unknown>)
+                : ({ points: raw.points } as Record<string, unknown>);
+            const current = normalizeVolumePeriod(currentRaw);
+            const previous =
+              typeof raw.previous === 'object' && raw.previous !== null
+                ? normalizeVolumePeriod(raw.previous as Record<string, unknown>)
+                : undefined;
             return {
-              points: (raw.points ?? []).map((p: any) => ({
-                timestamp: timestampToIso(p.timestamp),
-                count: parseInt64(p.count) ?? 0,
-                alerts: parseInt64(p.alerts) ?? 0,
-              })),
+              points: current.points,
+              current,
+              ...(previous ? { previous } : {}),
               meta: normalizeAnalyticsMeta({
                 raw,
-                hasData: (raw.points?.length ?? 0) > 0,
+                hasData: current.points.length > 0 || (previous?.points.length ?? 0) > 0,
               }),
             };
           },

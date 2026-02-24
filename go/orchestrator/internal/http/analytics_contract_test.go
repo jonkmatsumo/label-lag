@@ -106,6 +106,120 @@ func TestAnalyticsDailyStatsContract(t *testing.T) {
 	}
 }
 
+func TestAnalyticsDashboardCompareContract(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	currentTs := timestamppb.New(time.Date(2025, 1, 10, 0, 0, 0, 0, time.UTC))
+	previousTs := timestamppb.New(time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC))
+	stub := &stubAnalyticsClient{
+		getKpisResp: &crudv1.GetKpisResponse{
+			TotalDecisions: 100,
+			TotalAlerts:    10,
+			AlertRate:      0.1,
+			AvgScore:       50,
+			Current: &crudv1.KpisPeriod{
+				TotalDecisions: 100,
+				TotalAlerts:    10,
+				AlertRate:      0.1,
+				AvgScore:       50,
+				Buckets: []*crudv1.KpiBucket{
+					{Timestamp: currentTs, TotalDecisions: 100, TotalAlerts: 10, AvgScore: 50},
+				},
+			},
+			Previous: &crudv1.KpisPeriod{
+				TotalDecisions: 90,
+				TotalAlerts:    9,
+				AlertRate:      0.1,
+				AvgScore:       49,
+				Buckets: []*crudv1.KpiBucket{
+					{Timestamp: previousTs, TotalDecisions: 90, TotalAlerts: 9, AvgScore: 49},
+				},
+			},
+			Meta: &crudv1.AnalyticsMeta{},
+		},
+		getVolumeSeriesResp: &crudv1.GetVolumeSeriesResponse{
+			Points: []*crudv1.VolumePoint{
+				{Timestamp: currentTs, Count: 100, Alerts: 10},
+			},
+			Current: &crudv1.VolumeSeriesPeriod{
+				Points: []*crudv1.VolumePoint{
+					{Timestamp: currentTs, Count: 100, Alerts: 10},
+				},
+			},
+			Previous: &crudv1.VolumeSeriesPeriod{
+				Points: []*crudv1.VolumePoint{
+					{Timestamp: previousTs, Count: 90, Alerts: 9},
+				},
+			},
+			Meta: &crudv1.AnalyticsMeta{},
+		},
+	}
+
+	handler := NewHandler(HandlerOptions{
+		Logger:          logger,
+		AnalyticsClient: stub,
+		TrainingClient:  stubTrainingClient{},
+		ForecastClient:  stubForecastClient{},
+		RulesProvider:   rules.NewEmptyProvider(),
+		MaxBodyBytes:    1024,
+	})
+
+	t.Run("kpis_compare_to_previous", func(t *testing.T) {
+		req := withTenantRequest(httptest.NewRequest(
+			http.MethodGet,
+			"/kpis?start_time=2025-01-10T00:00:00Z&end_time=2025-01-11T00:00:00Z&group_by=day&compare_to_previous=true",
+			nil,
+		))
+		rec := httptest.NewRecorder()
+		handler.handleGetKpis(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+		}
+		if stub.lastGetKpisReq == nil || !stub.lastGetKpisReq.CompareToPrevious {
+			t.Fatalf("expected compare_to_previous=true in gRPC request")
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if payload["current"] == nil {
+			t.Fatalf("expected current block in response")
+		}
+		if payload["previous"] == nil {
+			t.Fatalf("expected previous block in response")
+		}
+	})
+
+	t.Run("volume_compare_to_previous", func(t *testing.T) {
+		req := withTenantRequest(httptest.NewRequest(
+			http.MethodGet,
+			"/volume?start_time=2025-01-10T00:00:00Z&end_time=2025-01-11T00:00:00Z&granularity=day&compare_to_previous=true",
+			nil,
+		))
+		rec := httptest.NewRecorder()
+		handler.handleGetVolumeSeries(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+		}
+		if stub.lastGetVolumeSeriesReq == nil || !stub.lastGetVolumeSeriesReq.CompareToPrevious {
+			t.Fatalf("expected compare_to_previous=true in gRPC request")
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if payload["current"] == nil {
+			t.Fatalf("expected current block in response")
+		}
+		if payload["previous"] == nil {
+			t.Fatalf("expected previous block in response")
+		}
+	})
+}
+
 func TestAnalyticsTransactionsContract(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	stub := &stubAnalyticsClient{

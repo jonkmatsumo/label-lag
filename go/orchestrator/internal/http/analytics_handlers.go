@@ -738,13 +738,19 @@ func (h *Handler) handleGetKpis(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, r, http.StatusBadRequest, "invalid group_by (day|hour required)")
 		return
 	}
+	compareToPrevious, err := parseBoolQuery(r, "compare_to_previous", false)
+	if err != nil {
+		writeJSONError(w, r, http.StatusBadRequest, "invalid compare_to_previous (boolean required)")
+		return
+	}
 
 	req := &crudv1.GetKpisRequest{
-		StartTime: startTS,
-		EndTime:   endTS,
-		GroupBy:   granularity,
-		TenantId:  tenantID,
-		Query:     buildAnalyticsQueryEnvelope(startTS, endTS, granularity),
+		StartTime:         startTS,
+		EndTime:           endTS,
+		GroupBy:           granularity,
+		TenantId:          tenantID,
+		Query:             buildAnalyticsQueryEnvelope(startTS, endTS, granularity),
+		CompareToPrevious: compareToPrevious,
 	}
 
 	if req.StartTime != nil && req.EndTime != nil && req.StartTime.AsTime().After(req.EndTime.AsTime()) {
@@ -787,13 +793,19 @@ func (h *Handler) handleGetVolumeSeries(w http.ResponseWriter, r *http.Request) 
 		writeJSONError(w, r, http.StatusBadRequest, "invalid granularity (day|hour required)")
 		return
 	}
+	compareToPrevious, err := parseBoolQuery(r, "compare_to_previous", false)
+	if err != nil {
+		writeJSONError(w, r, http.StatusBadRequest, "invalid compare_to_previous (boolean required)")
+		return
+	}
 
 	req := &crudv1.GetVolumeSeriesRequest{
-		StartTime:   startTS,
-		EndTime:     endTS,
-		Granularity: granularity,
-		TenantId:    tenantID,
-		Query:       buildAnalyticsQueryEnvelope(startTS, endTS, granularity),
+		StartTime:         startTS,
+		EndTime:           endTS,
+		Granularity:       granularity,
+		TenantId:          tenantID,
+		Query:             buildAnalyticsQueryEnvelope(startTS, endTS, granularity),
+		CompareToPrevious: compareToPrevious,
 	}
 
 	if req.StartTime != nil && req.EndTime != nil && req.StartTime.AsTime().After(req.EndTime.AsTime()) {
