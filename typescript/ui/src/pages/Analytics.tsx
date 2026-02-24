@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { analyticsApi, buildAnalyticsQueryEnvelope } from '../api';
-import type { RecentAlert, TransactionSearchRequest, TransactionDetail } from '../types/api';
+import type { RecentAlert, TransactionDetail } from '../types/api';
 import {
   Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart
 } from 'recharts';
@@ -11,7 +11,7 @@ import { DateRangePicker, KpiCard } from '../components';
 import { DataQualityBadge } from '../components/DataQualityBadge';
 import { useTenant } from '../hooks/useTenant';
 import { useCursorPagination } from '../hooks/useCursorPagination';
-import { useAnalyticsSearchParams } from '../hooks/useAnalyticsSearchParams';
+import { useAnalyticsExplorerSearchParams, type AnalyticsExplorerFilters } from '../hooks/useAnalyticsExplorerSearchParams';
 import { useAnalyticsQueryEnvelope } from '../hooks/useAnalyticsQueryEnvelope';
 import type { DateRange } from '../components/DateRangePicker';
 
@@ -23,9 +23,8 @@ export function Analytics() {
     granularity,
     setDateRange,
     setGranularity,
-    searchParams,
-    setSearchParams,
   } = useAnalyticsQueryEnvelope();
+  const { setTimeWindow } = useAnalyticsExplorerSearchParams();
   const analyticsQuery = useMemo(
     () =>
       buildAnalyticsQueryEnvelope({
@@ -318,12 +317,10 @@ export function Analytics() {
                   if (timestamp) {
                     const date = new Date(timestamp);
                     const dateStr = date.toISOString().split('T')[0];
-                    // If granularity is hour, we filter for that specific day or range
-                    // For now, let's drill down by setting both start/end to this day
-                    setSearchParams({
-                      ...Object.fromEntries(searchParams),
-                      start_date: dateStr,
-                      end_date: dateStr
+                    setTimeWindow({
+                      start_time: dateStr,
+                      end_time: dateStr,
+                      granularity,
                     });
                   }
                 }}
@@ -409,7 +406,11 @@ export function Analytics() {
 
 function TransactionExplorer() {
   const { tenantId } = useTenant();
-  const { filters, updateParams } = useAnalyticsSearchParams();
+  const { filters, updateFilters } = useAnalyticsExplorerSearchParams();
+  const paginationFilters = useMemo(
+    () => ({ ...filters }) as Record<string, unknown>,
+    [filters]
+  );
 
   const pagination = useCursorPagination<TransactionDetail>({
     queryKeyBase: ['analytics', tenantId, 'search'],
@@ -425,9 +426,10 @@ function TransactionExplorer() {
         items: res.items,
         nextCursor: res.next_cursor,
         truncated: res.meta.truncated,
+        effectiveLimit: res.meta.effective_limit,
       })),
     limit: 20,
-    filters,
+    filters: paginationFilters,
   });
 
   // No longer use pagination.total since backend doesn't return it for search
@@ -439,13 +441,15 @@ function TransactionExplorer() {
         <h3 className="card-title h6 fw-bold mb-0">Transaction Explorer</h3>
       </div>
       <div className="card-body">
-        <TransactionFilters filters={filters} onChange={updateParams} />
+        <TransactionFilters filters={filters} onChange={updateFilters} />
 
         {/* Truncation warning */}
-        {pagination.truncated && (
+        {pagination.truncated && pagination.data.length > 0 && (
           <div className="alert alert-warning py-2 small d-flex align-items-center mb-3">
             <ShieldCheck size={16} className="me-2 flex-shrink-0" />
-            <div><strong>Results truncated by server.</strong> Request limit was automatically capped at 500 for performance. Use filters to narrow results.</div>
+            <div>
+              Results limited to {pagination.effectiveLimit ?? 500}. Narrow filters to see more.
+            </div>
           </div>
         )}
 
@@ -490,9 +494,13 @@ function TransactionExplorer() {
   );
 }
 
-function TransactionFilters({ filters, onChange }: { filters: Partial<TransactionSearchRequest>, onChange: (f: Partial<TransactionSearchRequest>) => void }) {
+function TransactionFilters({ filters, onChange }: { filters: AnalyticsExplorerFilters, onChange: (f: Partial<AnalyticsExplorerFilters>) => void }) {
   const [localFilters, setLocalFilters] = useState(filters);
   const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    setLocalFilters(filters);
+  }, [filters]);
 
   const applyFilters = (e: React.FormEvent) => {
     e.preventDefault();

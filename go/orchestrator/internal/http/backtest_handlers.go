@@ -151,6 +151,7 @@ func (h *Handler) handleBacktestResults(w http.ResponseWriter, r *http.Request) 
 	writeAnalyticsJSON(w, backtestResultsListResponse{
 		Results: results,
 		Total:   len(results),
+		Meta:    mapAnalyticsMeta(resp.GetMeta()),
 	})
 }
 
@@ -222,6 +223,7 @@ type backtestResultResponse struct {
 type backtestResultsListResponse struct {
 	Results []backtestResultResponse `json:"results"`
 	Total   int                      `json:"total"`
+	Meta    *analyticsMetaResponse   `json:"meta,omitempty"`
 }
 
 func mapBacktestResult(res *crudv1.BacktestResult) backtestResultResponse {

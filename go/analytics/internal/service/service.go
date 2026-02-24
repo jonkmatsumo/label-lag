@@ -75,10 +75,7 @@ func (s *Service) GetTransactionDetails(ctx context.Context, req *pb.GetTransact
 	if err != nil {
 		return nil, err
 	}
-	limit, err := normalizeLimit(req.Limit, defaultTxnLimit, maxTransactionLimit, "limit")
-	if err != nil {
-		return nil, err
-	}
+	limit, truncated := normalizeLimit(req.Limit, defaultTxnLimit, maxTransactionLimit)
 	offset, err := normalizeOffset(req.Offset)
 	if err != nil {
 		return nil, err
@@ -92,6 +89,10 @@ func (s *Service) GetTransactionDetails(ctx context.Context, req *pb.GetTransact
 
 	return &pb.GetTransactionDetailsResponse{
 		Transactions: details,
+		Meta: &pb.AnalyticsMeta{
+			EffectiveLimit: limit,
+			Truncated:      truncated,
+		},
 	}, nil
 }
 
@@ -100,20 +101,29 @@ func (s *Service) SearchTransactions(ctx context.Context, req *pb.SearchTransact
 		return nil, status.Error(codes.InvalidArgument, "request required")
 	}
 
-	limit, err := normalizeLimit(req.Limit, defaultSearchLimit, maxSearchLimit, "limit")
+	limit, truncated := normalizeLimit(req.Limit, defaultSearchLimit, maxSearchLimit)
+	req.Limit = limit
+
+	transactions, nextCursor, meta, err := s.store.SearchTransactions(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	req.Limit = limit
 
-	transactions, nextCursor, truncated, err := s.store.SearchTransactions(ctx, req)
-	if err != nil {
-		return nil, err
+	// Ensure meta accurately reflects the service-level clamping as well
+	if meta == nil {
+		meta = &pb.AnalyticsMeta{
+			EffectiveLimit: limit,
+			Truncated:      truncated,
+		}
+	} else {
+		meta.Truncated = meta.Truncated || truncated
 	}
 
 	resp := &pb.SearchTransactionsResponse{
 		Transactions: transactions,
-		Truncated:    truncated,
+		Truncated:    meta.Truncated,
+		NextCursor:   nextCursor,
+		Meta:         meta,
 	}
 	if nextCursor != "" {
 		resp.Pagination = &commonv1.CursorPageResponse{
@@ -124,10 +134,7 @@ func (s *Service) SearchTransactions(ctx context.Context, req *pb.SearchTransact
 }
 
 func (s *Service) GetRecentAlerts(ctx context.Context, req *pb.GetRecentAlertsRequest) (*pb.GetRecentAlertsResponse, error) {
-	limit, err := normalizeLimit(req.Limit, defaultAlertLimit, maxAlertLimit, "limit")
-	if err != nil {
-		return nil, err
-	}
+	limit, truncated := normalizeLimit(req.Limit, defaultAlertLimit, maxAlertLimit)
 	offset, err := normalizeOffset(req.Offset)
 	if err != nil {
 		return nil, err
@@ -140,6 +147,10 @@ func (s *Service) GetRecentAlerts(ctx context.Context, req *pb.GetRecentAlertsRe
 
 	return &pb.GetRecentAlertsResponse{
 		Alerts: alerts,
+		Meta: &pb.AnalyticsMeta{
+			EffectiveLimit: limit,
+			Truncated:      truncated,
+		},
 	}, nil
 }
 
@@ -202,10 +213,7 @@ func (s *Service) ListBacktestResults(ctx context.Context, req *pb.ListBacktestR
 		end = &t
 	}
 
-	limit, err := normalizeLimit(req.Limit, 50, 250, "limit")
-	if err != nil {
-		return nil, err
-	}
+	limit, truncated := normalizeLimit(req.Limit, 50, 250)
 	offset, err := normalizeOffset(req.Offset)
 	if err != nil {
 		return nil, err
@@ -216,7 +224,13 @@ func (s *Service) ListBacktestResults(ctx context.Context, req *pb.ListBacktestR
 		return nil, err
 	}
 
-	return &pb.ListBacktestResultsResponse{Results: results}, nil
+	return &pb.ListBacktestResultsResponse{
+		Results: results,
+		Meta: &pb.AnalyticsMeta{
+			EffectiveLimit: limit,
+			Truncated:      truncated,
+		},
+	}, nil
 }
 
 func (s *Service) GetBacktestResult(ctx context.Context, req *pb.GetBacktestResultRequest) (*pb.GetBacktestResultResponse, error) {
@@ -278,7 +292,7 @@ func (s *Service) GetDatasetProfile(ctx context.Context, req *pb.GetDatasetProfi
 		return nil, status.Error(codes.InvalidArgument, "request required")
 	}
 
-	limitFeatures, _ := normalizeLimit(req.LimitFeatures, 50, 500, "limit_features")
+	limitFeatures, _ := normalizeLimit(req.LimitFeatures, 50, 500)
 	numBuckets := req.NumBuckets
 	if numBuckets <= 0 {
 		numBuckets = 10
@@ -543,10 +557,7 @@ func (s *Service) ListRuleVersions(ctx context.Context, req *pb.ListRuleVersions
 		return nil, status.Error(codes.InvalidArgument, "rule_id required")
 	}
 
-	limit, err := normalizeLimit(req.Limit, 50, 250, "limit")
-	if err != nil {
-		return nil, err
-	}
+	limit, truncated := normalizeLimit(req.Limit, 50, 250)
 	offset, err := normalizeOffset(req.Offset)
 	if err != nil {
 		return nil, err
@@ -560,6 +571,10 @@ func (s *Service) ListRuleVersions(ctx context.Context, req *pb.ListRuleVersions
 	return &pb.ListRuleVersionsResponse{
 		Versions: versions,
 		Total:    total,
+		Meta: &pb.AnalyticsMeta{
+			EffectiveLimit: limit,
+			Truncated:      truncated,
+		},
 	}, nil
 }
 
@@ -622,10 +637,7 @@ func (s *Service) GetAttribution(ctx context.Context, req *pb.GetAttributionRequ
 	if err != nil {
 		return nil, err
 	}
-	limit, err := normalizeLimit(req.Limit, 50, 250, "limit")
-	if err != nil {
-		return nil, err
-	}
+	limit, truncated := normalizeLimit(req.Limit, 50, 250)
 	cutoff := time.Now().AddDate(0, 0, -int(days))
 
 	items, err := s.store.GetAttribution(ctx, cutoff, limit, req.TenantId)
@@ -635,6 +647,10 @@ func (s *Service) GetAttribution(ctx context.Context, req *pb.GetAttributionRequ
 
 	return &pb.GetAttributionResponse{
 		Items: items,
+		Meta: &pb.AnalyticsMeta{
+			EffectiveLimit: limit,
+			Truncated:      truncated,
+		},
 	}, nil
 }
 
@@ -675,10 +691,7 @@ func (s *Service) BatchGetLatestUserFeatures(ctx context.Context, req *pb.BatchG
 }
 
 func (s *Service) ListDecisions(ctx context.Context, req *pb.ListDecisionsRequest) (*pb.ListDecisionsResponse, error) {
-	limit, err := normalizeLimit(req.Limit, 50, 250, "limit")
-	if err != nil {
-		return nil, err
-	}
+	limit, truncated := normalizeLimit(req.Limit, 50, 250)
 	offset, err := normalizeOffset(req.Offset)
 	if err != nil {
 		return nil, err
@@ -688,7 +701,7 @@ func (s *Service) ListDecisions(ctx context.Context, req *pb.ListDecisionsReques
 
 	// If cursor pagination is provided, normalize it too
 	if req.Pagination != nil {
-		req.Pagination.Limit, _ = normalizeLimit(req.Pagination.Limit, limit, 250, "pagination.limit")
+		req.Pagination.Limit, _ = normalizeLimit(req.Pagination.Limit, limit, 250)
 	}
 
 	if req.Decision != "" {
@@ -715,6 +728,10 @@ func (s *Service) ListDecisions(ctx context.Context, req *pb.ListDecisionsReques
 		Decisions: decisions,
 		Pagination: &commonv1.CursorPageResponse{
 			NextCursor: nextCursor,
+		},
+		Meta: &pb.AnalyticsMeta{
+			EffectiveLimit: limit,
+			Truncated:      truncated,
 		},
 	}
 	if req.Pagination == nil || req.Pagination.Cursor == "" {
@@ -774,7 +791,16 @@ func (s *Service) GetRuleImpact(ctx context.Context, req *pb.GetRuleImpactReques
 		return nil, status.Error(codes.InvalidArgument, "start_date must be <= end_date")
 	}
 
-	return s.store.GetRuleImpact(ctx, req)
+	resp, err := s.store.GetRuleImpact(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if resp != nil && resp.Meta == nil {
+		resp.Meta = &pb.AnalyticsMeta{
+			Truncated: false,
+		}
+	}
+	return resp, nil
 }
 
 func (s *Service) GetKpis(ctx context.Context, req *pb.GetKpisRequest) (*pb.GetKpisResponse, error) {
@@ -869,7 +895,16 @@ func (s *Service) GetConfusionMatrix(ctx context.Context, req *pb.GetConfusionMa
 		return nil, status.Error(codes.InvalidArgument, "start_time must be <= end_time")
 	}
 
-	return s.store.GetConfusionMatrix(ctx, req)
+	resp, err := s.store.GetConfusionMatrix(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if resp != nil && resp.Meta == nil {
+		resp.Meta = &pb.AnalyticsMeta{
+			Truncated: false,
+		}
+	}
+	return resp, nil
 }
 
 func (s *Service) StoreGeneratedData(ctx context.Context, req *pb.StoreGeneratedDataRequest) (*pb.StoreGeneratedDataResponse, error) {
@@ -900,14 +935,14 @@ func normalizeDays(value, fallback, max int32) (int32, error) {
 	return value, nil
 }
 
-func normalizeLimit(value, fallback, max int32, field string) (int32, error) {
-	if value == 0 {
-		return fallback, nil
+func normalizeLimit(value, fallback, max int32) (int32, bool) {
+	if value <= 0 {
+		return fallback, false
 	}
-	if value < 1 || value > max {
-		return 0, status.Errorf(codes.InvalidArgument, "%s must be between 1 and %d", field, max)
+	if value > max {
+		return max, true
 	}
-	return value, nil
+	return value, false
 }
 
 func normalizeOffset(value int32) (int32, error) {

@@ -1,6 +1,17 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { MockAgent, setGlobalDispatcher, getGlobalDispatcher, Dispatcher } from 'undici';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createTestApp, TestContext } from './setup';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+function loadSearchFixture<T = unknown>(name: string): T {
+  const fixturePath = path.resolve(__dirname, '../testdata/contracts/search', name);
+  return JSON.parse(readFileSync(fixturePath, 'utf8')) as T;
+}
 
 describe('Analytics Routes', () => {
   let ctx: TestContext;
@@ -264,7 +275,11 @@ describe('Analytics Routes', () => {
       }).reply(200, {
         transactions: [{ record_id: 'rec-1', amount: 100 }],
         next_cursor: 'encoded-cursor-value',
-        truncated: false
+        truncated: false,
+        meta: {
+          truncated: false,
+          effective_limit: 10
+        }
       });
 
       const response = await ctx.app.inject({
@@ -300,7 +315,11 @@ describe('Analytics Routes', () => {
       }).reply(200, {
         transactions: [{ record_id: 'rec-1' }],
         next_cursor: '',
-        truncated: true
+        truncated: true,
+        meta: {
+          truncated: true,
+          effective_limit: 50
+        }
       });
 
       const response = await ctx.app.inject({
@@ -353,6 +372,114 @@ describe('Analytics Routes', () => {
       const data = response.json();
       expect(data.error.code).toBe('INVALID_RANGE');
       expect(data.error.message).toContain('valid ISO timestamps');
+    });
+
+    it('rejects limit outside supported bounds', async () => {
+      const tooSmall = await ctx.app.inject({
+        method: 'POST',
+        url: '/bff/v1/analytics/transactions/search',
+        payload: {
+          limit: 0,
+        },
+      });
+      expect(tooSmall.statusCode).toBe(400);
+
+      const tooLarge = await ctx.app.inject({
+        method: 'POST',
+        url: '/bff/v1/analytics/transactions/search',
+        payload: {
+          limit: 10001,
+        },
+      });
+      expect(tooLarge.statusCode).toBe(400);
+    });
+
+    it('matches cursor page 1 fixture normalization', async () => {
+      const upstream = loadSearchFixture('cursor_page_1.json');
+      const expected = loadSearchFixture('cursor_page_1.bff.json');
+
+      ctx.mockGatewayPool.intercept({
+        path: '/analytics/transactions/search',
+        method: 'POST',
+      }).reply(200, upstream);
+
+      const response = await ctx.app.inject({
+        method: 'POST',
+        url: '/bff/v1/analytics/transactions/search',
+        payload: {
+          limit: 1,
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const data = response.json();
+      expect(data).toEqual(expected);
+      expect(typeof data.next_cursor).toBe('string');
+      expect(data.next_cursor.length).toBeGreaterThan(0);
+    });
+
+    it('matches cursor page 2 fixture normalization', async () => {
+      const upstream = loadSearchFixture('cursor_page_2.json');
+      const expected = loadSearchFixture('cursor_page_2.bff.json');
+
+      ctx.mockGatewayPool.intercept({
+        path: '/analytics/transactions/search',
+        method: 'POST',
+      }).reply(200, upstream);
+
+      const response = await ctx.app.inject({
+        method: 'POST',
+        url: '/bff/v1/analytics/transactions/search',
+        payload: {
+          cursor: 'opaque-cursor',
+          limit: 1,
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual(expected);
+    });
+
+    it('normalizes truncation metadata for oversized limit requests', async () => {
+      const rawItem = {
+        record_id: 'rec',
+        user_id: 'user',
+        amount: 42.5,
+        created_at: '2024-01-01T00:00:00Z',
+        is_fraudulent: false,
+      };
+      const transactions = Array.from({ length: 500 }, (_, i) => ({
+        ...rawItem,
+        record_id: `rec-${i}`,
+      }));
+
+      ctx.mockGatewayPool.intercept({
+        path: '/analytics/transactions/search',
+        method: 'POST',
+      }).reply(200, {
+        transactions,
+        next_cursor: 'opaque-next-cursor',
+        meta: {
+          truncated: true,
+          effective_limit: 500,
+        },
+      });
+
+      const response = await ctx.app.inject({
+        method: 'POST',
+        url: '/bff/v1/analytics/transactions/search',
+        payload: {
+          limit: 5000,
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const data = response.json();
+      expect(data.items).toHaveLength(500);
+      expect(data.meta.truncated).toBe(true);
+      expect(data.meta.effective_limit).toBe(500);
+      expect(typeof data.next_cursor).toBe('string');
+      expect(data.next_cursor.length).toBeGreaterThan(0);
     });
   });
 });

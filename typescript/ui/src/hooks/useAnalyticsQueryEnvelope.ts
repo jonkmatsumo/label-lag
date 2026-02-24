@@ -25,14 +25,6 @@ function getDefaultEnvelope(): AnalyticsQueryEnvelopeParams {
   });
 }
 
-function toSearchParamsInit(envelope: AnalyticsQueryEnvelopeParams): Record<string, string> {
-  return {
-    start_time: envelope.start_time,
-    end_time: envelope.end_time,
-    granularity: envelope.granularity ?? 'day',
-  };
-}
-
 export function useAnalyticsQueryEnvelope() {
   const [searchParams, setSearchParams] = useSearchParams();
   const defaults = getDefaultEnvelope();
@@ -54,10 +46,12 @@ export function useAnalyticsQueryEnvelope() {
       !isValidGranularity(rawGranularity);
     if (needsFix) {
       setSearchParams(
-        {
-          start_time: startTime,
-          end_time: endTime,
-          granularity,
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set('start_time', startTime);
+          next.set('end_time', endTime);
+          next.set('granularity', granularity);
+          return next;
         },
         { replace: true }
       );
@@ -73,7 +67,13 @@ export function useAnalyticsQueryEnvelope() {
         end: range.end,
         granularity,
       });
-      setSearchParams(toSearchParamsInit(next));
+      setSearchParams((prev) => {
+        const params = new URLSearchParams(prev);
+        params.set('start_time', next.start_time);
+        params.set('end_time', next.end_time);
+        params.set('granularity', next.granularity ?? 'day');
+        return params;
+      });
     },
     [granularity, setSearchParams]
   );
@@ -85,7 +85,13 @@ export function useAnalyticsQueryEnvelope() {
         end: endTime,
         granularity: nextGranularity,
       });
-      setSearchParams(toSearchParamsInit(next));
+      setSearchParams((prev) => {
+        const params = new URLSearchParams(prev);
+        params.set('start_time', next.start_time);
+        params.set('end_time', next.end_time);
+        params.set('granularity', next.granularity ?? 'day');
+        return params;
+      });
     },
     [endTime, setSearchParams, startTime]
   );

@@ -26,6 +26,11 @@ export interface AnalyticsQueryEnvelope {
   granularity: string;
 }
 
+export interface AnalyticsMeta {
+  truncated: boolean;
+  effective_limit: number;
+}
+
 export interface GetKpisRequest {
   /** @deprecated */
   start_time?:
@@ -113,6 +118,7 @@ export interface GetConfusionMatrixResponse {
   recall: number;
   f1_score: number;
   insufficient_labels: boolean;
+  meta?: AnalyticsMeta | undefined;
 }
 
 export interface GetDatasetProfileRequest {
@@ -212,6 +218,7 @@ export interface TransactionDetail_CategoricalFeaturesEntry {
 
 export interface GetTransactionDetailsResponse {
   transactions: TransactionDetail[];
+  meta?: AnalyticsMeta | undefined;
 }
 
 export interface SearchTransactionsRequest {
@@ -238,6 +245,7 @@ export interface SearchTransactionsResponse {
   pagination?: CursorPageResponse | undefined;
   truncated: boolean;
   next_cursor: string;
+  meta?: AnalyticsMeta | undefined;
 }
 
 export interface GetRecentAlertsRequest {
@@ -262,6 +270,7 @@ export interface Alert {
 
 export interface GetRecentAlertsResponse {
   alerts: Alert[];
+  meta?: AnalyticsMeta | undefined;
 }
 
 export interface GetOverviewMetricsRequest {
@@ -297,6 +306,7 @@ export interface FeatureSample {
 
 export interface GetFeatureSampleResponse {
   samples: FeatureSample[];
+  meta?: AnalyticsMeta | undefined;
 }
 
 export interface GetTrainingDataRequest {
@@ -387,6 +397,7 @@ export interface ListBacktestResultsRequest {
 
 export interface ListBacktestResultsResponse {
   results: BacktestResult[];
+  meta?: AnalyticsMeta | undefined;
 }
 
 export interface GetBacktestResultRequest {
@@ -625,6 +636,7 @@ export interface ListRuleVersionsRequest {
 export interface ListRuleVersionsResponse {
   versions: Rule[];
   total: string;
+  meta?: AnalyticsMeta | undefined;
 }
 
 export interface GetRuleVersionRequest {
@@ -715,6 +727,7 @@ export interface RuleStats {
 
 export interface GetRuleStatsResponse {
   stats: RuleStats[];
+  meta?: AnalyticsMeta | undefined;
 }
 
 export interface GetAttributionRequest {
@@ -748,6 +761,7 @@ export interface ListDecisionsRequest {
 export interface ListDecisionsResponse {
   decisions: DecisionSummary[];
   pagination?: CursorPageResponse | undefined;
+  meta?: AnalyticsMeta | undefined;
 }
 
 export interface DecisionSummary {
@@ -802,10 +816,12 @@ export interface GetRuleImpactResponse {
   total_triggers: string;
   avg_score_delta: number;
   daily_buckets: RuleImpactBucket[];
+  meta?: AnalyticsMeta | undefined;
 }
 
 export interface GetAttributionResponse {
   items: DailyAttribution[];
+  meta?: AnalyticsMeta | undefined;
 }
 
 /** Feature Hydration (Phase 6) */
@@ -935,6 +951,7 @@ export interface ListJobsRequest {
 export interface ListJobsResponse {
   jobs: Job[];
   pagination?: CursorPageResponse | undefined;
+  meta?: AnalyticsMeta | undefined;
 }
 
 export interface GetJobRequest {
@@ -975,6 +992,8 @@ export interface GetJobEventsRequest {
 
 export interface GetJobEventsResponse {
   events: JobEvent[];
+  total: number;
+  meta?: AnalyticsMeta | undefined;
 }
 
 export interface GetJobSummaryRequest {
@@ -997,6 +1016,7 @@ export interface JobSummaryBucket {
 
 export interface GetJobSummaryResponse {
   summaries: JobSummaryBucket[];
+  meta?: AnalyticsMeta | undefined;
 }
 
 export interface DatasetProfile {
@@ -1020,6 +1040,7 @@ export interface GetDatasetSummaryResponse {
 export interface ListDatasetProfilesResponse {
   profiles: DatasetProfile[];
   pagination?: CursorPageResponse | undefined;
+  meta?: AnalyticsMeta | undefined;
 }
 
 export interface GetLatestDatasetProfileRequest {
@@ -1078,6 +1099,7 @@ export interface ListTrainingRunsRequest {
 export interface ListTrainingRunsResponse {
   runs: TrainingRun[];
   pagination?: CursorPageResponse | undefined;
+  meta?: AnalyticsMeta | undefined;
 }
 
 export interface ListModelVersionsRequest {
@@ -1092,6 +1114,7 @@ export interface ListModelVersionsResponse {
   /** lightweight summary using TrainingRun */
   versions: TrainingRun[];
   pagination?: CursorPageResponse | undefined;
+  meta?: AnalyticsMeta | undefined;
 }
 
 export interface GetTrainingRunRequest {
@@ -1120,6 +1143,7 @@ export interface GetMetricSeriesRequest {
 
 export interface GetMetricSeriesResponse {
   points: MetricPoint[];
+  meta?: AnalyticsMeta | undefined;
 }
 
 export interface ReportTrainingRunRequest {

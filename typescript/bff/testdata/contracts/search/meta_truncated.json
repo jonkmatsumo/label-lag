@@ -1,0 +1,16 @@
+{
+    "transactions": [
+        {
+            "record_id": "rec-limit",
+            "user_id": "user-val",
+            "amount": 99.99,
+            "created_at": "2024-01-01T12:00:00Z",
+            "is_fraudulent": true
+        }
+    ],
+    "next_cursor": "next-cursor-val",
+    "meta": {
+        "truncated": true,
+        "effective_limit": 500
+    }
+}

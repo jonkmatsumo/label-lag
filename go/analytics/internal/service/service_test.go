@@ -16,17 +16,22 @@ func TestListDecisions_Validation(t *testing.T) {
 	mockStore := new(store.MockStore)
 	svc := NewService(mockStore, nil)
 
-	// Test invalid limit
-	req := &pb.ListDecisionsRequest{Limit: -1}
+	// Test invalid offset (fails validation)
+	req := &pb.ListDecisionsRequest{Offset: -1}
 	resp, err := svc.ListDecisions(context.Background(), req)
 	assert.Error(t, err)
 	assert.Nil(t, resp)
 
-	// Test invalid offset
-	req = &pb.ListDecisionsRequest{Offset: -1}
+	// Test invalid limit (uses fallback, does NOT fail validation)
+	req = &pb.ListDecisionsRequest{Limit: -1}
+	mockStore.On("ListDecisions", mock.Anything, mock.MatchedBy(func(r *pb.ListDecisionsRequest) bool {
+		return r.Limit == 50 // fallback
+	})).Return([]*pb.DecisionSummary{}, int64(0), "", nil).Once()
+
 	resp, err = svc.ListDecisions(context.Background(), req)
-	assert.Error(t, err)
-	assert.Nil(t, resp)
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	mockStore.AssertExpectations(t)
 }
 
 func TestListDecisions_Success(t *testing.T) {
@@ -38,12 +43,33 @@ func TestListDecisions_Success(t *testing.T) {
 
 	mockStore.On("ListDecisions", mock.Anything, mock.MatchedBy(func(r *pb.ListDecisionsRequest) bool {
 		return r.Limit == 10 && r.Offset == 0
-	})).Return(expectedDecisions, int64(1), "", nil)
+	})).Return(expectedDecisions, int64(1), "", nil).Once()
 
 	resp, err := svc.ListDecisions(context.Background(), req)
 	assert.NoError(t, err)
 	assert.Len(t, resp.Decisions, 1)
 	assert.Equal(t, int64(1), *resp.Pagination.Total)
+	assert.False(t, resp.Meta.Truncated)
+	assert.Equal(t, int32(10), resp.Meta.EffectiveLimit)
+	mockStore.AssertExpectations(t)
+}
+
+func TestListDecisions_LimitClamping(t *testing.T) {
+	mockStore := new(store.MockStore)
+	svc := NewService(mockStore, nil)
+
+	req := &pb.ListDecisionsRequest{Limit: 1000} // Exceeds max 250
+	expectedDecisions := []*pb.DecisionSummary{}
+
+	mockStore.On("ListDecisions", mock.Anything, mock.MatchedBy(func(r *pb.ListDecisionsRequest) bool {
+		return r.Limit == 250
+	})).Return(expectedDecisions, int64(0), "", nil).Once()
+
+	resp, err := svc.ListDecisions(context.Background(), req)
+	assert.NoError(t, err)
+	assert.True(t, resp.Meta.Truncated)
+	assert.Equal(t, int32(250), resp.Meta.EffectiveLimit)
+	mockStore.AssertExpectations(t)
 }
 
 func TestGetDecision_Validation(t *testing.T) {

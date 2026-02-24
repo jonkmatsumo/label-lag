@@ -10,10 +10,7 @@ import (
 )
 
 func (s *Service) ListJobs(ctx context.Context, req *pb.ListJobsRequest) (*pb.ListJobsResponse, error) {
-	limit, err := normalizeLimit(req.Limit, 50, 250, "limit")
-	if err != nil {
-		return nil, err
-	}
+	limit, truncated := normalizeLimit(req.Limit, 50, 250)
 	offset, err := normalizeOffset(req.Offset)
 	if err != nil {
 		return nil, err
@@ -34,6 +31,10 @@ func (s *Service) ListJobs(ctx context.Context, req *pb.ListJobsRequest) (*pb.Li
 		Jobs: jobs,
 		Pagination: &commonv1.CursorPageResponse{
 			NextCursor: nextCursor,
+		},
+		Meta: &pb.AnalyticsMeta{
+			EffectiveLimit: limit,
+			Truncated:      truncated,
 		},
 	}
 	if req.Pagination == nil || req.Pagination.Cursor == "" {
@@ -62,10 +63,7 @@ func (s *Service) GetJobEvents(ctx context.Context, req *pb.GetJobEventsRequest)
 		return nil, status.Error(codes.InvalidArgument, "job_id required")
 	}
 
-	limit, err := normalizeLimit(req.Limit, 100, 500, "limit")
-	if err != nil {
-		return nil, err
-	}
+	limit, truncated := normalizeLimit(req.Limit, 100, 500)
 	offset, err := normalizeOffset(req.Offset)
 	if err != nil {
 		return nil, err
@@ -89,6 +87,10 @@ func (s *Service) GetJobEvents(ctx context.Context, req *pb.GetJobEventsRequest)
 
 	return &pb.GetJobEventsResponse{
 		Events: events,
+		Meta: &pb.AnalyticsMeta{
+			EffectiveLimit: limit,
+			Truncated:      truncated,
+		},
 	}, nil
 }
 
@@ -111,6 +113,9 @@ func (s *Service) GetJobSummary(ctx context.Context, req *pb.GetJobSummaryReques
 
 	return &pb.GetJobSummaryResponse{
 		Summaries: summaries,
+		Meta: &pb.AnalyticsMeta{
+			Truncated: false, // Aggregates are not truncated by limit
+		},
 	}, nil
 }
 

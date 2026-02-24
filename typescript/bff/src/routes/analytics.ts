@@ -95,6 +95,19 @@ interface RuleImpactQuery {
 
 const HOT_ANALYTICS_CACHE_TTL_MS = 20_000;
 
+function toFiniteNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return undefined;
+}
+
 /**
  * Analytics routes for operational metrics and dataset insights
  */
@@ -505,7 +518,7 @@ export async function analyticsRoutes(
             is_fraudulent: { type: 'boolean' },
             min_score: { type: 'integer' },
             max_score: { type: 'integer' },
-            limit: { type: 'integer', default: 100 },
+            limit: { type: 'integer', minimum: 1, maximum: 10000, default: 100 },
             cursor: { type: 'string' },
             include_features: { type: 'boolean', default: false },
             query: {
@@ -518,6 +531,7 @@ export async function analyticsRoutes(
               },
             },
           },
+          additionalProperties: false,
         },
       },
     },
@@ -566,27 +580,24 @@ export async function analyticsRoutes(
           id: tx.record_id,
           record_id: tx.record_id,
           user_id: tx.user_id,
-          amount: tx.amount,
-          timestamp: tx.created_at,
-          created_at: tx.created_at,
+          amount: toFiniteNumber(tx.amount),
+          timestamp: timestampToIso(tx.created_at),
+          created_at: timestampToIso(tx.created_at),
           is_fraud: tx.is_fraudulent,
           is_fraudulent: tx.is_fraudulent,
           fraud_type: tx.fraud_type,
-          merchant_risk_score: tx.merchant_risk_score,
-          velocity_24h: tx.velocity_24h,
-          amount_to_avg_ratio_30d: tx.amount_to_avg_ratio_30d,
-          balance_volatility_z_score: tx.balance_volatility_z_score,
+          merchant_risk_score: toFiniteNumber(tx.merchant_risk_score),
+          velocity_24h: toFiniteNumber(tx.velocity_24h),
+          amount_to_avg_ratio_30d: toFiniteNumber(tx.amount_to_avg_ratio_30d),
+          balance_volatility_z_score: toFiniteNumber(tx.balance_volatility_z_score),
           is_off_hours_txn: tx.is_off_hours_txn,
         }));
         const normalized: TransactionSearchResponse = {
           items: normalizedItems,
-          next_cursor: raw.next_cursor,
-          truncated: !!raw.truncated,
+          next_cursor: raw.next_cursor ?? raw.nextCursor ?? '',
+          truncated: !!(raw.truncated || raw.meta?.truncated),
           meta: normalizeAnalyticsMeta({
-            raw: {
-              ...raw,
-              effective_limit: payload.limit,
-            },
+            raw,
             hasData: normalizedItems.length > 0,
           }),
         };

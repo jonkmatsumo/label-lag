@@ -150,35 +150,37 @@ func (s *SQLStore) GetTransactionDetails(ctx context.Context, cutoffDate time.Ti
 	return details, nil
 }
 
-func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransactionsRequest) ([]*pb.TransactionDetail, string, bool, error) {
-	// Parse cursor
-	var lastCreatedAt *time.Time
-	var lastRecordID string
-
+func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransactionsRequest) ([]*pb.TransactionDetail, string, *pb.AnalyticsMeta, error) {
 	// Fallback to pagination.cursor if flat cursor is empty (for backwards compatibility)
 	cursorStr := req.Cursor
 	if cursorStr == "" && req.Pagination != nil {
 		cursorStr = req.Pagination.Cursor
 	}
 
-	if cursorStr != "" {
-		cursorData, err := db.DecodeCursor(cursorStr)
-		if err == nil && len(cursorData) >= 2 {
-			if t, err := time.Parse(time.RFC3339Nano, fmt.Sprintf("%v", cursorData[0])); err == nil {
-				lastCreatedAt = &t
-			}
-			lastRecordID = fmt.Sprintf("%v", cursorData[1])
-		}
+	cursor, err := decodeTransactionCursor(cursorStr)
+	if err != nil {
+		return nil, "", nil, status.Errorf(codes.InvalidArgument, "invalid cursor: %v", err)
+	}
+
+	var lastCreatedAt *time.Time
+	var lastRecordID string
+	if cursor != nil {
+		lastCreatedAt = &cursor.CreatedAt
+		lastRecordID = cursor.RecordId
 	}
 
 	limit := req.Limit
 	requestedLimit := limit
 	if limit <= 0 {
-		limit = 100
-		requestedLimit = limit
+		limit = DefaultLimit
 	}
-	if limit > 500 {
-		limit = 500
+	if limit > MaxLimit {
+		limit = MaxLimit
+	}
+
+	meta := &pb.AnalyticsMeta{
+		EffectiveLimit: limit,
+		Truncated:      requestedLimit > MaxLimit,
 	}
 
 	featuresSelect := "gr.numerical_features, gr.categorical_features"
@@ -261,7 +263,7 @@ func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransac
 
 	rows, err := s.db.QueryContext(queryCtx, selectQuery, selectArgs...)
 	if err != nil {
-		return nil, "", false, db.MapDBError(err)
+		return nil, "", nil, db.MapDBError(err)
 	}
 	defer rows.Close()
 
@@ -287,19 +289,19 @@ func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransac
 			&numFeaturesJSON,
 			&catFeaturesJSON,
 		); err != nil {
-			return nil, "", false, fmt.Errorf("failed to scan search result: %v", err)
+			return nil, "", nil, fmt.Errorf("failed to scan search result: %v", err)
 		}
 		d.CreatedAt = timestamppb.New(createdAt)
 
 		if req.IncludeFeatures {
 			if len(numFeaturesJSON) > 0 {
 				if err := json.Unmarshal(numFeaturesJSON, &d.NumericalFeatures); err != nil {
-					return nil, "", false, status.Errorf(codes.Internal, "invalid json payload: %v", err)
+					return nil, "", nil, status.Errorf(codes.Internal, "invalid json payload: %v", err)
 				}
 			}
 			if len(catFeaturesJSON) > 0 {
 				if err := json.Unmarshal(catFeaturesJSON, &d.CategoricalFeatures); err != nil {
-					return nil, "", false, status.Errorf(codes.Internal, "invalid json payload: %v", err)
+					return nil, "", nil, status.Errorf(codes.Internal, "invalid json payload: %v", err)
 				}
 			}
 		}
@@ -307,20 +309,18 @@ func (s *SQLStore) SearchTransactions(ctx context.Context, req *pb.SearchTransac
 		details = append(details, &d)
 	}
 
-	truncated := false
-	if requestedLimit > 500 {
-		truncated = true
-	}
-
 	nextCursor := ""
 	if len(details) > int(limit) {
 		// we fetched limit + 1, so there's a next page.
 		details = details[:limit]
 		lastItem := details[len(details)-1]
-		nextCursor = db.EncodeCursor(lastItem.CreatedAt.AsTime().Format(time.RFC3339Nano), lastItem.RecordId)
+		nextCursor = encodeTransactionCursor(lastItem.CreatedAt.AsTime(), lastItem.RecordId)
+		// results are capped by requested limit, but we have more.
+		// If we clamped requested limit, it's already truncated=true.
+		// If we didn't clamp but the extra row exists, it's just "more pages".
 	}
 
-	return details, nextCursor, truncated, nil
+	return details, nextCursor, meta, nil
 }
 
 func (s *SQLStore) GetShadowComparison(ctx context.Context, hours int32, tenantID string) (*pb.ShadowModeMetrics, error) {

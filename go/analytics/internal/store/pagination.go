@@ -122,3 +122,43 @@ func decodeTrainingRunCursor(cursorStr string) (*trainingRunCursor, error) {
 	}
 	return &c, nil
 }
+
+const (
+	DefaultLimit = 100
+	MaxLimit     = 500
+)
+
+type transactionCursor struct {
+	CreatedAt time.Time `json:"created_at"`
+	RecordId  string    `json:"record_id"`
+}
+
+func encodeTransactionCursor(createdAt time.Time, recordID string) string {
+	c := transactionCursor{
+		CreatedAt: createdAt,
+		RecordId:  recordID,
+	}
+	b, _ := json.Marshal(c)
+	return base64.StdEncoding.EncodeToString(b)
+}
+
+func decodeTransactionCursor(cursorStr string) (*transactionCursor, error) {
+	if cursorStr == "" {
+		return nil, nil
+	}
+	b, err := base64.StdEncoding.DecodeString(cursorStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid cursor encoding: %w", err)
+	}
+	var c transactionCursor
+	if err := json.Unmarshal(b, &c); err != nil {
+		return nil, fmt.Errorf("invalid cursor payload: %w", err)
+	}
+	if c.RecordId == "" {
+		return nil, fmt.Errorf("invalid cursor payload: missing record_id")
+	}
+	if c.CreatedAt.IsZero() {
+		return nil, fmt.Errorf("invalid cursor payload: missing created_at")
+	}
+	return &c, nil
+}
