@@ -1,0 +1,46 @@
+{
+  "points": [
+    {
+      "timestamp": "2024-01-01T00:00:00.000Z",
+      "count": 1000,
+      "alerts": 30
+    },
+    {
+      "timestamp": "2024-01-02T00:00:00Z",
+      "count": 900,
+      "alerts": 27
+    }
+  ],
+  "current": {
+    "points": [
+      {
+        "timestamp": "2024-01-01T00:00:00.000Z",
+        "count": 1000,
+        "alerts": 30
+      },
+      {
+        "timestamp": "2024-01-02T00:00:00Z",
+        "count": 900,
+        "alerts": 27
+      }
+    ]
+  },
+  "previous": {
+    "points": [
+      {
+        "timestamp": "2023-12-30T00:00:00.000Z",
+        "count": 800,
+        "alerts": 21
+      },
+      {
+        "timestamp": "2023-12-31T00:00:00Z",
+        "count": 750,
+        "alerts": 19
+      }
+    ]
+  },
+  "meta": {
+    "truncated": false,
+    "partial": true
+  }
+}

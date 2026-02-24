@@ -285,6 +285,32 @@ describe('Contract: POST /analytics/transactions/search', () => {
 
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
 
+function normalizeKpiContractPeriod(raw: any) {
+  return {
+    total_decisions: parseInt64(raw.total_decisions),
+    total_alerts: parseInt64(raw.total_alerts),
+    alert_rate: raw.alert_rate,
+    avg_score: raw.avg_score,
+    rules_fired_total: parseInt64(raw.rules_fired_total),
+    buckets: raw.buckets?.map((b: any) => ({
+      timestamp: timestampToIso(b.timestamp),
+      decisions: parseInt64(b.decisions ?? b.total_decisions),
+      alerts: parseInt64(b.alerts ?? b.total_alerts),
+      rules_fired: parseInt64(b.rules_fired ?? b.rules_fired_total),
+    })),
+  };
+}
+
+function normalizeVolumeContractPeriod(raw: any) {
+  return {
+    points: raw.points?.map((p: any) => ({
+      timestamp: timestampToIso(p.timestamp),
+      count: parseInt64(p.count),
+      alerts: parseInt64(p.alerts),
+    })),
+  };
+}
+
 describe('Contract: GET /bff/v1/kpis', () => {
   it('hourly fixture matches normalized BFF output', () => {
     const raw = loadFixture('kpis/hourly.json') as any;
@@ -390,6 +416,35 @@ describe('Contract: GET /bff/v1/kpis', () => {
     expect(normalized.meta.partial).toBe(true);
     expect(normalized.buckets.length).toBeLessThanOrEqual(MAX_POINTS_DAILY);
   });
+
+  it('compare_previous fixture normalizes current/previous blocks with stable shape', () => {
+    const raw = loadFixture('kpis/compare_previous.json') as any;
+    const expected = loadFixture('kpis/compare_previous.bff.json');
+
+    const current = normalizeKpiContractPeriod(raw.current ?? raw);
+    const previous = normalizeKpiContractPeriod(raw.previous);
+
+    const normalized = {
+      total_decisions: current.total_decisions,
+      total_alerts: current.total_alerts,
+      alert_rate: current.alert_rate,
+      avg_score: current.avg_score,
+      rules_fired_total: current.rules_fired_total,
+      buckets: current.buckets,
+      current,
+      previous,
+      meta: {
+        truncated: false,
+        partial: false,
+      },
+    };
+
+    expect(normalized).toEqual(expected);
+    expect(normalized.current).toBeDefined();
+    expect(normalized.previous).toBeDefined();
+    expect(normalized.current.buckets.length).toBeLessThanOrEqual(MAX_POINTS_DAILY);
+    expect(normalized.previous.buckets.length).toBeLessThanOrEqual(MAX_POINTS_DAILY);
+  });
 });
 
 // ─── Volume (protojson handler with normalization) ──────────────────────────
@@ -458,6 +513,30 @@ describe('Contract: GET /bff/v1/volume', () => {
     expect(normalized.meta.partial).toBe(true);
     expect(normalized.points.length).toBeLessThanOrEqual(MAX_POINTS_DAILY);
     expect(normalized.points.length).toBeLessThanOrEqual(MAX_POINTS_HOURLY);
+  });
+
+  it('compare_previous fixture normalizes current/previous period points', () => {
+    const raw = loadFixture('volume/compare_previous.json') as any;
+    const expected = loadFixture('volume/compare_previous.bff.json');
+
+    const current = normalizeVolumeContractPeriod(raw.current ?? { points: raw.points });
+    const previous = normalizeVolumeContractPeriod(raw.previous);
+
+    const normalized = {
+      points: current.points,
+      current,
+      previous,
+      meta: {
+        truncated: false,
+        partial: true,
+      },
+    };
+
+    expect(normalized).toEqual(expected);
+    expect(normalized.current).toBeDefined();
+    expect(normalized.previous).toBeDefined();
+    expect(normalized.current.points.length).toBeLessThanOrEqual(MAX_POINTS_DAILY);
+    expect(normalized.previous.points.length).toBeLessThanOrEqual(MAX_POINTS_DAILY);
   });
 });
 

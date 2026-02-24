@@ -1,0 +1,54 @@
+{
+  "points": [
+    {
+      "timestamp": {
+        "seconds": "1704067200",
+        "nanos": 0
+      },
+      "count": "1000",
+      "alerts": "30"
+    },
+    {
+      "timestamp": "2024-01-02T00:00:00Z",
+      "count": "900",
+      "alerts": "27"
+    }
+  ],
+  "current": {
+    "points": [
+      {
+        "timestamp": {
+          "seconds": "1704067200",
+          "nanos": 0
+        },
+        "count": "1000",
+        "alerts": "30"
+      },
+      {
+        "timestamp": "2024-01-02T00:00:00Z",
+        "count": "900",
+        "alerts": "27"
+      }
+    ]
+  },
+  "previous": {
+    "points": [
+      {
+        "timestamp": {
+          "seconds": "1703894400",
+          "nanos": 0
+        },
+        "count": "800",
+        "alerts": "21"
+      },
+      {
+        "timestamp": "2023-12-31T00:00:00Z",
+        "count": "750",
+        "alerts": "19"
+      }
+    ]
+  },
+  "meta": {
+    "partial": true
+  }
+}

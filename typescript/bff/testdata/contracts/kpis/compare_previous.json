@@ -1,0 +1,58 @@
+{
+  "total_decisions": "120",
+  "total_alerts": "12",
+  "alert_rate": 0.1,
+  "avg_score": 42.5,
+  "rules_fired_total": "25",
+  "current": {
+    "total_decisions": "120",
+    "total_alerts": "12",
+    "alert_rate": 0.1,
+    "avg_score": 42.5,
+    "rules_fired_total": "25",
+    "buckets": [
+      {
+        "timestamp": {
+          "seconds": "1704067200",
+          "nanos": 0
+        },
+        "decisions": "60",
+        "alerts": "6",
+        "rules_fired": "13"
+      },
+      {
+        "timestamp": "2024-01-02T00:00:00Z",
+        "decisions": "60",
+        "alerts": "6",
+        "rules_fired": "12"
+      }
+    ]
+  },
+  "previous": {
+    "total_decisions": "100",
+    "total_alerts": "8",
+    "alert_rate": 0.08,
+    "avg_score": 40.1,
+    "rules_fired_total": "19",
+    "buckets": [
+      {
+        "timestamp": {
+          "seconds": "1703894400",
+          "nanos": 0
+        },
+        "decisions": "50",
+        "alerts": "4",
+        "rules_fired": "10"
+      },
+      {
+        "timestamp": "2023-12-31T00:00:00Z",
+        "decisions": "50",
+        "alerts": "4",
+        "rules_fired": "9"
+      }
+    ]
+  },
+  "meta": {
+    "partial": false
+  }
+}
