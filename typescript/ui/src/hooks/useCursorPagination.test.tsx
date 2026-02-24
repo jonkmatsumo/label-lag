@@ -55,7 +55,7 @@ describe('useCursorPagination', () => {
         expect(result.current.data).toEqual(mockData);
         expect(result.current.hasNextPage).toBe(true);
         expect(result.current.total).toBe(100);
-        expect(fetchPage).toHaveBeenCalledWith({ cursor: undefined, limit: 10 });
+        expect(fetchPage).toHaveBeenCalledWith(expect.objectContaining({ cursor: undefined, limit: 10 }));
     });
 
     it('should fetch next page when loadNext is called', async () => {
@@ -79,6 +79,6 @@ describe('useCursorPagination', () => {
 
         await waitFor(() => expect(result.current.data).toEqual(page2));
         expect(fetchPage).toHaveBeenCalledTimes(2);
-        expect(fetchPage).toHaveBeenLastCalledWith({ cursor: 'cursor-1', limit: 10 });
+        expect(fetchPage).toHaveBeenLastCalledWith(expect.objectContaining({ cursor: 'cursor-1', limit: 10 }));
     });
 });

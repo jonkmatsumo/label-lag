@@ -717,14 +717,26 @@ function TransactionFilters({ filters, onChange }: { filters: AnalyticsExplorerF
 const TRANSACTION_TABLE_COLUMN_WIDTHS = ['18%', '16%', '12%', '12%', '17%', '13%', '12%'] as const;
 const TRANSACTION_TABLE_ROW_HEIGHT = 58;
 
-function TransactionTable({ data }: { data: TransactionDetail[] }) {
+export function TransactionTable({ data }: { data: TransactionDetail[] }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const rowVirtualizer = useVirtualizer({
     count: data.length,
     getScrollElement: () => scrollContainerRef.current,
     estimateSize: () => TRANSACTION_TABLE_ROW_HEIGHT,
+    initialRect: {
+      width: 0,
+      height: 520,
+    },
     overscan: 8,
   });
+  const virtualRows = rowVirtualizer.getVirtualItems();
+  const rowsToRender = virtualRows.length > 0
+    ? virtualRows
+    : Array.from({ length: Math.min(data.length, 40) }, (_, index) => ({
+      index,
+      start: index * TRANSACTION_TABLE_ROW_HEIGHT,
+      size: TRANSACTION_TABLE_ROW_HEIGHT,
+    }));
 
   const renderColgroup = () => (
     <colgroup>
@@ -783,7 +795,7 @@ function TransactionTable({ data }: { data: TransactionDetail[] }) {
               position: 'relative',
             }}
           >
-            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+            {rowsToRender.map((virtualRow) => {
               const tx = data[virtualRow.index];
               return (
                 <tr
