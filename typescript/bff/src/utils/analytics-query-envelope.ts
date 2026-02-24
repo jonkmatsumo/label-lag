@@ -18,6 +18,7 @@ export interface ValidateAnalyticsQueryOptions {
   defaultGranularity?: AnalyticsGranularity;
   startField?: string;
   endField?: string;
+  maxWindowDaysByGranularity?: Partial<Record<AnalyticsGranularity, number>>;
 }
 
 export interface ResolveAnalyticsQueryInput {
@@ -215,6 +216,10 @@ export function validateAnalyticsQuery(
   const defaultGranularity = options.defaultGranularity ?? 'day';
   const startField = options.startField ?? 'start_time';
   const endField = options.endField ?? 'end_time';
+  const maxWindowDaysByGranularity = {
+    ...MAX_DAYS_BY_GRANULARITY,
+    ...(options.maxWindowDaysByGranularity ?? {}),
+  };
   const { start_time, end_time } = input;
 
   if (!start_time && !end_time) {
@@ -255,8 +260,8 @@ export function validateAnalyticsQuery(
   }
 
   const windowDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
-  const maxWindowDays = MAX_DAYS_BY_GRANULARITY[granularity];
-  if (windowDays > maxWindowDays) {
+  const maxWindowDays = maxWindowDaysByGranularity[granularity];
+  if (maxWindowDays > 0 && windowDays > maxWindowDays) {
     return invalidRange(
       `Time range cannot exceed ${maxWindowDays} days for ${granularity} granularity`
     );

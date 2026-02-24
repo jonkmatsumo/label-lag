@@ -94,6 +94,10 @@ interface RuleImpactQuery {
 }
 
 const HOT_ANALYTICS_CACHE_TTL_MS = 20_000;
+const DOWNSAMPLE_FRIENDLY_MAX_WINDOW_DAYS = {
+  day: 3650,
+  hour: 3650,
+} as const;
 
 function toFiniteNumber(value: unknown): number | undefined {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -631,7 +635,7 @@ export async function analyticsRoutes(
               pattern: '^\\d{4}-\\d{2}-\\d{2}',
               description: 'ISO date or datetime string (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ssZ)',
             },
-            group_by: { type: 'string', enum: ['hour', 'day'], default: 'day' },
+            group_by: { type: 'string', enum: ['hour', 'day'] },
             granularity: { type: 'string', enum: ['hour', 'day'] },
             query: { type: 'string' },
           },
@@ -664,6 +668,7 @@ export async function analyticsRoutes(
           options: {
             startField: 'start_time',
             endField: 'end_time',
+            maxWindowDaysByGranularity: DOWNSAMPLE_FRIENDLY_MAX_WINDOW_DAYS,
           },
         });
         if (!validatedQuery.ok) {
@@ -738,7 +743,7 @@ export async function analyticsRoutes(
               pattern: '^\\d{4}-\\d{2}-\\d{2}',
               description: 'ISO date or datetime string (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ssZ)',
             },
-            granularity: { type: 'string', enum: ['hour', 'day'], default: 'day' },
+            granularity: { type: 'string', enum: ['hour', 'day'] },
             query: { type: 'string' },
           },
         },
@@ -761,6 +766,7 @@ export async function analyticsRoutes(
           options: {
             startField: 'start_time',
             endField: 'end_time',
+            maxWindowDaysByGranularity: DOWNSAMPLE_FRIENDLY_MAX_WINDOW_DAYS,
           },
         });
         if (!validatedQuery.ok) {
@@ -854,6 +860,7 @@ export async function analyticsRoutes(
             startField: 'start_time',
             endField: 'end_time',
             required: true,
+            maxWindowDaysByGranularity: DOWNSAMPLE_FRIENDLY_MAX_WINDOW_DAYS,
           },
         });
         if (!validatedQuery.ok) {

@@ -119,16 +119,28 @@ describe('Analytics Query Migration Contract', () => {
       expect(data.error.message).toBe(QUERY_LEGACY_MISMATCH_MESSAGE);
     });
 
-    it('returns 400 for oversized hourly window', async () => {
+    it('accepts hourly windows larger than legacy cap', async () => {
+      ctx.mockGatewayPool.intercept({
+        path: '/kpis?start_time=2024-01-01&end_time=2024-02-01&group_by=hour',
+        method: 'GET',
+      }).reply(200, {
+        total_decisions: '10',
+        total_alerts: '1',
+        alert_rate: 0.1,
+        avg_score: 55,
+        rules_fired_total: '2',
+        buckets: [],
+        meta: { partial: true },
+      });
+
       const response = await ctx.app.inject({
         method: 'GET',
         url: buildUrl('/bff/v1/kpis', kpiFixtures.window_too_large_hour),
       });
 
-      expect(response.statusCode).toBe(400);
+      expect(response.statusCode).toBe(200);
       const data = response.json();
-      expect(data.error.code).toBe('INVALID_RANGE');
-      expect(data.error.message).toContain('14 days');
+      expect(data.meta).toEqual({ truncated: false, partial: true });
     });
 
     it('returns 400 for start_time >= end_time', async () => {
@@ -210,16 +222,25 @@ describe('Analytics Query Migration Contract', () => {
       expect(data.error.message).toBe(QUERY_LEGACY_MISMATCH_MESSAGE);
     });
 
-    it('returns 400 for oversized hourly window', async () => {
+    it('accepts hourly windows larger than legacy cap', async () => {
+      ctx.mockGatewayPool.intercept({
+        path: '/volume?start_time=2024-01-01&end_time=2024-02-01&granularity=hour',
+        method: 'GET',
+      }).reply(200, {
+        points: [
+          { timestamp: '2024-01-01T00:00:00Z', count: '10', alerts: '1' },
+        ],
+        meta: { partial: true },
+      });
+
       const response = await ctx.app.inject({
         method: 'GET',
         url: buildUrl('/bff/v1/volume', volumeFixtures.window_too_large_hour),
       });
 
-      expect(response.statusCode).toBe(400);
+      expect(response.statusCode).toBe(200);
       const data = response.json();
-      expect(data.error.code).toBe('INVALID_RANGE');
-      expect(data.error.message).toContain('14 days');
+      expect(data.meta).toEqual({ truncated: false, partial: true });
     });
 
     it('returns 400 for start_time >= end_time', async () => {
