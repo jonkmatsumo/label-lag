@@ -22,7 +22,7 @@ const EXPECTED_TIME_RANGE_ROUTE_PATHS = [
 
 function extractRouteBlocks(fileName: string): RouteBlock[] {
   const source = readFileSync(join(ROUTES_DIR, fileName), 'utf8');
-  const routeStarts = [...source.matchAll(/^\s*fastify\.(?:get|post)\b/gm)]
+  const routeStarts = [...source.matchAll(/^\s*(?:fastify\.(?:get|post)\b|registerAnalytics(?:Get|Post)\()/gm)]
     .map((match) => match.index)
     .filter((index): index is number => index !== undefined);
 
@@ -44,6 +44,12 @@ function extractRouteBlocks(fileName: string): RouteBlock[] {
 }
 
 describe('Analytics query validation guardrail', () => {
+  it('requires analytics routes to register through shared guard wrapper', () => {
+    const source = readFileSync(join(ROUTES_DIR, 'analytics.ts'), 'utf8');
+    const directAnalyticsRouteDefinitions = source.match(/fastify\.(?:get|post)\(\s*['"]\/bff\/v1\//g) ?? [];
+    expect(directAnalyticsRouteDefinitions).toEqual([]);
+  });
+
   it('requires shared query resolver for all analytics time-range routes', () => {
     const routes = [
       ...extractRouteBlocks('analytics.ts'),
@@ -64,5 +70,11 @@ describe('Analytics query validation guardrail', () => {
       .map((route) => route.path)
       .sort();
     expect(routesMissingResolver).toEqual([]);
+
+    const routesMissingMetaContract = timeRangeRoutes
+      .filter((route) => !route.block.includes('normalizeAnalyticsMeta('))
+      .map((route) => route.path)
+      .sort();
+    expect(routesMissingMetaContract).toEqual([]);
   });
 });

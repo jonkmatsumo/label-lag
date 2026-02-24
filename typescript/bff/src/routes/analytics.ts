@@ -100,6 +100,58 @@ const DOWNSAMPLE_FRIENDLY_MAX_WINDOW_DAYS = {
   day: 3650,
   hour: 3650,
 } as const;
+const ANALYTICS_GUARD_CONFIG_KEY = 'analytics_guarded';
+
+function isGuardedAnalyticsPath(path: string): boolean {
+  return path.startsWith('/bff/v1/analytics') || path === '/bff/v1/kpis' || path === '/bff/v1/volume';
+}
+
+function applyAnalyticsGuardConfig(options?: Record<string, unknown>) {
+  const config = (options?.config as Record<string, unknown> | undefined) ?? {};
+  return {
+    ...(options ?? {}),
+    config: {
+      ...config,
+      [ANALYTICS_GUARD_CONFIG_KEY]: true,
+    },
+  };
+}
+
+function registerAnalyticsGet(
+  fastify: FastifyInstance,
+  path: string,
+  optionsOrHandler: any,
+  maybeHandler?: any
+): void {
+  if (typeof optionsOrHandler === 'function') {
+    fastify.get(path, applyAnalyticsGuardConfig(), optionsOrHandler);
+    return;
+  }
+
+  if (!maybeHandler) {
+    throw new Error(`Missing handler for analytics route: ${path}`);
+  }
+
+  fastify.get(path, applyAnalyticsGuardConfig(optionsOrHandler), maybeHandler);
+}
+
+function registerAnalyticsPost(
+  fastify: FastifyInstance,
+  path: string,
+  optionsOrHandler: any,
+  maybeHandler?: any
+): void {
+  if (typeof optionsOrHandler === 'function') {
+    fastify.post(path, applyAnalyticsGuardConfig(), optionsOrHandler);
+    return;
+  }
+
+  if (!maybeHandler) {
+    throw new Error(`Missing handler for analytics route: ${path}`);
+  }
+
+  fastify.post(path, applyAnalyticsGuardConfig(optionsOrHandler), maybeHandler);
+}
 
 function toFiniteNumber(value: unknown): number | undefined {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -149,8 +201,23 @@ export async function analyticsRoutes(
 ): Promise<void> {
   const { httpClient, cache, shadowService } = options;
 
+  fastify.addHook('onRoute', (routeOptions) => {
+    const path = routeOptions.url;
+    if (!isGuardedAnalyticsPath(path)) {
+      return;
+    }
+
+    const config = (routeOptions.config ?? {}) as Record<string, unknown>;
+    if (config[ANALYTICS_GUARD_CONFIG_KEY] !== true) {
+      throw new Error(
+        `Analytics route "${path}" must be registered via registerAnalyticsGet/registerAnalyticsPost to enforce validator/meta guardrails`
+      );
+    }
+  });
+
   // GET /bff/v1/analytics/overview - Get dataset overview metrics
-  fastify.get(
+  registerAnalyticsGet(
+    fastify,
     '/bff/v1/analytics/overview',
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
@@ -196,7 +263,8 @@ export async function analyticsRoutes(
   );
 
   // GET /bff/v1/analytics/daily-stats - Get daily transaction statistics
-  fastify.get<{ Querystring: DailyStatsQuery }>(
+  registerAnalyticsGet(
+    fastify,
     '/bff/v1/analytics/daily-stats',
     {
       schema: {
@@ -258,7 +326,8 @@ export async function analyticsRoutes(
   );
 
   // GET /bff/v1/analytics/transactions - Get transaction details
-  fastify.get<{ Querystring: TransactionDetailsQuery }>(
+  registerAnalyticsGet(
+    fastify,
     '/bff/v1/analytics/transactions',
     {
       schema: {
@@ -299,7 +368,8 @@ export async function analyticsRoutes(
   );
 
   // GET /bff/v1/analytics/recent-alerts - Get recent high-risk alerts
-  fastify.get<{ Querystring: RecentAlertsQuery }>(
+  registerAnalyticsGet(
+    fastify,
     '/bff/v1/analytics/recent-alerts',
     {
       schema: {
@@ -364,7 +434,8 @@ export async function analyticsRoutes(
   );
 
   // GET /bff/v1/analytics/fingerprint - Get dataset fingerprint
-  fastify.get(
+  registerAnalyticsGet(
+    fastify,
     '/bff/v1/analytics/fingerprint',
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
@@ -389,7 +460,8 @@ export async function analyticsRoutes(
   );
 
   // GET /bff/v1/analytics/feature-sample - Get sampled features for diagnostics
-  fastify.get<{ Querystring: FeatureSampleQuery }>(
+  registerAnalyticsGet(
+    fastify,
     '/bff/v1/analytics/feature-sample',
     {
       schema: {
@@ -430,7 +502,8 @@ export async function analyticsRoutes(
   );
 
   // GET /bff/v1/analytics/rules/:rule_id - Get rule health & stats
-  fastify.get<{ Params: RuleAnalyticsParams; Querystring: RuleAnalyticsQuery }>(
+  registerAnalyticsGet(
+    fastify,
     '/bff/v1/analytics/rules/:rule_id',
     {
       schema: {
@@ -485,7 +558,8 @@ export async function analyticsRoutes(
   );
 
   // GET /bff/v1/analytics/attribution - Get rule attribution metrics
-  fastify.get<{ Querystring: RuleAttributionQuery }>(
+  registerAnalyticsGet(
+    fastify,
     '/bff/v1/analytics/attribution',
     {
       schema: {
@@ -534,7 +608,8 @@ export async function analyticsRoutes(
   );
 
   // POST /bff/v1/analytics/transactions/search
-  fastify.post<{ Body: TransactionSearchRequest }>(
+  registerAnalyticsPost(
+    fastify,
     '/bff/v1/analytics/transactions/search',
     {
       schema: {
@@ -645,7 +720,8 @@ export async function analyticsRoutes(
   );
 
   // GET /bff/v1/kpis - Get performance KPIs
-  fastify.get<{ Querystring: KpiQuery }>(
+  registerAnalyticsGet(
+    fastify,
     '/bff/v1/kpis',
     {
       schema: {
@@ -769,7 +845,8 @@ export async function analyticsRoutes(
   );
 
   // GET /bff/v1/volume - Get transaction volume timeseries
-  fastify.get<{ Querystring: VolumeQuery }>(
+  registerAnalyticsGet(
+    fastify,
     '/bff/v1/volume',
     {
       schema: {
@@ -877,7 +954,8 @@ export async function analyticsRoutes(
   );
 
   // GET /bff/v1/analytics/confusion-matrix - Get model confusion matrix
-  fastify.get<{ Querystring: ConfusionMatrixQuery }>(
+  registerAnalyticsGet(
+    fastify,
     '/bff/v1/analytics/confusion-matrix',
     {
       schema: {
@@ -981,7 +1059,8 @@ export async function analyticsRoutes(
   );
 
   // GET /bff/v1/analytics/rules/:rule_id/impact - Get impact metrics for a rule
-  fastify.get(
+  registerAnalyticsGet(
+    fastify,
     '/bff/v1/analytics/rules/:rule_id/impact',
     {
       schema: {
