@@ -305,6 +305,10 @@ export interface TransactionDetail {
   amount_to_avg_ratio_30d?: number;
   balance_volatility_z_score?: number;
   is_off_hours_txn?: boolean;
+  is_train_eligible?: boolean;
+  is_pre_fraud?: boolean;
+  numerical_features?: Record<string, number>;
+  categorical_features?: Record<string, string>;
 }
 
 export interface TransactionDetailsResponse {

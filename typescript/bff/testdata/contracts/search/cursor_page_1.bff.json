@@ -8,7 +8,11 @@
       "timestamp": "2024-01-01T12:00:00Z",
       "created_at": "2024-01-01T12:00:00Z",
       "is_fraud": false,
-      "is_fraudulent": false
+      "is_fraudulent": false,
+      "is_train_eligible": true,
+      "is_pre_fraud": false,
+      "numerical_features": {},
+      "categorical_features": {}
     }
   ],
   "next_cursor": "eyJyZWNvcmRfaWQiOiJyZWMtMDAxIiwiY3JlYXRlZF9hdCI6IjIwMjQtMDEtMDFUMTI6MDA6MDBaIn0=",
