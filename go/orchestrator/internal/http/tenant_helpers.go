@@ -11,11 +11,7 @@ import (
 // tenantIDFromRequest returns the tenant ID propagated by middleware and
 // guarantees a stable default for handlers/tests that bypass middleware.
 func tenantIDFromRequest(r *http.Request) string {
-	tenantID := tenant.FromContext(r.Context())
-	if tenantID == "" {
-		return "default"
-	}
-	return tenantID
+	return tenant.FromContext(r.Context())
 }
 
 // mustTenantID ensures a tenant ID is present in the request context.

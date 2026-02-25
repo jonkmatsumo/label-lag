@@ -8,10 +8,10 @@ import (
 	"testing"
 )
 
-func TestTenantIDFromRequestDefaultsWhenMissing(t *testing.T) {
+func TestTenantIDFromRequestEmptyWhenMissing(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
-	if got := tenantIDFromRequest(req); got != "default" {
-		t.Fatalf("expected default tenant id, got %q", got)
+	if got := tenantIDFromRequest(req); got != "" {
+		t.Fatalf("expected empty tenant id, got %q", got)
 	}
 }
 
@@ -32,7 +32,7 @@ func TestTenancyMiddlewarePropagatesHeader(t *testing.T) {
 	}
 }
 
-func TestTenancyMiddlewareUsesDefaultWhenHeaderMissing(t *testing.T) {
+func TestTenancyMiddlewareEmptyWhenHeaderMissing(t *testing.T) {
 	var gotTenantID string
 	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		gotTenantID = tenantIDFromRequest(r)
@@ -43,8 +43,8 @@ func TestTenancyMiddlewareUsesDefaultWhenHeaderMissing(t *testing.T) {
 
 	tenancyMiddleware(next).ServeHTTP(rec, req)
 
-	if gotTenantID != "default" {
-		t.Fatalf("expected default tenant id, got %q", gotTenantID)
+	if gotTenantID != "" {
+		t.Fatalf("expected empty tenant id, got %q", gotTenantID)
 	}
 }
 

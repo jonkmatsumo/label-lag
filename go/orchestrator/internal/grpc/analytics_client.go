@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
@@ -51,6 +52,7 @@ type AnalyticsClient struct {
 	breaker  *CircuitBreaker
 	logQueue chan *crudv1.LogInferenceEventRequest
 	stop     chan struct{}
+	wg       sync.WaitGroup
 }
 
 func NewAnalyticsClient(target string, timeout time.Duration) (*AnalyticsClient, error) {
@@ -98,6 +100,18 @@ func (c *AnalyticsClient) Close() error {
 	if c.stop != nil {
 		close(c.stop)
 	}
+
+	done := make(chan struct{})
+	go func() {
+		c.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+	}
+
 	if c.conn == nil {
 		return nil
 	}
@@ -105,7 +119,9 @@ func (c *AnalyticsClient) Close() error {
 }
 
 func (c *AnalyticsClient) startWorker() {
+	c.wg.Add(1)
 	go func() {
+		defer c.wg.Done()
 		for {
 			select {
 			case req := <-c.logQueue:

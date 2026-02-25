@@ -65,6 +65,7 @@ type Handler struct {
 	droppedLogs     atomic.Int64
 	workerCtx       context.Context
 	workerCancel    context.CancelFunc
+	closing         atomic.Bool
 
 	// Last-known-good ruleset cache for fallback on provider failure.
 	lastGoodRuleset *rules.RuleSet
@@ -77,6 +78,7 @@ type inferenceLogEvent struct {
 	spanContext trace.SpanContext
 	requestID   string
 	tenantID    string
+	enqueuedAt  time.Time
 }
 
 type HandlerOptions struct {
@@ -126,6 +128,7 @@ func (h *Handler) logWorker() {
 	defer h.logWg.Done()
 	for event := range h.logQueue {
 		handlerLogQueueDepth.Set(float64(len(h.logQueue)))
+		handlerLogQueueLatency.Observe(time.Since(event.enqueuedAt).Seconds())
 		ctx := event.ctx
 		// Create a link to the parent trace
 		opts := []trace.SpanStartOption{
@@ -160,6 +163,7 @@ func (h *Handler) logWorker() {
 }
 
 func (h *Handler) Shutdown(ctx context.Context) error {
+	h.closing.Store(true)
 	close(h.logQueue)
 	done := make(chan struct{})
 	go func() {
@@ -373,8 +377,10 @@ func writeRPCError(w http.ResponseWriter, r *http.Request, err error) {
 		switch rpcErr.Code {
 		case codes.InvalidArgument:
 			writeError(w, r, http.StatusBadRequest, "INVALID_ARGUMENT", rpcErr.Message, nil)
-		case codes.DeadlineExceeded, codes.Unavailable:
-			writeError(w, r, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "inference backend timeout", nil)
+		case codes.DeadlineExceeded:
+			writeError(w, r, http.StatusGatewayTimeout, "GATEWAY_TIMEOUT", "inference backend timeout", nil)
+		case codes.Unavailable:
+			writeError(w, r, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "inference backend unavailable", nil)
 		case codes.AlreadyExists:
 			writeError(w, r, http.StatusConflict, "ALREADY_EXISTS", rpcErr.Message, nil)
 		case codes.NotFound:
