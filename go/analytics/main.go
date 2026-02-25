@@ -87,6 +87,9 @@ func main() {
 	if err := db.Ping(); err != nil {
 		slog.Warn("failed to ping database", "error", err)
 	}
+	if err := obs.RegisterDBPoolStatsCollector(nil, db); err != nil {
+		slog.Warn("failed to register db pool metrics", "error", err)
+	}
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
 	if err != nil {

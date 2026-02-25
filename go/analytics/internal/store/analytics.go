@@ -644,8 +644,91 @@ func (s *SQLStore) discoverJSONBKeys(ctx context.Context, table, column string, 
 }
 
 func (s *SQLStore) profileNumericJSONBKey(ctx context.Context, table, column, key string, totalRecords int64, numBuckets int32, tenantID string) (*pb.FeatureProfile, error) {
-	columnExpr := fmt.Sprintf("(%s->>'%s')::numeric", column, key)
-	return s.profileNumericFeatureExpr(ctx, table, columnExpr, key, totalRecords, numBuckets, tenantID)
+	from := table
+	args := []interface{}{key}
+	tenantPredicate := ""
+	if tenantID != "" {
+		from = fmt.Sprintf("%s gr INNER JOIN inference_events ie ON gr.record_id = ie.request_id", table)
+		tenantPredicate = " AND ie.tenant_id = $2"
+		args = append(args, tenantID)
+	}
+	valueExpr := fmt.Sprintf("%s->>$1", column)
+
+	query := fmt.Sprintf(`
+		SELECT
+			AVG((%[1]s)::numeric) as mean,
+			STDDEV((%[1]s)::numeric) as stddev,
+			COUNT(*) FILTER (WHERE %[1]s IS NULL) as null_count,
+			MIN((%[1]s)::numeric) as min_val,
+			MAX((%[1]s)::numeric) as max_val
+		FROM %[2]s
+		WHERE %[1]s IS NOT NULL%[3]s
+	`, valueExpr, from, tenantPredicate)
+
+	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	var mean, stddev, minVal, maxVal sql.NullFloat64
+	var nullCount int64
+	err := s.db.QueryRowContext(queryCtx, query, args...).Scan(&mean, &stddev, &nullCount, &minVal, &maxVal)
+	if err != nil {
+		return nil, db.MapDBError(err)
+	}
+
+	profile := &pb.FeatureProfile{
+		Name:     key,
+		Type:     "numeric",
+		NullRate: float64(nullCount) / float64(totalRecords),
+		Mean:     mean.Float64,
+		StdDev:   stddev.Float64,
+	}
+
+	if minVal.Valid && maxVal.Valid && maxVal.Float64 >= minVal.Float64 {
+		var bucketSize float64
+		if maxVal.Float64 > minVal.Float64 {
+			bucketSize = (maxVal.Float64 - minVal.Float64) / float64(numBuckets)
+		} else {
+			bucketSize = 1.0
+		}
+
+		upperBound := maxVal.Float64 + 0.000001
+		histQuery := fmt.Sprintf(`
+			SELECT
+				WIDTH_BUCKET((%[1]s)::numeric, %[2]f, %[3]f, %[4]d) as bucket,
+				COUNT(*) as count
+			FROM %[5]s
+			WHERE %[1]s IS NOT NULL%[6]s
+			GROUP BY bucket
+			ORDER BY bucket
+		`, valueExpr, minVal.Float64, upperBound, numBuckets, from, tenantPredicate)
+
+		histQueryCtx, histCancel := context.WithTimeout(ctx, defaultQueryTimeout)
+		defer histCancel()
+		rows, err := s.db.QueryContext(histQueryCtx, histQuery, args...)
+		if err == nil {
+			defer rows.Close()
+			buckets := make(map[int]int64)
+			for rows.Next() {
+				var b int
+				var c int64
+				if err := rows.Scan(&b, &c); err == nil {
+					buckets[b] = c
+				}
+			}
+
+			for i := 1; i <= int(numBuckets); i++ {
+				lower := minVal.Float64 + float64(i-1)*bucketSize
+				upper := minVal.Float64 + float64(i)*bucketSize
+				profile.Histogram = append(profile.Histogram, &pb.Bucket{
+					Lower: lower,
+					Upper: upper,
+					Count: buckets[i],
+				})
+			}
+		}
+	}
+
+	return profile, nil
 }
 
 func (s *SQLStore) profileNumericFeature(ctx context.Context, table, column string, totalRecords int64, numBuckets int32, tenantID string) (*pb.FeatureProfile, error) {
@@ -747,21 +830,19 @@ func (s *SQLStore) profileNumericFeatureExpr(ctx context.Context, table, expr, n
 }
 
 func (s *SQLStore) profileCategoricalJSONBKey(ctx context.Context, table, column, key string, totalRecords int64, topK int, tenantID string) (*pb.FeatureProfile, error) {
-	expr := fmt.Sprintf("%s->>'%s'", column, key)
-
 	from := table
-	args := []interface{}{}
+	args := []interface{}{key}
+	tenantPredicate := ""
 	if tenantID != "" {
 		from = fmt.Sprintf("%s gr INNER JOIN inference_events ie ON gr.record_id = ie.request_id", table)
+		tenantPredicate = " AND ie.tenant_id = $2"
 		args = append(args, tenantID)
 	}
+	valueExpr := fmt.Sprintf("%s->>$1", column)
 
 	// Get null rate
 	var nullCount int64
-	nullQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s IS NULL", from, expr)
-	if tenantID != "" {
-		nullQuery += " AND ie.tenant_id = $1"
-	}
+	nullQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s IS NULL%s", from, valueExpr, tenantPredicate)
 	nullQueryCtx, nullCancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer nullCancel()
 	err := s.db.QueryRowContext(nullQueryCtx, nullQuery, args...).Scan(&nullCount)
@@ -779,19 +860,15 @@ func (s *SQLStore) profileCategoricalJSONBKey(ctx context.Context, table, column
 	topQuery := fmt.Sprintf(`
 		SELECT %[1]s as value, COUNT(*) as count
 		FROM %[2]s
-		WHERE %[1]s IS NOT NULL
-	`, expr, from)
-
-	if tenantID != "" {
-		topQuery += " AND ie.tenant_id = $1"
-	}
+		WHERE %[1]s IS NOT NULL%[3]s
+	`, valueExpr, from, tenantPredicate)
 	topQuery += fmt.Sprintf(" GROUP BY value ORDER BY count DESC, value LIMIT %d", topK)
 
 	topQueryCtx, topCancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer topCancel()
 	rows, err := s.db.QueryContext(topQueryCtx, topQuery, args...)
 	if err != nil {
-		return nil, err
+		return nil, db.MapDBError(err)
 	}
 	defer rows.Close()
 

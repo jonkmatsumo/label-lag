@@ -21,7 +21,10 @@ func (s *SQLStore) StoreGeneratedData(ctx context.Context, records []*pb.Generat
 		return 0, nil
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
+	txCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	tx, err := s.db.BeginTx(txCtx, nil)
 	if err != nil {
 		return 0, db.MapDBError(fmt.Errorf("failed to begin transaction: %w", err))
 	}
@@ -42,19 +45,16 @@ func (s *SQLStore) StoreGeneratedData(ctx context.Context, records []*pb.Generat
 			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
 		)
 	`
-	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
-	defer cancel()
-
 	for _, r := range records {
 		select {
-		case <-ctx.Done():
-			return 0, ctx.Err()
+		case <-txCtx.Done():
+			return 0, db.MapDBError(txCtx.Err())
 		default:
 		}
 		numFeaturesJSON, _ := json.Marshal(r.NumericalFeatures)
 		catFeaturesJSON, _ := json.Marshal(r.CategoricalFeatures)
 
-		_, err := tx.ExecContext(queryCtx, recordQuery,
+		_, err := tx.ExecContext(txCtx, recordQuery,
 			r.RecordId, r.UserId, r.FullName, r.Email, r.Phone,
 			r.TransactionTimestamp.AsTime(), r.IsOffHoursTxn, r.AvailableBalance,
 			r.BalanceToTransactionRatio, r.AvgAvailableBalance_30D,
@@ -82,8 +82,8 @@ func (s *SQLStore) StoreGeneratedData(ctx context.Context, records []*pb.Generat
 
 	for _, m := range metadata {
 		select {
-		case <-ctx.Done():
-			return 0, ctx.Err()
+		case <-txCtx.Done():
+			return 0, db.MapDBError(txCtx.Err())
 		default:
 		}
 		var fraudConfirmedAt sql.NullTime
@@ -91,7 +91,7 @@ func (s *SQLStore) StoreGeneratedData(ctx context.Context, records []*pb.Generat
 			fraudConfirmedAt = sql.NullTime{Time: m.FraudConfirmedAt.AsTime(), Valid: true}
 		}
 
-		_, err := tx.ExecContext(queryCtx, metadataQuery,
+		_, err := tx.ExecContext(txCtx, metadataQuery,
 			m.UserId, m.RecordId, m.SequenceNumber,
 			fraudConfirmedAt, m.IsPreFraud, m.DaysToFraud,
 			m.IsTrainEligible,
@@ -525,10 +525,10 @@ func (s *SQLStore) LogInferenceEvent(ctx context.Context, event *pb.InferenceEve
 		return status.Error(codes.InvalidArgument, "tenant_id required")
 	}
 
-	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	txCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
-	tx, err := s.db.BeginTx(queryCtx, nil)
+	tx, err := s.db.BeginTx(txCtx, nil)
 	if err != nil {
 		return db.MapDBError(fmt.Errorf("failed to begin transaction: %w", err))
 	}
@@ -547,7 +547,7 @@ func (s *SQLStore) LogInferenceEvent(ctx context.Context, event *pb.InferenceEve
 			model_score, final_score, rule_impacts, user_id, decision, tenant_id
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`
-	_, err = tx.ExecContext(queryCtx, queryEvent,
+	_, err = tx.ExecContext(txCtx, queryEvent,
 		event.RequestId,
 		event.Timestamp.AsTime(),
 		event.ModelVersion,
@@ -586,7 +586,7 @@ func (s *SQLStore) LogInferenceEvent(ctx context.Context, event *pb.InferenceEve
 			sum_score = aggregates_daily.sum_score + EXCLUDED.sum_score,
 			rules_fired_total = aggregates_daily.rules_fired_total + EXCLUDED.rules_fired_total
 	`
-	_, err = tx.ExecContext(queryCtx, queryDaily, event.TenantId, date, alertIncr, event.FinalScore, rulesFired)
+	_, err = tx.ExecContext(txCtx, queryDaily, event.TenantId, date, alertIncr, event.FinalScore, rulesFired)
 	if err != nil {
 		return db.MapDBError(fmt.Errorf("failed to update daily aggregates: %w", err))
 	}
@@ -600,7 +600,7 @@ func (s *SQLStore) LogInferenceEvent(ctx context.Context, event *pb.InferenceEve
 			sum_score = aggregates_hourly.sum_score + EXCLUDED.sum_score,
 			rules_fired_total = aggregates_hourly.rules_fired_total + EXCLUDED.rules_fired_total
 	`
-	_, err = tx.ExecContext(queryCtx, queryHourly, event.TenantId, hour, alertIncr, event.FinalScore, rulesFired)
+	_, err = tx.ExecContext(txCtx, queryHourly, event.TenantId, hour, alertIncr, event.FinalScore, rulesFired)
 	if err != nil {
 		return db.MapDBError(fmt.Errorf("failed to update hourly aggregates: %w", err))
 	}
@@ -611,14 +611,14 @@ func (s *SQLStore) LogInferenceEvent(ctx context.Context, event *pb.InferenceEve
 			request_id, rule_id, is_shadow, score_delta
 		) VALUES ($1, $2, $3, $4)
 	`
-	stmt, err := tx.PrepareContext(queryCtx, queryImpact)
+	stmt, err := tx.PrepareContext(txCtx, queryImpact)
 	if err != nil {
 		return db.MapDBError(fmt.Errorf("failed to prepare impact statement: %w", err))
 	}
 	defer stmt.Close()
 
 	for _, impact := range event.RuleImpacts {
-		_, err := stmt.ExecContext(queryCtx,
+		_, err := stmt.ExecContext(txCtx,
 			event.RequestId,
 			impact.RuleId,
 			impact.IsShadow,

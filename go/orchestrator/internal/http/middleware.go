@@ -3,6 +3,8 @@ package httpserver
 import (
 	"log/slog"
 	"net/http"
+	"os"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -19,6 +21,10 @@ import (
 )
 
 var (
+	globalRateLimitedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "orchestrator_global_rate_limited_total",
+		Help: "Total requests rejected by the global rate limiter.",
+	}, []string{"route", "status"})
 	rateLimitedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "orchestrator_rate_limited_total",
 		Help: "Total requests rejected by the rate limiter.",
@@ -27,12 +33,25 @@ var (
 		Name: "orchestrator_rate_limit_tenants_total",
 		Help: "Total number of active tenant limiters.",
 	})
+
+	globalLimiter = newGlobalLimiterFromEnv()
 )
 
 type tenantLimiter struct {
 	limiter  *rate.Limiter
 	lastSeen atomic.Int64 // Unix nanoseconds
 }
+
+const (
+	defaultTenantRateLimitRPS   = 10.0
+	defaultTenantRateLimitBurst = 20
+
+	defaultGlobalRateLimitRPS   = 200.0
+	defaultGlobalRateLimitBurst = 400
+
+	globalRateLimitRPSEnv   = "INFERENCE_GATEWAY_GLOBAL_RATE_LIMIT_RPS"
+	globalRateLimitBurstEnv = "INFERENCE_GATEWAY_GLOBAL_RATE_LIMIT_BURST"
+)
 
 // updateLastSeen ensures the timestamp only moves forward, protecting
 // against clock skew or out-of-order updates in high concurrency.
@@ -78,8 +97,47 @@ func cleanupStaleLimiters() {
 	rateLimitTenants.Set(count)
 }
 
+func newGlobalLimiterFromEnv() *rate.Limiter {
+	rps := parsePositiveFloatEnv(globalRateLimitRPSEnv, defaultGlobalRateLimitRPS)
+	burst := parsePositiveIntEnv(globalRateLimitBurstEnv, defaultGlobalRateLimitBurst)
+	return rate.NewLimiter(rate.Limit(rps), burst)
+}
+
+func parsePositiveFloatEnv(key string, fallback float64) float64 {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseFloat(value, 64)
+	if err != nil || parsed <= 0 {
+		slog.Warn("invalid rate limiter float env var", "key", key, "value", value, "fallback", fallback)
+		return fallback
+	}
+	return parsed
+}
+
+func parsePositiveIntEnv(key string, fallback int) int {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed <= 0 {
+		slog.Warn("invalid rate limiter int env var", "key", key, "value", value, "fallback", fallback)
+		return fallback
+	}
+	return parsed
+}
+
 func rateLimitMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !globalLimiter.Allow() {
+			statusCode := http.StatusTooManyRequests
+			globalRateLimitedTotal.WithLabelValues(normalizeRoute(r.URL.Path), strconv.Itoa(statusCode)).Inc()
+			writeJSONError(w, r, statusCode, "global rate limit exceeded")
+			return
+		}
+
 		tenantID := tenant.FromContext(r.Context())
 		tenantPresent := "true"
 		if tenantID == "" {
@@ -88,7 +146,7 @@ func rateLimitMiddleware(next http.Handler) http.Handler {
 		}
 
 		val, loaded := limiterMap.LoadOrStore(tenantID, &tenantLimiter{
-			limiter: rate.NewLimiter(rate.Limit(10), 20),
+			limiter: rate.NewLimiter(rate.Limit(defaultTenantRateLimitRPS), defaultTenantRateLimitBurst),
 		})
 		if !loaded {
 			rateLimitTenants.Inc()

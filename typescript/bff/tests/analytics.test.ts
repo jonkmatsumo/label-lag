@@ -529,6 +529,45 @@ describe('Analytics Routes', () => {
       expect(response.json()).toEqual(expected);
     });
 
+    it('guards required transaction detail fields from contract drift', async () => {
+      const upstream = loadSearchFixture('required_fields.json');
+      const expected = loadSearchFixture('required_fields.bff.json');
+
+      ctx.mockGatewayPool.intercept({
+        path: '/analytics/transactions/search',
+        method: 'POST',
+      }).reply(200, upstream);
+
+      const response = await ctx.app.inject({
+        method: 'POST',
+        url: '/bff/v1/analytics/transactions/search',
+        payload: {
+          limit: 10,
+          include_features: true,
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const data = response.json();
+      expect(data).toEqual(expected);
+
+      const item = data.items[0];
+      const requiredKeys = [
+        'record_id',
+        'user_id',
+        'created_at',
+        'timestamp',
+        'is_fraudulent',
+        'is_train_eligible',
+        'is_pre_fraud',
+        'numerical_features',
+        'categorical_features',
+      ];
+      for (const key of requiredKeys) {
+        expect(item).toHaveProperty(key);
+      }
+    });
+
     it('normalizes truncation metadata for oversized limit requests', async () => {
       const rawItem = {
         record_id: 'rec',

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	"golang.org/x/time/rate"
 
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/tenant"
 )
@@ -44,6 +45,8 @@ func resetLimiterMap() {
 		limiterMap.Delete(key)
 		return true
 	})
+	globalLimiter = rate.NewLimiter(rate.Limit(defaultGlobalRateLimitRPS), defaultGlobalRateLimitBurst)
+	globalRateLimitedTotal.Reset()
 }
 
 func TestRateLimitMiddleware(t *testing.T) {
@@ -106,6 +109,70 @@ func TestRateLimitMiddleware(t *testing.T) {
 			t.Fatalf("expected tenant B to be OK, got %d", recB.Code)
 		}
 	})
+}
+
+func TestGlobalRateLimitMiddleware_AppliesAcrossTenants(t *testing.T) {
+	resetLimiterMap()
+	globalLimiter = rate.NewLimiter(rate.Limit(1), 1)
+
+	handler := rateLimitMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	reqA := httptest.NewRequest(http.MethodGet, "/analytics/overview", nil)
+	reqA = reqA.WithContext(tenant.WithTenantID(reqA.Context(), "tenant-a"))
+	recA := httptest.NewRecorder()
+	handler.ServeHTTP(recA, reqA)
+	if recA.Code != http.StatusOK {
+		t.Fatalf("expected first request to pass, got %d", recA.Code)
+	}
+
+	reqB := httptest.NewRequest(http.MethodGet, "/analytics/overview", nil)
+	reqB = reqB.WithContext(tenant.WithTenantID(reqB.Context(), "tenant-b"))
+	recB := httptest.NewRecorder()
+	handler.ServeHTTP(recB, reqB)
+	if recB.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected global 429 for rotating tenant, got %d", recB.Code)
+	}
+
+	if got := testutil.ToFloat64(globalRateLimitedTotal.WithLabelValues("/analytics/overview", "429")); got != 1 {
+		t.Fatalf("expected global limiter metric to increment by 1, got %v", got)
+	}
+}
+
+func TestRateLimitMiddleware_PerTenantStillIsolatedWhenGlobalHasHeadroom(t *testing.T) {
+	resetLimiterMap()
+	globalLimiter = rate.NewLimiter(rate.Limit(1000), 1000)
+
+	handler := rateLimitMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	tenantA := "tenant-a"
+	tenantB := "tenant-b"
+
+	for i := 0; i < 20; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req = req.WithContext(tenant.WithTenantID(req.Context(), tenantA))
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+	}
+
+	reqA := httptest.NewRequest(http.MethodGet, "/", nil)
+	reqA = reqA.WithContext(tenant.WithTenantID(reqA.Context(), tenantA))
+	recA := httptest.NewRecorder()
+	handler.ServeHTTP(recA, reqA)
+	if recA.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected tenant A to be throttled, got %d", recA.Code)
+	}
+
+	reqB := httptest.NewRequest(http.MethodGet, "/", nil)
+	reqB = reqB.WithContext(tenant.WithTenantID(reqB.Context(), tenantB))
+	recB := httptest.NewRecorder()
+	handler.ServeHTTP(recB, reqB)
+	if recB.Code != http.StatusOK {
+		t.Fatalf("expected tenant B to remain unaffected, got %d", recB.Code)
+	}
 }
 
 func TestRateLimitMetricIncrements(t *testing.T) {

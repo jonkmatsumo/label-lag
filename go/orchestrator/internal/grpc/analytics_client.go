@@ -25,6 +25,15 @@ var (
 		Name: "orchestrator_analytics_queue_depth",
 		Help: "Current depth of the analytics log queue (async sender).",
 	})
+	analyticsLogQueueDrainLatency = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "orchestrator_analytics_queue_drain_latency_seconds",
+		Help:    "Time analytics log events spend waiting in queue before worker processing.",
+		Buckets: []float64{.001, .005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5},
+	}, []string{"queue"})
+	analyticsLogQueueEnqueueAttempts = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "orchestrator_log_events_enqueue_attempts_total",
+		Help: "Total analytics log enqueue attempts.",
+	}, []string{"queue"})
 	LogEventsDropped = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "orchestrator_log_events_dropped_total",
 		Help: "Total number of log events dropped due to queue saturation or shutdown.",
@@ -50,9 +59,14 @@ type AnalyticsClient struct {
 	conn     *grpc.ClientConn
 	stub     crudv1.AnalyticsServiceClient
 	breaker  *CircuitBreaker
-	logQueue chan *crudv1.LogInferenceEventRequest
+	logQueue chan *logQueueItem
 	stop     chan struct{}
 	wg       sync.WaitGroup
+}
+
+type logQueueItem struct {
+	req        *crudv1.LogInferenceEventRequest
+	enqueuedAt time.Time
 }
 
 func NewAnalyticsClient(target string, timeout time.Duration) (*AnalyticsClient, error) {
@@ -87,7 +101,7 @@ func NewAnalyticsClient(target string, timeout time.Duration) (*AnalyticsClient,
 		conn:     conn,
 		stub:     crudv1.NewAnalyticsServiceClient(conn),
 		breaker:  NewCircuitBreakerWithPrefix("analytics"),
-		logQueue: make(chan *crudv1.LogInferenceEventRequest, defaultQueueSize),
+		logQueue: make(chan *logQueueItem, defaultQueueSize),
 		stop:     make(chan struct{}),
 	}
 	analyticsQueueCapacity.Set(float64(defaultQueueSize))
@@ -124,11 +138,15 @@ func (c *AnalyticsClient) startWorker() {
 		defer c.wg.Done()
 		for {
 			select {
-			case req := <-c.logQueue:
+			case item := <-c.logQueue:
+				if item == nil || item.req == nil {
+					continue
+				}
+				analyticsLogQueueDrainLatency.WithLabelValues("analytics").Observe(time.Since(item.enqueuedAt).Seconds())
 				analyticsQueueDepth.Set(float64(len(c.logQueue)))
 				// Use context.Background() since the original request context may have been cancelled
 				ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
-				_, err := c.stub.LogInferenceEvent(ctx, req)
+				_, err := c.stub.LogInferenceEvent(ctx, item.req)
 				if err != nil {
 					LogEventsDropped.WithLabelValues("analytics", "send_error").Inc()
 				}
@@ -961,10 +979,11 @@ func (c *AnalyticsClient) LogInferenceEvent(ctx context.Context, req *crudv1.Log
 	if req == nil {
 		return nil, fmt.Errorf("nil request")
 	}
+	analyticsLogQueueEnqueueAttempts.WithLabelValues("analytics").Inc()
 
 	// Push to queue non-blocking
 	select {
-	case c.logQueue <- req:
+	case c.logQueue <- &logQueueItem{req: req, enqueuedAt: time.Now()}:
 		analyticsQueueDepth.Set(float64(len(c.logQueue)))
 	default:
 		// Queue full, drop event and increment counter
