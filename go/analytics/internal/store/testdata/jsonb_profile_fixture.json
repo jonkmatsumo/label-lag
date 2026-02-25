@@ -1,0 +1,23 @@
+{
+  "tenant_id": "tenant-1",
+  "total_records": 100,
+  "numeric": {
+    "key": "dyn_num_fixture",
+    "mean": 100.0,
+    "stddev": 5.0,
+    "null_rate": 0.05,
+    "min": 80.0,
+    "max": 120.0,
+    "bucket_count": 5,
+    "bucket_first_count": 95
+  },
+  "categorical": {
+    "key": "dyn_cat_fixture",
+    "null_rate": 0.1,
+    "top_values": [
+      {"value": "val1", "count": 50},
+      {"value": "val2", "count": 30},
+      {"value": "_other", "count": 10}
+    ]
+  }
+}
