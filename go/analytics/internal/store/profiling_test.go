@@ -35,12 +35,12 @@ func TestGetDatasetProfile_DynamicFeatures(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"key"}).AddRow("dyn_num_1"))
 
 	// 4. Profile dynamic numeric key
-	mock.ExpectQuery(`(?s)SELECT.*AVG\(\(numerical_features->>'dyn_num_1'\)::numeric\)`).
-		WithArgs("tenant-1").
+	mock.ExpectQuery(`(?s)SELECT.*AVG\(\(numerical_features->>\$1\)::numeric\)`).
+		WithArgs("dyn_num_1", "tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{"mean", "stddev", "null_count", "min_val", "max_val"}).
 			AddRow(100.0, 5.0, 5, 80.0, 120.0))
-	mock.ExpectQuery(`(?s)SELECT WIDTH_BUCKET\(\(numerical_features->>'dyn_num_1'\)::numeric`).
-		WithArgs("tenant-1").
+	mock.ExpectQuery(`(?s)SELECT WIDTH_BUCKET\(\(numerical_features->>\$1\)::numeric`).
+		WithArgs("dyn_num_1", "tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{"bucket", "count"}).
 			AddRow(1, 95))
 
@@ -51,12 +51,12 @@ func TestGetDatasetProfile_DynamicFeatures(t *testing.T) {
 
 	// 6. Profile dynamic categorical key
 	// Null rate
-	mock.ExpectQuery(`(?s)SELECT COUNT\(\*\) FROM.*categorical_features->>'dyn_cat_1' IS NULL`).
-		WithArgs("tenant-1").
+	mock.ExpectQuery(`(?s)SELECT COUNT\(\*\) FROM.*categorical_features->>\$1 IS NULL`).
+		WithArgs("dyn_cat_1", "tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(10))
 	// Top-K
-	mock.ExpectQuery(`(?s)SELECT.*categorical_features->>'dyn_cat_1' as value, COUNT\(\*\) as count`).
-		WithArgs("tenant-1").
+	mock.ExpectQuery(`(?s)SELECT.*categorical_features->>\$1 as value, COUNT\(\*\) as count`).
+		WithArgs("dyn_cat_1", "tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{"value", "count"}).
 			AddRow("val1", 50).
 			AddRow("val2", 30))
@@ -118,4 +118,28 @@ func TestGetDatasetProfile_Caps(t *testing.T) {
 	assert.Len(t, resp.FeatureProfiles, 2)
 	assert.True(t, resp.IsPartial)
 	assert.GreaterOrEqual(t, resp.TruncatedKeys, int32(4))
+}
+
+func TestProfileCategoricalJSONBKey_UsesParameterizedKey(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+	suspiciousKey := `dyn_cat_1' OR 1=1 --`
+
+	mock.ExpectQuery(`(?s)SELECT COUNT\(\*\) FROM.*categorical_features->>\$1 IS NULL`).
+		WithArgs(suspiciousKey, "tenant-1").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
+	mock.ExpectQuery(`(?s)SELECT.*categorical_features->>\$1 as value, COUNT\(\*\) as count`).
+		WithArgs(suspiciousKey, "tenant-1").
+		WillReturnRows(sqlmock.NewRows([]string{"value", "count"}).
+			AddRow("x", 10).
+			AddRow("y", 20))
+
+	profile, err := s.profileCategoricalJSONBKey(context.Background(), "generated_records", "categorical_features", suspiciousKey, 40, 5, "tenant-1")
+	require.NoError(t, err)
+	require.NotNil(t, profile)
+	assert.Equal(t, suspiciousKey, profile.Name)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
