@@ -1,0 +1,31 @@
+{
+  "transactions": [
+    {
+      "record_id": "rec-guard-1",
+      "user_id": "user-guard-1",
+      "amount": 123.45,
+      "created_at": "2024-01-02T03:04:05Z",
+      "is_fraudulent": true,
+      "fraud_type": "velocity_spike",
+      "merchant_risk_score": 88,
+      "velocity_24h": 7,
+      "amount_to_avg_ratio_30d": 2.5,
+      "balance_volatility_z_score": -1.25,
+      "is_off_hours_txn": true,
+      "is_train_eligible": true,
+      "is_pre_fraud": false,
+      "numerical_features": {
+        "dynamic_numeric": 99.9
+      },
+      "categorical_features": {
+        "dynamic_cat": "new_device"
+      }
+    }
+  ],
+  "next_cursor": "",
+  "truncated": false,
+  "meta": {
+    "truncated": false,
+    "effective_limit": 10
+  }
+}
