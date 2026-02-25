@@ -24,7 +24,7 @@ var (
 	globalRateLimitedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "orchestrator_global_rate_limited_total",
 		Help: "Total requests rejected by the global rate limiter.",
-	}, []string{"route", "status"})
+	}, []string{"route", "method", "status"})
 	rateLimitedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "orchestrator_rate_limited_total",
 		Help: "Total requests rejected by the rate limiter.",
@@ -133,7 +133,7 @@ func rateLimitMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !globalLimiter.Allow() {
 			statusCode := http.StatusTooManyRequests
-			globalRateLimitedTotal.WithLabelValues(normalizeRoute(r.URL.Path), strconv.Itoa(statusCode)).Inc()
+			globalRateLimitedTotal.WithLabelValues(normalizeRoute(r.URL.Path), r.Method, strconv.Itoa(statusCode)).Inc()
 			writeJSONError(w, r, statusCode, "global rate limit exceeded")
 			return
 		}
