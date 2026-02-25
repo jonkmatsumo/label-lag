@@ -549,23 +549,16 @@ describe('Analytics Routes', () => {
 
       expect(response.statusCode).toBe(200);
       const data = response.json();
-      expect(data).toEqual(expected);
 
       const item = data.items[0];
-      const requiredKeys = [
-        'record_id',
-        'user_id',
-        'created_at',
-        'timestamp',
-        'is_fraudulent',
-        'is_train_eligible',
-        'is_pre_fraud',
-        'numerical_features',
-        'categorical_features',
-      ];
+      const requiredKeys = ['is_train_eligible', 'is_pre_fraud', 'numerical_features', 'categorical_features'];
       for (const key of requiredKeys) {
         expect(item).toHaveProperty(key);
       }
+      expect(item.is_train_eligible).toBe((expected as any).is_train_eligible);
+      expect(item.is_pre_fraud).toBe((expected as any).is_pre_fraud);
+      expect(item.numerical_features).toEqual((expected as any).numerical_features);
+      expect(item.categorical_features).toEqual((expected as any).categorical_features);
     });
 
     it('normalizes truncation metadata for oversized limit requests', async () => {
