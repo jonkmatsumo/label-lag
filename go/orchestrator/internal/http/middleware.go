@@ -113,9 +113,7 @@ func tenancyMiddleware(next http.Handler) http.Handler {
 			writeJSONError(w, r, http.StatusBadRequest, "missing X-Tenant-Id")
 			return
 		}
-		if tenantID == "" {
-			tenantID = "default"
-		}
+		// No default fallback. requiresTenantHeader enforces requirement for analytics.
 
 		ctx := tenant.WithTenantID(r.Context(), tenantID)
 		span := trace.SpanFromContext(ctx)

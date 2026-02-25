@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/lib/pq"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -15,6 +16,19 @@ func MapDBError(err error) error {
 	if err == nil {
 		return nil
 	}
+
+	var pqErr *pq.Error
+	if errors.As(err, &pqErr) {
+		switch pqErr.Code {
+		case "23505": // unique_violation
+			return status.Error(codes.AlreadyExists, "resource already exists")
+		case "23503": // foreign_key_violation
+			return status.Error(codes.FailedPrecondition, "foreign key violation")
+		case "40P01": // deadlock_detected
+			return status.Error(codes.Unavailable, "database deadlock detected")
+		}
+	}
+
 	if errors.Is(err, sql.ErrNoRows) {
 		return status.Error(codes.NotFound, "resource not found")
 	}

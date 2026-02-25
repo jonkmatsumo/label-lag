@@ -41,6 +41,18 @@ var (
 		Name: "orchestrator_log_queue_capacity",
 		Help: "Maximum capacity of the handler inference log queue.",
 	})
+
+	handlerLogQueueLatency = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "orchestrator_log_queue_latency_seconds",
+		Help:    "Time events spend in the handler log queue before being processed.",
+		Buckets: []float64{.001, .005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5},
+	})
+
+	inferenceScoreDistribution = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "orchestrator_inference_score_distribution",
+		Help:    "Distribution of inference scores (0-100).",
+		Buckets: prometheus.LinearBuckets(0, 10, 11),
+	}, []string{"tenant"})
 )
 
 type responseWriter struct {

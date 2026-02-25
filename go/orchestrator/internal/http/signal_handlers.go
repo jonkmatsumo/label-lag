@@ -123,6 +123,9 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rawScore := int32(math.Round(inferenceResp.GetProbability() * 100))
+	tenantID := tenantIDFromRequest(r)
+	tenantLabel := tenantPresenceLabel(tenantID)
+	inferenceScoreDistribution.WithLabelValues(tenantLabel).Observe(float64(rawScore))
 
 	ruleResult, err := rules.EvaluateRules(features, int(rawScore), &ruleset, rules.EvalOptions{Debug: false})
 	if err != nil {
@@ -188,6 +191,7 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 			requestID:   requestID,
 			tenantID:    tenantID,
 			spanContext: span.SpanContext(),
+			enqueuedAt:  time.Now(),
 			req: &crudv1.LogInferenceEventRequest{
 				Event: &crudv1.InferenceEvent{
 					RequestId:    requestID,
@@ -200,6 +204,12 @@ func (h *Handler) handleEvaluateSignal(w http.ResponseWriter, r *http.Request) {
 					TenantId:     tenantID,
 				},
 			},
+		}
+
+		if h.closing.Load() {
+			h.droppedLogs.Add(1)
+			grpcclient.LogEventsDropped.WithLabelValues("handler", "closing").Inc()
+			return
 		}
 
 		select {

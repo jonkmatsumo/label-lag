@@ -166,6 +166,17 @@ function toFiniteNumber(value: unknown): number | undefined {
   return undefined;
 }
 
+function parseMapIfString(value: unknown): Record<string, any> {
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return {};
+    }
+  }
+  return (value as Record<string, any>) || {};
+}
+
 function normalizeKpiPeriod(raw: Record<string, unknown>) {
   return {
     total_decisions: parseInt64(raw.total_decisions) ?? 0,
@@ -698,6 +709,10 @@ export async function analyticsRoutes(
           amount_to_avg_ratio_30d: toFiniteNumber(tx.amount_to_avg_ratio_30d),
           balance_volatility_z_score: toFiniteNumber(tx.balance_volatility_z_score),
           is_off_hours_txn: tx.is_off_hours_txn,
+          is_train_eligible: tx.is_train_eligible ?? false,
+          is_pre_fraud: tx.is_pre_fraud ?? false,
+          numerical_features: parseMapIfString(tx.numerical_features),
+          categorical_features: parseMapIfString(tx.categorical_features),
         }));
         const normalized: TransactionSearchResponse = {
           items: normalizedItems,
