@@ -6,6 +6,9 @@ import (
 	"time"
 
 	crudv1 "github.com/jonkmatsumo/label-lag/go/analytics/proto/crud/v1"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
 )
@@ -190,7 +193,7 @@ func TestAnalyticsClient_LogInferenceEvent_Async(t *testing.T) {
 	client := &AnalyticsClient{
 		timeout:  time.Second,
 		stub:     mockStub,
-		logQueue: make(chan *crudv1.LogInferenceEventRequest, 2),
+		logQueue: make(chan *logQueueItem, 2),
 		stop:     make(chan struct{}),
 	}
 	client.startWorker()
@@ -218,7 +221,7 @@ func TestAnalyticsClient_LogInferenceEvent_Async(t *testing.T) {
 
 func TestAnalyticsClient_LogInferenceEvent_Drop(t *testing.T) {
 	client := &AnalyticsClient{
-		logQueue: make(chan *crudv1.LogInferenceEventRequest, 1),
+		logQueue: make(chan *logQueueItem, 1),
 		stop:     make(chan struct{}),
 	}
 	// Don't start worker to simulate full queue
@@ -230,7 +233,7 @@ func TestAnalyticsClient_LogInferenceEvent_Drop(t *testing.T) {
 	}
 
 	// Fill queue
-	client.logQueue <- req
+	client.logQueue <- &logQueueItem{req: req, enqueuedAt: time.Now()}
 
 	// This should drop
 	resp, err := client.LogInferenceEvent(context.Background(), req)
@@ -240,4 +243,77 @@ func TestAnalyticsClient_LogInferenceEvent_Drop(t *testing.T) {
 	if !resp.Success {
 		t.Error("expected success even on drop")
 	}
+}
+
+func TestAnalyticsClient_LogInferenceEvent_TracksEnqueueAttempts(t *testing.T) {
+	analyticsLogQueueEnqueueAttempts.Reset()
+	LogEventsDropped.Reset()
+
+	client := &AnalyticsClient{
+		logQueue: make(chan *logQueueItem, 1),
+		stop:     make(chan struct{}),
+	}
+	req := &crudv1.LogInferenceEventRequest{
+		Event: &crudv1.InferenceEvent{RequestId: "attempts"},
+	}
+
+	_, err := client.LogInferenceEvent(context.Background(), req)
+	if err != nil {
+		t.Fatalf("first enqueue failed: %v", err)
+	}
+	_, err = client.LogInferenceEvent(context.Background(), req)
+	if err != nil {
+		t.Fatalf("second enqueue failed: %v", err)
+	}
+
+	if got := testutil.ToFloat64(analyticsLogQueueEnqueueAttempts.WithLabelValues("analytics")); got != 2 {
+		t.Fatalf("expected 2 enqueue attempts, got %v", got)
+	}
+	if got := testutil.ToFloat64(LogEventsDropped.WithLabelValues("analytics", "full")); got != 1 {
+		t.Fatalf("expected 1 dropped-full event, got %v", got)
+	}
+}
+
+func TestAnalyticsClient_WorkerRecordsDrainLatency(t *testing.T) {
+	analyticsLogQueueDrainLatency.Reset()
+
+	mockStub := new(mockAnalyticsService)
+	client := &AnalyticsClient{
+		timeout:  time.Second,
+		stub:     mockStub,
+		logQueue: make(chan *logQueueItem, 2),
+		stop:     make(chan struct{}),
+	}
+	client.startWorker()
+	defer client.Close()
+
+	req := &crudv1.LogInferenceEventRequest{
+		Event: &crudv1.InferenceEvent{
+			RequestId: "latency-metric",
+		},
+	}
+	mockStub.On("LogInferenceEvent", mock.Anything, req).Return(&crudv1.LogInferenceEventResponse{Success: true}, nil).Once()
+
+	_, err := client.LogInferenceEvent(context.Background(), req)
+	if err != nil {
+		t.Fatalf("Log failed: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	observer, err := analyticsLogQueueDrainLatency.GetMetricWithLabelValues("analytics")
+	if err != nil {
+		t.Fatalf("failed to get drain latency observer: %v", err)
+	}
+	histogram, ok := observer.(prometheus.Histogram)
+	if !ok {
+		t.Fatalf("drain latency metric is not a histogram")
+	}
+	metric := &dto.Metric{}
+	if err := histogram.Write(metric); err != nil {
+		t.Fatalf("failed to read drain latency metric: %v", err)
+	}
+	if metric.GetHistogram().GetSampleCount() < 1 {
+		t.Fatalf("expected drain latency sample count >= 1, got %d", metric.GetHistogram().GetSampleCount())
+	}
+	mockStub.AssertExpectations(t)
 }
