@@ -21,14 +21,11 @@ func (s *SQLStore) StoreGeneratedData(ctx context.Context, records []*pb.Generat
 		return 0, nil
 	}
 
-	txCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
-	defer cancel()
-
-	tx, err := s.db.BeginTx(txCtx, nil)
+	txCtx, cancel, tx, err := beginRequestBoundTx(ctx, s.db)
 	if err != nil {
-		return 0, db.MapDBError(fmt.Errorf("failed to begin transaction: %w", err))
+		return 0, err
 	}
-	defer tx.Rollback()
+	defer cancel()
 
 	// Insert generated records
 	recordQuery := `
@@ -48,7 +45,7 @@ func (s *SQLStore) StoreGeneratedData(ctx context.Context, records []*pb.Generat
 	for _, r := range records {
 		select {
 		case <-txCtx.Done():
-			return 0, db.MapDBError(txCtx.Err())
+			return 0, rollbackTxOnError(tx, txCtx.Err())
 		default:
 		}
 		numFeaturesJSON, _ := json.Marshal(r.NumericalFeatures)
@@ -66,7 +63,7 @@ func (s *SQLStore) StoreGeneratedData(ctx context.Context, records []*pb.Generat
 			numFeaturesJSON, catFeaturesJSON,
 		)
 		if err != nil {
-			return 0, db.MapDBError(fmt.Errorf("failed to insert record %s: %w", r.RecordId, err))
+			return 0, rollbackTxOnError(tx, fmt.Errorf("failed to insert record %s: %w", r.RecordId, err))
 		}
 	}
 
@@ -83,7 +80,7 @@ func (s *SQLStore) StoreGeneratedData(ctx context.Context, records []*pb.Generat
 	for _, m := range metadata {
 		select {
 		case <-txCtx.Done():
-			return 0, db.MapDBError(txCtx.Err())
+			return 0, rollbackTxOnError(tx, txCtx.Err())
 		default:
 		}
 		var fraudConfirmedAt sql.NullTime
@@ -97,7 +94,7 @@ func (s *SQLStore) StoreGeneratedData(ctx context.Context, records []*pb.Generat
 			m.IsTrainEligible,
 		)
 		if err != nil {
-			return 0, db.MapDBError(fmt.Errorf("failed to insert metadata for record %s: %w", m.RecordId, err))
+			return 0, rollbackTxOnError(tx, fmt.Errorf("failed to insert metadata for record %s: %w", m.RecordId, err))
 		}
 	}
 
@@ -494,19 +491,16 @@ func (s *SQLStore) FailGenerationJob(ctx context.Context, key string, errMsg str
 
 func (s *SQLStore) ClearAllData(ctx context.Context) ([]string, error) {
 	tables := []string{"generated_records", "feature_snapshots", "rules", "rule_versions", "backtest_results", "inference_events"}
-	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	txCtx, cancel, tx, err := beginRequestBoundTx(ctx, s.db)
+	if err != nil {
+		return nil, err
+	}
 	defer cancel()
 
-	tx, err := s.db.BeginTx(queryCtx, nil)
-	if err != nil {
-		return nil, db.MapDBError(fmt.Errorf("failed to begin transaction: %w", err))
-	}
-	defer tx.Rollback()
-
 	for _, table := range tables {
-		_, err := tx.ExecContext(queryCtx, fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE", table))
+		_, err := tx.ExecContext(txCtx, fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE", table))
 		if err != nil {
-			return nil, db.MapDBError(fmt.Errorf("failed to truncate table %s: %w", table, err))
+			return nil, rollbackTxOnError(tx, fmt.Errorf("failed to truncate table %s: %w", table, err))
 		}
 	}
 
@@ -525,19 +519,16 @@ func (s *SQLStore) LogInferenceEvent(ctx context.Context, event *pb.InferenceEve
 		return status.Error(codes.InvalidArgument, "tenant_id required")
 	}
 
-	txCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
-	defer cancel()
-
-	tx, err := s.db.BeginTx(txCtx, nil)
+	txCtx, cancel, tx, err := beginRequestBoundTx(ctx, s.db)
 	if err != nil {
-		return db.MapDBError(fmt.Errorf("failed to begin transaction: %w", err))
+		return err
 	}
-	defer tx.Rollback()
+	defer cancel()
 
 	// Convert rule impacts to JSON for the de-normalized column
 	impactsJSON, err := json.Marshal(event.RuleImpacts)
 	if err != nil {
-		return fmt.Errorf("failed to marshal rule impacts: %w", err)
+		return rollbackTxOnError(tx, fmt.Errorf("failed to marshal rule impacts: %w", err))
 	}
 
 	// Insert into inference_events
@@ -560,7 +551,7 @@ func (s *SQLStore) LogInferenceEvent(ctx context.Context, event *pb.InferenceEve
 		event.TenantId,
 	)
 	if err != nil {
-		return db.MapDBError(fmt.Errorf("failed to insert inference event: %w", err))
+		return rollbackTxOnError(tx, fmt.Errorf("failed to insert inference event: %w", err))
 	}
 
 	// Increment aggregates
@@ -588,7 +579,7 @@ func (s *SQLStore) LogInferenceEvent(ctx context.Context, event *pb.InferenceEve
 	`
 	_, err = tx.ExecContext(txCtx, queryDaily, event.TenantId, date, alertIncr, event.FinalScore, rulesFired)
 	if err != nil {
-		return db.MapDBError(fmt.Errorf("failed to update daily aggregates: %w", err))
+		return rollbackTxOnError(tx, fmt.Errorf("failed to update daily aggregates: %w", err))
 	}
 
 	queryHourly := `
@@ -602,7 +593,7 @@ func (s *SQLStore) LogInferenceEvent(ctx context.Context, event *pb.InferenceEve
 	`
 	_, err = tx.ExecContext(txCtx, queryHourly, event.TenantId, hour, alertIncr, event.FinalScore, rulesFired)
 	if err != nil {
-		return db.MapDBError(fmt.Errorf("failed to update hourly aggregates: %w", err))
+		return rollbackTxOnError(tx, fmt.Errorf("failed to update hourly aggregates: %w", err))
 	}
 
 	// Insert rule impacts
@@ -613,7 +604,7 @@ func (s *SQLStore) LogInferenceEvent(ctx context.Context, event *pb.InferenceEve
 	`
 	stmt, err := tx.PrepareContext(txCtx, queryImpact)
 	if err != nil {
-		return db.MapDBError(fmt.Errorf("failed to prepare impact statement: %w", err))
+		return rollbackTxOnError(tx, fmt.Errorf("failed to prepare impact statement: %w", err))
 	}
 	defer stmt.Close()
 
@@ -625,7 +616,7 @@ func (s *SQLStore) LogInferenceEvent(ctx context.Context, event *pb.InferenceEve
 			impact.ScoreDelta,
 		)
 		if err != nil {
-			return db.MapDBError(fmt.Errorf("failed to insert rule impact: %w", err))
+			return rollbackTxOnError(tx, fmt.Errorf("failed to insert rule impact: %w", err))
 		}
 	}
 
