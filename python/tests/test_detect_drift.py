@@ -1,6 +1,7 @@
 """Tests for drift detection functionality."""
 
 import logging
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
@@ -12,6 +13,7 @@ from training.detect_drift import (
     PSI_THRESHOLD_CRITICAL,
     calculate_psi,
     detect_drift,
+    get_reference_data,
 )
 
 
@@ -154,6 +156,179 @@ class TestCalculatePsi:
             "Insufficient bucket mass for PSI" in record.message
             for record in caplog.records
         )
+
+
+class TestReferenceResolution:
+    @staticmethod
+    def _version(
+        *,
+        version: int,
+        run_id: str,
+        current_stage: str = "None",
+        aliases: list[str] | None = None,
+    ):
+        return SimpleNamespace(
+            version=str(version),
+            run_id=run_id,
+            current_stage=current_stage,
+            aliases=aliases or [],
+        )
+
+    @patch("pandas.read_parquet")
+    @patch("mlflow.artifacts.download_artifacts")
+    @patch("mlflow.MlflowClient")
+    def test_reference_resolution_prefers_alias(
+        self,
+        mock_client_cls,
+        mock_download_artifacts,
+        mock_read_parquet,
+    ):
+        df = pd.DataFrame({"velocity_24h": [1.0], "amount_to_avg_ratio_30d": [1.0]})
+        mock_read_parquet.return_value = df
+        mock_download_artifacts.return_value = "/tmp/reference_data.parquet"
+        mock_client = mock_client_cls.return_value
+        mock_client.search_model_versions.return_value = [
+            self._version(version=5, run_id="run-v5", current_stage="Production"),
+            self._version(version=7, run_id="run-v7", aliases=["champion"]),
+        ]
+
+        with patch("training.detect_drift.DRIFT_REFERENCE_MODEL_ALIAS", "@champion"):
+            loaded, metadata = get_reference_data(include_metadata=True)
+
+        assert loaded is not None
+        assert metadata["resolution_strategy"] == "alias"
+        assert metadata["selected_model_version"] == "7"
+        mock_download_artifacts.assert_called_once_with(
+            run_id="run-v7",
+            artifact_path="reference_data.parquet",
+            dst_path=mock_download_artifacts.call_args.kwargs["dst_path"],
+        )
+
+    @patch("pandas.read_parquet")
+    @patch("mlflow.artifacts.download_artifacts")
+    @patch("mlflow.MlflowClient")
+    def test_reference_resolution_falls_back_to_stage_when_alias_missing(
+        self,
+        mock_client_cls,
+        mock_download_artifacts,
+        mock_read_parquet,
+        caplog,
+    ):
+        df = pd.DataFrame({"velocity_24h": [1.0], "amount_to_avg_ratio_30d": [1.0]})
+        mock_read_parquet.return_value = df
+        mock_download_artifacts.return_value = "/tmp/reference_data.parquet"
+        mock_client = mock_client_cls.return_value
+        mock_client.search_model_versions.return_value = [
+            self._version(version=4, run_id="run-v4", current_stage="Production"),
+            self._version(version=2, run_id="run-v2"),
+        ]
+
+        with (
+            patch("training.detect_drift.DRIFT_REFERENCE_MODEL_ALIAS", "@champion"),
+            caplog.at_level(logging.WARNING),
+        ):
+            _, metadata = get_reference_data(include_metadata=True)
+
+        assert metadata["resolution_strategy"] == "production_stage"
+        assert metadata["selected_model_version"] == "4"
+        assert "alias '@champion' not found" in caplog.text
+        assert "legacy Production stage" in caplog.text
+
+    @patch("pandas.read_parquet")
+    @patch("mlflow.artifacts.download_artifacts")
+    @patch("mlflow.MlflowClient")
+    def test_reference_resolution_falls_back_to_latest_when_alias_and_stage_missing(
+        self,
+        mock_client_cls,
+        mock_download_artifacts,
+        mock_read_parquet,
+        caplog,
+    ):
+        df = pd.DataFrame({"velocity_24h": [1.0], "amount_to_avg_ratio_30d": [1.0]})
+        mock_read_parquet.return_value = df
+        mock_download_artifacts.return_value = "/tmp/reference_data.parquet"
+        mock_client = mock_client_cls.return_value
+        mock_client.search_model_versions.return_value = [
+            self._version(version=1, run_id="run-v1"),
+            self._version(version=3, run_id="run-v3"),
+            self._version(version=2, run_id="run-v2"),
+        ]
+
+        with (
+            patch("training.detect_drift.DRIFT_REFERENCE_MODEL_ALIAS", ""),
+            caplog.at_level(logging.WARNING),
+        ):
+            _, metadata = get_reference_data(include_metadata=True)
+
+        assert metadata["resolution_strategy"] == "latest_version"
+        assert metadata["selected_model_version"] == "3"
+        assert "falling back to latest model version 3" in caplog.text
+
+    @patch("pandas.read_parquet")
+    @patch("mlflow.artifacts.download_artifacts")
+    @patch("mlflow.MlflowClient")
+    def test_reference_resolution_handles_ambiguous_alias_deterministically(
+        self,
+        mock_client_cls,
+        mock_download_artifacts,
+        mock_read_parquet,
+        caplog,
+    ):
+        df = pd.DataFrame({"velocity_24h": [1.0], "amount_to_avg_ratio_30d": [1.0]})
+        mock_read_parquet.return_value = df
+        mock_download_artifacts.return_value = "/tmp/reference_data.parquet"
+        mock_client = mock_client_cls.return_value
+        mock_client.search_model_versions.return_value = [
+            self._version(version=6, run_id="run-v6", aliases=["champion"]),
+            self._version(version=8, run_id="run-v8", aliases=["champion"]),
+            self._version(version=4, run_id="run-v4", current_stage="Production"),
+        ]
+
+        with (
+            patch("training.detect_drift.DRIFT_REFERENCE_MODEL_ALIAS", "@champion"),
+            caplog.at_level(logging.WARNING),
+        ):
+            _, metadata = get_reference_data(include_metadata=True)
+
+        assert metadata["resolution_strategy"] == "alias"
+        assert metadata["alias_ambiguous"] is True
+        assert metadata["alias_candidate_count"] == 2
+        assert metadata["selected_model_version"] == "8"
+        assert "resolved to 2 candidates" in caplog.text
+
+    @patch("training.detect_drift.get_live_data")
+    @patch("training.detect_drift.get_reference_data")
+    def test_detect_drift_surfaces_reference_resolution_metadata(
+        self, mock_reference, mock_live
+    ):
+        reference_df = pd.DataFrame(
+            {
+                "velocity_24h": [1, 2, 3] * 200,
+                "amount_to_avg_ratio_30d": [1.0, 1.5, 2.0] * 200,
+                "balance_volatility_z_score": [-1.0, 0.0, 1.0] * 200,
+            }
+        )
+        live_df = pd.DataFrame(
+            {
+                "velocity_24h": [1, 2, 3] * 200,
+                "amount_to_avg_ratio_30d": [1.0, 1.5, 2.0] * 200,
+                "balance_volatility_z_score": [-1.0, 0.0, 1.0] * 200,
+            }
+        )
+        mock_reference.return_value = (
+            reference_df,
+            {
+                "resolution_strategy": "alias",
+                "selected_model_version": "9",
+                "selected_run_id": "run-v9",
+            },
+        )
+        mock_live.return_value = live_df
+
+        result = detect_drift()
+
+        assert result["reference_resolution"]["resolution_strategy"] == "alias"
+        assert result["reference_resolution"]["selected_model_version"] == "9"
 
 
 class TestDetectDrift:
