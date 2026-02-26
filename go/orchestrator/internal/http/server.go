@@ -7,6 +7,9 @@ import (
 )
 
 func NewServer(addr string, logger *slog.Logger, handler *Handler, readTimeout, writeTimeout, idleTimeout time.Duration) *http.Server {
+	// Resolve env-driven global rate limit values at startup.
+	resetGlobalLimiterFromEnv()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", healthHandler)
 	if handler != nil {
