@@ -294,7 +294,55 @@ class TestReferenceResolution:
         assert metadata["alias_ambiguous"] is True
         assert metadata["alias_candidate_count"] == 2
         assert metadata["selected_model_version"] == "8"
+        assert metadata["selected_model_version"] == "8"
         assert "resolved to 2 candidates" in caplog.text
+
+    @patch("mlflow.MlflowClient")
+    def test_reference_resolution_handles_empty_registry(self, mock_client_cls):
+        """Empty model registry results return safe 'no reference' outcome."""
+        mock_client = mock_client_cls.return_value
+        mock_client.search_model_versions.return_value = []
+
+        loaded, metadata = get_reference_data(include_metadata=True)
+
+        assert loaded is None
+        assert metadata["resolution_strategy"] is None
+        assert metadata["requested_alias"] is None
+
+    @patch("training.detect_drift.logger")
+    @patch("mlflow.MlflowClient")
+    def test_fallback_warnings_rate_limited(self, mock_client_cls, mock_logger):
+        """Production stage fallback warns once and is then suppressed."""
+        mock_client = mock_client_cls.return_value
+        mock_client.search_model_versions.return_value = [
+            self._version(version=4, run_id="run-v4", current_stage="Production"),
+        ]
+
+        # Reset global flags
+        import training.detect_drift
+
+        training.detect_drift._DRIFT_STAGE_FALLBACK_WARNED = False
+
+        # First resolution: should warn
+        from training.detect_drift import _select_reference_model_version
+
+        _select_reference_model_version(
+            mock_client.search_model_versions.return_value, alias_name=None
+        )
+        assert any(
+            "legacy Production stage" in str(call)
+            for call in mock_logger.warning.call_args_list
+        )
+
+        # Second resolution: should NOT warn again (process-level limit)
+        mock_logger.warning.reset_mock()
+        _select_reference_model_version(
+            mock_client.search_model_versions.return_value, alias_name=None
+        )
+        assert not any(
+            "legacy Production stage" in str(call)
+            for call in mock_logger.warning.call_args_list
+        )
 
     @patch("training.detect_drift.get_live_data")
     @patch("training.detect_drift.get_reference_data")
