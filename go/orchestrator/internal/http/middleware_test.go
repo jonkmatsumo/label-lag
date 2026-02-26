@@ -135,7 +135,7 @@ func TestGlobalRateLimitMiddleware_AppliesAcrossTenants(t *testing.T) {
 		t.Fatalf("expected global 429 for rotating tenant, got %d", recB.Code)
 	}
 
-	if got := testutil.ToFloat64(globalRateLimitedTotal.WithLabelValues("/analytics/overview", "429")); got != 1 {
+	if got := testutil.ToFloat64(globalRateLimitedTotal.WithLabelValues("/analytics/overview", "GET", "429")); got != 1 {
 		t.Fatalf("expected global limiter metric to increment by 1, got %v", got)
 	}
 }

@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -11,6 +13,7 @@ import (
 // DBPoolStatsCollector exports sql.DB pool stats as Prometheus metrics.
 type DBPoolStatsCollector struct {
 	db *sql.DB
+	mu sync.Mutex
 
 	openConnectionsDesc    *prometheus.Desc
 	inUseConnectionsDesc   *prometheus.Desc
@@ -20,6 +23,10 @@ type DBPoolStatsCollector struct {
 	waitDurationDesc       *prometheus.Desc
 	maxIdleClosedDesc      *prometheus.Desc
 	maxLifetimeClosedDesc  *prometheus.Desc
+	acquireDurationHist    prometheus.Histogram
+
+	lastWaitCount    int64
+	lastWaitDuration time.Duration
 }
 
 func NewDBPoolStatsCollector(db *sql.DB) *DBPoolStatsCollector {
@@ -73,6 +80,11 @@ func NewDBPoolStatsCollector(db *sql.DB) *DBPoolStatsCollector {
 			nil,
 			nil,
 		),
+		acquireDurationHist: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Name:    "analytics_db_pool_acquire_duration_seconds",
+			Help:    "Proxy histogram for DB connection acquisition wait duration based on incremental pool wait stats.",
+			Buckets: []float64{.0005, .001, .0025, .005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5},
+		}),
 	}
 }
 
@@ -85,6 +97,7 @@ func (c *DBPoolStatsCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.waitDurationDesc
 	ch <- c.maxIdleClosedDesc
 	ch <- c.maxLifetimeClosedDesc
+	c.acquireDurationHist.Describe(ch)
 }
 
 func (c *DBPoolStatsCollector) Collect(ch chan<- prometheus.Metric) {
@@ -101,6 +114,18 @@ func (c *DBPoolStatsCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(c.waitDurationDesc, prometheus.CounterValue, stats.WaitDuration.Seconds())
 	ch <- prometheus.MustNewConstMetric(c.maxIdleClosedDesc, prometheus.CounterValue, float64(stats.MaxIdleClosed))
 	ch <- prometheus.MustNewConstMetric(c.maxLifetimeClosedDesc, prometheus.CounterValue, float64(stats.MaxLifetimeClosed))
+
+	c.mu.Lock()
+	deltaWaitCount := stats.WaitCount - c.lastWaitCount
+	deltaWaitDuration := stats.WaitDuration - c.lastWaitDuration
+	c.lastWaitCount = stats.WaitCount
+	c.lastWaitDuration = stats.WaitDuration
+	c.mu.Unlock()
+
+	if deltaWaitCount > 0 && deltaWaitDuration > 0 {
+		c.acquireDurationHist.Observe(deltaWaitDuration.Seconds() / float64(deltaWaitCount))
+	}
+	c.acquireDurationHist.Collect(ch)
 }
 
 func RegisterDBPoolStatsCollector(reg prometheus.Registerer, db *sql.DB) error {

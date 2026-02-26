@@ -68,6 +68,60 @@ func TestLogInferenceEvent_DeadlineExceededRollsBack(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestStoreGeneratedData_CanceledContextRollsBack(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+	now := time.Now().UTC()
+	records := []*pb.GeneratedRecord{
+		newGeneratedRecordForTxTest("rec-cancel-1", now),
+		newGeneratedRecordForTxTest("rec-cancel-2", now.Add(time.Second)),
+	}
+
+	mock.ExpectBegin()
+	mock.ExpectExec("INSERT INTO generated_records").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("INSERT INTO generated_records").WillReturnError(context.Canceled)
+	mock.ExpectRollback()
+
+	inserted, err := s.StoreGeneratedData(context.Background(), records, nil)
+	require.Error(t, err)
+	assert.Equal(t, int64(0), inserted)
+	assert.Equal(t, codes.Canceled, status.Code(err))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestLogInferenceEvent_CanceledContextRollsBack(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+	event := &pb.InferenceEvent{
+		RequestId:  "req-cancel",
+		Timestamp:  timestamppb.New(time.Now().UTC()),
+		TenantId:   "tenant-1",
+		UserId:     "user-1",
+		ModelScore: 40,
+		FinalScore: 55,
+		Decision:   DecisionReview,
+		RuleImpacts: []*pb.RuleImpact{
+			{RuleId: "rule-1", ScoreDelta: 8},
+		},
+	}
+
+	mock.ExpectBegin()
+	mock.ExpectExec("INSERT INTO inference_events").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("INSERT INTO aggregates_daily").WillReturnError(context.Canceled)
+	mock.ExpectRollback()
+
+	err = s.LogInferenceEvent(context.Background(), event)
+	require.Error(t, err)
+	assert.Equal(t, codes.Canceled, status.Code(err))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func newGeneratedRecordForTxTest(id string, ts time.Time) *pb.GeneratedRecord {
 	timestamp := timestamppb.New(ts)
 	return &pb.GeneratedRecord{

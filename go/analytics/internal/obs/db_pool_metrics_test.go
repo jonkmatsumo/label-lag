@@ -6,6 +6,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/require"
 )
 
@@ -39,6 +40,7 @@ func TestDBPoolStatsCollector_EmitsBoundedMetrics(t *testing.T) {
 		"analytics_db_pool_wait_duration_seconds_total": false,
 		"analytics_db_pool_max_idle_closed_total":       false,
 		"analytics_db_pool_max_lifetime_closed_total":   false,
+		"analytics_db_pool_acquire_duration_seconds":    false,
 	}
 
 	for _, family := range metricFamilies {
@@ -56,4 +58,23 @@ func TestDBPoolStatsCollector_EmitsBoundedMetrics(t *testing.T) {
 	for name, seen := range expected {
 		require.Truef(t, seen, "expected metric family %s to be exported", name)
 	}
+}
+
+func TestDBPoolStatsCollector_AcquireDurationHistogramCanObserveSamples(t *testing.T) {
+	db, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	collector := NewDBPoolStatsCollector(db)
+
+	// Simulate one incremental wait observation.
+	collector.mu.Lock()
+	collector.lastWaitCount = 0
+	collector.lastWaitDuration = 0
+	collector.mu.Unlock()
+
+	collector.acquireDurationHist.Observe(0.02)
+	metric := &dto.Metric{}
+	require.NoError(t, collector.acquireDurationHist.Write(metric))
+	require.GreaterOrEqual(t, metric.GetHistogram().GetSampleCount(), uint64(1))
 }
