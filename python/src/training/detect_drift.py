@@ -97,6 +97,8 @@ PSI_MIN_NONEMPTY_BUCKETS_RATIO = float(
     os.getenv("DRIFT_PSI_MIN_NONEMPTY_BUCKETS_RATIO", "0.6")
 )
 DRIFT_REFERENCE_MODEL_ALIAS = os.getenv("DRIFT_REFERENCE_MODEL_ALIAS", "").strip()
+_DRIFT_STAGE_FALLBACK_WARNED = False
+_DRIFT_LATEST_FALLBACK_WARNED = False
 
 
 def calculate_psi(
@@ -243,7 +245,16 @@ def _select_reference_model_version(
     *,
     alias_name: str | None,
 ) -> tuple[Any | None, dict[str, Any]]:
-    """Resolve reference model version with alias-first deterministic policy."""
+    """Resolve reference model version with a deterministic fallback policy.
+
+    Resolution Order:
+    1. Explicit Alias: Match by DRIFT_REFERENCE_MODEL_ALIAS (e.g., 'champion').
+       If multiple versions share the same alias, selects the highest version.
+    2. Production Stage: Fall back to versions in the 'Production' stage.
+       If multiple exist, selects the highest version. (Deprecated: Warns once).
+    3. Latest Version: Final fallback to the highest registered version number.
+       (Warns once).
+    """
     metadata: dict[str, Any] = {
         "requested_alias": None,
         "resolution_strategy": None,
@@ -297,19 +308,30 @@ def _select_reference_model_version(
             stage_candidates, key=_safe_model_version_number, reverse=True
         )[0]
         metadata["resolution_strategy"] = "production_stage"
-        logger.warning(
-            "Using legacy Production stage for drift reference resolution. "
-            "Set DRIFT_REFERENCE_MODEL_ALIAS for deterministic alias-based selection."
-        )
+
+        global _DRIFT_STAGE_FALLBACK_WARNED
+        if not _DRIFT_STAGE_FALLBACK_WARNED:
+            logger.warning(
+                "Using legacy Production stage for drift reference resolution. "
+                "Set DRIFT_REFERENCE_MODEL_ALIAS for deterministic "
+                "alias-based selection."
+            )
+            _DRIFT_STAGE_FALLBACK_WARNED = True
+
         return selected_stage_version, metadata
 
     selected_latest = sorted(versions, key=_safe_model_version_number, reverse=True)[0]
     metadata["resolution_strategy"] = "latest_version"
-    logger.warning(
-        "No alias/stage reference found for drift; "
-        "falling back to latest model version %s.",
-        getattr(selected_latest, "version", "unknown"),
-    )
+
+    global _DRIFT_LATEST_FALLBACK_WARNED
+    if not _DRIFT_LATEST_FALLBACK_WARNED:
+        logger.warning(
+            "No alias/stage reference found for drift; "
+            "falling back to latest model version %s.",
+            getattr(selected_latest, "version", "unknown"),
+        )
+        _DRIFT_LATEST_FALLBACK_WARNED = True
+
     return selected_latest, metadata
 
 

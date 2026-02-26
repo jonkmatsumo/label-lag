@@ -181,3 +181,99 @@ class TestSelectedTrialOverride:
                     tuning_tags_found = True
                     break
             assert tuning_tags_found, "Tuning tags not found"
+
+
+class TestResumeValidation:
+    """Tests for study resume validation (invariants)."""
+
+    @pytest.mark.slow
+    @patch("model.tuning.optuna.load_study")
+    @patch("model.tuning._env_flag")
+    @patch("model.tuning.mlflow")
+    def test_resume_invariant_mismatch_actionable_error(
+        self, mock_mlflow, mock_env_flag, mock_load_study
+    ):
+        """Actionable error when invariants mismatch in strict mode."""
+        mock_env_flag.return_value = True  # Strict mode
+        mock_study = MagicMock()
+        mock_study.user_attrs = {
+            "objective_version": "xgb_objective_v2",
+            "dataset_identity": "old_data",
+            "seed": "42",
+        }
+        mock_load_study.return_value = mock_study
+
+        with pytest.raises(ValueError) as exc:
+            from model.tuning import run_tuning_study
+
+            run_tuning_study(
+                pd.DataFrame(),
+                pd.Series(),
+                pd.DataFrame(),
+                pd.Series(),
+                dataset_identity="new_data",
+                objective_version="xgb_objective_v2",
+                job_id="job_123",
+                storage_url="sqlite:///test.db",
+            )
+
+        assert "optuna_resume_invariant_mismatch_strict" in str(exc.value)
+        assert "dataset_identity (expected=new_data, actual=old_data)" in str(exc.value)
+
+    @pytest.mark.slow
+    @patch("model.tuning.optuna.load_study")
+    @patch("model.tuning.logger")
+    @patch("model.tuning.mlflow")
+    def test_resume_legacy_study_warns_once(
+        self, mock_mlflow, mock_logger, mock_load_study
+    ):
+        """Legacy studies (missing objective_version) warn once and proceed."""
+        mock_study = MagicMock()
+        mock_study.user_attrs = {
+            "split_config_hash": "some_hash",
+            "seed": "42",
+        }  # Missing objective_version
+        mock_load_study.return_value = mock_study
+
+        with (
+            patch("model.tuning.create_tuning_study"),
+            patch("model.tuning.DEFAULT_SEARCH_SPACE", {}),
+        ):
+            # Reset the global warned flag for testing
+            import model.tuning
+            from model.tuning import run_tuning_study
+
+            model.tuning._LEGACY_STUDY_WARNED = False
+
+            # First run: should warn
+            run_tuning_study(
+                pd.DataFrame(),
+                pd.Series(),
+                pd.DataFrame(),
+                pd.Series(),
+                objective_version="xgb_objective_v2",
+                job_id="job_123",
+                storage_url="sqlite:///test.db",
+                n_trials=0,
+            )
+            assert any(
+                "optuna_resume_legacy_study" in str(call)
+                for call in mock_logger.warning.call_args_list
+            )
+
+            # Second run: should NOT warn again (process-level rate limit)
+            mock_logger.warning.reset_mock()
+            run_tuning_study(
+                pd.DataFrame(),
+                pd.Series(),
+                pd.DataFrame(),
+                pd.Series(),
+                objective_version="xgb_objective_v2",
+                job_id="job_456",
+                storage_url="sqlite:///test.db",
+                n_trials=0,
+            )
+            assert not any(
+                "optuna_resume_legacy_study" in str(call)
+                for call in mock_logger.warning.call_args_list
+            )
