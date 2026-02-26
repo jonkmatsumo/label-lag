@@ -159,6 +159,22 @@ def _build_study_invariants(
     return invariants
 
 
+def _resume_invariant_mismatches(
+    *,
+    stored_attrs: dict[str, Any],
+    expected_attrs: dict[str, str],
+) -> list[str]:
+    mismatches: list[str] = []
+    for key, expected_value in expected_attrs.items():
+        stored_value = stored_attrs.get(key)
+        if stored_value is None:
+            mismatches.append(f"{key}=missing")
+            continue
+        if str(stored_value).strip() != expected_value:
+            mismatches.append(key)
+    return mismatches
+
+
 def _create_objective(
     x_train: pd.DataFrame,
     y_train: pd.Series,
@@ -473,8 +489,30 @@ def run_tuning_study(
                         job_id,
                         seed,
                     )
+
+                invariant_mismatches = _resume_invariant_mismatches(
+                    stored_attrs=existing.user_attrs,
+                    expected_attrs=study_invariants,
+                )
+                if invariant_mismatches:
+                    mismatch_summary = ", ".join(invariant_mismatches)
+                    strict_validation = _env_flag(
+                        "STRICT_TUNING_RESUME_VALIDATION", default=False
+                    )
+                    message = (
+                        "optuna_resume_invariant_mismatch "
+                        f"(job_id={job_id}; mismatches={mismatch_summary})"
+                    )
+                    if strict_validation:
+                        raise ValueError(
+                            f"{message}; set STRICT_TUNING_RESUME_VALIDATION=0 "
+                            "to allow warn-only behavior."
+                        )
+                    logger.warning("%s; continuing in warn-only mode.", message)
             except KeyError:
                 pass  # Study doesn't exist yet — first run, use caller seed.
+            except ValueError:
+                raise
             except Exception:
                 pass  # Storage unavailable or lookup error; continue best-effort.
 
