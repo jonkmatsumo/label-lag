@@ -50,6 +50,13 @@ inference_feature_coverage_ratio = Histogram(
     buckets=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.99, 1.0),
 )
 
+# Coverage SLO guardrail counter (bounded bucket label set only).
+inference_feature_coverage_below_threshold_total = Counter(
+    "inference_feature_coverage_below_threshold_total",
+    "Times inference feature coverage fell below configured warning threshold.",
+    ["bucket"],
+)
+
 # Model benchmark latency samples during load-time benchmark.
 inference_benchmark_sample_latency_ms = Histogram(
     "forecast_inference_benchmark_sample_latency_ms",

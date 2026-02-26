@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 
 from training.detect_drift import (
+    MIN_REFERENCE_SAMPLES,
     PSI_THRESHOLD_CRITICAL,
     calculate_psi,
     detect_drift,
@@ -126,6 +127,33 @@ class TestCalculatePsi:
 
         with pytest.raises(ValueError, match="Unknown buckettype"):
             calculate_psi(expected, actual, buckettype="invalid")
+
+    def test_bucket_mass_guardrail_suppresses_noisy_small_sample_signal(self, caplog):
+        """Sparse bucket mass above minimum sample size should suppress PSI alerting."""
+        sample_size = MIN_REFERENCE_SAMPLES + 20
+        expected = np.array([0.0] * (sample_size - 10) + [1.0] * 10)
+        actual = np.array([0.0] * (sample_size - 35) + [7.0] * 35)
+
+        with caplog.at_level(logging.WARNING):
+            psi_first, metadata_first = calculate_psi(
+                expected, actual, buckettype="quantiles", buckets=10
+            )
+            psi_second, metadata_second = calculate_psi(
+                expected, actual, buckettype="quantiles", buckets=10
+            )
+
+        assert psi_first == 0.0
+        assert psi_second == 0.0
+        assert metadata_first == metadata_second
+        assert metadata_first["bucket_mass_guardrail_applied"] is True
+        assert metadata_first["bucket_mass_ok"] is False
+        assert metadata_first["drift_error"] == "insufficient_bucket_mass"
+        assert "nonempty_buckets" in metadata_first
+        assert "min_expected_count" in metadata_first
+        assert any(
+            "Insufficient bucket mass for PSI" in record.message
+            for record in caplog.records
+        )
 
 
 class TestDetectDrift:
@@ -360,3 +388,54 @@ class TestDetectDrift:
 
         # Verify get_live_data was NOT called
         mock_live.assert_not_called()
+
+    @patch("training.detect_drift.get_reference_data")
+    @patch("training.detect_drift.get_live_data")
+    def test_guardrail_sets_drift_error_and_suppresses_alerts(
+        self, mock_live, mock_ref, caplog
+    ):
+        """Guardrail should suppress drift signaling on insufficient bucket mass."""
+        sample_size = MIN_REFERENCE_SAMPLES + 20
+        base_reference = np.array([0.0] * (sample_size - 10) + [1.0] * 10)
+        base_live = np.array([0.0] * (sample_size - 30) + [8.0] * 30)
+
+        ref_data = pd.DataFrame(
+            {
+                "velocity_24h": base_reference,
+                "amount_to_avg_ratio_30d": base_reference * 2.0,
+                "balance_volatility_z_score": base_reference - 2.0,
+            }
+        )
+        live_data = pd.DataFrame(
+            {
+                "velocity_24h": base_live,
+                "amount_to_avg_ratio_30d": base_live * 2.0,
+                "balance_volatility_z_score": base_live - 2.0,
+            }
+        )
+        mock_ref.return_value = ref_data
+        mock_live.return_value = live_data
+
+        with caplog.at_level(logging.WARNING):
+            result = detect_drift()
+
+        assert result["drift_detected"] is False
+        assert result["drift_error"] == "insufficient_bucket_mass"
+        assert result["alerts"] == []
+
+        for feature in (
+            "velocity_24h",
+            "amount_to_avg_ratio_30d",
+            "balance_volatility_z_score",
+        ):
+            feature_result = result["features"][feature]
+            assert feature_result["status"] == "OK"
+            assert feature_result["drift_error"] == "insufficient_bucket_mass"
+            assert feature_result["bucketing"]["bucket_mass_ok"] is False
+            assert "nonempty_buckets" in feature_result["bucketing"]
+            assert "min_expected_count" in feature_result["bucketing"]
+
+        assert any(
+            "Insufficient bucket mass for PSI" in record.message
+            for record in caplog.records
+        )

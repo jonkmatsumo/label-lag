@@ -34,6 +34,28 @@ MODEL_NAME = "ach-fraud-detection"
 FALLBACK_MODEL_PATH = Path(__file__).parent.parent / "model" / "fallback_model.pkl"
 
 
+def _load_benchmark_enabled() -> bool:
+    raw = os.getenv("INFERENCE_BENCHMARK_ENABLED", "true")
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _load_benchmark_sample_rate() -> float:
+    raw = os.getenv("INFERENCE_BENCHMARK_SAMPLE_RATE", "1.0")
+    try:
+        parsed = float(raw)
+    except ValueError:
+        logger.warning(
+            "Invalid INFERENCE_BENCHMARK_SAMPLE_RATE=%s; defaulting to 1.0",
+            raw,
+        )
+        return 1.0
+    return max(0.0, min(1.0, parsed))
+
+
+INFERENCE_BENCHMARK_ENABLED = _load_benchmark_enabled()
+INFERENCE_BENCHMARK_SAMPLE_RATE = _load_benchmark_sample_rate()
+
+
 @dataclass
 class ModelStateBundle:
     """Bundle of model and associated metadata for atomic swap."""
@@ -91,6 +113,8 @@ class ModelManager:
         self._mlflow_failure_reason: str = "unknown"
         self._benchmark_last_run_ts: float | None = None
         self._benchmark_last_status: str | None = None
+        self._feature_coverage_warning_active: bool = False
+        self._feature_coverage_warning_last_seen_ts: float | None = None
         self._initialized = True
 
     @staticmethod
@@ -312,7 +336,24 @@ class ModelManager:
                 "benchmark_last_run_ts": self._benchmark_last_run_ts,
                 "benchmark_last_status": self._benchmark_last_status,
                 "active_model_version": self.model_version,
+                "feature_coverage_warning_active": (
+                    self._feature_coverage_warning_active
+                ),
+                "feature_coverage_warning_last_seen_ts": (
+                    self._feature_coverage_warning_last_seen_ts
+                ),
             }
+
+    def update_feature_coverage_warning(
+        self, *, active: bool, observed_ts: float | None = None
+    ) -> None:
+        """Update coverage warning diagnostics state."""
+        with self._lock:
+            self._feature_coverage_warning_active = bool(active)
+            if active:
+                self._feature_coverage_warning_last_seen_ts = (
+                    observed_ts if observed_ts is not None else time.time()
+                )
 
     def load_production_model(self) -> bool:
         """Load the production model from MLflow registry.
@@ -664,6 +705,7 @@ class ModelManager:
         n_samples: int = 100,
         *,
         log_to_mlflow: bool | None = None,
+        sample_rng: np.random.Generator | None = None,
     ) -> None:
         """Benchmark inference latency and emit runtime metrics.
 
@@ -673,9 +715,16 @@ class ModelManager:
             n_samples: Number of samples to use for benchmarking.
             log_to_mlflow: Whether to also emit benchmark metrics to MLflow run.
                 Defaults to True for explicit bundle calls and False otherwise.
+            sample_rng: Optional RNG used for deterministic sample-rate gating.
         """
         if log_to_mlflow is None:
             log_to_mlflow = bundle is not None
+
+        if not INFERENCE_BENCHMARK_ENABLED:
+            self._benchmark_last_status = "skipped_disabled"
+            self._benchmark_last_run_ts = time.time()
+            logger.debug("Inference benchmark disabled by INFERENCE_BENCHMARK_ENABLED")
+            return
 
         runtime_bundle = self._resolve_runtime_bundle(bundle)
         model = getattr(runtime_bundle, "model", None) if runtime_bundle else None
@@ -686,6 +735,21 @@ class ModelManager:
         if version in self._benchmarked_versions:
             logger.debug(f"Skipping benchmark for version {version} (already run)")
             return
+
+        if INFERENCE_BENCHMARK_SAMPLE_RATE < 1.0:
+            sample_draw = self._draw_benchmark_sample(sample_rng)
+            if sample_draw >= INFERENCE_BENCHMARK_SAMPLE_RATE:
+                self._benchmarked_versions.add(version)
+                self._benchmark_last_status = "skipped_sampled_out"
+                self._benchmark_last_run_ts = time.time()
+                logger.debug(
+                    "Skipping benchmark for version %s due to sampling "
+                    "(draw=%.5f sample_rate=%.3f)",
+                    version,
+                    sample_draw,
+                    INFERENCE_BENCHMARK_SAMPLE_RATE,
+                )
+                return
 
         logger.info(f"Starting inference benchmark for version {version}")
 
@@ -777,6 +841,12 @@ class ModelManager:
             self._benchmark_last_status = "failed"
 
         self._benchmark_last_run_ts = time.time()
+
+    @staticmethod
+    def _draw_benchmark_sample(rng: np.random.Generator | None = None) -> float:
+        """Draw a random value in [0,1) for sample-rate gating."""
+        generator = rng if rng is not None else np.random.default_rng()
+        return float(generator.random())
 
     def _load_fallback_model(self) -> ModelStateBundle | None:
         """Attempt to load fallback model from local file.

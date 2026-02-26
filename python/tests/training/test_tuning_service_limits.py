@@ -28,13 +28,17 @@ class FakeContext:
         raise FakeRpcAbortError(code=code, details=details)
 
 
-def _request(n_trials: int = 5, timeout_minutes: int = 30) -> training_pb2.TrainRequest:
+def _request(
+    n_trials: int = 5,
+    timeout_minutes: int = 30,
+    split_strategy: str = "temporal",
+) -> training_pb2.TrainRequest:
     return training_pb2.TrainRequest(
         training_window_days=30,
         selected_feature_columns=["f1"],
         feature_resolution_mode="strict",
         split_config=training_pb2.SplitConfig(
-            strategy="temporal",
+            strategy=split_strategy,
             validation_fraction=0.2,
             seed=42,
         ),
@@ -92,3 +96,37 @@ def test_start_tuning_rejects_when_concurrency_cap_reached(monkeypatch):
 
     assert exc.value.code() == grpc.StatusCode.RESOURCE_EXHAUSTED
     assert "Maximum concurrent tuning jobs reached" in exc.value.details()
+
+
+def test_validate_rejects_unsupported_split_strategy_when_strict(monkeypatch):
+    monkeypatch.setattr("training.service.DataLoader.FEATURE_COLUMNS", ["f1"])
+    monkeypatch.setenv("STRICT_SPLIT_STRATEGY_VALIDATION", "1")
+
+    service = TrainingService(InMemoryJobStore(), JobQueue())
+    context = FakeContext()
+
+    with pytest.raises(FakeRpcAbortError) as exc:
+        service.ValidateTrainRequest(
+            _request(split_strategy="temporal_stratified"),
+            context,
+        )
+
+    assert exc.value.code() == grpc.StatusCode.INVALID_ARGUMENT
+    assert "Unsupported split strategy 'temporal_stratified'" in exc.value.details()
+    assert "Supported strategies" in exc.value.details()
+
+
+def test_validate_warn_only_mode_allows_unsupported_split_strategy(monkeypatch):
+    monkeypatch.setattr("training.service.DataLoader.FEATURE_COLUMNS", ["f1"])
+    monkeypatch.setenv("STRICT_SPLIT_STRATEGY_VALIDATION", "0")
+
+    service = TrainingService(InMemoryJobStore(), JobQueue())
+    context = FakeContext()
+
+    response = service.ValidateTrainRequest(
+        _request(split_strategy="expanding_window"),
+        context,
+    )
+
+    assert response.valid is True
+    assert any("compatibility mode" in warning for warning in response.warnings)

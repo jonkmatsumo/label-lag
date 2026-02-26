@@ -26,8 +26,9 @@ from training.jobs import (
     bound_params,
     truncate_error_message,
 )
+from training.metrics import observe_training_job_cancellation
 from training.optuna_resume import get_optuna_storage_url, load_existing_tuning_study
-from training.schemas import SplitConfig, TuningConfig
+from training.schemas import SplitConfig, SplitStrategy, TuningConfig
 from training.v1 import training_pb2, training_pb2_grpc
 
 logger = logging.getLogger(__name__)
@@ -174,6 +175,45 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
         if job.error_message:
             summary.error_message = truncate_error_message(job.error_message)
         return summary
+
+    @staticmethod
+    def _apply_split_strategy_validation_policy(
+        split_strategy: str,
+        *,
+        context=None,
+        warnings: list[str] | None = None,
+    ) -> None:
+        """Apply strict/compat split-strategy validation policy."""
+        unsupported_strategies = {
+            SplitStrategy.TEMPORAL_STRATIFIED.value,
+            SplitStrategy.EXPANDING_WINDOW.value,
+        }
+        supported_strategies = [
+            SplitStrategy.TEMPORAL.value,
+            SplitStrategy.GROUP_TEMPORAL.value,
+            SplitStrategy.KFOLD_TEMPORAL.value,
+        ]
+        strict_enabled = _env_flag("STRICT_SPLIT_STRATEGY_VALIDATION", False)
+
+        if split_strategy not in unsupported_strategies:
+            return
+
+        if strict_enabled:
+            message = (
+                f"Unsupported split strategy '{split_strategy}' in strict mode. "
+                f"Supported strategies: {supported_strategies}."
+            )
+            if context is not None:
+                context.abort(grpc.StatusCode.INVALID_ARGUMENT, message)
+            raise ValueError(message)
+
+        compatibility_warning = (
+            f"Split strategy '{split_strategy}' is not implemented; "
+            "continuing in compatibility mode (warn-only delegation)."
+        )
+        logger.warning(compatibility_warning)
+        if warnings is not None:
+            warnings.append(compatibility_warning)
 
     def ClearData(self, request, context):  # noqa: N802
         """Clear all data from the database via Analytics service."""
@@ -338,6 +378,10 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                         "validation_fraction": request.split_config.validation_fraction,
                         "seed": request.split_config.seed,
                     }
+                    self._apply_split_strategy_validation_policy(
+                        str(split_data["strategy"]),
+                        context=context,
+                    )
                     split_config = SplitConfig(**split_data)
                 except ValidationError as e:
                     context.abort(
@@ -647,6 +691,11 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                     "validation_fraction": request.split_config.validation_fraction,
                     "seed": request.split_config.seed,
                 }
+                self._apply_split_strategy_validation_policy(
+                    str(split_dict["strategy"]),
+                    context=context,
+                    warnings=warnings,
+                )
 
             config_to_hash = {
                 "features": final_feature_list,
@@ -840,6 +889,10 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                 "validation_fraction": request.split_config.validation_fraction,
                 "seed": request.split_config.seed,
             }
+            self._apply_split_strategy_validation_policy(
+                str(split_config["strategy"]),
+                context=context,
+            )
             tuning_config = {
                 "enabled": True,
                 "strategy": request.tuning_config.strategy,
@@ -1227,6 +1280,9 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                 j.ended_at = now
 
             self.job_store.update(request.job_id, set_canceled)
+            canceled_job = self.job_store.get(request.job_id)
+            if canceled_job:
+                observe_training_job_cancellation(canceled_job, canceled_at=now)
             self.job_queue.cancel(request.job_id)
             return self.GetTuningStatus(request, context)
 
@@ -1327,6 +1383,9 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
         self.job_store.update(job.job_id, finalize)
         if target_status == TuningJobStatus.CANCELED:
             self.job_queue.cancel(job.job_id)
+            canceled_job = self.job_store.get(job.job_id)
+            if canceled_job:
+                observe_training_job_cancellation(canceled_job, canceled_at=now)
         return training_pb2.FinalizeTuningJobResponse(
             job_id=job.job_id,
             status=target_status.value,

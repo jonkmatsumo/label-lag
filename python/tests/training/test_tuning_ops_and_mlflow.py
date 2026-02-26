@@ -123,19 +123,21 @@ def test_cancel_tuning_job_pending_is_immediate_and_idempotent():
     job = _create_job(store, status=TuningJobStatus.PENDING)
     queue.enqueue(job.job_id)
 
-    first = service.CancelTuningJob(
-        training_pb2.CancelTuningJobRequest(job_id=job.job_id),
-        FakeContext(),
-    )
-    second = service.CancelTuningJob(
-        training_pb2.CancelTuningJobRequest(job_id=job.job_id),
-        FakeContext(),
-    )
+    with patch("training.service.observe_training_job_cancellation") as mock_observe:
+        first = service.CancelTuningJob(
+            training_pb2.CancelTuningJobRequest(job_id=job.job_id),
+            FakeContext(),
+        )
+        second = service.CancelTuningJob(
+            training_pb2.CancelTuningJobRequest(job_id=job.job_id),
+            FakeContext(),
+        )
 
     assert first.status == TuningJobStatus.CANCELED.value
     assert first.ended_at > 0
     assert second.status == TuningJobStatus.CANCELED.value
     assert queue.get(block=False) is None
+    mock_observe.assert_called_once()
 
 
 def test_cancel_tuning_job_running_becomes_canceling_idempotently():
