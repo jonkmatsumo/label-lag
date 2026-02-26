@@ -46,6 +46,7 @@ const (
 	defaultTenantRateLimitRPS   = 10.0
 	defaultTenantRateLimitBurst = 20
 
+	// Conservative process-wide defaults. Override via env when higher throughput is safe.
 	defaultGlobalRateLimitRPS   = 200.0
 	defaultGlobalRateLimitBurst = 400
 
@@ -101,6 +102,10 @@ func newGlobalLimiterFromEnv() *rate.Limiter {
 	rps := parsePositiveFloatEnv(globalRateLimitRPSEnv, defaultGlobalRateLimitRPS)
 	burst := parsePositiveIntEnv(globalRateLimitBurstEnv, defaultGlobalRateLimitBurst)
 	return rate.NewLimiter(rate.Limit(rps), burst)
+}
+
+func resetGlobalLimiterFromEnv() {
+	globalLimiter = newGlobalLimiterFromEnv()
 }
 
 func parsePositiveFloatEnv(key string, fallback float64) float64 {

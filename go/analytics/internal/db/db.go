@@ -8,9 +8,16 @@ import (
 	"errors"
 
 	"github.com/lib/pq"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+var dbTimeoutTotal = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "analytics_db_timeout_total",
+	Help: "Total number of database operations that timed out before completion.",
+})
 
 func MapDBError(err error) error {
 	if err == nil {
@@ -33,6 +40,7 @@ func MapDBError(err error) error {
 		return status.Error(codes.NotFound, "resource not found")
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
+		dbTimeoutTotal.Inc()
 		return status.Error(codes.DeadlineExceeded, "database query timed out")
 	}
 	if errors.Is(err, context.Canceled) {

@@ -604,24 +604,51 @@ func (s *SQLStore) GetDatasetProfile(ctx context.Context, datasetID string, limi
 	return resp, nil
 }
 
+func validateJSONBProfileSource(table, column string) (string, error) {
+	if table != "generated_records" {
+		return "", status.Errorf(codes.InvalidArgument, "unsupported profile table: %s", table)
+	}
+	switch column {
+	case "numerical_features", "categorical_features":
+		return column, nil
+	default:
+		return "", status.Errorf(codes.InvalidArgument, "unsupported JSONB profile column: %s", column)
+	}
+}
+
 func (s *SQLStore) discoverJSONBKeys(ctx context.Context, table, column string, limit int, tenantID string) ([]string, error) {
-	from := table
-	where := fmt.Sprintf("%s IS NOT NULL AND %s != '{}'::jsonb", column, column)
-	args := []interface{}{}
-	if tenantID != "" {
-		from = fmt.Sprintf("%s gr INNER JOIN inference_events ie ON gr.record_id = ie.request_id", table)
-		where += " AND ie.tenant_id = $1"
-		args = append(args, tenantID)
+	columnName, err := validateJSONBProfileSource(table, column)
+	if err != nil {
+		return nil, err
 	}
 
+	tenantJoin := ""
+	tenantPredicate := ""
+	args := []interface{}{}
+	nextArg := 1
+	if tenantID != "" {
+		tenantJoin = "INNER JOIN inference_events ie ON gr.record_id = ie.request_id"
+		tenantPredicate = fmt.Sprintf(" AND ie.tenant_id = $%d", nextArg)
+		args = append(args, tenantID)
+		nextArg++
+	}
+	limitArg := nextArg
+	args = append(args, limit)
+
 	query := fmt.Sprintf(`
-		SELECT DISTINCT key
+		SELECT DISTINCT kv.key
 		FROM (
-			SELECT jsonb_object_keys(%[2]s) as key
-			FROM (SELECT %[2]s FROM %[1]s WHERE %[3]s LIMIT 1000) as sub
-		) as keys
-		LIMIT %[4]d
-	`, from, column, where, limit)
+			SELECT gr.%[1]s AS feature_map
+			FROM generated_records gr
+			%[2]s
+			WHERE gr.%[1]s IS NOT NULL
+			  AND gr.%[1]s != '{}'::jsonb%[3]s
+			LIMIT 1000
+		) AS sampled
+		CROSS JOIN LATERAL jsonb_each_text(sampled.feature_map) AS kv(key, value)
+		ORDER BY kv.key
+		LIMIT $%[4]d
+	`, columnName, tenantJoin, tenantPredicate, limitArg)
 
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
@@ -644,33 +671,53 @@ func (s *SQLStore) discoverJSONBKeys(ctx context.Context, table, column string, 
 }
 
 func (s *SQLStore) profileNumericJSONBKey(ctx context.Context, table, column, key string, totalRecords int64, numBuckets int32, tenantID string) (*pb.FeatureProfile, error) {
-	from := table
-	args := []interface{}{key}
-	tenantPredicate := ""
-	if tenantID != "" {
-		from = fmt.Sprintf("%s gr INNER JOIN inference_events ie ON gr.record_id = ie.request_id", table)
-		tenantPredicate = " AND ie.tenant_id = $2"
-		args = append(args, tenantID)
+	columnName, err := validateJSONBProfileSource(table, column)
+	if err != nil {
+		return nil, err
 	}
-	valueExpr := fmt.Sprintf("%s->>$1", column)
+
+	tenantJoin := ""
+	tenantPredicate := ""
+	args := []interface{}{key}
+	nextArg := 2
+	if tenantID != "" {
+		tenantJoin = "INNER JOIN inference_events ie ON gr.record_id = ie.request_id"
+		tenantPredicate = fmt.Sprintf(" AND ie.tenant_id = $%d", nextArg)
+		args = append(args, tenantID)
+		nextArg++
+	}
 
 	query := fmt.Sprintf(`
+		WITH scoped AS (
+			SELECT gr.%[1]s AS feature_map
+			FROM generated_records gr
+			%[2]s
+			WHERE TRUE%[3]s
+		),
+		typed AS (
+			SELECT (kv.value)::numeric AS numeric_value
+			FROM scoped s
+			LEFT JOIN LATERAL (
+				SELECT value
+				FROM jsonb_each_text(s.feature_map)
+				WHERE key = $1
+			) kv ON TRUE
+		)
 		SELECT
-			AVG((%[1]s)::numeric) as mean,
-			STDDEV((%[1]s)::numeric) as stddev,
-			COUNT(*) FILTER (WHERE %[1]s IS NULL) as null_count,
-			MIN((%[1]s)::numeric) as min_val,
-			MAX((%[1]s)::numeric) as max_val
-		FROM %[2]s
-		WHERE %[1]s IS NOT NULL%[3]s
-	`, valueExpr, from, tenantPredicate)
+			AVG(numeric_value)::float8 as mean,
+			STDDEV(numeric_value)::float8 as stddev,
+			COUNT(*) FILTER (WHERE numeric_value IS NULL) as null_count,
+			MIN(numeric_value)::float8 as min_val,
+			MAX(numeric_value)::float8 as max_val
+		FROM typed
+	`, columnName, tenantJoin, tenantPredicate)
 
 	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 
 	var mean, stddev, minVal, maxVal sql.NullFloat64
 	var nullCount int64
-	err := s.db.QueryRowContext(queryCtx, query, args...).Scan(&mean, &stddev, &nullCount, &minVal, &maxVal)
+	err = s.db.QueryRowContext(queryCtx, query, args...).Scan(&mean, &stddev, &nullCount, &minVal, &maxVal)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -693,14 +740,29 @@ func (s *SQLStore) profileNumericJSONBKey(ctx context.Context, table, column, ke
 
 		upperBound := maxVal.Float64 + 0.000001
 		histQuery := fmt.Sprintf(`
+			WITH scoped AS (
+				SELECT gr.%[1]s AS feature_map
+				FROM generated_records gr
+				%[2]s
+				WHERE TRUE%[3]s
+			),
+			typed AS (
+				SELECT (kv.value)::numeric AS numeric_value
+				FROM scoped s
+				LEFT JOIN LATERAL (
+					SELECT value
+					FROM jsonb_each_text(s.feature_map)
+					WHERE key = $1
+				) kv ON TRUE
+			)
 			SELECT
-				WIDTH_BUCKET((%[1]s)::numeric, %[2]f, %[3]f, %[4]d) as bucket,
+				WIDTH_BUCKET(numeric_value, %[4]f, %[5]f, %[6]d) as bucket,
 				COUNT(*) as count
-			FROM %[5]s
-			WHERE %[1]s IS NOT NULL%[6]s
+			FROM typed
+			WHERE numeric_value IS NOT NULL
 			GROUP BY bucket
 			ORDER BY bucket
-		`, valueExpr, minVal.Float64, upperBound, numBuckets, from, tenantPredicate)
+		`, columnName, tenantJoin, tenantPredicate, minVal.Float64, upperBound, numBuckets)
 
 		histQueryCtx, histCancel := context.WithTimeout(ctx, defaultQueryTimeout)
 		defer histCancel()
@@ -830,22 +892,46 @@ func (s *SQLStore) profileNumericFeatureExpr(ctx context.Context, table, expr, n
 }
 
 func (s *SQLStore) profileCategoricalJSONBKey(ctx context.Context, table, column, key string, totalRecords int64, topK int, tenantID string) (*pb.FeatureProfile, error) {
-	from := table
-	args := []interface{}{key}
-	tenantPredicate := ""
-	if tenantID != "" {
-		from = fmt.Sprintf("%s gr INNER JOIN inference_events ie ON gr.record_id = ie.request_id", table)
-		tenantPredicate = " AND ie.tenant_id = $2"
-		args = append(args, tenantID)
+	columnName, err := validateJSONBProfileSource(table, column)
+	if err != nil {
+		return nil, err
 	}
-	valueExpr := fmt.Sprintf("%s->>$1", column)
+
+	tenantJoin := ""
+	tenantPredicate := ""
+	args := []interface{}{key}
+	nextArg := 2
+	if tenantID != "" {
+		tenantJoin = "INNER JOIN inference_events ie ON gr.record_id = ie.request_id"
+		tenantPredicate = fmt.Sprintf(" AND ie.tenant_id = $%d", nextArg)
+		args = append(args, tenantID)
+		nextArg++
+	}
 
 	// Get null rate
 	var nullCount int64
-	nullQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s IS NULL%s", from, valueExpr, tenantPredicate)
+	nullQuery := fmt.Sprintf(`
+		WITH scoped AS (
+			SELECT gr.%[1]s AS feature_map
+			FROM generated_records gr
+			%[2]s
+			WHERE TRUE%[3]s
+		)
+		SELECT COUNT(*)
+		FROM (
+			SELECT kv.value
+			FROM scoped s
+			LEFT JOIN LATERAL (
+				SELECT value
+				FROM jsonb_each_text(s.feature_map)
+				WHERE key = $1
+			) kv ON TRUE
+		) values_for_key
+		WHERE value IS NULL
+	`, columnName, tenantJoin, tenantPredicate)
 	nullQueryCtx, nullCancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer nullCancel()
-	err := s.db.QueryRowContext(nullQueryCtx, nullQuery, args...).Scan(&nullCount)
+	err = s.db.QueryRowContext(nullQueryCtx, nullQuery, args...).Scan(&nullCount)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}
@@ -857,16 +943,34 @@ func (s *SQLStore) profileCategoricalJSONBKey(ctx context.Context, table, column
 	}
 
 	// Get top-K frequencies
+	topKArg := nextArg
+	argsWithLimit := append(args, topK)
 	topQuery := fmt.Sprintf(`
-		SELECT %[1]s as value, COUNT(*) as count
-		FROM %[2]s
-		WHERE %[1]s IS NOT NULL%[3]s
-	`, valueExpr, from, tenantPredicate)
-	topQuery += fmt.Sprintf(" GROUP BY value ORDER BY count DESC, value LIMIT %d", topK)
+		WITH scoped AS (
+			SELECT gr.%[1]s AS feature_map
+			FROM generated_records gr
+			%[2]s
+			WHERE TRUE%[3]s
+		)
+		SELECT value, COUNT(*) as count
+		FROM (
+			SELECT kv.value
+			FROM scoped s
+			LEFT JOIN LATERAL (
+				SELECT value
+				FROM jsonb_each_text(s.feature_map)
+				WHERE key = $1
+			) kv ON TRUE
+		) values_for_key
+		WHERE value IS NOT NULL
+		GROUP BY value
+		ORDER BY count DESC, value
+		LIMIT $%[4]d
+	`, columnName, tenantJoin, tenantPredicate, topKArg)
 
 	topQueryCtx, topCancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer topCancel()
-	rows, err := s.db.QueryContext(topQueryCtx, topQuery, args...)
+	rows, err := s.db.QueryContext(topQueryCtx, topQuery, argsWithLimit...)
 	if err != nil {
 		return nil, db.MapDBError(err)
 	}

@@ -149,29 +149,26 @@ func (s *SQLStore) GetRuleVersion(ctx context.Context, ruleID, versionID string,
 }
 
 func (s *SQLStore) PublishRuleVersion(ctx context.Context, req *pb.PublishRuleVersionRequest) (string, error) {
-	queryCtx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
-	defer cancel()
-
-	tx, err := s.db.BeginTx(queryCtx, nil)
+	txCtx, cancel, tx, err := beginRequestBoundTx(ctx, s.db)
 	if err != nil {
-		return "", db.MapDBError(fmt.Errorf("failed to begin transaction: %w", err))
+		return "", err
 	}
-	defer tx.Rollback()
+	defer cancel()
 
 	var field, op, value, action, severity, reason, statusStr string
 	var score sql.NullInt32
 	ruleQuery := "SELECT field, op, value, action, score, severity, reason, status FROM rules WHERE rule_id = $1"
 	if req.TenantId != "" {
 		ruleQuery += " AND tenant_id = $2"
-		err = tx.QueryRowContext(queryCtx, ruleQuery, req.RuleId, req.TenantId).Scan(&field, &op, &value, &action, &score, &severity, &reason, &statusStr)
+		err = tx.QueryRowContext(txCtx, ruleQuery, req.RuleId, req.TenantId).Scan(&field, &op, &value, &action, &score, &severity, &reason, &statusStr)
 	} else {
-		err = tx.QueryRowContext(queryCtx, ruleQuery, req.RuleId).Scan(&field, &op, &value, &action, &score, &severity, &reason, &statusStr)
+		err = tx.QueryRowContext(txCtx, ruleQuery, req.RuleId).Scan(&field, &op, &value, &action, &score, &severity, &reason, &statusStr)
 	}
 
 	if err == sql.ErrNoRows {
-		return "", status.Error(codes.NotFound, "rule not found")
+		return "", rollbackTxOnError(tx, status.Error(codes.NotFound, "rule not found"))
 	} else if err != nil {
-		return "", db.MapDBError(fmt.Errorf("failed to get rule: %w", err))
+		return "", rollbackTxOnError(tx, fmt.Errorf("failed to get rule: %w", err))
 	}
 
 	newVersion := req.VersionId
@@ -192,32 +189,32 @@ func (s *SQLStore) PublishRuleVersion(ctx context.Context, req *pb.PublishRuleVe
 	}
 	ruleJSON, _ := json.Marshal(r)
 
-	_, err = tx.ExecContext(queryCtx, `
+	_, err = tx.ExecContext(txCtx, `
 		INSERT INTO rule_versions (version_id, rule_id, rule_json, created_at, created_by, change_description, status, is_active, tenant_id)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`, newVersion, req.RuleId, ruleJSON, time.Now(), req.Actor, req.Reason, "active", true, req.TenantId)
 
 	if err != nil {
-		return "", db.MapDBError(fmt.Errorf("failed to insert rule version: %w", err))
+		return "", rollbackTxOnError(tx, fmt.Errorf("failed to insert rule version: %w", err))
 	}
 
 	updateRule := "UPDATE rules SET status = 'active', active_version_id = $1 WHERE rule_id = $2"
 	if req.TenantId != "" {
 		updateRule += " AND tenant_id = $3"
-		_, err = tx.ExecContext(queryCtx, updateRule, newVersion, req.RuleId, req.TenantId)
+		_, err = tx.ExecContext(txCtx, updateRule, newVersion, req.RuleId, req.TenantId)
 	} else {
-		_, err = tx.ExecContext(queryCtx, updateRule, newVersion, req.RuleId)
+		_, err = tx.ExecContext(txCtx, updateRule, newVersion, req.RuleId)
 	}
 
 	if err != nil {
-		return "", db.MapDBError(fmt.Errorf("failed to update rule status: %w", err))
+		return "", rollbackTxOnError(tx, fmt.Errorf("failed to update rule status: %w", err))
 	}
 
-	_, err = tx.ExecContext(queryCtx, `
+	_, err = tx.ExecContext(txCtx, `
 		UPDATE rule_versions SET is_active = FALSE WHERE rule_id = $1 AND version_id != $2
 	`, req.RuleId, newVersion)
 	if err != nil {
-		return "", db.MapDBError(fmt.Errorf("failed to archive old versions: %w", err))
+		return "", rollbackTxOnError(tx, fmt.Errorf("failed to archive old versions: %w", err))
 	}
 
 	if err := tx.Commit(); err != nil {

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	dto "github.com/prometheus/client_model/go"
 	"golang.org/x/time/rate"
 
 	"github.com/jonkmatsumo/label-lag/go/orchestrator/internal/tenant"
@@ -137,6 +138,63 @@ func TestGlobalRateLimitMiddleware_AppliesAcrossTenants(t *testing.T) {
 
 	if got := testutil.ToFloat64(globalRateLimitedTotal.WithLabelValues("/analytics/overview", "GET", "429")); got != 1 {
 		t.Fatalf("expected global limiter metric to increment by 1, got %v", got)
+	}
+}
+
+func TestResetGlobalLimiterFromEnv_AppliesConfiguredValues(t *testing.T) {
+	t.Setenv(globalRateLimitRPSEnv, "123.5")
+	t.Setenv(globalRateLimitBurstEnv, "77")
+
+	resetGlobalLimiterFromEnv()
+
+	if got := float64(globalLimiter.Limit()); got != 123.5 {
+		t.Fatalf("expected global limiter rps=123.5, got %v", got)
+	}
+	if got := globalLimiter.Burst(); got != 77 {
+		t.Fatalf("expected global limiter burst=77, got %d", got)
+	}
+}
+
+func TestGlobalRateLimitMetricLabelsRemainBounded(t *testing.T) {
+	resetLimiterMap()
+	globalLimiter = rate.NewLimiter(rate.Limit(1), 1)
+
+	handler := rateLimitMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// First request consumes the single token.
+	req1 := httptest.NewRequest(http.MethodGet, "/analytics/rules/rule-123/impact", nil)
+	req1 = req1.WithContext(tenant.WithTenantID(req1.Context(), "tenant-a"))
+	handler.ServeHTTP(httptest.NewRecorder(), req1)
+
+	// Second request is globally limited.
+	req2 := httptest.NewRequest(http.MethodGet, "/analytics/rules/rule-456/impact", nil)
+	req2 = req2.WithContext(tenant.WithTenantID(req2.Context(), "tenant-b"))
+	rec2 := httptest.NewRecorder()
+	handler.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected status 429, got %d", rec2.Code)
+	}
+
+	counter, err := globalRateLimitedTotal.GetMetricWithLabelValues("/analytics/rules/{rule_id}/impact", "GET", "429")
+	if err != nil {
+		t.Fatalf("failed to fetch labeled metric: %v", err)
+	}
+	metric := &dto.Metric{}
+	if err := counter.Write(metric); err != nil {
+		t.Fatalf("failed to read metric labels: %v", err)
+	}
+
+	if len(metric.GetLabel()) != 3 {
+		t.Fatalf("expected exactly 3 labels, got %d", len(metric.GetLabel()))
+	}
+	labelNames := map[string]bool{}
+	for _, l := range metric.GetLabel() {
+		labelNames[l.GetName()] = true
+	}
+	if !labelNames["route"] || !labelNames["method"] || !labelNames["status"] {
+		t.Fatalf("expected labels route/method/status, got %#v", labelNames)
 	}
 }
 

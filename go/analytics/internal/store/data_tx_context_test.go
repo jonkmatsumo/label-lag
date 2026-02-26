@@ -38,6 +38,34 @@ func TestStoreGeneratedData_DeadlineExceededRollsBack(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestStoreGeneratedData_MetadataDeadlineExceededRollsBackAtomically(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+	now := time.Now().UTC()
+	records := []*pb.GeneratedRecord{
+		newGeneratedRecordForTxTest("rec-meta-timeout", now),
+	}
+	metadata := []*pb.EvaluationMetadata{
+		newMetadataForTxTest("rec-meta-timeout"),
+		newMetadataForTxTest("rec-meta-timeout"),
+	}
+
+	mock.ExpectBegin()
+	mock.ExpectExec("INSERT INTO generated_records").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("INSERT INTO evaluation_metadata").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("INSERT INTO evaluation_metadata").WillReturnError(context.DeadlineExceeded)
+	mock.ExpectRollback()
+
+	inserted, err := s.StoreGeneratedData(context.Background(), records, metadata)
+	require.Error(t, err)
+	assert.Equal(t, int64(0), inserted)
+	assert.Equal(t, codes.DeadlineExceeded, status.Code(err))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestLogInferenceEvent_DeadlineExceededRollsBack(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -135,5 +163,16 @@ func newGeneratedRecordForTxTest(id string, ts time.Time) *pb.GeneratedRecord {
 		PhoneChangedAt:       timestamp,
 		NumericalFeatures:    map[string]float64{"n": 1},
 		CategoricalFeatures:  map[string]string{"c": "v"},
+	}
+}
+
+func newMetadataForTxTest(recordID string) *pb.EvaluationMetadata {
+	return &pb.EvaluationMetadata{
+		UserId:          "user-1",
+		RecordId:        recordID,
+		SequenceNumber:  1,
+		IsPreFraud:      false,
+		DaysToFraud:     0,
+		IsTrainEligible: true,
 	}
 }

@@ -274,6 +274,69 @@ func TestAnalyticsClient_LogInferenceEvent_TracksEnqueueAttempts(t *testing.T) {
 	}
 }
 
+func TestAnalyticsClient_QueueMetricsUseBoundedLabels(t *testing.T) {
+	analyticsLogQueueEnqueueAttempts.Reset()
+	LogEventsDropped.Reset()
+	analyticsLogQueueDrainLatency.Reset()
+
+	client := &AnalyticsClient{
+		logQueue: make(chan *logQueueItem, 1),
+		stop:     make(chan struct{}),
+	}
+	req := &crudv1.LogInferenceEventRequest{
+		Event: &crudv1.InferenceEvent{RequestId: "bounded-labels"},
+	}
+
+	// First request enqueues, second request drops (queue full).
+	if _, err := client.LogInferenceEvent(context.Background(), req); err != nil {
+		t.Fatalf("first enqueue failed: %v", err)
+	}
+	if _, err := client.LogInferenceEvent(context.Background(), req); err != nil {
+		t.Fatalf("second enqueue failed: %v", err)
+	}
+
+	attemptCounter, err := analyticsLogQueueEnqueueAttempts.GetMetricWithLabelValues("analytics")
+	if err != nil {
+		t.Fatalf("failed to read enqueue attempts metric: %v", err)
+	}
+	attemptMetric := &dto.Metric{}
+	if err := attemptCounter.Write(attemptMetric); err != nil {
+		t.Fatalf("failed to serialize enqueue attempts metric: %v", err)
+	}
+	assertMetricLabels(t, attemptMetric, map[string]string{
+		"queue": "analytics",
+	})
+
+	dropCounter, err := LogEventsDropped.GetMetricWithLabelValues("analytics", "full")
+	if err != nil {
+		t.Fatalf("failed to read dropped metric: %v", err)
+	}
+	dropMetric := &dto.Metric{}
+	if err := dropCounter.Write(dropMetric); err != nil {
+		t.Fatalf("failed to serialize dropped metric: %v", err)
+	}
+	assertMetricLabels(t, dropMetric, map[string]string{
+		"queue":  "analytics",
+		"reason": "full",
+	})
+
+	drainObserver, err := analyticsLogQueueDrainLatency.GetMetricWithLabelValues("analytics")
+	if err != nil {
+		t.Fatalf("failed to read drain latency metric: %v", err)
+	}
+	drainHistogram, ok := drainObserver.(prometheus.Histogram)
+	if !ok {
+		t.Fatalf("drain latency metric is not a histogram")
+	}
+	drainMetric := &dto.Metric{}
+	if err := drainHistogram.Write(drainMetric); err != nil {
+		t.Fatalf("failed to serialize drain latency metric: %v", err)
+	}
+	assertMetricLabels(t, drainMetric, map[string]string{
+		"queue": "analytics",
+	})
+}
+
 func TestAnalyticsClient_WorkerRecordsDrainLatency(t *testing.T) {
 	analyticsLogQueueDrainLatency.Reset()
 
@@ -316,4 +379,20 @@ func TestAnalyticsClient_WorkerRecordsDrainLatency(t *testing.T) {
 		t.Fatalf("expected drain latency sample count >= 1, got %d", metric.GetHistogram().GetSampleCount())
 	}
 	mockStub.AssertExpectations(t)
+}
+
+func assertMetricLabels(t *testing.T, metric *dto.Metric, expected map[string]string) {
+	t.Helper()
+	if len(metric.GetLabel()) != len(expected) {
+		t.Fatalf("expected %d labels, got %d", len(expected), len(metric.GetLabel()))
+	}
+	for _, label := range metric.GetLabel() {
+		want, ok := expected[label.GetName()]
+		if !ok {
+			t.Fatalf("unexpected label %q", label.GetName())
+		}
+		if label.GetValue() != want {
+			t.Fatalf("label %q: got %q want %q", label.GetName(), label.GetValue(), want)
+		}
+	}
 }
