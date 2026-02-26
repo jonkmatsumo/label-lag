@@ -571,6 +571,7 @@ def train_model(
                     direction=tuning_config.direction,
                     strategy=tuning_config.strategy.value,
                     search_space_overrides=tuning_config.search_space,
+                    split_config=split_config.model_dump() if split_config else None,
                 )
                 selected_params = best
                 selection_type = "auto"
