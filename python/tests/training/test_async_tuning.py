@@ -88,10 +88,12 @@ def test_job_cancellation_logic():
     job.status = TuningJobStatus.CANCELING
     store.create(job)
 
-    worker._execute_job(job.job_id)
+    with patch("training.worker.observe_training_job_cancellation") as mock_observe:
+        worker._execute_job(job.job_id)
 
     updated_job = store.get(job.job_id)
     assert updated_job.status == TuningJobStatus.CANCELED
+    mock_observe.assert_called_once()
 
 
 @patch("training.worker.DataLoader")
