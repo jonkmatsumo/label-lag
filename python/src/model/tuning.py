@@ -53,6 +53,7 @@ MAX_BEST_PARAMS_TAG_LENGTH = 2000
 MAX_DATASET_IDENTITY_LENGTH = 128
 OPTUNA_OBJECTIVE_VERSION = "xgb_objective_v2"
 _LEGACY_STUDY_WARNED = False
+mlflow: Any = None
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -440,13 +441,21 @@ def run_tuning_study(
                     pass  # Fallback to default if invalid JSON
 
     # Log resolved search space
-    # (mock mlflow import locally to avoid side effects if not available)
-    try:
-        import mlflow
+    # (mock mlflow access via module-level placeholder for testability)
+    global mlflow
+    if mlflow is None:
+        try:
+            import mlflow as _mlflow
 
-        mlflow.log_dict(resolved_search_space, "resolved_search_space.json")
-    except ImportError:
-        pass
+            mlflow = _mlflow
+        except ImportError:
+            pass
+
+    if mlflow is not None:
+        try:
+            mlflow.log_dict(resolved_search_space, "resolved_search_space.json")
+        except Exception as exc:
+            logger.debug("Failed to log search space to MLflow: %s", exc)
 
     objective = _create_objective(
         x_train,
@@ -599,15 +608,14 @@ def run_tuning_study(
     except Exception:
         best = {}
 
-    try:
-        import mlflow
-
-        mlflow.set_tag(
-            "best_trial_number", str(best_trial.number) if best_trial else ""
-        )
-        mlflow.set_tag("best_params_json", _best_params_tag_value(best))
-    except Exception as exc:
-        logger.warning("Failed to log best trial metadata tags: %s", exc)
+    if mlflow is not None:
+        try:
+            mlflow.set_tag(
+                "best_trial_number", str(best_trial.number) if best_trial else ""
+            )
+            mlflow.set_tag("best_params_json", _best_params_tag_value(best))
+        except Exception as exc:
+            logger.warning("Failed to log best trial metadata tags: %s", exc)
     rows = []
     pruned_count = 0
     completed_count = 0
@@ -636,46 +644,45 @@ def run_tuning_study(
     trials_df.attrs = {"pruned_count": pruned_count, "completed_count": completed_count}
 
     # Log trials summary (NF4)
-    try:
-        import mlflow
+    if mlflow is not None:
+        try:
+            # Sort trials by value based on direction
+            reverse = direction == "maximize"
+            completed_trials = [
+                t for t in study.trials if str(t.state) == "TrialState.COMPLETE"
+            ]
+            sorted_trials = sorted(
+                completed_trials,
+                key=lambda x: (
+                    x.value
+                    if x.value is not None
+                    else (float("-inf") if reverse else float("inf"))
+                ),
+                reverse=reverse,
+            )
 
-        # Sort trials by value based on direction
-        reverse = direction == "maximize"
-        completed_trials = [
-            t for t in study.trials if str(t.state) == "TrialState.COMPLETE"
-        ]
-        sorted_trials = sorted(
-            completed_trials,
-            key=lambda x: (
-                x.value
-                if x.value is not None
-                else (float("-inf") if reverse else float("inf"))
-            ),
-            reverse=reverse,
-        )
-
-        top_k = 10
-        summary = {
-            "schema_version": 1,
-            "metric": metric,
-            "direction": direction,
-            "total_trials": len(study.trials),
-            "completed_trials": len(completed_trials),
-            "pruned_trials": pruned_count,
-            "top_trials": [
-                {
-                    "trial_number": t.number,
-                    "value": float(t.value) if t.value is not None else None,
-                    "params": t.params,
-                    "datetime": (
-                        t.datetime_start.isoformat() if t.datetime_start else None
-                    ),
-                }
-                for t in sorted_trials[:top_k]
-            ],
-        }
-        mlflow.log_dict(summary, "trials_summary.json")
-    except Exception as e:
-        logger.warning(f"Failed to log trials summary: {e}")
+            top_k = 10
+            summary = {
+                "schema_version": 1,
+                "metric": metric,
+                "direction": direction,
+                "total_trials": len(study.trials),
+                "completed_trials": len(completed_trials),
+                "pruned_trials": pruned_count,
+                "top_trials": [
+                    {
+                        "trial_number": t.number,
+                        "value": float(t.value) if t.value is not None else None,
+                        "params": t.params,
+                        "datetime": (
+                            t.datetime_start.isoformat() if t.datetime_start else None
+                        ),
+                    }
+                    for t in sorted_trials[:top_k]
+                ],
+            }
+            mlflow.log_dict(summary, "trials_summary.json")
+        except Exception as e:
+            logger.warning(f"Failed to log trials summary: {e}")
 
     return best, trials_df

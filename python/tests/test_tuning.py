@@ -186,10 +186,12 @@ class TestSelectedTrialOverride:
 class TestResumeValidation:
     """Tests for study resume validation (invariants)."""
 
+    @pytest.mark.slow
     @patch("model.tuning.optuna.load_study")
     @patch("model.tuning._env_flag")
+    @patch("model.tuning.mlflow")
     def test_resume_invariant_mismatch_actionable_error(
-        self, mock_env_flag, mock_load_study
+        self, mock_mlflow, mock_env_flag, mock_load_study
     ):
         """Actionable error when invariants mismatch in strict mode."""
         mock_env_flag.return_value = True  # Strict mode
@@ -218,9 +220,13 @@ class TestResumeValidation:
         assert "optuna_resume_invariant_mismatch_strict" in str(exc.value)
         assert "dataset_identity (expected=new_data, actual=old_data)" in str(exc.value)
 
+    @pytest.mark.slow
     @patch("model.tuning.optuna.load_study")
     @patch("model.tuning.logger")
-    def test_resume_legacy_study_warns_once(self, mock_logger, mock_load_study):
+    @patch("model.tuning.mlflow")
+    def test_resume_legacy_study_warns_once(
+        self, mock_mlflow, mock_logger, mock_load_study
+    ):
         """Legacy studies (missing objective_version) warn once and proceed."""
         mock_study = MagicMock()
         mock_study.user_attrs = {
