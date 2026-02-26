@@ -478,7 +478,7 @@ class ModelManager:
                     reload_span, "model.reload.status", "loaded_from_mlflow"
                 )
                 self._set_span_attribute(
-                    reload_span, "model.version", self.model_version
+                    reload_span, "ml.model.version", self.model_version
                 )
                 self._attach_training_identity_to_span(
                     reload_span,
@@ -513,7 +513,7 @@ class ModelManager:
                         reload_span, "model.reload.status", "loaded_from_fallback"
                     )
                     self._set_span_attribute(
-                        reload_span, "model.version", self.model_version
+                        reload_span, "ml.model.version", self.model_version
                     )
                     return True
                 logger.warning(
