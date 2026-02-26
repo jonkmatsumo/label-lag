@@ -12,6 +12,7 @@ from model.tuning import run_tuning_study
 from training.job_queue import JobQueue
 from training.job_store import JobStore
 from training.jobs import TuningJobStatus
+from training.metrics import observe_training_job_cancellation
 from training.optuna_resume import get_optuna_storage_url
 from training.schemas import SplitConfig, TuningConfig
 from training.tuning_startup import get_tuning_job_retention_days, prune_tuning_jobs
@@ -117,12 +118,19 @@ class TuningWorker:
 
         # Check if already canceled/canceling
         if job.status == TuningJobStatus.CANCELING:
+            canceled_at = datetime.now(UTC)
 
             def cancel_job(j):
                 j.status = TuningJobStatus.CANCELED
-                j.ended_at = datetime.now(UTC)
+                j.ended_at = canceled_at
 
             self.job_store.update(job_id, cancel_job)
+            canceled_job = self.job_store.get(job_id)
+            if canceled_job:
+                observe_training_job_cancellation(
+                    canceled_job,
+                    canceled_at=canceled_at,
+                )
             self._log_lifecycle_event("canceled", job_id)
             return
         if job.status == TuningJobStatus.CANCELED:
@@ -234,12 +242,19 @@ class TuningWorker:
             # After completion, check status again (might have been canceled)
             final_job = self.job_store.get(job_id)
             if final_job.status == TuningJobStatus.CANCELING:
+                canceled_at = datetime.now(UTC)
 
                 def set_canceled(j):
                     j.status = TuningJobStatus.CANCELED
-                    j.ended_at = datetime.now(UTC)
+                    j.ended_at = canceled_at
 
                 self.job_store.update(job_id, set_canceled)
+                canceled_job = self.job_store.get(job_id)
+                if canceled_job:
+                    observe_training_job_cancellation(
+                        canceled_job,
+                        canceled_at=canceled_at,
+                    )
                 self._log_lifecycle_event("canceled", job_id)
             else:
 
@@ -312,13 +327,20 @@ class TuningWorker:
         if job.status != TuningJobStatus.CANCELING:
             return False
 
+        canceled_at = datetime.now(UTC)
+
         def set_canceled(current_job):
             current_job.status = TuningJobStatus.CANCELED
-            now = datetime.now(UTC)
-            current_job.updated_at = now
-            current_job.ended_at = now
+            current_job.updated_at = canceled_at
+            current_job.ended_at = canceled_at
 
         self.job_store.update(job_id, set_canceled)
+        canceled_job = self.job_store.get(job_id)
+        if canceled_job:
+            observe_training_job_cancellation(
+                canceled_job,
+                canceled_at=canceled_at,
+            )
         self._log_lifecycle_event("canceled", job_id)
         return True
 

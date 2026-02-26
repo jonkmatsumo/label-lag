@@ -26,6 +26,7 @@ from training.jobs import (
     bound_params,
     truncate_error_message,
 )
+from training.metrics import observe_training_job_cancellation
 from training.optuna_resume import get_optuna_storage_url, load_existing_tuning_study
 from training.schemas import SplitConfig, TuningConfig
 from training.v1 import training_pb2, training_pb2_grpc
@@ -1227,6 +1228,9 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                 j.ended_at = now
 
             self.job_store.update(request.job_id, set_canceled)
+            canceled_job = self.job_store.get(request.job_id)
+            if canceled_job:
+                observe_training_job_cancellation(canceled_job, canceled_at=now)
             self.job_queue.cancel(request.job_id)
             return self.GetTuningStatus(request, context)
 
@@ -1327,6 +1331,9 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
         self.job_store.update(job.job_id, finalize)
         if target_status == TuningJobStatus.CANCELED:
             self.job_queue.cancel(job.job_id)
+            canceled_job = self.job_store.get(job.job_id)
+            if canceled_job:
+                observe_training_job_cancellation(canceled_job, canceled_at=now)
         return training_pb2.FinalizeTuningJobResponse(
             job_id=job.job_id,
             status=target_status.value,
