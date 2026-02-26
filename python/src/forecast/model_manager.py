@@ -272,14 +272,14 @@ class ModelManager:
         if not training_identity:
             return
         self._set_span_attribute(
-            span, "training.mlflow_run_id", training_identity.get("mlflow_run_id")
+            span, "ml.training.run_id", training_identity.get("mlflow_run_id")
         )
         self._set_span_attribute(
-            span, "training.model_version", training_identity.get("model_version")
+            span, "ml.model.version", training_identity.get("model_version")
         )
         self._set_span_attribute(
             span,
-            "training.feature_schema_hash",
+            "ml.feature.schema_hash",
             training_identity.get("feature_schema_hash"),
         )
 
@@ -438,11 +438,9 @@ class ModelManager:
                 "feature_coverage_warning_last_seen_ts": (
                     self._feature_coverage_warning_last_seen_ts
                 ),
-                "training_mlflow_run_id": training_identity.get("mlflow_run_id"),
-                "training_model_version": training_identity.get("model_version"),
-                "training_feature_schema_hash": training_identity.get(
-                    "feature_schema_hash"
-                ),
+                "ml.training.run_id": training_identity.get("mlflow_run_id"),
+                "ml.model.version": training_identity.get("model_version"),
+                "ml.feature.schema_hash": training_identity.get("feature_schema_hash"),
             }
 
     def update_feature_coverage_warning(
@@ -752,6 +750,9 @@ class ModelManager:
                         with open(artifact_path) as f:
                             return json.load(f)
                     except Exception:
+                        logger.debug(
+                            "training_run_identity.json not found for run %s", run_id
+                        )
                         break
         except Exception as e:
             logger.debug(f"Could not load training run identity artifact: {e}")
