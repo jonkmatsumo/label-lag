@@ -7,6 +7,8 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestGetDatasetProfile_DynamicFeatures(t *testing.T) {
@@ -30,33 +32,33 @@ func TestGetDatasetProfile_DynamicFeatures(t *testing.T) {
 	}
 
 	// 3. Discover dynamic numeric keys
-	mock.ExpectQuery(`(?s)SELECT DISTINCT key FROM.*numerical_features`).
-		WithArgs("tenant-1").
+	mock.ExpectQuery(`(?s)SELECT DISTINCT kv\.key.*gr\.numerical_features.*LIMIT \$2`).
+		WithArgs("tenant-1", MaxNumericKeysProfiled).
 		WillReturnRows(sqlmock.NewRows([]string{"key"}).AddRow("dyn_num_1"))
 
 	// 4. Profile dynamic numeric key
-	mock.ExpectQuery(`(?s)SELECT.*AVG\(\(numerical_features->>\$1\)::numeric\)`).
+	mock.ExpectQuery(`(?s)WITH scoped AS.*jsonb_each_text\(s\.feature_map\).*WHERE key = \$1.*SELECT\s+AVG\(numeric_value\)::float8`).
 		WithArgs("dyn_num_1", "tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{"mean", "stddev", "null_count", "min_val", "max_val"}).
 			AddRow(100.0, 5.0, 5, 80.0, 120.0))
-	mock.ExpectQuery(`(?s)SELECT WIDTH_BUCKET\(\(numerical_features->>\$1\)::numeric`).
+	mock.ExpectQuery(`(?s)WITH scoped AS.*SELECT\s+WIDTH_BUCKET\(numeric_value,`).
 		WithArgs("dyn_num_1", "tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{"bucket", "count"}).
 			AddRow(1, 95))
 
 	// 5. Discover dynamic categorical keys
-	mock.ExpectQuery(`(?s)SELECT DISTINCT key FROM.*categorical_features`).
-		WithArgs("tenant-1").
+	mock.ExpectQuery(`(?s)SELECT DISTINCT kv\.key.*gr\.categorical_features.*LIMIT \$2`).
+		WithArgs("tenant-1", MaxCategoricalKeysProfiled).
 		WillReturnRows(sqlmock.NewRows([]string{"key"}).AddRow("dyn_cat_1"))
 
 	// 6. Profile dynamic categorical key
 	// Null rate
-	mock.ExpectQuery(`(?s)SELECT COUNT\(\*\) FROM.*categorical_features->>\$1 IS NULL`).
+	mock.ExpectQuery(`(?s)WITH scoped AS.*jsonb_each_text\(s\.feature_map\).*WHERE key = \$1.*WHERE value IS NULL`).
 		WithArgs("dyn_cat_1", "tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(10))
 	// Top-K
-	mock.ExpectQuery(`(?s)SELECT.*categorical_features->>\$1 as value, COUNT\(\*\) as count`).
-		WithArgs("dyn_cat_1", "tenant-1").
+	mock.ExpectQuery(`(?s)WITH scoped AS.*SELECT value, COUNT\(\*\) as count.*GROUP BY value.*LIMIT \$3`).
+		WithArgs("dyn_cat_1", "tenant-1", DefaultTopK).
 		WillReturnRows(sqlmock.NewRows([]string{"value", "count"}).
 			AddRow("val1", 50).
 			AddRow("val2", 30))
@@ -128,11 +130,11 @@ func TestProfileCategoricalJSONBKey_UsesParameterizedKey(t *testing.T) {
 	s := NewSQLStore(db)
 	suspiciousKey := `dyn_cat_1' OR 1=1 --`
 
-	mock.ExpectQuery(`(?s)SELECT COUNT\(\*\) FROM.*categorical_features->>\$1 IS NULL`).
+	mock.ExpectQuery(`(?s)WITH scoped AS.*jsonb_each_text\(s\.feature_map\).*WHERE key = \$1.*WHERE value IS NULL`).
 		WithArgs(suspiciousKey, "tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
-	mock.ExpectQuery(`(?s)SELECT.*categorical_features->>\$1 as value, COUNT\(\*\) as count`).
-		WithArgs(suspiciousKey, "tenant-1").
+	mock.ExpectQuery(`(?s)WITH scoped AS.*SELECT value, COUNT\(\*\) as count.*GROUP BY value.*LIMIT \$3`).
+		WithArgs(suspiciousKey, "tenant-1", 5).
 		WillReturnRows(sqlmock.NewRows([]string{"value", "count"}).
 			AddRow("x", 10).
 			AddRow("y", 20))
@@ -141,5 +143,26 @@ func TestProfileCategoricalJSONBKey_UsesParameterizedKey(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, profile)
 	assert.Equal(t, suspiciousKey, profile.Name)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestProfileNumericJSONBKey_RejectsUnsupportedSourceIdentifiers(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	defer db.Close()
+
+	s := NewSQLStore(db)
+
+	_, err = s.profileNumericJSONBKey(
+		context.Background(),
+		"generated_records; DROP TABLE generated_records; --",
+		"numerical_features",
+		"safe-key",
+		100,
+		5,
+		"tenant-1",
+	)
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 	require.NoError(t, mock.ExpectationsWereMet())
 }

@@ -293,7 +293,8 @@ func TestDiscoverJSONBKeys_DeterministicOrder(t *testing.T) {
 	defer db.Close()
 
 	s := NewSQLStore(db)
-	mock.ExpectQuery("SELECT DISTINCT key").
+	mock.ExpectQuery("SELECT DISTINCT kv\\.key").
+		WithArgs(10).
 		WillReturnRows(
 			sqlmock.NewRows([]string{"key"}).
 				AddRow("zeta").

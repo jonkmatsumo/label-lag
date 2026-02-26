@@ -43,11 +43,11 @@ func TestJSONBProfiling_FixtureDrivenOutput(t *testing.T) {
 
 	s := NewSQLStore(db)
 
-	mock.ExpectQuery(`(?s)SELECT.*AVG\(\(numerical_features->>\$1\)::numeric\)`).
+	mock.ExpectQuery(`(?s)WITH scoped AS.*jsonb_each_text\(s\.feature_map\).*WHERE key = \$1.*SELECT\s+AVG\(numeric_value\)::float8`).
 		WithArgs(fixture.Numeric.Key, fixture.TenantID).
 		WillReturnRows(sqlmock.NewRows([]string{"mean", "stddev", "null_count", "min_val", "max_val"}).
 			AddRow(fixture.Numeric.Mean, fixture.Numeric.StdDev, 5, fixture.Numeric.Min, fixture.Numeric.Max))
-	mock.ExpectQuery(`(?s)SELECT\s+WIDTH_BUCKET\(\(numerical_features->>\$1\)::numeric`).
+	mock.ExpectQuery(`(?s)WITH scoped AS.*SELECT\s+WIDTH_BUCKET\(numeric_value,`).
 		WithArgs(fixture.Numeric.Key, fixture.TenantID).
 		WillReturnRows(sqlmock.NewRows([]string{"bucket", "count"}).
 			AddRow(1, fixture.Numeric.BucketFirstCount))
@@ -70,11 +70,11 @@ func TestJSONBProfiling_FixtureDrivenOutput(t *testing.T) {
 	require.Len(t, numeric.Histogram, int(fixture.Numeric.BucketCount))
 	assert.Equal(t, fixture.Numeric.BucketFirstCount, numeric.Histogram[0].Count)
 
-	mock.ExpectQuery(`(?s)SELECT COUNT\(\*\) FROM.*categorical_features->>\$1 IS NULL`).
+	mock.ExpectQuery(`(?s)WITH scoped AS.*jsonb_each_text\(s\.feature_map\).*WHERE key = \$1.*WHERE value IS NULL`).
 		WithArgs(fixture.Categorical.Key, fixture.TenantID).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(10))
-	mock.ExpectQuery(`(?s)SELECT.*categorical_features->>\$1 as value, COUNT\(\*\) as count`).
-		WithArgs(fixture.Categorical.Key, fixture.TenantID).
+	mock.ExpectQuery(`(?s)WITH scoped AS.*SELECT value, COUNT\(\*\) as count.*GROUP BY value.*LIMIT \$3`).
+		WithArgs(fixture.Categorical.Key, fixture.TenantID, 2).
 		WillReturnRows(sqlmock.NewRows([]string{"value", "count"}).
 			AddRow(fixture.Categorical.TopValues[0].Value, fixture.Categorical.TopValues[0].Count).
 			AddRow(fixture.Categorical.TopValues[1].Value, fixture.Categorical.TopValues[1].Count))
@@ -109,11 +109,11 @@ func TestProfileNumericJSONBKey_UsesParameterizedKey(t *testing.T) {
 	s := NewSQLStore(db)
 	suspiciousKey := `dyn_num_1')::numeric); DROP TABLE generated_records; --`
 
-	mock.ExpectQuery(`(?s)SELECT.*AVG\(\(numerical_features->>\$1\)::numeric\)`).
+	mock.ExpectQuery(`(?s)WITH scoped AS.*jsonb_each_text\(s\.feature_map\).*WHERE key = \$1.*SELECT\s+AVG\(numeric_value\)::float8`).
 		WithArgs(suspiciousKey, "tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{"mean", "stddev", "null_count", "min_val", "max_val"}).
 			AddRow(10.0, 2.0, 1, 1.0, 20.0))
-	mock.ExpectQuery(`(?s)SELECT\s+WIDTH_BUCKET\(\(numerical_features->>\$1\)::numeric`).
+	mock.ExpectQuery(`(?s)WITH scoped AS.*SELECT\s+WIDTH_BUCKET\(numeric_value,`).
 		WithArgs(suspiciousKey, "tenant-1").
 		WillReturnRows(sqlmock.NewRows([]string{"bucket", "count"}).AddRow(1, 99))
 
