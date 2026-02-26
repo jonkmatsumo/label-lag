@@ -51,7 +51,8 @@ DEFAULT_SEARCH_SPACE = {
 }
 MAX_BEST_PARAMS_TAG_LENGTH = 2000
 MAX_DATASET_IDENTITY_LENGTH = 128
-OPTUNA_OBJECTIVE_VERSION = "xgb_objective_v1"
+OPTUNA_OBJECTIVE_VERSION = "xgb_objective_v2"
+_LEGACY_STUDY_WARNED = False
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -164,14 +165,29 @@ def _resume_invariant_mismatches(
     stored_attrs: dict[str, Any],
     expected_attrs: dict[str, str],
 ) -> list[str]:
+    """Identify mismatches between stored and expected study invariants.
+
+    Returns list of mismatch descriptions: 'key (expected=..., actual=...)'
+    """
     mismatches: list[str] = []
+
+    def _brief(val: Any) -> str:
+        s = str(val).strip()
+        if len(s) > 32:
+            return f"{s[:16]}...{hashlib.md5(s.encode()).hexdigest()[:8]}"
+        return s
+
     for key, expected_value in expected_attrs.items():
         stored_value = stored_attrs.get(key)
         if stored_value is None:
-            mismatches.append(f"{key}=missing")
+            mismatches.append(f"{key} (missing)")
             continue
-        if str(stored_value).strip() != expected_value:
-            mismatches.append(key)
+        actual_rendered = str(stored_value).strip()
+        if actual_rendered != expected_value:
+            mismatches.append(
+                f"{key} (expected={_brief(expected_value)}, "
+                f"actual={_brief(actual_rendered)})"
+            )
     return mismatches
 
 
@@ -495,20 +511,40 @@ def run_tuning_study(
                     expected_attrs=study_invariants,
                 )
                 if invariant_mismatches:
-                    mismatch_summary = ", ".join(invariant_mismatches)
+                    # Check if this is a legacy study (missing objective_version)
+                    is_legacy = "objective_version" not in existing.user_attrs
+                    mismatch_summary = "; ".join(invariant_mismatches)
                     strict_validation = _env_flag(
                         "STRICT_TUNING_RESUME_VALIDATION", default=False
                     )
-                    message = (
-                        "optuna_resume_invariant_mismatch "
-                        f"(job_id={job_id}; mismatches={mismatch_summary})"
+
+                    label = (
+                        "optuna_resume_legacy_study"
+                        if is_legacy
+                        else "optuna_resume_invariant_mismatch"
                     )
-                    if strict_validation:
+                    message = (
+                        f"{label} (job_id={job_id}; mismatches={mismatch_summary})"
+                    )
+
+                    if is_legacy:
+                        global _LEGACY_STUDY_WARNED
+                        if not _LEGACY_STUDY_WARNED:
+                            logger.warning(
+                                "%s; legacy study detected without invariants. "
+                                "Continuing in warn-only mode (one-time warning).",
+                                message,
+                            )
+                            _LEGACY_STUDY_WARNED = True
+                    elif strict_validation:
+                        # Use descriptive message with strict-mode disable hint.
                         raise ValueError(
-                            f"{message}; set STRICT_TUNING_RESUME_VALIDATION=0 "
-                            "to allow warn-only behavior."
+                            f"optuna_resume_invariant_mismatch_strict: {message}. "
+                            "Set STRICT_TUNING_RESUME_VALIDATION=0 to allow "
+                            "warn-only behavior."
                         )
-                    logger.warning("%s; continuing in warn-only mode.", message)
+                    else:
+                        logger.warning("%s; continuing in warn-only mode.", message)
             except KeyError:
                 pass  # Study doesn't exist yet — first run, use caller seed.
             except ValueError:
