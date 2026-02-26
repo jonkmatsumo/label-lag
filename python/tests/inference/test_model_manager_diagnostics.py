@@ -124,3 +124,21 @@ class TestModelManagerDiagnostics:
             diag = manager.get_diagnostics()
             assert diag["benchmark_last_status"] == "failed"
             assert diag["benchmark_last_run_ts"] == 1235.5
+
+    def test_diagnostics_track_feature_coverage_warning_state(self):
+        manager = self._fresh_manager()
+
+        initial = manager.get_diagnostics()
+        assert initial["feature_coverage_warning_active"] is False
+        assert initial["feature_coverage_warning_last_seen_ts"] is None
+
+        manager.update_feature_coverage_warning(active=True, observed_ts=111.5)
+        warned = manager.get_diagnostics()
+        assert warned["feature_coverage_warning_active"] is True
+        assert warned["feature_coverage_warning_last_seen_ts"] == 111.5
+
+        manager.update_feature_coverage_warning(active=False, observed_ts=222.0)
+        recovered = manager.get_diagnostics()
+        assert recovered["feature_coverage_warning_active"] is False
+        # Last warning timestamp remains set to latest warning event.
+        assert recovered["feature_coverage_warning_last_seen_ts"] == 111.5
