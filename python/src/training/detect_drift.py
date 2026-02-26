@@ -96,6 +96,7 @@ PSI_MIN_EXPECTED_PER_BUCKET = float(os.getenv("DRIFT_PSI_MIN_EXPECTED_PER_BUCKET
 PSI_MIN_NONEMPTY_BUCKETS_RATIO = float(
     os.getenv("DRIFT_PSI_MIN_NONEMPTY_BUCKETS_RATIO", "0.6")
 )
+DRIFT_REFERENCE_MODEL_ALIAS = os.getenv("DRIFT_REFERENCE_MODEL_ALIAS", "").strip()
 
 
 def calculate_psi(
@@ -215,7 +216,106 @@ def calculate_psi(
     return float(psi), metadata
 
 
-def get_reference_data() -> pd.DataFrame | None:
+def _safe_model_version_number(model_version: Any) -> int:
+    """Parse model version into an integer for deterministic ordering."""
+    try:
+        return int(str(getattr(model_version, "version", "")).strip())
+    except Exception:
+        return -1
+
+
+def _model_version_has_alias(model_version: Any, alias_name: str) -> bool:
+    """Check if a model version contains a given alias."""
+    normalized_alias = str(alias_name).lstrip("@")
+    aliases = getattr(model_version, "aliases", None)
+    if aliases is None:
+        return False
+    if isinstance(aliases, str):
+        return aliases.lstrip("@") == normalized_alias
+    try:
+        return any(str(alias).lstrip("@") == normalized_alias for alias in aliases)
+    except Exception:
+        return False
+
+
+def _select_reference_model_version(
+    versions: list[Any],
+    *,
+    alias_name: str | None,
+) -> tuple[Any | None, dict[str, Any]]:
+    """Resolve reference model version with alias-first deterministic policy."""
+    metadata: dict[str, Any] = {
+        "requested_alias": None,
+        "resolution_strategy": None,
+        "alias_candidate_count": 0,
+        "alias_ambiguous": False,
+    }
+
+    if not versions:
+        return None, metadata
+
+    normalized_alias = str(alias_name or "").strip().lstrip("@")
+    if normalized_alias:
+        metadata["requested_alias"] = normalized_alias
+        alias_candidates = [
+            version
+            for version in versions
+            if _model_version_has_alias(version, normalized_alias)
+        ]
+        if alias_candidates:
+            alias_candidates_sorted = sorted(
+                alias_candidates,
+                key=_safe_model_version_number,
+                reverse=True,
+            )
+            metadata["alias_candidate_count"] = len(alias_candidates_sorted)
+            metadata["alias_ambiguous"] = len(alias_candidates_sorted) > 1
+            selected_alias_version = alias_candidates_sorted[0]
+            if metadata["alias_ambiguous"]:
+                logger.warning(
+                    "Drift alias '@%s' resolved to %s candidates; selecting highest "
+                    "version deterministically (%s).",
+                    normalized_alias,
+                    len(alias_candidates_sorted),
+                    getattr(selected_alias_version, "version", "unknown"),
+                )
+            metadata["resolution_strategy"] = "alias"
+            return selected_alias_version, metadata
+        logger.warning(
+            "Configured drift reference alias '@%s' not found; "
+            "falling back to stage/latest resolution.",
+            normalized_alias,
+        )
+
+    stage_candidates = [
+        version
+        for version in versions
+        if getattr(version, "current_stage", "") == "Production"
+    ]
+    if stage_candidates:
+        selected_stage_version = sorted(
+            stage_candidates, key=_safe_model_version_number, reverse=True
+        )[0]
+        metadata["resolution_strategy"] = "production_stage"
+        logger.warning(
+            "Using legacy Production stage for drift reference resolution. "
+            "Set DRIFT_REFERENCE_MODEL_ALIAS for deterministic alias-based selection."
+        )
+        return selected_stage_version, metadata
+
+    selected_latest = sorted(versions, key=_safe_model_version_number, reverse=True)[0]
+    metadata["resolution_strategy"] = "latest_version"
+    logger.warning(
+        "No alias/stage reference found for drift; "
+        "falling back to latest model version %s.",
+        getattr(selected_latest, "version", "unknown"),
+    )
+    return selected_latest, metadata
+
+
+def get_reference_data(
+    *, include_metadata: bool = False
+) -> pd.DataFrame | tuple[pd.DataFrame | None, dict[str, Any]] | None:
     """Load reference data from MLflow model artifacts."""
     try:
         import mlflow
@@ -224,22 +324,26 @@ def get_reference_data() -> pd.DataFrame | None:
         mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
         client = MlflowClient()
 
-        versions = client.search_model_versions(f"name='{MODEL_NAME}'")
-        production_version = None
+        versions = list(client.search_model_versions(f"name='{MODEL_NAME}'"))
+        selected_version, resolution_metadata = _select_reference_model_version(
+            versions,
+            alias_name=DRIFT_REFERENCE_MODEL_ALIAS,
+        )
 
-        for v in versions:
-            if v.current_stage == "Production":
-                production_version = v
-                break
-
-        if production_version is None:
-            logger.error("No production model found in registry")
+        if selected_version is None:
+            logger.error("No registered model versions found for drift reference")
+            if include_metadata:
+                return None, resolution_metadata
             return None
 
-        run_id = production_version.run_id
+        run_id = selected_version.run_id
+        selected_version_number = str(getattr(selected_version, "version", "unknown"))
+        resolution_metadata["selected_model_version"] = selected_version_number
+        resolution_metadata["selected_run_id"] = str(run_id)
         logger.info(
-            "Found production model: version=%s, run_id=%s",
-            production_version.version,
+            "Resolved drift reference model: strategy=%s version=%s run_id=%s",
+            resolution_metadata.get("resolution_strategy"),
+            selected_version_number,
             run_id,
         )
 
@@ -252,10 +356,14 @@ def get_reference_data() -> pd.DataFrame | None:
             df_reference = pd.read_parquet(artifact_path)
 
         logger.info(f"Loaded reference data: {len(df_reference)} records")
+        if include_metadata:
+            return df_reference, resolution_metadata
         return df_reference
 
     except Exception as e:
         logger.error(f"Failed to load reference data: {e}")
+        if include_metadata:
+            return None, {}
         return None
 
 
@@ -308,9 +416,19 @@ def detect_drift(
         "drifted_features": [],
         "drift_error": None,
         "alerts": [],
+        "reference_resolution": {},
     }
 
-    df_reference = get_reference_data()
+    reference_result = get_reference_data(include_metadata=True)
+    reference_resolution: dict[str, Any] = {}
+    if isinstance(reference_result, tuple):
+        df_reference, reference_resolution = reference_result
+    else:
+        df_reference = reference_result
+
+    if reference_resolution:
+        results["reference_resolution"] = reference_resolution
+
     if df_reference is None or len(df_reference) == 0:
         results["error"] = "No reference data available"
         return results
