@@ -5,8 +5,9 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import optuna
+import pytest
 
-from model.tuning import run_tuning_study
+from model.tuning import OPTUNA_OBJECTIVE_VERSION, run_tuning_study
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -127,3 +128,75 @@ class TestOptunaSeeds:
         assert sampler_seeds[0] == 7, (
             f"Expected seed=7 (from persisted attrs), got seed={sampler_seeds[0]}"
         )
+
+    def test_resume_invariant_mismatch_warns_by_default(self, caplog):
+        """Mismatched persisted invariants should warn and continue by default."""
+        x_data, y = _make_xy()
+        existing_study = optuna.create_study(direction="maximize")
+        existing_study.set_user_attr("seed", 7)
+        existing_study.set_user_attr("split_config_hash", "stored-hash")
+        existing_study.set_user_attr("objective_version", OPTUNA_OBJECTIVE_VERSION)
+
+        with (
+            patch("model.tuning.create_tuning_study", return_value=existing_study),
+            patch("optuna.load_study", return_value=existing_study),
+            patch("mlflow.log_dict"),
+            patch("mlflow.log_params"),
+            patch("mlflow.active_run"),
+            patch("mlflow.start_run"),
+        ):
+            run_tuning_study(
+                x_data,
+                y,
+                x_data,
+                y,
+                n_trials=0,
+                seed=99,
+                job_id="job-invariant-warn",
+                storage_url="sqlite:///fake.db",
+                split_config={
+                    "strategy": "temporal",
+                    "validation_fraction": 0.2,
+                    "seed": 42,
+                },
+            )
+
+        assert "optuna_resume_invariant_mismatch" in caplog.text
+        assert "split_config_hash" in caplog.text
+
+    def test_resume_invariant_mismatch_fails_in_strict_mode(self):
+        """Strict resume validation should fail fast on invariant mismatches."""
+        x_data, y = _make_xy()
+        existing_study = optuna.create_study(direction="maximize")
+        existing_study.set_user_attr("seed", 7)
+        existing_study.set_user_attr("split_config_hash", "stored-hash")
+        existing_study.set_user_attr("objective_version", OPTUNA_OBJECTIVE_VERSION)
+
+        with (
+            patch.dict(
+                "os.environ",
+                {"STRICT_TUNING_RESUME_VALIDATION": "1"},
+                clear=False,
+            ),
+            patch("optuna.load_study", return_value=existing_study),
+            patch("mlflow.log_dict"),
+            patch("mlflow.log_params"),
+            patch("mlflow.active_run"),
+            patch("mlflow.start_run"),
+        ):
+            with pytest.raises(ValueError, match="optuna_resume_invariant_mismatch"):
+                run_tuning_study(
+                    x_data,
+                    y,
+                    x_data,
+                    y,
+                    n_trials=0,
+                    seed=99,
+                    job_id="job-invariant-strict",
+                    storage_url="sqlite:///fake.db",
+                    split_config={
+                        "strategy": "temporal",
+                        "validation_fraction": 0.2,
+                        "seed": 42,
+                    },
+                )

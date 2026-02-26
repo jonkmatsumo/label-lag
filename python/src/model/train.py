@@ -98,6 +98,21 @@ def _safe_run_id(run_obj, mlflow_obj) -> str:
     return "unknown"
 
 
+def _normalize_registered_model_version(registered_model: Any) -> str | None:
+    """Extract and normalize registered model version when available."""
+    candidate = getattr(registered_model, "version", registered_model)
+    if candidate is None:
+        return None
+    if isinstance(candidate, bytes):
+        candidate = candidate.decode("utf-8", errors="ignore")
+    if isinstance(candidate, str):
+        normalized = candidate.strip()
+        return normalized or None
+    if isinstance(candidate, (int, float)):
+        return str(int(candidate))
+    return None
+
+
 # experiment name
 EXPERIMENT_NAME = "ach-fraud-detection"
 
@@ -556,6 +571,7 @@ def train_model(
                     direction=tuning_config.direction,
                     strategy=tuning_config.strategy.value,
                     search_space_overrides=tuning_config.search_space,
+                    split_config=split_config.model_dump() if split_config else None,
                 )
                 selected_params = best
                 selection_type = "auto"
@@ -681,6 +697,8 @@ def train_model(
         )
         _mlflow.log_dict(run_spec.model_dump(), "training_run_spec.json")
         _mlflow.set_tag("training_run_spec_version", str(run_spec.schema_version))
+        _mlflow.set_tag("training_identity.mlflow_run_id", run_id)
+        _mlflow.set_tag("training_identity.feature_schema_hash", feature_schema_hash)
 
         # Determine effective calibration samples for logging
         effective_cal_samples = 0 if cal_skip_reason else n_cal_samples
@@ -911,7 +929,21 @@ def train_model(
 
         _mlflow.log_metric("training_time_seconds", time.time() - training_start_time)
         model_uri = f"runs:/{run_id}/model"
-        _mlflow.register_model(model_uri, EXPERIMENT_NAME)
+        registered_model = _mlflow.register_model(model_uri, EXPERIMENT_NAME)
+        registered_model_version = _normalize_registered_model_version(registered_model)
+        training_identity = {
+            "schema_version": 1,
+            "mlflow_run_id": run_id,
+            "model_name": EXPERIMENT_NAME,
+            "feature_schema_hash": feature_schema_hash,
+        }
+        if registered_model_version is not None:
+            training_identity["model_version"] = registered_model_version
+            _mlflow.set_tag(
+                "training_identity.model_version",
+                registered_model_version,
+            )
+        _mlflow.log_dict(training_identity, "training_run_identity.json")
         return run_id
 
 

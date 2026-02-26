@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import optuna
 import pandas as pd
@@ -49,6 +50,8 @@ DEFAULT_SEARCH_SPACE = {
     "reg_lambda": (0.0, 10.0),
 }
 MAX_BEST_PARAMS_TAG_LENGTH = 2000
+MAX_DATASET_IDENTITY_LENGTH = 128
+OPTUNA_OBJECTIVE_VERSION = "xgb_objective_v1"
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -80,6 +83,96 @@ def _best_params_tag_value(best_params: dict[str, object]) -> str:
         sort_keys=True,
     )
     return serialized[:MAX_BEST_PARAMS_TAG_LENGTH]
+
+
+def _coerce_optional_dict(payload: Any) -> dict[str, Any] | None:
+    if payload is None:
+        return None
+    if isinstance(payload, dict):
+        return payload
+    if hasattr(payload, "model_dump"):
+        try:
+            value = payload.model_dump()
+            if isinstance(value, dict):
+                return value
+        except Exception:
+            return None
+    return None
+
+
+def _compute_split_config_hash(split_config: Any) -> str | None:
+    split_payload = _coerce_optional_dict(split_config)
+    if split_payload is None:
+        return None
+
+    normalized: dict[str, Any] = {}
+    for key in (
+        "strategy",
+        "n_folds",
+        "stratify_column",
+        "group_column",
+        "validation_fraction",
+        "seed",
+    ):
+        value = split_payload.get(key)
+        if value is None or value == "":
+            continue
+        normalized[key] = value
+
+    if not normalized:
+        return None
+
+    serialized = json.dumps(normalized, sort_keys=True, default=str)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _normalize_dataset_identity(dataset_identity: str | None) -> str | None:
+    if dataset_identity is None:
+        return None
+    normalized = str(dataset_identity).strip()
+    if not normalized:
+        return None
+    return normalized[:MAX_DATASET_IDENTITY_LENGTH]
+
+
+def _build_study_invariants(
+    *,
+    split_config: Any,
+    dataset_identity: str | None,
+    objective_version: str | None,
+) -> dict[str, str]:
+    invariants: dict[str, str] = {}
+    split_hash = _compute_split_config_hash(split_config)
+    if split_hash is not None:
+        invariants["split_config_hash"] = split_hash
+
+    normalized_dataset_identity = _normalize_dataset_identity(dataset_identity)
+    if normalized_dataset_identity is not None:
+        invariants["dataset_identity"] = normalized_dataset_identity
+
+    normalized_objective_version = (
+        str(objective_version).strip() if objective_version is not None else ""
+    )
+    if normalized_objective_version:
+        invariants["objective_version"] = normalized_objective_version
+
+    return invariants
+
+
+def _resume_invariant_mismatches(
+    *,
+    stored_attrs: dict[str, Any],
+    expected_attrs: dict[str, str],
+) -> list[str]:
+    mismatches: list[str] = []
+    for key, expected_value in expected_attrs.items():
+        stored_value = stored_attrs.get(key)
+        if stored_value is None:
+            mismatches.append(f"{key}=missing")
+            continue
+        if str(stored_value).strip() != expected_value:
+            mismatches.append(key)
+    return mismatches
 
 
 def _create_objective(
@@ -291,6 +384,9 @@ def run_tuning_study(
     job_id: str | None = None,
     job_store: JobStore | None = None,
     storage_url: str | None = None,
+    split_config: dict[str, Any] | None = None,
+    dataset_identity: str | None = None,
+    objective_version: str = OPTUNA_OBJECTIVE_VERSION,
 ) -> tuple[dict, pd.DataFrame]:
     """Run Optuna study and return best params and trial history.
 
@@ -310,6 +406,9 @@ def run_tuning_study(
         job_id: Optional job ID for tracking.
         job_store: Optional JobStore for tracking.
         storage_url: Optional Optuna RDB storage URL override.
+        split_config: Optional split config payload used for data partitioning.
+        dataset_identity: Optional bounded dataset identifier for resume checks.
+        objective_version: Objective logic version for deterministic resume checks.
 
     Returns:
         (best_params, trials_df) where trials_df has columns like
@@ -342,6 +441,12 @@ def run_tuning_study(
         scale_pos_weight,
         seed,
         resolved_search_space,
+    )
+
+    study_invariants = _build_study_invariants(
+        split_config=split_config,
+        dataset_identity=dataset_identity,
+        objective_version=objective_version,
     )
 
     if strategy == "grid":
@@ -384,8 +489,32 @@ def run_tuning_study(
                         job_id,
                         seed,
                     )
-            except Exception:
+
+                invariant_mismatches = _resume_invariant_mismatches(
+                    stored_attrs=existing.user_attrs,
+                    expected_attrs=study_invariants,
+                )
+                if invariant_mismatches:
+                    mismatch_summary = ", ".join(invariant_mismatches)
+                    strict_validation = _env_flag(
+                        "STRICT_TUNING_RESUME_VALIDATION", default=False
+                    )
+                    message = (
+                        "optuna_resume_invariant_mismatch "
+                        f"(job_id={job_id}; mismatches={mismatch_summary})"
+                    )
+                    if strict_validation:
+                        raise ValueError(
+                            f"{message}; set STRICT_TUNING_RESUME_VALIDATION=0 "
+                            "to allow warn-only behavior."
+                        )
+                    logger.warning("%s; continuing in warn-only mode.", message)
+            except KeyError:
                 pass  # Study doesn't exist yet — first run, use caller seed.
+            except ValueError:
+                raise
+            except Exception:
+                pass  # Storage unavailable or lookup error; continue best-effort.
 
     if strategy == "random":
         sampler = optuna.samplers.RandomSampler(seed=seed)
@@ -407,6 +536,9 @@ def run_tuning_study(
     # Persist seed so resumed studies always reproduce the original sequence.
     if "seed" not in study.user_attrs:
         study.set_user_attr("seed", seed)
+    for key, value in study_invariants.items():
+        if key not in study.user_attrs:
+            study.set_user_attr(key, value)
 
     existing_trial_count = len(study.trials)
     remaining_trials = max(0, n_trials - existing_trial_count)

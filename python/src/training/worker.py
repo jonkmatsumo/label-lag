@@ -237,6 +237,8 @@ class TuningWorker:
                     job_id=job_id,
                     job_store=self.job_store,
                     storage_url=optuna_storage_url,
+                    split_config=_as_dict(split_cfg_obj),
+                    dataset_identity=config.get("dataset_identity"),
                 )
 
             # After completion, check status again (might have been canceled)

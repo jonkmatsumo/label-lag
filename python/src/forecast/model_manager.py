@@ -11,6 +11,7 @@ import logging
 import os
 import pickle
 import time
+from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
@@ -70,6 +71,7 @@ class ModelStateBundle:
     feature_importance: dict | None
     schema_mismatch_detected: bool = False
     last_reload_ts: float | None = None
+    training_identity: dict[str, str] | None = None
 
 
 class ModelManager:
@@ -110,6 +112,7 @@ class ModelManager:
         self._baseline_distribution: dict | None = None
         self._feature_importance: dict[str, float] | None = None
         self._schema_mismatch_detected: bool = False
+        self._training_identity: dict[str, str] | None = None
         self._mlflow_failure_reason: str = "unknown"
         self._benchmark_last_run_ts: float | None = None
         self._benchmark_last_status: str | None = None
@@ -183,6 +186,7 @@ class ModelManager:
             baseline_distribution=getattr(self, "_baseline_distribution", None),
             feature_importance=getattr(self, "_feature_importance", None),
             last_reload_ts=time.time(),
+            training_identity=getattr(self, "_training_identity", None),
         )
 
     def _sync_legacy_from_bundle(self, bundle: Any) -> None:
@@ -199,6 +203,84 @@ class ModelManager:
         self._feature_importance = getattr(bundle, "feature_importance", None)
         self._schema_mismatch_detected = bool(
             getattr(bundle, "schema_mismatch_detected", False)
+        )
+        training_identity = getattr(bundle, "training_identity", None)
+        self._training_identity = (
+            training_identity if isinstance(training_identity, dict) else None
+        )
+
+    @staticmethod
+    def _set_span_attribute(span: Any, key: str, value: str | None) -> None:
+        """Safely set a tracing span attribute if span support is available."""
+        if span is None or value is None:
+            return
+        setter = getattr(span, "set_attribute", None)
+        if callable(setter):
+            try:
+                setter(key, value)
+            except Exception:
+                pass
+
+    @staticmethod
+    def _normalize_training_identity(identity: Any) -> dict[str, str] | None:
+        """Normalize training identity payload loaded from artifacts."""
+        if not isinstance(identity, dict):
+            return None
+        normalized: dict[str, str] = {}
+        for key in ("mlflow_run_id", "model_version", "feature_schema_hash"):
+            value = identity.get(key)
+            if value is None:
+                continue
+            rendered = str(value).strip()
+            if rendered:
+                normalized[key] = rendered
+
+        if "schema_version" in identity:
+            rendered_schema_version = str(identity["schema_version"]).strip()
+            if rendered_schema_version:
+                normalized["schema_version"] = rendered_schema_version
+        if "model_name" in identity:
+            rendered_model_name = str(identity["model_name"]).strip()
+            if rendered_model_name:
+                normalized["model_name"] = rendered_model_name
+
+        return normalized or None
+
+    @staticmethod
+    def _reload_span_context():
+        """Return a model reload tracing span context manager when available."""
+        if os.getenv(
+            "INFERENCE_MODEL_RELOAD_SPAN_ENABLED", "false"
+        ).strip().lower() not in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }:
+            return nullcontext(None)
+        try:
+            import mlflow
+
+            return mlflow.start_span(name="model_reload")
+        except Exception:
+            return nullcontext(None)
+
+    def _attach_training_identity_to_span(
+        self, span: Any, training_identity: dict[str, str] | None
+    ) -> None:
+        """Attach bounded training correlation identifiers to reload spans."""
+        if not training_identity:
+            return
+        self._set_span_attribute(
+            span, "training.mlflow_run_id", training_identity.get("mlflow_run_id")
+        )
+        self._set_span_attribute(
+            span, "training.model_version", training_identity.get("model_version")
+        )
+        self._set_span_attribute(
+            span,
+            "training.feature_schema_hash",
+            training_identity.get("feature_schema_hash"),
         )
 
     def _store_loaded_bundle_if_valid(self, bundle: Any) -> bool:
@@ -225,6 +307,19 @@ class ModelManager:
                 f"ModelManager state transition: {old_state} -> {state}"
                 + (f" (error: {error})" if error else "")
             )
+
+    @property
+    def training_identity(self) -> dict[str, str] | None:
+        """Get normalized training identity for the active model bundle."""
+        bundle = self._resolve_runtime_bundle()
+        if bundle is not None:
+            candidate = getattr(bundle, "training_identity", None)
+            if isinstance(candidate, dict):
+                return candidate
+        candidate = getattr(self, "_training_identity", None)
+        if isinstance(candidate, dict):
+            return candidate
+        return None
 
     @property
     def model_loaded(self) -> bool:
@@ -317,6 +412,7 @@ class ModelManager:
         """
         with self._lock:
             bundle = self._resolve_runtime_bundle()
+            training_identity = self.training_identity or {}
             return {
                 "state": self._state,
                 "model_version": self.model_version,
@@ -342,6 +438,11 @@ class ModelManager:
                 "feature_coverage_warning_last_seen_ts": (
                     self._feature_coverage_warning_last_seen_ts
                 ),
+                "training_mlflow_run_id": training_identity.get("mlflow_run_id"),
+                "training_model_version": training_identity.get("model_version"),
+                "training_feature_schema_hash": training_identity.get(
+                    "feature_schema_hash"
+                ),
             }
 
     def update_feature_coverage_warning(
@@ -364,49 +465,79 @@ class ModelManager:
         Returns:
             True if a model was loaded successfully, False otherwise.
         """
-        # Only transition to loading if we don't have a model yet (atomic swap)
-        if not self.model_loaded:
-            self._transition_to("loading")
+        with self._reload_span_context() as reload_span:
+            self._set_span_attribute(reload_span, "model.reload.source", "mlflow")
+            # Only transition to loading if we don't have a model yet (atomic swap)
+            if not self.model_loaded:
+                self._transition_to("loading")
 
-        # Try loading from MLflow first
-        bundle = self._load_from_mlflow()
-        if self._store_loaded_bundle_if_valid(bundle):
-            self._transition_to("ready")
-            self._benchmark_inference(bundle, log_to_mlflow=True)
-            return True
-        if bundle:
-            # Backward-compatibility for tests that mock loader methods as booleans.
-            logger.warning(
-                "Model loader returned non-bundle truthy value; treating as success."
-            )
-            self._transition_to("ready")
-            # Can't benchmark without a real bundle
-            return True
-
-        # Fall back to local model
-        from forecast.metrics import model_fallback_total
-
-        bundle = self._load_fallback_model()
-        if bundle:
-            model_fallback_total.labels(reason=ErrorCategory.MLFLOW_UNAVAILABLE).inc()
+            # Try loading from MLflow first
+            bundle = self._load_from_mlflow()
             if self._store_loaded_bundle_if_valid(bundle):
                 self._transition_to("ready")
-                self._benchmark_inference(bundle, log_to_mlflow=False)
+                self._benchmark_inference(bundle, log_to_mlflow=True)
+                self._set_span_attribute(
+                    reload_span, "model.reload.status", "loaded_from_mlflow"
+                )
+                self._set_span_attribute(
+                    reload_span, "model.version", self.model_version
+                )
+                self._attach_training_identity_to_span(
+                    reload_span,
+                    getattr(bundle, "training_identity", None),
+                )
                 return True
-            logger.warning(
-                "Fallback loader returned non-bundle truthy value; treating as success."
-            )
-            self._transition_to("ready")
-            return True
+            if bundle:
+                # Backward-compatibility for tests that mock loader methods as booleans.
+                logger.warning(
+                    "Model loader returned non-bundle truthy value; "
+                    "treating as success."
+                )
+                self._transition_to("ready")
+                self._set_span_attribute(
+                    reload_span, "model.reload.status", "loaded_from_mlflow"
+                )
+                # Can't benchmark without a real bundle
+                return True
 
-        self._transition_to("failed", error="Both MLflow and fallback failed")
-        logger.error("No model available - both MLflow and fallback failed")
-        from forecast.metrics import model_reload_failure_total
+            # Fall back to local model
+            from forecast.metrics import model_fallback_total
 
-        # Use mlflow failure reason as the primary reason if both fail
-        reason = self._mlflow_failure_reason
-        model_reload_failure_total.labels(reason=reason).inc()
-        return False
+            bundle = self._load_fallback_model()
+            if bundle:
+                model_fallback_total.labels(
+                    reason=ErrorCategory.MLFLOW_UNAVAILABLE
+                ).inc()
+                if self._store_loaded_bundle_if_valid(bundle):
+                    self._transition_to("ready")
+                    self._benchmark_inference(bundle, log_to_mlflow=False)
+                    self._set_span_attribute(
+                        reload_span, "model.reload.status", "loaded_from_fallback"
+                    )
+                    self._set_span_attribute(
+                        reload_span, "model.version", self.model_version
+                    )
+                    return True
+                logger.warning(
+                    "Fallback loader returned non-bundle truthy value; "
+                    "treating as success."
+                )
+                self._transition_to("ready")
+                self._set_span_attribute(
+                    reload_span, "model.reload.status", "loaded_from_fallback"
+                )
+                return True
+
+            self._transition_to("failed", error="Both MLflow and fallback failed")
+            logger.error("No model available - both MLflow and fallback failed")
+            from forecast.metrics import model_reload_failure_total
+
+            # Use mlflow failure reason as the primary reason if both fail
+            reason = self._mlflow_failure_reason
+            model_reload_failure_total.labels(reason=reason).inc()
+            self._set_span_attribute(reload_span, "model.reload.status", "failed")
+            self._set_span_attribute(reload_span, "model.reload.error_reason", reason)
+            return False
 
     def _load_from_mlflow(self) -> ModelStateBundle | None:
         """Attempt to load model from MLflow registry.
@@ -462,6 +593,9 @@ class ModelManager:
 
             # Try to load score_distribution.json artifact (C3)
             baseline_distribution = self._load_baseline_distribution_artifact()
+            training_identity = self._normalize_training_identity(
+                self._load_training_run_identity_artifact(version)
+            )
 
             # Cache feature importance (C4)
             feature_importance = self.get_feature_importance_from_model(
@@ -515,6 +649,7 @@ class ModelManager:
                 feature_importance=feature_importance,
                 schema_mismatch_detected=schema_mismatch,
                 last_reload_ts=time.time(),
+                training_identity=training_identity,
             )
 
             # Benchmark inference latency after load
@@ -598,6 +733,28 @@ class ModelManager:
                         break
         except Exception as e:
             logger.debug(f"Could not load feature schema hash artifact: {e}")
+        return None
+
+    def _load_training_run_identity_artifact(self, version: str) -> dict | None:
+        """Load training_run_identity.json artifact from the model run."""
+        try:
+            import mlflow
+
+            client = mlflow.MlflowClient()
+            versions = client.search_model_versions(f"name='{MODEL_NAME}'")
+            for v in versions:
+                if v.current_stage == "Production" and v.version == version.lstrip("v"):
+                    run_id = v.run_id
+                    try:
+                        artifact_path = client.download_artifacts(
+                            run_id, "training_run_identity.json"
+                        )
+                        with open(artifact_path) as f:
+                            return json.load(f)
+                    except Exception:
+                        break
+        except Exception as e:
+            logger.debug(f"Could not load training run identity artifact: {e}")
         return None
 
     def _load_calibrator_artifact(self) -> tuple[Any, bool]:
