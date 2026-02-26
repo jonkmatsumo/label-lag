@@ -92,6 +92,10 @@ PSI_THRESHOLD_CRITICAL = _DRIFT_THRESHOLDS["psi_critical"]
 CACHE_TTL_SECONDS = _DRIFT_THRESHOLDS["cache_ttl_seconds"]
 
 MIN_REFERENCE_SAMPLES = 500
+PSI_MIN_EXPECTED_PER_BUCKET = float(os.getenv("DRIFT_PSI_MIN_EXPECTED_PER_BUCKET", "5"))
+PSI_MIN_NONEMPTY_BUCKETS_RATIO = float(
+    os.getenv("DRIFT_PSI_MIN_NONEMPTY_BUCKETS_RATIO", "0.6")
+)
 
 
 def calculate_psi(
@@ -153,15 +157,18 @@ def calculate_psi(
     expected_counts = np.histogram(expected, **hist_kwargs)[0]
     actual_counts = np.histogram(actual, **hist_kwargs)[0]
 
-    expected_pct = expected_counts / len(expected)
-    actual_pct = actual_counts / len(actual)
-
-    epsilon = 1e-6
-    expected_pct = np.clip(expected_pct, epsilon, 1)
-    actual_pct = np.clip(actual_pct, epsilon, 1)
-
-    psi_values = (actual_pct - expected_pct) * np.log(actual_pct / expected_pct)
-    psi = np.sum(psi_values)
+    bucket_count = len(expected_counts)
+    nonempty_buckets = int(np.count_nonzero(expected_counts > 0))
+    nonempty_buckets_ratio = (
+        float(nonempty_buckets) / float(bucket_count) if bucket_count > 0 else 0.0
+    )
+    min_expected_count = float(expected_counts.min()) if bucket_count > 0 else 0.0
+    bucket_mass_ok_raw = (
+        min_expected_count >= PSI_MIN_EXPECTED_PER_BUCKET
+        and nonempty_buckets_ratio >= PSI_MIN_NONEMPTY_BUCKETS_RATIO
+    )
+    bucket_mass_guardrail_applied = len(expected) >= MIN_REFERENCE_SAMPLES
+    bucket_mass_ok = bucket_mass_ok_raw if bucket_mass_guardrail_applied else True
 
     metadata = {
         "buckettype_requested": buckettype,
@@ -173,7 +180,37 @@ def calculate_psi(
         "bucketing_fallback_reason": fallback_reason,
         "breakpoints": [float(b) for b in breakpoints],
         "reference_sample_size": len(expected),
+        "nonempty_buckets": nonempty_buckets,
+        "nonempty_buckets_ratio": round(nonempty_buckets_ratio, 4),
+        "min_expected_count": min_expected_count,
+        "bucket_mass_ok": bucket_mass_ok,
+        "bucket_mass_guardrail_applied": bucket_mass_guardrail_applied,
     }
+
+    if not bucket_mass_ok:
+        logger.warning(
+            "Insufficient bucket mass for PSI "
+            "(nonempty_buckets=%s/%s ratio=%.3f min_expected_count=%.2f "
+            "required_nonempty_ratio=%.3f min_expected_per_bucket=%.2f)",
+            nonempty_buckets,
+            bucket_count,
+            nonempty_buckets_ratio,
+            min_expected_count,
+            PSI_MIN_NONEMPTY_BUCKETS_RATIO,
+            PSI_MIN_EXPECTED_PER_BUCKET,
+        )
+        metadata["drift_error"] = "insufficient_bucket_mass"
+        return 0.0, metadata
+
+    expected_pct = expected_counts / len(expected)
+    actual_pct = actual_counts / len(actual)
+
+    epsilon = 1e-6
+    expected_pct = np.clip(expected_pct, epsilon, 1)
+    actual_pct = np.clip(actual_pct, epsilon, 1)
+
+    psi_values = (actual_pct - expected_pct) * np.log(actual_pct / expected_pct)
+    psi = np.sum(psi_values)
 
     return float(psi), metadata
 
@@ -269,6 +306,7 @@ def detect_drift(
         "features": {},
         "drift_detected": False,
         "drifted_features": [],
+        "drift_error": None,
         "alerts": [],
     }
 
@@ -305,6 +343,19 @@ def detect_drift(
         psi, bucketing = calculate_psi(
             expected, actual, buckettype="quantiles", buckets=10
         )
+        drift_error = (
+            bucketing.get("drift_error") if isinstance(bucketing, dict) else None
+        )
+
+        if drift_error == "insufficient_bucket_mass":
+            results["drift_error"] = drift_error
+            results["features"][feature] = {
+                "psi": round(psi, 4),
+                "status": "OK",
+                "drift_error": drift_error,
+                "bucketing": bucketing,
+            }
+            continue
 
         if psi >= PSI_THRESHOLD_CRITICAL:
             status = "CRITICAL"
