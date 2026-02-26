@@ -91,6 +91,8 @@ class ModelManager:
         self._mlflow_failure_reason: str = "unknown"
         self._benchmark_last_run_ts: float | None = None
         self._benchmark_last_status: str | None = None
+        self._feature_coverage_warning_active: bool = False
+        self._feature_coverage_warning_last_seen_ts: float | None = None
         self._initialized = True
 
     @staticmethod
@@ -312,7 +314,24 @@ class ModelManager:
                 "benchmark_last_run_ts": self._benchmark_last_run_ts,
                 "benchmark_last_status": self._benchmark_last_status,
                 "active_model_version": self.model_version,
+                "feature_coverage_warning_active": (
+                    self._feature_coverage_warning_active
+                ),
+                "feature_coverage_warning_last_seen_ts": (
+                    self._feature_coverage_warning_last_seen_ts
+                ),
             }
+
+    def update_feature_coverage_warning(
+        self, *, active: bool, observed_ts: float | None = None
+    ) -> None:
+        """Update coverage warning diagnostics state."""
+        with self._lock:
+            self._feature_coverage_warning_active = bool(active)
+            if active:
+                self._feature_coverage_warning_last_seen_ts = (
+                    observed_ts if observed_ts is not None else time.time()
+                )
 
     def load_production_model(self) -> bool:
         """Load the production model from MLflow registry.

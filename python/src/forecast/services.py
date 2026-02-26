@@ -12,6 +12,7 @@ import structlog
 
 from forecast.metrics import (
     heuristic_fallback_total,
+    inference_feature_coverage_below_threshold_total,
     inference_feature_coverage_ratio,
     zero_fallback_total,
 )
@@ -31,6 +32,33 @@ MERCHANT_RISK_THRESHOLD = 70  # Merchant risk score threshold
 CONNECTION_BURST_THRESHOLD = 4  # 24h bank connections threshold
 
 MODEL_VERSION = "v1.0.0"
+
+
+def _load_feature_coverage_warn_threshold() -> float:
+    """Load and clamp coverage warning threshold to [0.0, 1.0]."""
+    raw = os.getenv("FEATURE_COVERAGE_WARN_THRESHOLD", "1.0")
+    try:
+        parsed = float(raw)
+    except ValueError:
+        logger.warning(
+            "Invalid FEATURE_COVERAGE_WARN_THRESHOLD=%s; defaulting to 1.0", raw
+        )
+        return 1.0
+    return max(0.0, min(1.0, parsed))
+
+
+FEATURE_COVERAGE_WARN_THRESHOLD = _load_feature_coverage_warn_threshold()
+
+
+def _coverage_bucket(coverage_ratio: float) -> str:
+    """Map coverage ratio into a bounded alert bucket label."""
+    if coverage_ratio < 0.5:
+        return "lt_0.5"
+    if coverage_ratio < 0.8:
+        return "lt_0.8"
+    if coverage_ratio < 0.95:
+        return "lt_0.95"
+    return "lt_1.0"
 
 
 @dataclass
@@ -272,6 +300,22 @@ class SignalForecaster:
 
                 # Emit coverage metric
                 inference_feature_coverage_ratio.observe(coverage_ratio)
+                coverage_warning_active = (
+                    coverage_ratio < FEATURE_COVERAGE_WARN_THRESHOLD
+                )
+
+                if coverage_warning_active:
+                    coverage_bucket = _coverage_bucket(coverage_ratio)
+                    inference_feature_coverage_below_threshold_total.labels(
+                        bucket=coverage_bucket
+                    ).inc()
+                else:
+                    coverage_bucket = None
+
+                if hasattr(manager, "update_feature_coverage_warning"):
+                    manager.update_feature_coverage_warning(
+                        active=coverage_warning_active
+                    )
 
                 log_data = {
                     "event": "inference_feature_coverage",
@@ -279,7 +323,10 @@ class SignalForecaster:
                     "required_count": total_required,
                     "available_count": available_count,
                     "coverage_ratio": round(coverage_ratio, 4),
+                    "coverage_warn_threshold": FEATURE_COVERAGE_WARN_THRESHOLD,
                 }
+                if coverage_bucket is not None:
+                    log_data["coverage_bucket"] = coverage_bucket
 
                 if coverage_ratio < 1.0:
                     log_data["missing_features"] = missing_features[:10]
