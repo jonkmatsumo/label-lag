@@ -14,6 +14,10 @@ from typing import TYPE_CHECKING, Any
 
 from model.evaluate import ScoreCalibrator
 from model.loader import DataLoader
+from training.reason_codes import (
+    MLFLOW_PARAM_CALIBRATION_SKIP_REASON,
+    CalibrationSkipReason,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -671,11 +675,11 @@ def train_model(
         n_cal_neg = int(np.sum(y_cal_fit == 0))
 
         if n_cal_samples < min_cal_samples:
-            cal_skip_reason = "calibration_skipped_insufficient_samples"
+            cal_skip_reason = CalibrationSkipReason.INSUFFICIENT_SAMPLES.value
         elif n_cal_pos < min_cal_pos:
-            cal_skip_reason = "calibration_skipped_insufficient_positives"
+            cal_skip_reason = CalibrationSkipReason.INSUFFICIENT_POSITIVES.value
         elif n_cal_neg < min_cal_neg:
-            cal_skip_reason = "calibration_skipped_insufficient_negatives"
+            cal_skip_reason = CalibrationSkipReason.INSUFFICIENT_NEGATIVES.value
 
         # Log training run spec (NF1)
         from training.schemas import TrainingRunSpec
@@ -734,7 +738,7 @@ def train_model(
             "calibration_enabled": not bool(cal_skip_reason),
         }
         if cal_skip_reason:
-            params_log["calibration_skip_reason"] = cal_skip_reason
+            params_log[MLFLOW_PARAM_CALIBRATION_SKIP_REASON] = cal_skip_reason
 
         if early_stopping_rounds:
             params_log["early_stopping_rounds"] = early_stopping_rounds
