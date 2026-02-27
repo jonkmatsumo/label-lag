@@ -19,14 +19,32 @@ class Currency(str, Enum):
 
 
 class ErrorCategory(str, Enum):
-    """Canonical error categories for inference and fallback."""
+    """Canonical error categories for inference, fallback, and hardening."""
 
+    # Core Prediction Failures
     MODEL_NOT_LOADED = "model_not_loaded"
     NO_HISTORY = "no_history"
     MISSING_FEATURES = "missing_features"
     MODEL_PREDICTION_ERROR = "model_prediction_error"
     HEURISTIC_DISABLED = "heuristic_disabled"
+
+    # Infrastructure / External Services
     MLFLOW_UNAVAILABLE = "mlflow_unavailable"
+    MLFLOW_FETCH_ERROR = "mlflow_fetch"
+    ARTIFACT_MISSING = "artifact_missing"
+    REGISTRY_SYNC_FAILURE = "registry_sync_failure"
+
+    # Validation & Hardening
+    SCHEMA_MISMATCH = "schema_mismatch"
+    RESUME_INVARIANT_MISMATCH = "resume_invariant_mismatch"
+
+    # Drift Detection
+    TIED_QUANTILES = "tied_quantiles"
+    INSUFFICIENT_DATA = "insufficient_data"
+    INSUFFICIENT_BUCKET_MASS = "insufficient_bucket_mass"
+
+    # Generic
+    UNKNOWN = "unknown"
 
 
 class SignalRequest(BaseModel):
