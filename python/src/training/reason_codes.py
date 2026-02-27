@@ -43,6 +43,23 @@ class BenchmarkStatus(str, Enum):
     FAILED = "failed"
 
 
+class ModelManagerState(str, Enum):
+    """Lifecycle states for ModelManager diagnostics."""
+
+    IDLE = "idle"
+    LOADING = "loading"
+    READY = "ready"
+    FAILED = "failed"
+
+
+class ReloadStatus(str, Enum):
+    """Normalized reload status values in diagnostics snapshots."""
+
+    IDLE = "idle"
+    SUCCESS = "success"
+    FAILED = "failed"
+
+
 class ResumeValidationReason(str, Enum):
     """Reason codes for Optuna resume validation outcomes."""
 
@@ -63,6 +80,8 @@ SCHEMA_MISMATCH_REASONS = frozenset(reason.value for reason in SchemaMismatchRea
 CALIBRATION_SKIP_REASONS = frozenset(reason.value for reason in CalibrationSkipReason)
 DRIFT_FALLBACK_REASONS = frozenset(reason.value for reason in DriftFallbackReason)
 BENCHMARK_STATUSES = frozenset(reason.value for reason in BenchmarkStatus)
+MODEL_MANAGER_STATES = frozenset(reason.value for reason in ModelManagerState)
+RELOAD_STATUSES = frozenset(reason.value for reason in ReloadStatus)
 RESUME_VALIDATION_REASONS = frozenset(reason.value for reason in ResumeValidationReason)
 
 MLFLOW_PARAM_CALIBRATION_SKIP_REASON = "calibration_skip_reason"

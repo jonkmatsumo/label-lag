@@ -14,10 +14,13 @@ def test_diagnostics_snapshot_includes_required_baseline_fields():
     manager = _fresh_manager()
     diag = manager.get_diagnostics()
 
-    assert "state" in diag
-    assert "model_version" in diag
-    assert "last_reload_status" in diag
-    assert "schema_mismatch_detected" in diag
+    required_keys = {
+        "state",
+        "active_model_version",
+        "last_reload_status",
+        "schema_mismatch_detected",
+    }
+    assert required_keys.issubset(diag.keys())
 
 
 def test_missing_registry_features_warn_only_when_strict_flag_unset(monkeypatch):

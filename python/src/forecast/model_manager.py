@@ -23,7 +23,9 @@ import pandas as pd
 from training.reason_codes import (
     BenchmarkStatus,
     DiagnosticsDegradedReason,
+    ModelManagerState,
     ReloadFailureReason,
+    ReloadStatus,
     SchemaMismatchReason,
 )
 from training.schemas import ErrorCategory
@@ -105,7 +107,9 @@ class ModelManager:
             return
 
         self._bundle: ModelStateBundle | None = None
-        self._state: Literal["idle", "loading", "ready", "failed"] = "idle"
+        self._state: Literal["idle", "loading", "ready", "failed"] = (
+            ModelManagerState.IDLE.value
+        )
         self._last_error: str | None = None
         self._benchmarked_versions: set[str] = set()
         # Backward-compatible legacy fields used by older tests/callers.
@@ -420,14 +424,14 @@ class ModelManager:
             bundle = self._resolve_runtime_bundle()
             training_identity = self.training_identity or {}
             last_reload_status = (
-                "success"
-                if self._state == "ready"
-                else "failed"
-                if self._state == "failed"
-                else "idle"
+                ReloadStatus.SUCCESS.value
+                if self._state == ModelManagerState.READY.value
+                else ReloadStatus.FAILED.value
+                if self._state == ModelManagerState.FAILED.value
+                else ReloadStatus.IDLE.value
             )
             degraded_reasons: list[str] = []
-            if self._state == "failed":
+            if self._state == ModelManagerState.FAILED.value:
                 degraded_reasons.append(DiagnosticsDegradedReason.RELOAD_FAILED.value)
             if self.schema_mismatch_detected:
                 degraded_reasons.append(SchemaMismatchReason.SCHEMA_MISMATCH.value)
@@ -449,7 +453,7 @@ class ModelManager:
                 "last_reload_status": last_reload_status,
                 "last_reload_reason": (
                     self._mlflow_failure_reason
-                    if last_reload_status == "failed"
+                    if last_reload_status == ReloadStatus.FAILED.value
                     else None
                 ),
                 "benchmark_last_run_ts": self._benchmark_last_run_ts,
@@ -491,12 +495,12 @@ class ModelManager:
             self._set_span_attribute(reload_span, "model.reload.source", "mlflow")
             # Only transition to loading if we don't have a model yet (atomic swap)
             if not self.model_loaded:
-                self._transition_to("loading")
+                self._transition_to(ModelManagerState.LOADING.value)
 
             # Try loading from MLflow first
             bundle = self._load_from_mlflow()
             if self._store_loaded_bundle_if_valid(bundle):
-                self._transition_to("ready")
+                self._transition_to(ModelManagerState.READY.value)
                 self._benchmark_inference(bundle, log_to_mlflow=True)
                 self._set_span_attribute(
                     reload_span, "model.reload.status", "loaded_from_mlflow"
@@ -515,7 +519,7 @@ class ModelManager:
                     "Model loader returned non-bundle truthy value; "
                     "treating as success."
                 )
-                self._transition_to("ready")
+                self._transition_to(ModelManagerState.READY.value)
                 self._set_span_attribute(
                     reload_span, "model.reload.status", "loaded_from_mlflow"
                 )
@@ -531,7 +535,7 @@ class ModelManager:
                     reason=ErrorCategory.MLFLOW_UNAVAILABLE
                 ).inc()
                 if self._store_loaded_bundle_if_valid(bundle):
-                    self._transition_to("ready")
+                    self._transition_to(ModelManagerState.READY.value)
                     self._benchmark_inference(bundle, log_to_mlflow=False)
                     self._set_span_attribute(
                         reload_span, "model.reload.status", "loaded_from_fallback"
@@ -544,20 +548,25 @@ class ModelManager:
                     "Fallback loader returned non-bundle truthy value; "
                     "treating as success."
                 )
-                self._transition_to("ready")
+                self._transition_to(ModelManagerState.READY.value)
                 self._set_span_attribute(
                     reload_span, "model.reload.status", "loaded_from_fallback"
                 )
                 return True
 
-            self._transition_to("failed", error="Both MLflow and fallback failed")
+            self._transition_to(
+                ModelManagerState.FAILED.value,
+                error="Both MLflow and fallback failed",
+            )
             logger.error("No model available - both MLflow and fallback failed")
             from forecast.metrics import model_reload_failure_total
 
             # Use mlflow failure reason as the primary reason if both fail
             reason = self._mlflow_failure_reason
             model_reload_failure_total.labels(reason=reason).inc()
-            self._set_span_attribute(reload_span, "model.reload.status", "failed")
+            self._set_span_attribute(
+                reload_span, "model.reload.status", ReloadStatus.FAILED.value
+            )
             self._set_span_attribute(reload_span, "model.reload.error_reason", reason)
             return False
 
@@ -1105,11 +1114,11 @@ class ModelManager:
         state = self._state
         bundle = self._resolve_runtime_bundle()
 
-        if state == "loading":
+        if state == ModelManagerState.LOADING.value:
             raise RuntimeError("Model reload in progress", "reload_in_progress")
 
         if bundle is None or getattr(bundle, "model", None) is None:
-            if state == "failed":
+            if state == ModelManagerState.FAILED.value:
                 raise RuntimeError(
                     f"Model loading failed: {self._last_error}", "load_failed"
                 )
@@ -1117,7 +1126,7 @@ class ModelManager:
                 "No model loaded. Call load_production_model() first.", "not_loaded"
             )
 
-        if state == "failed":
+        if state == ModelManagerState.FAILED.value:
             logger.warning(
                 "Serving from old model bundle because latest reload failed: "
                 f"{self._last_error}"
@@ -1157,9 +1166,9 @@ class ModelManager:
         if bundle is None:
             # Re-check state if bundle is None to provide better error
             state = self._state
-            if state == "loading":
+            if state == ModelManagerState.LOADING.value:
                 raise RuntimeError("Model reload in progress", "reload_in_progress")
-            if state == "failed":
+            if state == ModelManagerState.FAILED.value:
                 raise RuntimeError(
                     f"Model loading failed: {self._last_error}", "load_failed"
                 )
