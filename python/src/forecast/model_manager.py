@@ -20,6 +20,12 @@ from typing import Any, Literal
 import numpy as np
 import pandas as pd
 
+from training.reason_codes import (
+    BenchmarkStatus,
+    DiagnosticsDegradedReason,
+    ReloadFailureReason,
+    SchemaMismatchReason,
+)
 from training.schemas import ErrorCategory
 
 # Configure logging
@@ -113,7 +119,7 @@ class ModelManager:
         self._feature_importance: dict[str, float] | None = None
         self._schema_mismatch_detected: bool = False
         self._training_identity: dict[str, str] | None = None
-        self._mlflow_failure_reason: str = "unknown"
+        self._mlflow_failure_reason: str = ReloadFailureReason.UNKNOWN.value
         self._benchmark_last_run_ts: float | None = None
         self._benchmark_last_status: str | None = None
         self._feature_coverage_warning_active: bool = False
@@ -413,6 +419,22 @@ class ModelManager:
         with self._lock:
             bundle = self._resolve_runtime_bundle()
             training_identity = self.training_identity or {}
+            last_reload_status = (
+                "success"
+                if self._state == "ready"
+                else "failed"
+                if self._state == "failed"
+                else "idle"
+            )
+            degraded_reasons: list[str] = []
+            if self._state == "failed":
+                degraded_reasons.append(DiagnosticsDegradedReason.RELOAD_FAILED.value)
+            if self.schema_mismatch_detected:
+                degraded_reasons.append(SchemaMismatchReason.SCHEMA_MISMATCH.value)
+            if self._feature_coverage_warning_active:
+                degraded_reasons.append(
+                    DiagnosticsDegradedReason.FEATURE_COVERAGE_WARNING.value
+                )
             return {
                 "state": self._state,
                 "model_version": self.model_version,
@@ -424,13 +446,15 @@ class ModelManager:
                 "last_reload_ts": getattr(bundle, "last_reload_ts", None)
                 if bundle
                 else None,
-                "last_reload_status": "success"
-                if self._state == "ready"
-                else "failed"
-                if self._state == "failed"
-                else "idle",
+                "last_reload_status": last_reload_status,
+                "last_reload_reason": (
+                    self._mlflow_failure_reason
+                    if last_reload_status == "failed"
+                    else None
+                ),
                 "benchmark_last_run_ts": self._benchmark_last_run_ts,
                 "benchmark_last_status": self._benchmark_last_status,
+                "degraded_reasons": degraded_reasons,
                 "active_model_version": self.model_version,
                 "feature_coverage_warning_active": (
                     self._feature_coverage_warning_active
@@ -658,15 +682,15 @@ class ModelManager:
         except Exception as e:
             error_str = str(e).lower()
             if "artifact" in error_str or "not found" in error_str:
-                self._mlflow_failure_reason = "artifact_missing"
+                self._mlflow_failure_reason = ReloadFailureReason.ARTIFACT_MISSING.value
             elif (
                 "mlflow" in error_str
                 or "connection" in error_str
                 or "http" in error_str
             ):
-                self._mlflow_failure_reason = "mlflow_fetch"
+                self._mlflow_failure_reason = ReloadFailureReason.MLFLOW_FETCH.value
             else:
-                self._mlflow_failure_reason = "unknown"
+                self._mlflow_failure_reason = ReloadFailureReason.UNKNOWN.value
 
             logger.critical(
                 f"Failed to load model from MLflow/MinIO: {e}. "
@@ -879,7 +903,7 @@ class ModelManager:
             log_to_mlflow = bundle is not None
 
         if not INFERENCE_BENCHMARK_ENABLED:
-            self._benchmark_last_status = "skipped_disabled"
+            self._benchmark_last_status = BenchmarkStatus.SKIPPED_DISABLED.value
             self._benchmark_last_run_ts = time.time()
             logger.debug("Inference benchmark disabled by INFERENCE_BENCHMARK_ENABLED")
             return
@@ -898,7 +922,7 @@ class ModelManager:
             sample_draw = self._draw_benchmark_sample(sample_rng)
             if sample_draw >= INFERENCE_BENCHMARK_SAMPLE_RATE:
                 self._benchmarked_versions.add(version)
-                self._benchmark_last_status = "skipped_sampled_out"
+                self._benchmark_last_status = BenchmarkStatus.SKIPPED_SAMPLED_OUT.value
                 self._benchmark_last_run_ts = time.time()
                 logger.debug(
                     "Skipping benchmark for version %s due to sampling "
@@ -993,10 +1017,10 @@ class ModelManager:
 
             # Mark as benchmarked even if metrics emit fails, to avoid retries.
             self._benchmarked_versions.add(version)
-            self._benchmark_last_status = "success"
+            self._benchmark_last_status = BenchmarkStatus.SUCCESS.value
         except Exception as e:
             logger.debug(f"Inference benchmarking failed: {e}")
-            self._benchmark_last_status = "failed"
+            self._benchmark_last_status = BenchmarkStatus.FAILED.value
 
         self._benchmark_last_run_ts = time.time()
 

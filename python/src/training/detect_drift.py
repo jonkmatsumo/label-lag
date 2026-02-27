@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 
 from training.crud_client import get_crud_client
+from training.reason_codes import DriftFallbackReason
 
 # Configure logging
 logging.basicConfig(
@@ -133,7 +134,7 @@ def calculate_psi(
         quantile_breakpoints = np.percentile(expected, np.linspace(0, 100, buckets + 1))
         unique_breakpoints = np.unique(quantile_breakpoints)
         if len(unique_breakpoints) < (buckets + 1):
-            fallback_reason = "tied_quantiles"
+            fallback_reason = DriftFallbackReason.TIED_QUANTILES.value
             logger.warning(
                 "Quantile PSI bucketing collapsed (%s < %s unique breakpoints). "
                 "Falling back to uniform bins over data range.",
@@ -202,7 +203,7 @@ def calculate_psi(
             PSI_MIN_NONEMPTY_BUCKETS_RATIO,
             PSI_MIN_EXPECTED_PER_BUCKET,
         )
-        metadata["drift_error"] = "insufficient_bucket_mass"
+        metadata["drift_error"] = DriftFallbackReason.INSUFFICIENT_BUCKET_MASS.value
         return 0.0, metadata
 
     expected_pct = expected_counts / len(expected)
@@ -487,7 +488,7 @@ def detect_drift(
             bucketing.get("drift_error") if isinstance(bucketing, dict) else None
         )
 
-        if drift_error == "insufficient_bucket_mass":
+        if drift_error == DriftFallbackReason.INSUFFICIENT_BUCKET_MASS.value:
             results["drift_error"] = drift_error
             results["features"][feature] = {
                 "psi": round(psi, 4),

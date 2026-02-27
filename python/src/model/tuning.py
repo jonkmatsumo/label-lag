@@ -27,6 +27,10 @@ from sklearn.metrics import (
 from xgboost import XGBClassifier
 
 from training.optuna_resume import create_tuning_study
+from training.reason_codes import (
+    MLFLOW_TAG_TUNING_RESUME_REASON,
+    ResumeValidationReason,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +65,33 @@ def _env_flag(name: str, default: bool = False) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _set_resume_validation_reason_tag(reason_code: str) -> None:
+    """Best-effort MLflow tag for resume validation reason code."""
+    if _active_mlflow_run_id() is None:
+        return
+    try:
+        mlflow.set_tag(MLFLOW_TAG_TUNING_RESUME_REASON, reason_code)
+    except Exception:
+        pass
+
+
+def _active_mlflow_run_id() -> str | None:
+    """Return active MLflow run_id when available, otherwise None."""
+    if mlflow is None:
+        return None
+    active_run = getattr(mlflow, "active_run", None)
+    if not callable(active_run):
+        return None
+    try:
+        run = active_run()
+    except Exception:
+        return None
+    run_id = getattr(getattr(run, "info", None), "run_id", None)
+    if isinstance(run_id, str) and run_id.strip():
+        return run_id
+    return None
 
 
 def _is_transient_mlflow_error(exc: Exception) -> bool:
@@ -528,10 +559,11 @@ def run_tuning_study(
                     )
 
                     label = (
-                        "optuna_resume_legacy_study"
+                        ResumeValidationReason.LEGACY_STUDY.value
                         if is_legacy
-                        else "optuna_resume_invariant_mismatch"
+                        else ResumeValidationReason.INVARIANT_MISMATCH.value
                     )
+                    _set_resume_validation_reason_tag(label)
                     message = (
                         f"{label} (job_id={job_id}; mismatches={mismatch_summary})"
                     )
@@ -547,8 +579,12 @@ def run_tuning_study(
                             _LEGACY_STUDY_WARNED = True
                     elif strict_validation:
                         # Use descriptive message with strict-mode disable hint.
+                        strict_label = (
+                            ResumeValidationReason.INVARIANT_MISMATCH_STRICT.value
+                        )
+                        _set_resume_validation_reason_tag(strict_label)
                         raise ValueError(
-                            f"optuna_resume_invariant_mismatch_strict: {message}. "
+                            f"{strict_label}: {message}. "
                             "Set STRICT_TUNING_RESUME_VALIDATION=0 to allow "
                             "warn-only behavior."
                         )
@@ -610,10 +646,11 @@ def run_tuning_study(
 
     if mlflow is not None:
         try:
-            mlflow.set_tag(
-                "best_trial_number", str(best_trial.number) if best_trial else ""
-            )
-            mlflow.set_tag("best_params_json", _best_params_tag_value(best))
+            if _active_mlflow_run_id() is not None:
+                mlflow.set_tag(
+                    "best_trial_number", str(best_trial.number) if best_trial else ""
+                )
+                mlflow.set_tag("best_params_json", _best_params_tag_value(best))
         except Exception as exc:
             logger.warning("Failed to log best trial metadata tags: %s", exc)
     rows = []
