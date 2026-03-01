@@ -16,6 +16,18 @@ from model.evaluate import ScoreCalibrator
 from model.loader import DataLoader
 from training.reason_codes import (
     MLFLOW_PARAM_CALIBRATION_SKIP_REASON,
+    MLFLOW_TAG_FEATURE_SCHEMA_HASH,
+    MLFLOW_TAG_FEATURE_SET_HASH,
+    MLFLOW_TAG_TRAINING_CONFIG_HASH,
+    MLFLOW_TAG_TRAINING_IDENTITY_FEATURE_SCHEMA_HASH,
+    MLFLOW_TAG_TRAINING_IDENTITY_MODEL_VERSION,
+    MLFLOW_TAG_TRAINING_IDENTITY_RUN_ID,
+    MLFLOW_TAG_TRAINING_RUN_SPEC_VERSION,
+    TRAINING_IDENTITY_KEY_FEATURE_SCHEMA_HASH,
+    TRAINING_IDENTITY_KEY_MLFLOW_RUN_ID,
+    TRAINING_IDENTITY_KEY_MODEL_NAME,
+    TRAINING_IDENTITY_KEY_MODEL_VERSION,
+    TRAINING_IDENTITY_KEY_SCHEMA_VERSION,
     CalibrationSkipReason,
 )
 
@@ -646,16 +658,16 @@ def train_model(
         )
         training_config_hash = hashlib.sha256(config_json.encode("utf-8")).hexdigest()
 
-        _mlflow.set_tag("training_config_hash", training_config_hash)
+        _mlflow.set_tag(MLFLOW_TAG_TRAINING_CONFIG_HASH, training_config_hash)
         _mlflow.log_dict(config_to_hash, "resolved_training_config.json")
 
         # Log feature set spec (Commit 8)
         _mlflow.log_dict(feature_spec.model_dump(), "feature_set.json")
-        _mlflow.set_tag("feature_set_hash", feature_spec.hash)
-        _mlflow.set_tag("feature_schema_hash", feature_schema_hash)
+        _mlflow.set_tag(MLFLOW_TAG_FEATURE_SET_HASH, feature_spec.hash)
+        _mlflow.set_tag(MLFLOW_TAG_FEATURE_SCHEMA_HASH, feature_schema_hash)
         _mlflow.log_dict(
             {
-                "feature_schema_hash": feature_schema_hash,
+                TRAINING_IDENTITY_KEY_FEATURE_SCHEMA_HASH: feature_schema_hash,
                 "feature_count": len(ordered_features),
             },
             "feature_schema_hash.json",
@@ -700,9 +712,13 @@ def train_model(
             training_window_days=training_window_days,
         )
         _mlflow.log_dict(run_spec.model_dump(), "training_run_spec.json")
-        _mlflow.set_tag("training_run_spec_version", str(run_spec.schema_version))
-        _mlflow.set_tag("training_identity.mlflow_run_id", run_id)
-        _mlflow.set_tag("training_identity.feature_schema_hash", feature_schema_hash)
+        _mlflow.set_tag(
+            MLFLOW_TAG_TRAINING_RUN_SPEC_VERSION, str(run_spec.schema_version)
+        )
+        _mlflow.set_tag(MLFLOW_TAG_TRAINING_IDENTITY_RUN_ID, run_id)
+        _mlflow.set_tag(
+            MLFLOW_TAG_TRAINING_IDENTITY_FEATURE_SCHEMA_HASH, feature_schema_hash
+        )
 
         # Determine effective calibration samples for logging
         effective_cal_samples = 0 if cal_skip_reason else n_cal_samples
@@ -936,15 +952,17 @@ def train_model(
         registered_model = _mlflow.register_model(model_uri, EXPERIMENT_NAME)
         registered_model_version = _normalize_registered_model_version(registered_model)
         training_identity = {
-            "schema_version": 1,
-            "mlflow_run_id": run_id,
-            "model_name": EXPERIMENT_NAME,
-            "feature_schema_hash": feature_schema_hash,
+            TRAINING_IDENTITY_KEY_SCHEMA_VERSION: 1,
+            TRAINING_IDENTITY_KEY_MLFLOW_RUN_ID: run_id,
+            TRAINING_IDENTITY_KEY_MODEL_NAME: EXPERIMENT_NAME,
+            TRAINING_IDENTITY_KEY_FEATURE_SCHEMA_HASH: feature_schema_hash,
         }
         if registered_model_version is not None:
-            training_identity["model_version"] = registered_model_version
+            training_identity[TRAINING_IDENTITY_KEY_MODEL_VERSION] = (
+                registered_model_version
+            )
             _mlflow.set_tag(
-                "training_identity.model_version",
+                MLFLOW_TAG_TRAINING_IDENTITY_MODEL_VERSION,
                 registered_model_version,
             )
         _mlflow.log_dict(training_identity, "training_run_identity.json")

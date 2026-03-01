@@ -3,6 +3,15 @@
 This contract describes the payload returned by
 `forecast.model_manager.ModelManager.get_diagnostics()`.
 
+## Guardrail Baseline Subset (Always Present)
+
+These keys are guaranteed to exist for operability guardrails, including idle state:
+
+- `state`
+- `active_model_version`
+- `last_reload_status`
+- `schema_mismatch_detected`
+
 ## Required Baseline Fields (Always Present)
 
 | Field | Type | Notes |
@@ -19,7 +28,7 @@ This contract describes the payload returned by
 | `benchmark_last_run_ts` | `float \| null` | Last benchmark attempt epoch timestamp. |
 | `benchmark_last_status` | `string \| null` | Benchmark status code when benchmark path has executed. |
 | `degraded_reasons` | `list[string]` | Bounded degraded-reason vocabulary. |
-| `active_model_version` | `string` | Backward-compatible active version alias. |
+| `active_model_version` | `string` | Backward-compatible alias for currently active model version. |
 | `feature_coverage_warning_active` | `bool` | Coverage warning latch. |
 | `feature_coverage_warning_last_seen_ts` | `float \| null` | Last warning observation timestamp. |
 | `ml.training.run_id` | `string \| null` | Training run correlation id. |
@@ -66,6 +75,11 @@ This contract describes the payload returned by
 - `reload_failed`
 - `schema_mismatch`
 - `feature_coverage_warning`
+
+`model_source`:
+- `mlflow`
+- `fallback`
+- `none`
 
 ## Example Payload
 

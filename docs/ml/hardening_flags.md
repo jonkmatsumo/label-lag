@@ -3,6 +3,8 @@
 This document is the single source of truth for runtime hardening controls
 introduced in recent ML hardening tranches.
 
+Strict-mode flags are opt-in by default unless explicitly noted otherwise.
+
 ## Flags and Controls
 
 | Flag | Default | Scope | Effect | Where Read | Related Signals | When to Enable |
@@ -28,6 +30,6 @@ passed from training RPC inputs into `train_model`.
 
 | Flag | Default | Scope | Effect | Where Read | Related Signals | When to Enable |
 | --- | --- | --- | --- | --- | --- | --- |
-| `min_cal_samples` | `100` (`TrainRequest` fallback) | Training calibration | Minimum calibration sample count required to fit calibrator. Below threshold causes skip. | `python/src/training/service.py` -> `python/src/model/train.py` | MLflow params: `calibration_enabled`, `calibration_samples`, `calibration_skip_reason` | Increase when calibration stability is more important than always fitting. |
-| `min_cal_pos` | `10` (`TrainRequest` fallback) | Training calibration | Minimum positive-class count in calibration slice. Below threshold causes skip. | `python/src/training/service.py` -> `python/src/model/train.py` | MLflow params: `calibration_pos_count`, `calibration_skip_reason` | Increase for high-confidence positive calibration requirements. |
-| `min_cal_neg` | `10` (`TrainRequest` fallback) | Training calibration | Minimum negative-class count in calibration slice. Below threshold causes skip. | `python/src/training/service.py` -> `python/src/model/train.py` | MLflow params: `calibration_neg_count`, `calibration_skip_reason` | Increase for high-confidence negative calibration requirements. |
+| `min_cal_samples` | `100` (RPC `TrainRequest` fallback), `200` (direct `train_model` default) | Training calibration | Minimum calibration sample count required to fit calibrator. Below threshold causes skip. | `python/src/training/service.py` -> `python/src/model/train.py` | MLflow params: `calibration_enabled`, `calibration_samples`, `calibration_skip_reason` | Increase when calibration stability is more important than always fitting. |
+| `min_cal_pos` | `10` (RPC `TrainRequest` fallback), `5` (direct `train_model` default) | Training calibration | Minimum positive-class count in calibration slice. Below threshold causes skip. | `python/src/training/service.py` -> `python/src/model/train.py` | MLflow params: `calibration_pos_count`, `calibration_skip_reason` | Increase for high-confidence positive calibration requirements. |
+| `min_cal_neg` | `10` (RPC `TrainRequest` fallback), `5` (direct `train_model` default) | Training calibration | Minimum negative-class count in calibration slice. Below threshold causes skip. | `python/src/training/service.py` -> `python/src/model/train.py` | MLflow params: `calibration_neg_count`, `calibration_skip_reason` | Increase for high-confidence negative calibration requirements. |
