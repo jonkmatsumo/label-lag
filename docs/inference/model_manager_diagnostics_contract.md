@@ -23,6 +23,7 @@ These keys are guaranteed to exist for operability guardrails, including idle st
 | `schema_mismatch_detected` | `bool` | Feature schema mismatch indicator. |
 | `calibrator_loaded` | `bool` | Whether `calibrator.pkl` was loaded. |
 | `has_bundle` | `bool` | Whether a runtime model bundle exists. |
+| `last_reload_ts` | `float \| null` | Last successful bundle load timestamp. |
 | `last_reload_status` | `string` | Derived reload status. |
 | `last_reload_reason` | `string \| null` | Reload failure reason code when `last_reload_status=failed`. |
 | `benchmark_last_run_ts` | `float \| null` | Last benchmark attempt epoch timestamp. |
@@ -35,7 +36,7 @@ These keys are guaranteed to exist for operability guardrails, including idle st
 | `ml.model.version` | `string \| null` | Training-side model version value. |
 | `ml.feature.schema_hash` | `string \| null` | Training-side feature schema hash. |
 
-## Optional / Nullable Fields
+## Nullable Value Conditions (Keys Still Present)
 
 | Field | Nullability Condition |
 | --- | --- |
