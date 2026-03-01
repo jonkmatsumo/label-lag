@@ -919,8 +919,8 @@ def train_model(
             # Save required_features.json artifact (FF5)
             required_features_data = {
                 "features": actual_feature_columns,
-                "feature_set_hash": feature_spec.hash,
-                "training_config_hash": training_config_hash,
+                MLFLOW_TAG_FEATURE_SET_HASH: feature_spec.hash,
+                MLFLOW_TAG_TRAINING_CONFIG_HASH: training_config_hash,
             }
             required_features_path = os.path.join(tmpdir, "required_features.json")
             with open(required_features_path, "w") as f:

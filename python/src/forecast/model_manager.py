@@ -53,7 +53,6 @@ from training.reason_codes import (
     ModelManagerState,
     ReloadFailureReason,
     ReloadStatus,
-    SchemaMismatchReason,
 )
 from training.schemas import ErrorCategory
 
@@ -475,7 +474,7 @@ class ModelManager:
             if self._state == ModelManagerState.FAILED.value:
                 degraded_reasons.append(DiagnosticsDegradedReason.RELOAD_FAILED.value)
             if self.schema_mismatch_detected:
-                degraded_reasons.append(SchemaMismatchReason.SCHEMA_MISMATCH.value)
+                degraded_reasons.append(DiagnosticsDegradedReason.SCHEMA_MISMATCH.value)
             if self._feature_coverage_warning_active:
                 degraded_reasons.append(
                     DiagnosticsDegradedReason.FEATURE_COVERAGE_WARNING.value

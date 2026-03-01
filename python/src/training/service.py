@@ -28,6 +28,10 @@ from training.jobs import (
 )
 from training.metrics import observe_training_job_cancellation
 from training.optuna_resume import get_optuna_storage_url, load_existing_tuning_study
+from training.reason_codes import (
+    MLFLOW_TAG_FEATURE_SET_HASH,
+    MLFLOW_TAG_TRAINING_CONFIG_HASH,
+)
 from training.schemas import SplitConfig, SplitStrategy, TuningConfig
 from training.v1 import training_pb2, training_pb2_grpc
 
@@ -540,8 +544,8 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                     with open(path) as f:
                         data = json.load(f)
                     required_features = data.get("features", [])
-                    f_hash = data.get("feature_set_hash", "")
-                    t_hash = data.get("training_config_hash", "")
+                    f_hash = data.get(MLFLOW_TAG_FEATURE_SET_HASH, "")
+                    t_hash = data.get(MLFLOW_TAG_TRAINING_CONFIG_HASH, "")
                 except Exception:
                     # Fallback to feature_columns.json
                     try:
@@ -945,9 +949,9 @@ class TrainingService(training_pb2_grpc.TrainingServiceServicer):
                 mlflow.set_tag("tuning_metric", request.tuning_config.metric)
                 mlflow.set_tag("tuning_direction", request.tuning_config.direction)
                 mlflow.set_tag("tuning_strategy", request.tuning_config.strategy)
-                mlflow.set_tag("training_config_hash", training_config_hash)
+                mlflow.set_tag(MLFLOW_TAG_TRAINING_CONFIG_HASH, training_config_hash)
                 if feature_set_hash:
-                    mlflow.set_tag("feature_set_hash", feature_set_hash)
+                    mlflow.set_tag(MLFLOW_TAG_FEATURE_SET_HASH, feature_set_hash)
                 self.job_store.create(job)
                 self.job_queue.enqueue(job.job_id)
                 logger.info(

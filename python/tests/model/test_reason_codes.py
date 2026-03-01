@@ -1,6 +1,7 @@
 from training.reason_codes import (
     BENCHMARK_STATUSES,
     CALIBRATION_SKIP_REASONS,
+    DIAGNOSTICS_DEGRADED_REASONS,
     DRIFT_FALLBACK_REASONS,
     RELOAD_FAILURE_REASONS,
     RESUME_VALIDATION_REASONS,
@@ -30,6 +31,11 @@ def test_reason_code_vocabulary_is_stable():
         "skipped_sampled_out",
         "success",
         "failed",
+    }
+    assert DIAGNOSTICS_DEGRADED_REASONS == {
+        "reload_failed",
+        "schema_mismatch",
+        "feature_coverage_warning",
     }
     assert RESUME_VALIDATION_REASONS == {
         "optuna_resume_legacy_study",
