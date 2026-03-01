@@ -7,6 +7,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from training.reason_codes import (
+    DriftFallbackReason,
+    ReloadFailureReason,
+    SchemaMismatchReason,
+)
+
 
 class Currency(str, Enum):
     """Supported currency codes."""
@@ -30,18 +36,18 @@ class ErrorCategory(str, Enum):
 
     # Infrastructure / External Services
     MLFLOW_UNAVAILABLE = "mlflow_unavailable"
-    MLFLOW_FETCH_ERROR = "mlflow_fetch"
-    ARTIFACT_MISSING = "artifact_missing"
+    MLFLOW_FETCH_ERROR = ReloadFailureReason.MLFLOW_FETCH.value
+    ARTIFACT_MISSING = ReloadFailureReason.ARTIFACT_MISSING.value
     REGISTRY_SYNC_FAILURE = "registry_sync_failure"
 
     # Validation & Hardening
-    SCHEMA_MISMATCH = "schema_mismatch"
+    SCHEMA_MISMATCH = SchemaMismatchReason.SCHEMA_MISMATCH.value
     RESUME_INVARIANT_MISMATCH = "resume_invariant_mismatch"
 
     # Drift Detection
-    TIED_QUANTILES = "tied_quantiles"
+    TIED_QUANTILES = DriftFallbackReason.TIED_QUANTILES.value
     INSUFFICIENT_DATA = "insufficient_data"
-    INSUFFICIENT_BUCKET_MASS = "insufficient_bucket_mass"
+    INSUFFICIENT_BUCKET_MASS = DriftFallbackReason.INSUFFICIENT_BUCKET_MASS.value
 
     # Generic
     UNKNOWN = "unknown"

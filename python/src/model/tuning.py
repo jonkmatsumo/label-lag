@@ -28,6 +28,8 @@ from xgboost import XGBClassifier
 
 from training.optuna_resume import create_tuning_study
 from training.reason_codes import (
+    MLFLOW_TAG_BEST_PARAMS_JSON,
+    MLFLOW_TAG_BEST_TRIAL_NUMBER,
     MLFLOW_TAG_TUNING_RESUME_REASON,
     ResumeValidationReason,
 )
@@ -648,9 +650,12 @@ def run_tuning_study(
         try:
             if _active_mlflow_run_id() is not None:
                 mlflow.set_tag(
-                    "best_trial_number", str(best_trial.number) if best_trial else ""
+                    MLFLOW_TAG_BEST_TRIAL_NUMBER,
+                    str(best_trial.number) if best_trial else "",
                 )
-                mlflow.set_tag("best_params_json", _best_params_tag_value(best))
+                mlflow.set_tag(
+                    MLFLOW_TAG_BEST_PARAMS_JSON, _best_params_tag_value(best)
+                )
         except Exception as exc:
             logger.warning("Failed to log best trial metadata tags: %s", exc)
     rows = []

@@ -84,5 +84,61 @@ MODEL_MANAGER_STATES = frozenset(reason.value for reason in ModelManagerState)
 RELOAD_STATUSES = frozenset(reason.value for reason in ReloadStatus)
 RESUME_VALIDATION_REASONS = frozenset(reason.value for reason in ResumeValidationReason)
 
+# Diagnostics snapshot keys used by ModelManager.get_diagnostics().
+DIAGNOSTIC_KEY_STATE = "state"
+DIAGNOSTIC_KEY_MODEL_VERSION = "model_version"
+DIAGNOSTIC_KEY_MODEL_SOURCE = "model_source"
+DIAGNOSTIC_KEY_LAST_ERROR = "last_error"
+DIAGNOSTIC_KEY_SCHEMA_MISMATCH_DETECTED = "schema_mismatch_detected"
+DIAGNOSTIC_KEY_CALIBRATOR_LOADED = "calibrator_loaded"
+DIAGNOSTIC_KEY_HAS_BUNDLE = "has_bundle"
+DIAGNOSTIC_KEY_LAST_RELOAD_TS = "last_reload_ts"
+DIAGNOSTIC_KEY_LAST_RELOAD_STATUS = "last_reload_status"
+DIAGNOSTIC_KEY_LAST_RELOAD_REASON = "last_reload_reason"
+DIAGNOSTIC_KEY_BENCHMARK_LAST_RUN_TS = "benchmark_last_run_ts"
+DIAGNOSTIC_KEY_BENCHMARK_LAST_STATUS = "benchmark_last_status"
+DIAGNOSTIC_KEY_DEGRADED_REASONS = "degraded_reasons"
+DIAGNOSTIC_KEY_ACTIVE_MODEL_VERSION = "active_model_version"
+DIAGNOSTIC_KEY_FEATURE_COVERAGE_WARNING_ACTIVE = "feature_coverage_warning_active"
+DIAGNOSTIC_KEY_FEATURE_COVERAGE_WARNING_LAST_SEEN_TS = (
+    "feature_coverage_warning_last_seen_ts"
+)
+DIAGNOSTIC_KEY_ML_TRAINING_RUN_ID = "ml.training.run_id"
+DIAGNOSTIC_KEY_ML_MODEL_VERSION = "ml.model.version"
+DIAGNOSTIC_KEY_ML_FEATURE_SCHEMA_HASH = "ml.feature.schema_hash"
+
+MODEL_MANAGER_BASELINE_DIAGNOSTIC_KEYS = frozenset(
+    {
+        DIAGNOSTIC_KEY_STATE,
+        DIAGNOSTIC_KEY_ACTIVE_MODEL_VERSION,
+        DIAGNOSTIC_KEY_LAST_RELOAD_STATUS,
+        DIAGNOSTIC_KEY_SCHEMA_MISMATCH_DETECTED,
+    }
+)
+
+# Keys for training identity payloads/artifacts.
+TRAINING_IDENTITY_KEY_SCHEMA_VERSION = "schema_version"
+TRAINING_IDENTITY_KEY_MLFLOW_RUN_ID = "mlflow_run_id"
+TRAINING_IDENTITY_KEY_MODEL_NAME = "model_name"
+TRAINING_IDENTITY_KEY_MODEL_VERSION = "model_version"
+TRAINING_IDENTITY_KEY_FEATURE_SCHEMA_HASH = "feature_schema_hash"
+
+# Trace/span metadata keys for model reload observability.
+TRACE_KEY_ML_TRAINING_RUN_ID = "ml.training.run_id"
+TRACE_KEY_ML_MODEL_VERSION = "ml.model.version"
+TRACE_KEY_ML_FEATURE_SCHEMA_HASH = "ml.feature.schema_hash"
+
+# Stable MLflow metadata keys used for auditing/reason tracking.
 MLFLOW_PARAM_CALIBRATION_SKIP_REASON = "calibration_skip_reason"
 MLFLOW_TAG_TUNING_RESUME_REASON = "tuning_resume_reason"
+MLFLOW_TAG_TRAINING_CONFIG_HASH = "training_config_hash"
+MLFLOW_TAG_FEATURE_SET_HASH = "feature_set_hash"
+MLFLOW_TAG_FEATURE_SCHEMA_HASH = "feature_schema_hash"
+MLFLOW_TAG_TRAINING_RUN_SPEC_VERSION = "training_run_spec_version"
+MLFLOW_TAG_TRAINING_IDENTITY_RUN_ID = "training_identity.mlflow_run_id"
+MLFLOW_TAG_TRAINING_IDENTITY_MODEL_VERSION = "training_identity.model_version"
+MLFLOW_TAG_TRAINING_IDENTITY_FEATURE_SCHEMA_HASH = (
+    "training_identity.feature_schema_hash"
+)
+MLFLOW_TAG_BEST_TRIAL_NUMBER = "best_trial_number"
+MLFLOW_TAG_BEST_PARAMS_JSON = "best_params_json"

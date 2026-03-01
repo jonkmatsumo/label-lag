@@ -21,6 +21,33 @@ import numpy as np
 import pandas as pd
 
 from training.reason_codes import (
+    DIAGNOSTIC_KEY_ACTIVE_MODEL_VERSION,
+    DIAGNOSTIC_KEY_BENCHMARK_LAST_RUN_TS,
+    DIAGNOSTIC_KEY_BENCHMARK_LAST_STATUS,
+    DIAGNOSTIC_KEY_CALIBRATOR_LOADED,
+    DIAGNOSTIC_KEY_DEGRADED_REASONS,
+    DIAGNOSTIC_KEY_FEATURE_COVERAGE_WARNING_ACTIVE,
+    DIAGNOSTIC_KEY_FEATURE_COVERAGE_WARNING_LAST_SEEN_TS,
+    DIAGNOSTIC_KEY_HAS_BUNDLE,
+    DIAGNOSTIC_KEY_LAST_ERROR,
+    DIAGNOSTIC_KEY_LAST_RELOAD_REASON,
+    DIAGNOSTIC_KEY_LAST_RELOAD_STATUS,
+    DIAGNOSTIC_KEY_LAST_RELOAD_TS,
+    DIAGNOSTIC_KEY_ML_FEATURE_SCHEMA_HASH,
+    DIAGNOSTIC_KEY_ML_MODEL_VERSION,
+    DIAGNOSTIC_KEY_ML_TRAINING_RUN_ID,
+    DIAGNOSTIC_KEY_MODEL_SOURCE,
+    DIAGNOSTIC_KEY_MODEL_VERSION,
+    DIAGNOSTIC_KEY_SCHEMA_MISMATCH_DETECTED,
+    DIAGNOSTIC_KEY_STATE,
+    TRACE_KEY_ML_FEATURE_SCHEMA_HASH,
+    TRACE_KEY_ML_MODEL_VERSION,
+    TRACE_KEY_ML_TRAINING_RUN_ID,
+    TRAINING_IDENTITY_KEY_FEATURE_SCHEMA_HASH,
+    TRAINING_IDENTITY_KEY_MLFLOW_RUN_ID,
+    TRAINING_IDENTITY_KEY_MODEL_NAME,
+    TRAINING_IDENTITY_KEY_MODEL_VERSION,
+    TRAINING_IDENTITY_KEY_SCHEMA_VERSION,
     BenchmarkStatus,
     DiagnosticsDegradedReason,
     ModelManagerState,
@@ -237,7 +264,11 @@ class ModelManager:
         if not isinstance(identity, dict):
             return None
         normalized: dict[str, str] = {}
-        for key in ("mlflow_run_id", "model_version", "feature_schema_hash"):
+        for key in (
+            TRAINING_IDENTITY_KEY_MLFLOW_RUN_ID,
+            TRAINING_IDENTITY_KEY_MODEL_VERSION,
+            TRAINING_IDENTITY_KEY_FEATURE_SCHEMA_HASH,
+        ):
             value = identity.get(key)
             if value is None:
                 continue
@@ -245,14 +276,20 @@ class ModelManager:
             if rendered:
                 normalized[key] = rendered
 
-        if "schema_version" in identity:
-            rendered_schema_version = str(identity["schema_version"]).strip()
+        if TRAINING_IDENTITY_KEY_SCHEMA_VERSION in identity:
+            rendered_schema_version = str(
+                identity[TRAINING_IDENTITY_KEY_SCHEMA_VERSION]
+            ).strip()
             if rendered_schema_version:
-                normalized["schema_version"] = rendered_schema_version
-        if "model_name" in identity:
-            rendered_model_name = str(identity["model_name"]).strip()
+                normalized[TRAINING_IDENTITY_KEY_SCHEMA_VERSION] = (
+                    rendered_schema_version
+                )
+        if TRAINING_IDENTITY_KEY_MODEL_NAME in identity:
+            rendered_model_name = str(
+                identity[TRAINING_IDENTITY_KEY_MODEL_NAME]
+            ).strip()
             if rendered_model_name:
-                normalized["model_name"] = rendered_model_name
+                normalized[TRAINING_IDENTITY_KEY_MODEL_NAME] = rendered_model_name
 
         return normalized or None
 
@@ -282,15 +319,19 @@ class ModelManager:
         if not training_identity:
             return
         self._set_span_attribute(
-            span, "ml.training.run_id", training_identity.get("mlflow_run_id")
-        )
-        self._set_span_attribute(
-            span, "ml.model.version", training_identity.get("model_version")
+            span,
+            TRACE_KEY_ML_TRAINING_RUN_ID,
+            training_identity.get(TRAINING_IDENTITY_KEY_MLFLOW_RUN_ID),
         )
         self._set_span_attribute(
             span,
-            "ml.feature.schema_hash",
-            training_identity.get("feature_schema_hash"),
+            TRACE_KEY_ML_MODEL_VERSION,
+            training_identity.get(TRAINING_IDENTITY_KEY_MODEL_VERSION),
+        )
+        self._set_span_attribute(
+            span,
+            TRACE_KEY_ML_FEATURE_SCHEMA_HASH,
+            training_identity.get(TRAINING_IDENTITY_KEY_FEATURE_SCHEMA_HASH),
         )
 
     def _store_loaded_bundle_if_valid(self, bundle: Any) -> bool:
@@ -440,35 +481,41 @@ class ModelManager:
                     DiagnosticsDegradedReason.FEATURE_COVERAGE_WARNING.value
                 )
             return {
-                "state": self._state,
-                "model_version": self.model_version,
-                "model_source": self.model_source,
-                "last_error": self._last_error,
-                "schema_mismatch_detected": self.schema_mismatch_detected,
-                "calibrator_loaded": self.calibrator_loaded,
-                "has_bundle": bundle is not None,
-                "last_reload_ts": getattr(bundle, "last_reload_ts", None)
+                DIAGNOSTIC_KEY_STATE: self._state,
+                DIAGNOSTIC_KEY_MODEL_VERSION: self.model_version,
+                DIAGNOSTIC_KEY_MODEL_SOURCE: self.model_source,
+                DIAGNOSTIC_KEY_LAST_ERROR: self._last_error,
+                DIAGNOSTIC_KEY_SCHEMA_MISMATCH_DETECTED: self.schema_mismatch_detected,
+                DIAGNOSTIC_KEY_CALIBRATOR_LOADED: self.calibrator_loaded,
+                DIAGNOSTIC_KEY_HAS_BUNDLE: bundle is not None,
+                DIAGNOSTIC_KEY_LAST_RELOAD_TS: getattr(bundle, "last_reload_ts", None)
                 if bundle
                 else None,
-                "last_reload_status": last_reload_status,
-                "last_reload_reason": (
+                DIAGNOSTIC_KEY_LAST_RELOAD_STATUS: last_reload_status,
+                DIAGNOSTIC_KEY_LAST_RELOAD_REASON: (
                     self._mlflow_failure_reason
                     if last_reload_status == ReloadStatus.FAILED.value
                     else None
                 ),
-                "benchmark_last_run_ts": self._benchmark_last_run_ts,
-                "benchmark_last_status": self._benchmark_last_status,
-                "degraded_reasons": degraded_reasons,
-                "active_model_version": self.model_version,
-                "feature_coverage_warning_active": (
+                DIAGNOSTIC_KEY_BENCHMARK_LAST_RUN_TS: self._benchmark_last_run_ts,
+                DIAGNOSTIC_KEY_BENCHMARK_LAST_STATUS: self._benchmark_last_status,
+                DIAGNOSTIC_KEY_DEGRADED_REASONS: degraded_reasons,
+                DIAGNOSTIC_KEY_ACTIVE_MODEL_VERSION: self.model_version,
+                DIAGNOSTIC_KEY_FEATURE_COVERAGE_WARNING_ACTIVE: (
                     self._feature_coverage_warning_active
                 ),
-                "feature_coverage_warning_last_seen_ts": (
+                DIAGNOSTIC_KEY_FEATURE_COVERAGE_WARNING_LAST_SEEN_TS: (
                     self._feature_coverage_warning_last_seen_ts
                 ),
-                "ml.training.run_id": training_identity.get("mlflow_run_id"),
-                "ml.model.version": training_identity.get("model_version"),
-                "ml.feature.schema_hash": training_identity.get("feature_schema_hash"),
+                DIAGNOSTIC_KEY_ML_TRAINING_RUN_ID: training_identity.get(
+                    TRAINING_IDENTITY_KEY_MLFLOW_RUN_ID
+                ),
+                DIAGNOSTIC_KEY_ML_MODEL_VERSION: training_identity.get(
+                    TRAINING_IDENTITY_KEY_MODEL_VERSION
+                ),
+                DIAGNOSTIC_KEY_ML_FEATURE_SCHEMA_HASH: training_identity.get(
+                    TRAINING_IDENTITY_KEY_FEATURE_SCHEMA_HASH
+                ),
             }
 
     def update_feature_coverage_warning(
@@ -506,7 +553,7 @@ class ModelManager:
                     reload_span, "model.reload.status", "loaded_from_mlflow"
                 )
                 self._set_span_attribute(
-                    reload_span, "ml.model.version", self.model_version
+                    reload_span, TRACE_KEY_ML_MODEL_VERSION, self.model_version
                 )
                 self._attach_training_identity_to_span(
                     reload_span,
@@ -541,7 +588,7 @@ class ModelManager:
                         reload_span, "model.reload.status", "loaded_from_fallback"
                     )
                     self._set_span_attribute(
-                        reload_span, "ml.model.version", self.model_version
+                        reload_span, TRACE_KEY_ML_MODEL_VERSION, self.model_version
                     )
                     return True
                 logger.warning(
