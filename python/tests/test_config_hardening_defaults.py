@@ -10,3 +10,11 @@ def test_strict_hardening_flags_default_off_when_unset(monkeypatch):
 
     assert tuning_env_flag("STRICT_TUNING_RESUME_VALIDATION", default=False) is False
     assert training_env_flag("STRICT_SPLIT_STRATEGY_VALIDATION", default=False) is False
+
+
+def test_strict_hardening_flags_are_opt_in(monkeypatch):
+    monkeypatch.setenv("STRICT_TUNING_RESUME_VALIDATION", "1")
+    monkeypatch.setenv("STRICT_SPLIT_STRATEGY_VALIDATION", "true")
+
+    assert tuning_env_flag("STRICT_TUNING_RESUME_VALIDATION", default=False) is True
+    assert training_env_flag("STRICT_SPLIT_STRATEGY_VALIDATION", default=False) is True
