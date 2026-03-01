@@ -72,6 +72,7 @@ class DiagnosticsDegradedReason(str, Enum):
     """Bounded degraded-reason vocabulary for diagnostics snapshots."""
 
     RELOAD_FAILED = "reload_failed"
+    SCHEMA_MISMATCH = SchemaMismatchReason.SCHEMA_MISMATCH.value
     FEATURE_COVERAGE_WARNING = "feature_coverage_warning"
 
 
@@ -83,6 +84,9 @@ BENCHMARK_STATUSES = frozenset(reason.value for reason in BenchmarkStatus)
 MODEL_MANAGER_STATES = frozenset(reason.value for reason in ModelManagerState)
 RELOAD_STATUSES = frozenset(reason.value for reason in ReloadStatus)
 RESUME_VALIDATION_REASONS = frozenset(reason.value for reason in ResumeValidationReason)
+DIAGNOSTICS_DEGRADED_REASONS = frozenset(
+    reason.value for reason in DiagnosticsDegradedReason
+)
 
 # Diagnostics snapshot keys used by ModelManager.get_diagnostics().
 DIAGNOSTIC_KEY_STATE = "state"

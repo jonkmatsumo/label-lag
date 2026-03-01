@@ -5,6 +5,15 @@ introduced in recent ML hardening tranches.
 
 Strict-mode flags are opt-in by default unless explicitly noted otherwise.
 
+## Inventory Scope
+
+- Environment-driven hardening flags for inference, tuning, and drift monitoring.
+- Request-level calibration viability controls consumed by training APIs.
+- Operability-aligned signals linked to each flag (diagnostics, metrics, and MLflow metadata).
+
+Update this file in the same commit whenever a hardening flag is added, removed,
+or has default/effect changes.
+
 ## Flags and Controls
 
 | Flag | Default | Scope | Effect | Where Read | Related Signals | When to Enable |
@@ -20,7 +29,7 @@ Strict-mode flags are opt-in by default unless explicitly noted otherwise.
 | `DRIFT_PSI_CRIT_THRESHOLD` | `0.25` | Drift monitoring | Critical threshold for PSI alert generation and drifted-feature marking. | `python/src/training/detect_drift.py` (`_load_drift_thresholds`) | drift payload: `drift_detected`, `drifted_features[]`, critical alerts | Tune to production tolerance for severe distribution shifts. |
 | `DRIFT_PSI_MIN_EXPECTED_PER_BUCKET` | `5.0` | Drift PSI robustness | Minimum expected mass per bucket for trustworthy PSI on sufficiently large references. | `python/src/training/detect_drift.py` (`calculate_psi`) | drift metadata: `drift_error=insufficient_bucket_mass`, bucket guardrail metadata | Raise for stricter PSI quality checks on sparse baselines. |
 | `DRIFT_PSI_MIN_NONEMPTY_BUCKETS_RATIO` | `0.6` | Drift PSI robustness | Minimum non-empty reference-bucket ratio for trustworthy PSI on sufficiently large references. | `python/src/training/detect_drift.py` (`calculate_psi`) | drift metadata: `drift_error=insufficient_bucket_mass`, `nonempty_buckets_ratio` | Raise when requiring stronger bucket coverage before alerting. |
-| `DRIFT_REFERENCE_MODEL_ALIAS` | `\"\"` | Drift reference selection | Preferred alias used to resolve reference model for drift baselines before stage/latest fallback. | `python/src/training/detect_drift.py` (`_select_reference_model_version`) | drift payload: `reference_resolution` metadata (`resolution_strategy`, selected version/run_id) | Set in production for deterministic baseline reference selection. |
+| `DRIFT_REFERENCE_MODEL_ALIAS` | `""` | Drift reference selection | Preferred alias used to resolve reference model for drift baselines before stage/latest fallback. | `python/src/training/detect_drift.py` (`_select_reference_model_version`) | drift payload: `reference_resolution` metadata (`resolution_strategy`, selected version/run_id) | Set in production for deterministic baseline reference selection. |
 | `TUNING_MLFLOW_NESTED_RUNS` | `false` | Tuning observability | Enables nested MLflow trial runs for completed trials in tuning jobs. | `python/src/model/tuning.py` (`JobProgressCallback`) | nested MLflow runs (trial params/metrics), tuning logs | Enable only when per-trial MLflow lineage detail is needed. |
 
 ## Calibration Viability Controls (Request Fields)

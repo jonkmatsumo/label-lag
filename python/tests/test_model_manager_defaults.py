@@ -15,6 +15,13 @@ def test_diagnostics_snapshot_includes_required_baseline_fields():
     manager = _fresh_manager()
     diag = manager.get_diagnostics()
 
+    expected_keys = {
+        "state",
+        "active_model_version",
+        "last_reload_status",
+        "schema_mismatch_detected",
+    }
+    assert expected_keys.issubset(diag.keys())
     assert MODEL_MANAGER_BASELINE_DIAGNOSTIC_KEYS.issubset(diag.keys())
 
 

@@ -10,6 +10,7 @@ from training.reason_codes import (
     DIAGNOSTIC_KEY_ML_TRAINING_RUN_ID,
     DIAGNOSTIC_KEY_SCHEMA_MISMATCH_DETECTED,
     DIAGNOSTIC_KEY_STATE,
+    DIAGNOSTICS_DEGRADED_REASONS,
     DRIFT_FALLBACK_REASONS,
     MLFLOW_PARAM_CALIBRATION_SKIP_REASON,
     MLFLOW_TAG_BEST_PARAMS_JSON,
@@ -45,6 +46,11 @@ def test_reason_code_sets_are_bounded_and_stable():
         "skipped_sampled_out",
         "success",
         "failed",
+    }
+    assert DIAGNOSTICS_DEGRADED_REASONS == {
+        "reload_failed",
+        "schema_mismatch",
+        "feature_coverage_warning",
     }
     assert MODEL_MANAGER_STATES == {"idle", "loading", "ready", "failed"}
     assert RELOAD_STATUSES == {"idle", "success", "failed"}

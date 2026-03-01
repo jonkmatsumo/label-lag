@@ -7,6 +7,7 @@ import tempfile
 from abc import ABC, abstractmethod
 
 from features.spec import FeatureSetSpec
+from training.reason_codes import MLFLOW_TAG_FEATURE_SET_HASH
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +77,7 @@ class MLflowFeatureSetStore(FeatureSetStore):
 
     def _log_spec_to_active_run(self, spec: FeatureSetSpec) -> None:
         self._mlflow.set_tag("feature_set_id", spec.id)
-        self._mlflow.set_tag("feature_set_hash", spec.hash)
+        self._mlflow.set_tag(MLFLOW_TAG_FEATURE_SET_HASH, spec.hash)
         self._mlflow.log_dict(spec.model_dump(), "feature_set.json")
 
     def get(self, feature_set_id: str) -> FeatureSetSpec | None:
