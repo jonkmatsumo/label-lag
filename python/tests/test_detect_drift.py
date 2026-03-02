@@ -15,6 +15,7 @@ from training.detect_drift import (
     detect_drift,
     get_reference_data,
 )
+from training.reason_codes import DriftErrorCode, DriftResolutionMode
 
 
 class TestCalculatePsi:
@@ -662,3 +663,101 @@ class TestDetectDrift:
             "Insufficient bucket mass for PSI" in record.message
             for record in caplog.records
         )
+
+    @patch("training.detect_drift.get_reference_data")
+    @patch("training.detect_drift.get_live_data")
+    def test_standard_error_fields_for_no_reference_model(self, mock_live, mock_ref):
+        mock_ref.return_value = None
+        mock_live.return_value = pd.DataFrame()
+
+        result = detect_drift()
+
+        assert result["error_code"] == DriftErrorCode.NO_REFERENCE_DATA.value
+        assert result["error_message"] == "No reference data available"
+        assert result["resolution_mode"] == DriftResolutionMode.NONE.value
+
+    @patch("training.detect_drift.get_reference_data")
+    @patch("training.detect_drift.get_live_data")
+    def test_standard_error_fields_for_insufficient_reference_samples(
+        self, mock_live, mock_ref
+    ):
+        mock_ref.return_value = pd.DataFrame(
+            {
+                "velocity_24h": [0.0] * 50,
+                "amount_to_avg_ratio_30d": [0.0] * 50,
+                "balance_volatility_z_score": [0.0] * 50,
+            }
+        )
+        mock_live.return_value = pd.DataFrame()
+
+        result = detect_drift()
+
+        assert (
+            result["error_code"] == DriftErrorCode.INSUFFICIENT_REFERENCE_SAMPLES.value
+        )
+        assert "Insufficient reference data" in result["error_message"]
+        assert result["resolution_mode"] == DriftResolutionMode.NONE.value
+
+    @patch("training.detect_drift.get_reference_data")
+    @patch("training.detect_drift.get_live_data")
+    def test_standard_error_fields_for_sparse_bucket_guardrail(
+        self, mock_live, mock_ref
+    ):
+        sample_size = MIN_REFERENCE_SAMPLES + 20
+        base_reference = np.array([0.0] * (sample_size - 10) + [1.0] * 10)
+        base_live = np.array([0.0] * (sample_size - 30) + [8.0] * 30)
+        mock_ref.return_value = pd.DataFrame(
+            {
+                "velocity_24h": base_reference,
+                "amount_to_avg_ratio_30d": base_reference,
+                "balance_volatility_z_score": base_reference,
+            }
+        )
+        mock_live.return_value = pd.DataFrame(
+            {
+                "velocity_24h": base_live,
+                "amount_to_avg_ratio_30d": base_live,
+                "balance_volatility_z_score": base_live,
+            }
+        )
+
+        result = detect_drift()
+
+        assert result["error_code"] == DriftErrorCode.INSUFFICIENT_BUCKET_MASS.value
+        assert (
+            result["error_message"]
+            == "Drift signal suppressed due to insufficient bucket mass"
+        )
+        assert result["resolution_mode"] in {
+            DriftResolutionMode.ALIAS.value,
+            DriftResolutionMode.STAGE.value,
+            DriftResolutionMode.LATEST.value,
+            DriftResolutionMode.NONE.value,
+        }
+
+    @patch("training.detect_drift.get_reference_data")
+    @patch("training.detect_drift.get_live_data")
+    def test_standard_error_fields_for_success_path(self, mock_live, mock_ref):
+        base = np.arange(1000, dtype=float)
+        stable_reference = pd.DataFrame(
+            {
+                "velocity_24h": base,
+                "amount_to_avg_ratio_30d": base * 0.5,
+                "balance_volatility_z_score": base - 500.0,
+            }
+        )
+        mock_ref.return_value = (
+            stable_reference,
+            {
+                "resolution_strategy": "alias",
+                "selected_model_version": "9",
+                "selected_run_id": "run-v9",
+            },
+        )
+        mock_live.return_value = stable_reference.copy()
+
+        result = detect_drift()
+
+        assert result["error_code"] is None
+        assert result["error_message"] is None
+        assert result["resolution_mode"] == DriftResolutionMode.ALIAS.value
