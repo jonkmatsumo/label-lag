@@ -25,6 +25,7 @@ from training.reason_codes import (
     DIAGNOSTIC_KEY_BENCHMARK_LAST_RUN_TS,
     DIAGNOSTIC_KEY_BENCHMARK_LAST_STATUS,
     DIAGNOSTIC_KEY_CALIBRATOR_LOADED,
+    DIAGNOSTIC_KEY_CONFIG,
     DIAGNOSTIC_KEY_DEGRADED_REASONS,
     DIAGNOSTIC_KEY_FEATURE_COVERAGE_WARNING_ACTIVE,
     DIAGNOSTIC_KEY_FEATURE_COVERAGE_WARNING_LAST_SEEN_TS,
@@ -513,6 +514,9 @@ class ModelManager:
             if diagnostics_snapshot.get(DIAGNOSTIC_KEY_FEATURE_COVERAGE_WARNING_ACTIVE)
             else "ok"
         )
+        strict_config = diagnostics_snapshot.get(DIAGNOSTIC_KEY_CONFIG, {})
+        if not isinstance(strict_config, dict):
+            strict_config = {}
 
         return {
             "state": str(diagnostics_snapshot.get(DIAGNOSTIC_KEY_STATE, "idle")),
@@ -537,6 +541,25 @@ class ModelManager:
             "drift_resolution_mode": drift_resolution_mode,
             "drift_last_computed_ts": drift_last_computed_ts,
             "drift_last_error_code": drift_last_error_code,
+            "config": strict_config,
+        }
+
+    @staticmethod
+    def _effective_strict_config() -> dict[str, bool]:
+        def _env_flag(name: str) -> bool:
+            raw = os.getenv(name)
+            if raw is None:
+                return False
+            return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+        return {
+            "strict_feature_schema": _env_flag("ENFORCE_MODEL_FEATURES"),
+            "strict_tuning_resume_validation": _env_flag(
+                "STRICT_TUNING_RESUME_VALIDATION"
+            ),
+            "strict_split_strategy_validation": _env_flag(
+                "STRICT_SPLIT_STRATEGY_VALIDATION"
+            ),
         }
 
     def get_diagnostics(self) -> dict[str, Any]:
@@ -600,6 +623,7 @@ class ModelManager:
                 DIAGNOSTIC_KEY_ML_FEATURE_SCHEMA_HASH: training_identity.get(
                     TRAINING_IDENTITY_KEY_FEATURE_SCHEMA_HASH
                 ),
+                DIAGNOSTIC_KEY_CONFIG: self._effective_strict_config(),
             }
             diagnostics[DIAGNOSTIC_KEY_ML_HEALTH] = self._build_ml_health_summary(
                 diagnostics
