@@ -2,7 +2,9 @@ from training.reason_codes import (
     BENCHMARK_STATUSES,
     CALIBRATION_SKIP_REASONS,
     DIAGNOSTICS_DEGRADED_REASONS,
+    DRIFT_ERROR_CODES,
     DRIFT_FALLBACK_REASONS,
+    DRIFT_RESOLUTION_MODES,
     RELOAD_FAILURE_REASONS,
     RESUME_VALIDATION_REASONS,
     SCHEMA_MISMATCH_REASONS,
@@ -26,6 +28,13 @@ def test_reason_code_vocabulary_is_stable():
         "tied_quantiles",
         "insufficient_bucket_mass",
     }
+    assert DRIFT_ERROR_CODES == {
+        "no_reference_data",
+        "insufficient_reference_samples",
+        "no_live_data",
+        "insufficient_bucket_mass",
+    }
+    assert DRIFT_RESOLUTION_MODES == {"alias", "stage", "latest", "none"}
     assert BENCHMARK_STATUSES == {
         "skipped_disabled",
         "skipped_sampled_out",

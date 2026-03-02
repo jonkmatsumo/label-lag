@@ -17,7 +17,11 @@ import numpy as np
 import pandas as pd
 
 from training.crud_client import get_crud_client
-from training.reason_codes import DriftFallbackReason
+from training.reason_codes import (
+    DriftErrorCode,
+    DriftFallbackReason,
+    DriftResolutionMode,
+)
 
 # Configure logging
 logging.basicConfig(
@@ -336,6 +340,16 @@ def _select_reference_model_version(
     return selected_latest, metadata
 
 
+def _normalize_resolution_mode(raw_strategy: Any) -> str:
+    if raw_strategy == "alias":
+        return DriftResolutionMode.ALIAS.value
+    if raw_strategy == "production_stage":
+        return DriftResolutionMode.STAGE.value
+    if raw_strategy == "latest_version":
+        return DriftResolutionMode.LATEST.value
+    return DriftResolutionMode.NONE.value
+
+
 def get_reference_data(
     *, include_metadata: bool = False
 ) -> pd.DataFrame | tuple[pd.DataFrame | None, dict[str, Any]] | None:
@@ -438,6 +452,9 @@ def detect_drift(
         "drift_detected": False,
         "drifted_features": [],
         "drift_error": None,
+        "error_code": None,
+        "error_message": None,
+        "resolution_mode": DriftResolutionMode.NONE.value,
         "alerts": [],
         "reference_resolution": {},
     }
@@ -451,9 +468,17 @@ def detect_drift(
 
     if reference_resolution:
         results["reference_resolution"] = reference_resolution
+    results["resolution_mode"] = _normalize_resolution_mode(
+        reference_resolution.get("resolution_strategy")
+        if isinstance(reference_resolution, dict)
+        else None
+    )
 
     if df_reference is None or len(df_reference) == 0:
-        results["error"] = "No reference data available"
+        message = "No reference data available"
+        results["error"] = message
+        results["error_code"] = DriftErrorCode.NO_REFERENCE_DATA.value
+        results["error_message"] = message
         return results
 
     results["reference_size"] = len(df_reference)
@@ -465,11 +490,16 @@ def detect_drift(
         )
         logger.warning(msg)
         results["error"] = msg
+        results["error_code"] = DriftErrorCode.INSUFFICIENT_REFERENCE_SAMPLES.value
+        results["error_message"] = msg
         return results
 
     df_current = get_live_data(hours=hours)
     if len(df_current) == 0:
-        results["error"] = "No live data available"
+        message = "No live data available"
+        results["error"] = message
+        results["error_code"] = DriftErrorCode.NO_LIVE_DATA.value
+        results["error_message"] = message
         return results
 
     results["live_size"] = len(df_current)
@@ -490,6 +520,11 @@ def detect_drift(
 
         if drift_error == DriftFallbackReason.INSUFFICIENT_BUCKET_MASS.value:
             results["drift_error"] = drift_error
+            results["error_code"] = DriftErrorCode.INSUFFICIENT_BUCKET_MASS.value
+            if results["error_message"] is None:
+                results["error_message"] = (
+                    "Drift signal suppressed due to insufficient bucket mass"
+                )
             results["features"][feature] = {
                 "psi": round(psi, 4),
                 "status": "OK",

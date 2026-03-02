@@ -34,6 +34,24 @@ class DriftFallbackReason(str, Enum):
     INSUFFICIENT_BUCKET_MASS = "insufficient_bucket_mass"
 
 
+class DriftErrorCode(str, Enum):
+    """Canonical top-level drift error codes."""
+
+    NO_REFERENCE_DATA = "no_reference_data"
+    INSUFFICIENT_REFERENCE_SAMPLES = "insufficient_reference_samples"
+    NO_LIVE_DATA = "no_live_data"
+    INSUFFICIENT_BUCKET_MASS = DriftFallbackReason.INSUFFICIENT_BUCKET_MASS.value
+
+
+class DriftResolutionMode(str, Enum):
+    """Canonical drift reference resolution modes."""
+
+    ALIAS = "alias"
+    STAGE = "stage"
+    LATEST = "latest"
+    NONE = "none"
+
+
 class BenchmarkStatus(str, Enum):
     """Status codes for inference benchmark execution."""
 
@@ -80,6 +98,8 @@ RELOAD_FAILURE_REASONS = frozenset(reason.value for reason in ReloadFailureReaso
 SCHEMA_MISMATCH_REASONS = frozenset(reason.value for reason in SchemaMismatchReason)
 CALIBRATION_SKIP_REASONS = frozenset(reason.value for reason in CalibrationSkipReason)
 DRIFT_FALLBACK_REASONS = frozenset(reason.value for reason in DriftFallbackReason)
+DRIFT_ERROR_CODES = frozenset(reason.value for reason in DriftErrorCode)
+DRIFT_RESOLUTION_MODES = frozenset(reason.value for reason in DriftResolutionMode)
 BENCHMARK_STATUSES = frozenset(reason.value for reason in BenchmarkStatus)
 MODEL_MANAGER_STATES = frozenset(reason.value for reason in ModelManagerState)
 RELOAD_STATUSES = frozenset(reason.value for reason in ReloadStatus)
