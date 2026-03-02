@@ -35,6 +35,8 @@ These keys are guaranteed to exist for operability guardrails, including idle st
 | `ml.training.run_id` | `string \| null` | Training run correlation id. |
 | `ml.model.version` | `string \| null` | Training-side model version value. |
 | `ml.feature.schema_hash` | `string \| null` | Training-side feature schema hash. |
+| `config` | `object` | Effective strict-mode runtime config (`strict_feature_schema`, `strict_tuning_resume_validation`, `strict_split_strategy_validation`). |
+| `ml_health` | `object` | Compact bounded operator summary derived from diagnostics + last drift cache snapshot when available. |
 
 ## Nullable Value Conditions (Keys Still Present)
 
@@ -47,6 +49,8 @@ These keys are guaranteed to exist for operability guardrails, including idle st
 | `benchmark_last_status` | Null until benchmark path has run or skipped. |
 | `feature_coverage_warning_last_seen_ts` | Null until coverage warning has been observed. |
 | `ml.training.run_id` / `ml.model.version` / `ml.feature.schema_hash` | Null when training identity artifact is unavailable. |
+| `ml_health.last_reload_ts` / `ml_health.benchmark_status` / `ml_health.drift_last_computed_ts` / `ml_health.drift_last_error_code` | Null when source value has not been observed yet. |
+| `ml_health.drift_reference_available` | Null when no drift run has been cached yet. |
 
 ## Allowed Enum / Code Values
 
@@ -82,6 +86,62 @@ These keys are guaranteed to exist for operability guardrails, including idle st
 - `fallback`
 - `none`
 
+`ml_health.feature_coverage_status`:
+- `ok`
+- `warning`
+
+`ml_health.drift_resolution_mode`:
+- `alias`
+- `stage`
+- `latest`
+- `none`
+
+## `ml_health` Shape
+
+`ml_health` is bounded and scalar-only except for nested `config` booleans:
+
+- `state`
+- `active_model_version`
+- `last_reload_status`
+- `last_reload_ts`
+- `schema_mismatch_detected`
+- `benchmark_status`
+- `feature_coverage_status`
+- `feature_coverage_last_seen_ts`
+- `drift_reference_available`
+- `drift_resolution_mode`
+- `drift_last_computed_ts`
+- `drift_last_error_code`
+- `config`
+
+`ml_health.config` keys:
+
+- `strict_feature_schema`
+- `strict_tuning_resume_validation`
+- `strict_split_strategy_validation`
+
+## Drift Error Fields (Canonical)
+
+`training.detect_drift.detect_drift()` includes additive canonical fields:
+
+- `error_code`: bounded reason code or `null`.
+- `error_message`: short operator-facing message or `null`.
+- `resolution_mode`: canonical reference resolution mode.
+
+Allowed `error_code` values:
+
+- `no_reference_data`
+- `insufficient_reference_samples`
+- `no_live_data`
+- `insufficient_bucket_mass`
+
+Allowed `resolution_mode` values:
+
+- `alias`
+- `stage`
+- `latest`
+- `none`
+
 ## Example Payload
 
 ```json
@@ -104,6 +164,30 @@ These keys are guaranteed to exist for operability guardrails, including idle st
   "feature_coverage_warning_last_seen_ts": null,
   "ml.training.run_id": "bf0e9d26c4f94ce5b8ef93f7bdf98b2a",
   "ml.model.version": "17",
-  "ml.feature.schema_hash": "f38aa5..."
+  "ml.feature.schema_hash": "f38aa5...",
+  "config": {
+    "strict_feature_schema": false,
+    "strict_tuning_resume_validation": false,
+    "strict_split_strategy_validation": false
+  },
+  "ml_health": {
+    "state": "ready",
+    "active_model_version": "v17",
+    "last_reload_status": "success",
+    "last_reload_ts": 1769246400.125,
+    "schema_mismatch_detected": false,
+    "benchmark_status": "success",
+    "feature_coverage_status": "ok",
+    "feature_coverage_last_seen_ts": null,
+    "drift_reference_available": true,
+    "drift_resolution_mode": "alias",
+    "drift_last_computed_ts": 1769246700.05,
+    "drift_last_error_code": null,
+    "config": {
+      "strict_feature_schema": false,
+      "strict_tuning_resume_validation": false,
+      "strict_split_strategy_validation": false
+    }
+  }
 }
 ```
