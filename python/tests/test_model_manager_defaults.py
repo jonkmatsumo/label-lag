@@ -119,6 +119,7 @@ def test_ml_health_summary_is_stable_and_bounded():
         "drift_resolution_mode",
         "drift_last_computed_ts",
         "drift_last_error_code",
+        "config",
     }
     assert isinstance(health["state"], str)
     assert isinstance(health["active_model_version"], str)
@@ -136,6 +137,13 @@ def test_ml_health_summary_is_stable_and_bounded():
     assert health["drift_resolution_mode"] in {"alias", "stage", "latest", "none"}
     assert isinstance(health["drift_last_computed_ts"], float)
     assert isinstance(health["drift_last_error_code"], str)
+    assert health["config"] == {
+        "strict_feature_schema": False,
+        "strict_tuning_resume_validation": False,
+        "strict_split_strategy_validation": False,
+    }
     assert all(
-        not isinstance(value, list | tuple | set | dict) for value in health.values()
+        not isinstance(value, list | tuple | set)
+        for key, value in health.items()
+        if key != "config"
     )
