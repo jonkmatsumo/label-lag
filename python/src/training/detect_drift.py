@@ -104,6 +104,7 @@ PSI_MIN_NONEMPTY_BUCKETS_RATIO = float(
 DRIFT_REFERENCE_MODEL_ALIAS = os.getenv("DRIFT_REFERENCE_MODEL_ALIAS", "").strip()
 _DRIFT_STAGE_FALLBACK_WARNED = False
 _DRIFT_LATEST_FALLBACK_WARNED = False
+MAX_DRIFT_ERROR_MESSAGE_LENGTH = 200
 
 
 def calculate_psi(
@@ -350,6 +351,22 @@ def _normalize_resolution_mode(raw_strategy: Any) -> str:
     return DriftResolutionMode.NONE.value
 
 
+def _bounded_error_message(message: Any) -> str:
+    return str(message).strip()[:MAX_DRIFT_ERROR_MESSAGE_LENGTH]
+
+
+def _set_canonical_error(
+    results: dict[str, Any],
+    *,
+    code: DriftErrorCode,
+    message: Any,
+) -> None:
+    bounded_message = _bounded_error_message(message)
+    results["error"] = bounded_message
+    results["error_code"] = code.value
+    results["error_message"] = bounded_message
+
+
 def get_reference_data(
     *, include_metadata: bool = False
 ) -> pd.DataFrame | tuple[pd.DataFrame | None, dict[str, Any]] | None:
@@ -457,6 +474,7 @@ def detect_drift(
         "resolution_mode": DriftResolutionMode.NONE.value,
         "alerts": [],
         "reference_resolution": {},
+        "reference_model_version": None,
     }
 
     reference_result = get_reference_data(include_metadata=True)
@@ -468,6 +486,9 @@ def detect_drift(
 
     if reference_resolution:
         results["reference_resolution"] = reference_resolution
+        selected_version = reference_resolution.get("selected_model_version")
+        if selected_version is not None:
+            results["reference_model_version"] = str(selected_version)[:64]
     results["resolution_mode"] = _normalize_resolution_mode(
         reference_resolution.get("resolution_strategy")
         if isinstance(reference_resolution, dict)
@@ -475,10 +496,11 @@ def detect_drift(
     )
 
     if df_reference is None or len(df_reference) == 0:
-        message = "No reference data available"
-        results["error"] = message
-        results["error_code"] = DriftErrorCode.NO_REFERENCE_DATA.value
-        results["error_message"] = message
+        _set_canonical_error(
+            results,
+            code=DriftErrorCode.NO_REFERENCE_DATA,
+            message="No reference data available",
+        )
         return results
 
     results["reference_size"] = len(df_reference)
@@ -489,17 +511,20 @@ def detect_drift(
             f"(minimum {MIN_REFERENCE_SAMPLES})"
         )
         logger.warning(msg)
-        results["error"] = msg
-        results["error_code"] = DriftErrorCode.INSUFFICIENT_REFERENCE_SAMPLES.value
-        results["error_message"] = msg
+        _set_canonical_error(
+            results,
+            code=DriftErrorCode.INSUFFICIENT_REFERENCE_SAMPLES,
+            message=msg,
+        )
         return results
 
     df_current = get_live_data(hours=hours)
     if len(df_current) == 0:
-        message = "No live data available"
-        results["error"] = message
-        results["error_code"] = DriftErrorCode.NO_LIVE_DATA.value
-        results["error_message"] = message
+        _set_canonical_error(
+            results,
+            code=DriftErrorCode.NO_LIVE_DATA,
+            message="No live data available",
+        )
         return results
 
     results["live_size"] = len(df_current)
@@ -520,10 +545,11 @@ def detect_drift(
 
         if drift_error == DriftFallbackReason.INSUFFICIENT_BUCKET_MASS.value:
             results["drift_error"] = drift_error
-            results["error_code"] = DriftErrorCode.INSUFFICIENT_BUCKET_MASS.value
             if results["error_message"] is None:
-                results["error_message"] = (
-                    "Drift signal suppressed due to insufficient bucket mass"
+                _set_canonical_error(
+                    results,
+                    code=DriftErrorCode.INSUFFICIENT_BUCKET_MASS,
+                    message="Drift signal suppressed due to insufficient bucket mass",
                 )
             results["features"][feature] = {
                 "psi": round(psi, 4),
