@@ -37,6 +37,11 @@ def test_ml_health_payload_golden_shape_and_bounds():
         health = manager.get_diagnostics()["ml_health"]
 
     assert set(health.keys()) == {
+        "model",
+        "benchmark",
+        "drift",
+        "feature_coverage",
+        "config",
         "state",
         "active_model_version",
         "last_reload_status",
@@ -49,12 +54,43 @@ def test_ml_health_payload_golden_shape_and_bounds():
         "drift_resolution_mode",
         "drift_last_computed_ts",
         "drift_last_error_code",
-        "config",
     }
+    assert set(health["model"].keys()) == {
+        "state",
+        "active_model_version",
+        "last_reload_status",
+        "last_reload_ts",
+        "schema_mismatch_detected",
+    }
+    assert set(health["benchmark"].keys()) == {"enabled", "last_status", "last_run_ts"}
+    assert set(health["drift"].keys()) == {
+        "reference_resolution_mode",
+        "last_error_code",
+    }
+    assert set(health["feature_coverage"].keys()) == {"last_ratio", "below_threshold"}
     assert health["state"] in {"idle", "loading", "ready", "failed"}
     assert len(health["active_model_version"]) <= 64
     assert len(health["last_reload_status"]) <= 32
     assert health["drift_resolution_mode"] in {"alias", "stage", "latest", "none"}
+    assert health["benchmark"]["enabled"] is True
+    assert (
+        health["benchmark"]["last_status"] is None
+        or len(health["benchmark"]["last_status"]) <= 32
+    )
+    assert health["feature_coverage"]["last_ratio"] is None or (
+        0.0 <= health["feature_coverage"]["last_ratio"] <= 1.0
+    )
+    assert isinstance(health["feature_coverage"]["below_threshold"], bool)
+    assert health["drift"]["reference_resolution_mode"] in {
+        "alias",
+        "stage",
+        "latest",
+        "none",
+    }
+    assert (
+        health["drift"]["last_error_code"] is None
+        or len(health["drift"]["last_error_code"]) <= 64
+    )
     assert (
         health["drift_last_error_code"] is None
         or len(health["drift_last_error_code"]) <= 64
