@@ -104,9 +104,15 @@ def test_ml_health_summary_is_stable_and_bounded():
 
     with patch("forecast.drift_cache.get_drift_cache", return_value=mock_cache):
         diagnostics = manager.get_diagnostics()
+        health_from_method = manager.get_ml_health_summary()
 
     health = diagnostics["ml_health"]
     assert set(health.keys()) == {
+        "model",
+        "benchmark",
+        "drift",
+        "feature_coverage",
+        "config",
         "state",
         "active_model_version",
         "last_reload_status",
@@ -119,8 +125,30 @@ def test_ml_health_summary_is_stable_and_bounded():
         "drift_resolution_mode",
         "drift_last_computed_ts",
         "drift_last_error_code",
-        "config",
     }
+    assert health == health_from_method
+
+    assert set(health["model"].keys()) == {
+        "state",
+        "active_model_version",
+        "last_reload_status",
+        "last_reload_ts",
+        "schema_mismatch_detected",
+    }
+    assert set(health["benchmark"].keys()) == {
+        "enabled",
+        "last_status",
+        "last_run_ts",
+    }
+    assert set(health["drift"].keys()) == {
+        "reference_resolution_mode",
+        "last_error_code",
+    }
+    assert set(health["feature_coverage"].keys()) == {
+        "last_ratio",
+        "below_threshold",
+    }
+
     assert isinstance(health["state"], str)
     assert isinstance(health["active_model_version"], str)
     assert isinstance(health["last_reload_status"], str)
@@ -131,19 +159,45 @@ def test_ml_health_summary_is_stable_and_bounded():
     assert health["benchmark_status"] is None or isinstance(
         health["benchmark_status"], str
     )
+    assert isinstance(health["benchmark"]["enabled"], bool)
+    assert health["benchmark"]["last_status"] is None or isinstance(
+        health["benchmark"]["last_status"], str
+    )
+    assert health["benchmark"]["last_run_ts"] is None or isinstance(
+        health["benchmark"]["last_run_ts"], float
+    )
     assert health["feature_coverage_status"] == "warning"
     assert isinstance(health["feature_coverage_last_seen_ts"], float)
+    assert health["feature_coverage"]["last_ratio"] is None or isinstance(
+        health["feature_coverage"]["last_ratio"], float
+    )
+    assert isinstance(health["feature_coverage"]["below_threshold"], bool)
     assert isinstance(health["drift_reference_available"], bool)
     assert health["drift_resolution_mode"] in {"alias", "stage", "latest", "none"}
+    assert health["drift"]["reference_resolution_mode"] in {
+        "alias",
+        "stage",
+        "latest",
+        "none",
+    }
     assert isinstance(health["drift_last_computed_ts"], float)
     assert isinstance(health["drift_last_error_code"], str)
+    assert isinstance(health["drift"]["last_error_code"], str)
     assert health["config"] == {
         "strict_feature_schema": False,
         "strict_tuning_resume_validation": False,
         "strict_split_strategy_validation": False,
     }
+    assert health["model"]["state"] == health["state"]
+    assert health["model"]["active_model_version"] == health["active_model_version"]
+    assert health["model"]["last_reload_status"] == health["last_reload_status"]
+    assert health["model"]["last_reload_ts"] == health["last_reload_ts"]
+    assert (
+        health["model"]["schema_mismatch_detected"]
+        == health["schema_mismatch_detected"]
+    )
     assert all(
         not isinstance(value, list | tuple | set)
         for key, value in health.items()
-        if key != "config"
+        if key not in {"config", "model", "benchmark", "drift", "feature_coverage"}
     )

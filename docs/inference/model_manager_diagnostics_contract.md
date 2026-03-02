@@ -49,7 +49,7 @@ These keys are guaranteed to exist for operability guardrails, including idle st
 | `benchmark_last_status` | Null until benchmark path has run or skipped. |
 | `feature_coverage_warning_last_seen_ts` | Null until coverage warning has been observed. |
 | `ml.training.run_id` / `ml.model.version` / `ml.feature.schema_hash` | Null when training identity artifact is unavailable. |
-| `ml_health.last_reload_ts` / `ml_health.benchmark_status` / `ml_health.drift_last_computed_ts` / `ml_health.drift_last_error_code` | Null when source value has not been observed yet. |
+| `ml_health.model.last_reload_ts` / `ml_health.benchmark.last_status` / `ml_health.benchmark.last_run_ts` / `ml_health.drift.last_error_code` / legacy aliases (`ml_health.last_reload_ts`, `ml_health.benchmark_status`, `ml_health.drift_last_computed_ts`, `ml_health.drift_last_error_code`) | Null when source value has not been observed yet. |
 | `ml_health.drift_reference_available` | Null when no drift run has been cached yet. |
 
 ## Allowed Enum / Code Values
@@ -90,7 +90,7 @@ These keys are guaranteed to exist for operability guardrails, including idle st
 - `ok`
 - `warning`
 
-`ml_health.drift_resolution_mode`:
+`ml_health.drift.reference_resolution_mode` and legacy alias `ml_health.drift_resolution_mode`:
 - `alias`
 - `stage`
 - `latest`
@@ -98,7 +98,34 @@ These keys are guaranteed to exist for operability guardrails, including idle st
 
 ## `ml_health` Shape
 
-`ml_health` is bounded and scalar-only except for nested `config` booleans:
+`ml_health` contains stable grouped sections and keeps legacy scalar aliases for
+backward compatibility.
+
+- `model`
+  - `state`
+  - `active_model_version`
+  - `last_reload_status`
+  - `last_reload_ts`
+  - `schema_mismatch_detected`
+- `benchmark`
+  - `enabled`
+  - `last_status`
+  - `last_run_ts`
+- `drift`
+  - `reference_resolution_mode`
+  - `last_error_code`
+- `feature_coverage`
+  - `last_ratio`
+  - `below_threshold`
+- `config`
+
+`ml_health.config` keys (always present, default `false`):
+
+- `strict_feature_schema`
+- `strict_tuning_resume_validation`
+- `strict_split_strategy_validation`
+
+Legacy aliases retained in `ml_health`:
 
 - `state`
 - `active_model_version`
@@ -112,21 +139,15 @@ These keys are guaranteed to exist for operability guardrails, including idle st
 - `drift_resolution_mode`
 - `drift_last_computed_ts`
 - `drift_last_error_code`
-- `config`
-
-`ml_health.config` keys:
-
-- `strict_feature_schema`
-- `strict_tuning_resume_validation`
-- `strict_split_strategy_validation`
 
 ## Drift Error Fields (Canonical)
 
 `training.detect_drift.detect_drift()` includes additive canonical fields:
 
 - `error_code`: bounded reason code or `null`.
-- `error_message`: short operator-facing message or `null`.
+- `error_message`: short operator-facing message or `null`, capped at 200 chars.
 - `resolution_mode`: canonical reference resolution mode.
+- `reference_model_version`: selected reference model version when available.
 
 Allowed `error_code` values:
 
@@ -141,6 +162,13 @@ Allowed `resolution_mode` values:
 - `stage`
 - `latest`
 - `none`
+
+`resolution_mode` semantics:
+
+- `alias`: resolved by configured alias (`DRIFT_REFERENCE_MODEL_ALIAS`).
+- `stage`: resolved by legacy Production stage fallback.
+- `latest`: resolved by latest version fallback.
+- `none`: no reference could be resolved.
 
 ## Example Payload
 
@@ -171,6 +199,31 @@ Allowed `resolution_mode` values:
     "strict_split_strategy_validation": false
   },
   "ml_health": {
+    "model": {
+      "state": "ready",
+      "active_model_version": "v17",
+      "last_reload_status": "success",
+      "last_reload_ts": 1769246400.125,
+      "schema_mismatch_detected": false
+    },
+    "benchmark": {
+      "enabled": true,
+      "last_status": "success",
+      "last_run_ts": 1769246400.412
+    },
+    "drift": {
+      "reference_resolution_mode": "alias",
+      "last_error_code": null
+    },
+    "feature_coverage": {
+      "last_ratio": 1.0,
+      "below_threshold": false
+    },
+    "config": {
+      "strict_feature_schema": false,
+      "strict_tuning_resume_validation": false,
+      "strict_split_strategy_validation": false
+    },
     "state": "ready",
     "active_model_version": "v17",
     "last_reload_status": "success",
@@ -182,12 +235,7 @@ Allowed `resolution_mode` values:
     "drift_reference_available": true,
     "drift_resolution_mode": "alias",
     "drift_last_computed_ts": 1769246700.05,
-    "drift_last_error_code": null,
-    "config": {
-      "strict_feature_schema": false,
-      "strict_tuning_resume_validation": false,
-      "strict_split_strategy_validation": false
-    }
+    "drift_last_error_code": null
   }
 }
 ```

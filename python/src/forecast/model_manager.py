@@ -119,6 +119,11 @@ class ModelManager:
 
     _instance = None
     _lock = Lock()
+    _STRICT_CONFIG_KEYS = (
+        "strict_feature_schema",
+        "strict_tuning_resume_validation",
+        "strict_split_strategy_validation",
+    )
 
     def __new__(cls) -> "ModelManager":
         """Create singleton instance."""
@@ -466,6 +471,44 @@ class ModelManager:
             return "latest"
         return "none"
 
+    @staticmethod
+    def _bounded_optional_str(value: Any, *, max_len: int) -> str | None:
+        if value is None:
+            return None
+        text = str(value).strip()
+        if not text:
+            return None
+        return text[:max_len]
+
+    @staticmethod
+    def _bounded_str(value: Any, *, default: str, max_len: int) -> str:
+        text = str(value).strip() if value is not None else ""
+        if not text:
+            text = default
+        return text[:max_len]
+
+    @staticmethod
+    def _coerce_float_or_none(value: Any) -> float | None:
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, int | float):
+            return float(value)
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    @classmethod
+    def _normalize_strict_config(cls, config_snapshot: Any) -> dict[str, bool]:
+        if not isinstance(config_snapshot, dict):
+            return {key: False for key in cls._STRICT_CONFIG_KEYS}
+        return {
+            key: bool(config_snapshot.get(key, False))
+            for key in cls._STRICT_CONFIG_KEYS
+        }
+
     def _build_ml_health_summary(
         self, diagnostics_snapshot: dict[str, Any]
     ) -> dict[str, Any]:
@@ -514,35 +557,98 @@ class ModelManager:
             if diagnostics_snapshot.get(DIAGNOSTIC_KEY_FEATURE_COVERAGE_WARNING_ACTIVE)
             else "ok"
         )
-        strict_config = diagnostics_snapshot.get(DIAGNOSTIC_KEY_CONFIG, {})
-        if not isinstance(strict_config, dict):
-            strict_config = {}
+        strict_config = self._normalize_strict_config(
+            diagnostics_snapshot.get(DIAGNOSTIC_KEY_CONFIG)
+        )
 
-        return {
-            "state": str(diagnostics_snapshot.get(DIAGNOSTIC_KEY_STATE, "idle")),
-            "active_model_version": str(
-                diagnostics_snapshot.get(DIAGNOSTIC_KEY_ACTIVE_MODEL_VERSION, "unknown")
+        model_summary = {
+            "state": self._bounded_str(
+                diagnostics_snapshot.get(DIAGNOSTIC_KEY_STATE),
+                default="idle",
+                max_len=32,
             ),
-            "last_reload_status": str(
-                diagnostics_snapshot.get(DIAGNOSTIC_KEY_LAST_RELOAD_STATUS, "idle")
+            "active_model_version": self._bounded_str(
+                diagnostics_snapshot.get(DIAGNOSTIC_KEY_ACTIVE_MODEL_VERSION),
+                default="unknown",
+                max_len=64,
             ),
-            "last_reload_ts": diagnostics_snapshot.get(DIAGNOSTIC_KEY_LAST_RELOAD_TS),
+            "last_reload_status": self._bounded_str(
+                diagnostics_snapshot.get(DIAGNOSTIC_KEY_LAST_RELOAD_STATUS),
+                default="idle",
+                max_len=32,
+            ),
+            "last_reload_ts": self._coerce_float_or_none(
+                diagnostics_snapshot.get(DIAGNOSTIC_KEY_LAST_RELOAD_TS)
+            ),
             "schema_mismatch_detected": bool(
                 diagnostics_snapshot.get(DIAGNOSTIC_KEY_SCHEMA_MISMATCH_DETECTED)
             ),
-            "benchmark_status": diagnostics_snapshot.get(
-                DIAGNOSTIC_KEY_BENCHMARK_LAST_STATUS
+        }
+
+        benchmark_summary = {
+            "enabled": bool(INFERENCE_BENCHMARK_ENABLED),
+            "last_status": self._bounded_optional_str(
+                diagnostics_snapshot.get(DIAGNOSTIC_KEY_BENCHMARK_LAST_STATUS),
+                max_len=32,
             ),
+            "last_run_ts": self._coerce_float_or_none(
+                diagnostics_snapshot.get(DIAGNOSTIC_KEY_BENCHMARK_LAST_RUN_TS)
+            ),
+        }
+
+        feature_coverage_summary = {
+            "last_ratio": self._coerce_float_or_none(
+                diagnostics_snapshot.get("feature_coverage_last_ratio")
+            ),
+            "below_threshold": bool(
+                diagnostics_snapshot.get(
+                    DIAGNOSTIC_KEY_FEATURE_COVERAGE_WARNING_ACTIVE, False
+                )
+            ),
+        }
+
+        drift_summary = {
+            "reference_resolution_mode": self._bounded_str(
+                drift_resolution_mode,
+                default="none",
+                max_len=16,
+            ),
+            "last_error_code": self._bounded_optional_str(
+                drift_last_error_code,
+                max_len=64,
+            ),
+        }
+
+        # Keep legacy scalar aliases for compatibility with existing consumers.
+        return {
+            "model": model_summary,
+            "benchmark": benchmark_summary,
+            "drift": drift_summary,
+            "feature_coverage": feature_coverage_summary,
+            "config": strict_config,
+            "state": model_summary["state"],
+            "active_model_version": model_summary["active_model_version"],
+            "last_reload_status": model_summary["last_reload_status"],
+            "last_reload_ts": model_summary["last_reload_ts"],
+            "schema_mismatch_detected": model_summary["schema_mismatch_detected"],
+            "benchmark_status": benchmark_summary["last_status"],
             "feature_coverage_status": feature_coverage_status,
-            "feature_coverage_last_seen_ts": diagnostics_snapshot.get(
-                DIAGNOSTIC_KEY_FEATURE_COVERAGE_WARNING_LAST_SEEN_TS
+            "feature_coverage_last_seen_ts": self._coerce_float_or_none(
+                diagnostics_snapshot.get(
+                    DIAGNOSTIC_KEY_FEATURE_COVERAGE_WARNING_LAST_SEEN_TS
+                )
             ),
             "drift_reference_available": drift_reference_available,
-            "drift_resolution_mode": drift_resolution_mode,
+            "drift_resolution_mode": drift_summary["reference_resolution_mode"],
             "drift_last_computed_ts": drift_last_computed_ts,
-            "drift_last_error_code": drift_last_error_code,
-            "config": strict_config,
+            "drift_last_error_code": drift_summary["last_error_code"],
         }
+
+    def get_ml_health_summary(self) -> dict[str, Any]:
+        """Get the current bounded ML health summary snapshot."""
+        diagnostics = self.get_diagnostics()
+        payload = diagnostics.get(DIAGNOSTIC_KEY_ML_HEALTH)
+        return payload if isinstance(payload, dict) else {}
 
     @staticmethod
     def _effective_strict_config() -> dict[str, bool]:
@@ -552,15 +658,17 @@ class ModelManager:
                 return False
             return raw.strip().lower() in {"1", "true", "yes", "on"}
 
-        return {
-            "strict_feature_schema": _env_flag("ENFORCE_MODEL_FEATURES"),
-            "strict_tuning_resume_validation": _env_flag(
-                "STRICT_TUNING_RESUME_VALIDATION"
-            ),
-            "strict_split_strategy_validation": _env_flag(
-                "STRICT_SPLIT_STRATEGY_VALIDATION"
-            ),
-        }
+        return ModelManager._normalize_strict_config(
+            {
+                "strict_feature_schema": _env_flag("ENFORCE_MODEL_FEATURES"),
+                "strict_tuning_resume_validation": _env_flag(
+                    "STRICT_TUNING_RESUME_VALIDATION"
+                ),
+                "strict_split_strategy_validation": _env_flag(
+                    "STRICT_SPLIT_STRATEGY_VALIDATION"
+                ),
+            }
+        )
 
     def get_diagnostics(self) -> dict[str, Any]:
         """Get a diagnostic snapshot of the ModelManager state.
@@ -623,7 +731,9 @@ class ModelManager:
                 DIAGNOSTIC_KEY_ML_FEATURE_SCHEMA_HASH: training_identity.get(
                     TRAINING_IDENTITY_KEY_FEATURE_SCHEMA_HASH
                 ),
-                DIAGNOSTIC_KEY_CONFIG: self._effective_strict_config(),
+                DIAGNOSTIC_KEY_CONFIG: self._normalize_strict_config(
+                    self._effective_strict_config()
+                ),
             }
             diagnostics[DIAGNOSTIC_KEY_ML_HEALTH] = self._build_ml_health_summary(
                 diagnostics

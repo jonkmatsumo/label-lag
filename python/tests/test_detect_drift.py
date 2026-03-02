@@ -9,6 +9,7 @@ import pandas as pd
 import pytest
 
 from training.detect_drift import (
+    MAX_DRIFT_ERROR_MESSAGE_LENGTH,
     MIN_REFERENCE_SAMPLES,
     PSI_THRESHOLD_CRITICAL,
     calculate_psi,
@@ -674,7 +675,9 @@ class TestDetectDrift:
 
         assert result["error_code"] == DriftErrorCode.NO_REFERENCE_DATA.value
         assert result["error_message"] == "No reference data available"
+        assert len(result["error_message"]) <= MAX_DRIFT_ERROR_MESSAGE_LENGTH
         assert result["resolution_mode"] == DriftResolutionMode.NONE.value
+        assert result["reference_model_version"] is None
 
     @patch("training.detect_drift.get_reference_data")
     @patch("training.detect_drift.get_live_data")
@@ -696,7 +699,9 @@ class TestDetectDrift:
             result["error_code"] == DriftErrorCode.INSUFFICIENT_REFERENCE_SAMPLES.value
         )
         assert "Insufficient reference data" in result["error_message"]
+        assert len(result["error_message"]) <= MAX_DRIFT_ERROR_MESSAGE_LENGTH
         assert result["resolution_mode"] == DriftResolutionMode.NONE.value
+        assert result["reference_model_version"] is None
 
     @patch("training.detect_drift.get_reference_data")
     @patch("training.detect_drift.get_live_data")
@@ -728,12 +733,14 @@ class TestDetectDrift:
             result["error_message"]
             == "Drift signal suppressed due to insufficient bucket mass"
         )
+        assert len(result["error_message"]) <= MAX_DRIFT_ERROR_MESSAGE_LENGTH
         assert result["resolution_mode"] in {
             DriftResolutionMode.ALIAS.value,
             DriftResolutionMode.STAGE.value,
             DriftResolutionMode.LATEST.value,
             DriftResolutionMode.NONE.value,
         }
+        assert result["reference_model_version"] is None
 
     @patch("training.detect_drift.get_reference_data")
     @patch("training.detect_drift.get_live_data")
@@ -761,3 +768,4 @@ class TestDetectDrift:
         assert result["error_code"] is None
         assert result["error_message"] is None
         assert result["resolution_mode"] == DriftResolutionMode.ALIAS.value
+        assert result["reference_model_version"] == "9"

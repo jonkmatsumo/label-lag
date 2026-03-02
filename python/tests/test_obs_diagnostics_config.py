@@ -23,6 +23,9 @@ def test_diagnostics_config_defaults_to_all_strict_flags_off(monkeypatch):
     }
     assert diagnostics["config"] == expected
     assert diagnostics["ml_health"]["config"] == expected
+    assert manager.get_ml_health_summary()["config"] == expected
+    assert set(diagnostics["config"].keys()) == set(expected.keys())
+    assert all(isinstance(value, bool) for value in diagnostics["config"].values())
 
 
 def test_diagnostics_config_reflects_enabled_strict_flags(monkeypatch):
@@ -40,3 +43,6 @@ def test_diagnostics_config_reflects_enabled_strict_flags(monkeypatch):
     }
     assert diagnostics["config"] == expected
     assert diagnostics["ml_health"]["config"] == expected
+    assert manager.get_ml_health_summary()["config"] == expected
+    assert set(diagnostics["config"].keys()) == set(expected.keys())
+    assert all(isinstance(value, bool) for value in diagnostics["config"].values())
