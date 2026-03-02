@@ -34,6 +34,7 @@ from training.reason_codes import (
     DIAGNOSTIC_KEY_LAST_RELOAD_STATUS,
     DIAGNOSTIC_KEY_LAST_RELOAD_TS,
     DIAGNOSTIC_KEY_ML_FEATURE_SCHEMA_HASH,
+    DIAGNOSTIC_KEY_ML_HEALTH,
     DIAGNOSTIC_KEY_ML_MODEL_VERSION,
     DIAGNOSTIC_KEY_ML_TRAINING_RUN_ID,
     DIAGNOSTIC_KEY_MODEL_SOURCE,
@@ -454,6 +455,90 @@ class ModelManager:
 
         return DataLoader.FEATURE_COLUMNS
 
+    @staticmethod
+    def _normalize_resolution_mode(raw_mode: Any) -> str:
+        if raw_mode == "alias":
+            return "alias"
+        if raw_mode == "production_stage":
+            return "stage"
+        if raw_mode == "latest_version":
+            return "latest"
+        return "none"
+
+    def _build_ml_health_summary(
+        self, diagnostics_snapshot: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Build a compact, bounded health summary for operators."""
+        drift_last_computed_ts: float | None = None
+        drift_reference_available: bool | None = None
+        drift_resolution_mode = "none"
+        drift_last_error_code: str | None = None
+
+        try:
+            from forecast.drift_cache import get_drift_cache
+
+            cache = get_drift_cache()
+            cached_result = getattr(cache, "_cache", None)
+            if cached_result is not None:
+                computed_at = getattr(cached_result, "computed_at", None)
+                if computed_at is not None and hasattr(computed_at, "timestamp"):
+                    drift_last_computed_ts = float(computed_at.timestamp())
+
+                result_payload = getattr(cached_result, "result", {})
+                if isinstance(result_payload, dict):
+                    resolution = result_payload.get("reference_resolution")
+                    if isinstance(resolution, dict):
+                        drift_resolution_mode = self._normalize_resolution_mode(
+                            resolution.get("resolution_strategy")
+                        )
+                        selected_run_id = resolution.get("selected_run_id")
+                        if selected_run_id is not None:
+                            drift_reference_available = bool(
+                                str(selected_run_id).strip()
+                            )
+
+                    error_code = result_payload.get("error_code")
+                    if isinstance(error_code, str) and error_code.strip():
+                        drift_last_error_code = error_code
+                    elif isinstance(result_payload.get("drift_error"), str):
+                        drift_last_error_code = result_payload.get("drift_error")
+                    elif isinstance(result_payload.get("error"), str):
+                        drift_last_error_code = "unknown"
+
+        except Exception:
+            pass
+
+        feature_coverage_status = (
+            "warning"
+            if diagnostics_snapshot.get(DIAGNOSTIC_KEY_FEATURE_COVERAGE_WARNING_ACTIVE)
+            else "ok"
+        )
+
+        return {
+            "state": str(diagnostics_snapshot.get(DIAGNOSTIC_KEY_STATE, "idle")),
+            "active_model_version": str(
+                diagnostics_snapshot.get(DIAGNOSTIC_KEY_ACTIVE_MODEL_VERSION, "unknown")
+            ),
+            "last_reload_status": str(
+                diagnostics_snapshot.get(DIAGNOSTIC_KEY_LAST_RELOAD_STATUS, "idle")
+            ),
+            "last_reload_ts": diagnostics_snapshot.get(DIAGNOSTIC_KEY_LAST_RELOAD_TS),
+            "schema_mismatch_detected": bool(
+                diagnostics_snapshot.get(DIAGNOSTIC_KEY_SCHEMA_MISMATCH_DETECTED)
+            ),
+            "benchmark_status": diagnostics_snapshot.get(
+                DIAGNOSTIC_KEY_BENCHMARK_LAST_STATUS
+            ),
+            "feature_coverage_status": feature_coverage_status,
+            "feature_coverage_last_seen_ts": diagnostics_snapshot.get(
+                DIAGNOSTIC_KEY_FEATURE_COVERAGE_WARNING_LAST_SEEN_TS
+            ),
+            "drift_reference_available": drift_reference_available,
+            "drift_resolution_mode": drift_resolution_mode,
+            "drift_last_computed_ts": drift_last_computed_ts,
+            "drift_last_error_code": drift_last_error_code,
+        }
+
     def get_diagnostics(self) -> dict[str, Any]:
         """Get a diagnostic snapshot of the ModelManager state.
 
@@ -479,7 +564,7 @@ class ModelManager:
                 degraded_reasons.append(
                     DiagnosticsDegradedReason.FEATURE_COVERAGE_WARNING.value
                 )
-            return {
+            diagnostics = {
                 DIAGNOSTIC_KEY_STATE: self._state,
                 DIAGNOSTIC_KEY_MODEL_VERSION: self.model_version,
                 DIAGNOSTIC_KEY_MODEL_SOURCE: self.model_source,
@@ -516,6 +601,10 @@ class ModelManager:
                     TRAINING_IDENTITY_KEY_FEATURE_SCHEMA_HASH
                 ),
             }
+            diagnostics[DIAGNOSTIC_KEY_ML_HEALTH] = self._build_ml_health_summary(
+                diagnostics
+            )
+            return diagnostics
 
     def update_feature_coverage_warning(
         self, *, active: bool, observed_ts: float | None = None
