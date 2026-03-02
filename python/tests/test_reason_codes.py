@@ -11,7 +11,9 @@ from training.reason_codes import (
     DIAGNOSTIC_KEY_SCHEMA_MISMATCH_DETECTED,
     DIAGNOSTIC_KEY_STATE,
     DIAGNOSTICS_DEGRADED_REASONS,
+    DRIFT_ERROR_CODES,
     DRIFT_FALLBACK_REASONS,
+    DRIFT_RESOLUTION_MODES,
     MLFLOW_PARAM_CALIBRATION_SKIP_REASON,
     MLFLOW_TAG_BEST_PARAMS_JSON,
     MLFLOW_TAG_BEST_TRIAL_NUMBER,
@@ -41,6 +43,13 @@ def test_reason_code_sets_are_bounded_and_stable():
         "calibration_skipped_insufficient_negatives",
     }
     assert DRIFT_FALLBACK_REASONS == {"tied_quantiles", "insufficient_bucket_mass"}
+    assert DRIFT_ERROR_CODES == {
+        "no_reference_data",
+        "insufficient_reference_samples",
+        "no_live_data",
+        "insufficient_bucket_mass",
+    }
+    assert DRIFT_RESOLUTION_MODES == {"alias", "stage", "latest", "none"}
     assert BENCHMARK_STATUSES == {
         "skipped_disabled",
         "skipped_sampled_out",

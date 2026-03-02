@@ -1,5 +1,7 @@
 """Guardrail tests for ModelManager default/warn-only behavior."""
 
+from datetime import datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from forecast.model_manager import ModelManager
@@ -81,3 +83,67 @@ def test_missing_registry_features_fail_when_strict_flag_set(monkeypatch):
         assert manager.load_production_model() is False
         diag = manager.get_diagnostics()
         assert diag["last_reload_status"] == "failed"
+
+
+def test_ml_health_summary_is_stable_and_bounded():
+    manager = _fresh_manager()
+    manager.update_feature_coverage_warning(active=True, observed_ts=111.5)
+
+    mock_cache = SimpleNamespace(
+        _cache=SimpleNamespace(
+            computed_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            result={
+                "reference_resolution": {
+                    "resolution_strategy": "production_stage",
+                    "selected_run_id": "run-123",
+                },
+                "error_code": "no_reference_data",
+            },
+        )
+    )
+
+    with patch("forecast.drift_cache.get_drift_cache", return_value=mock_cache):
+        diagnostics = manager.get_diagnostics()
+
+    health = diagnostics["ml_health"]
+    assert set(health.keys()) == {
+        "state",
+        "active_model_version",
+        "last_reload_status",
+        "last_reload_ts",
+        "schema_mismatch_detected",
+        "benchmark_status",
+        "feature_coverage_status",
+        "feature_coverage_last_seen_ts",
+        "drift_reference_available",
+        "drift_resolution_mode",
+        "drift_last_computed_ts",
+        "drift_last_error_code",
+        "config",
+    }
+    assert isinstance(health["state"], str)
+    assert isinstance(health["active_model_version"], str)
+    assert isinstance(health["last_reload_status"], str)
+    assert health["last_reload_ts"] is None or isinstance(
+        health["last_reload_ts"], float
+    )
+    assert isinstance(health["schema_mismatch_detected"], bool)
+    assert health["benchmark_status"] is None or isinstance(
+        health["benchmark_status"], str
+    )
+    assert health["feature_coverage_status"] == "warning"
+    assert isinstance(health["feature_coverage_last_seen_ts"], float)
+    assert isinstance(health["drift_reference_available"], bool)
+    assert health["drift_resolution_mode"] in {"alias", "stage", "latest", "none"}
+    assert isinstance(health["drift_last_computed_ts"], float)
+    assert isinstance(health["drift_last_error_code"], str)
+    assert health["config"] == {
+        "strict_feature_schema": False,
+        "strict_tuning_resume_validation": False,
+        "strict_split_strategy_validation": False,
+    }
+    assert all(
+        not isinstance(value, list | tuple | set)
+        for key, value in health.items()
+        if key != "config"
+    )
