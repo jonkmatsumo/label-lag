@@ -119,6 +119,11 @@ class ModelManager:
 
     _instance = None
     _lock = Lock()
+    _STRICT_CONFIG_KEYS = (
+        "strict_feature_schema",
+        "strict_tuning_resume_validation",
+        "strict_split_strategy_validation",
+    )
 
     def __new__(cls) -> "ModelManager":
         """Create singleton instance."""
@@ -495,6 +500,15 @@ class ModelManager:
         except (TypeError, ValueError):
             return None
 
+    @classmethod
+    def _normalize_strict_config(cls, config_snapshot: Any) -> dict[str, bool]:
+        if not isinstance(config_snapshot, dict):
+            return {key: False for key in cls._STRICT_CONFIG_KEYS}
+        return {
+            key: bool(config_snapshot.get(key, False))
+            for key in cls._STRICT_CONFIG_KEYS
+        }
+
     def _build_ml_health_summary(
         self, diagnostics_snapshot: dict[str, Any]
     ) -> dict[str, Any]:
@@ -543,19 +557,9 @@ class ModelManager:
             if diagnostics_snapshot.get(DIAGNOSTIC_KEY_FEATURE_COVERAGE_WARNING_ACTIVE)
             else "ok"
         )
-        config_snapshot = diagnostics_snapshot.get(DIAGNOSTIC_KEY_CONFIG)
-        strict_config = config_snapshot if isinstance(config_snapshot, dict) else {}
-        strict_config = {
-            "strict_feature_schema": bool(
-                strict_config.get("strict_feature_schema", False)
-            ),
-            "strict_tuning_resume_validation": bool(
-                strict_config.get("strict_tuning_resume_validation", False)
-            ),
-            "strict_split_strategy_validation": bool(
-                strict_config.get("strict_split_strategy_validation", False)
-            ),
-        }
+        strict_config = self._normalize_strict_config(
+            diagnostics_snapshot.get(DIAGNOSTIC_KEY_CONFIG)
+        )
 
         model_summary = {
             "state": self._bounded_str(
@@ -654,15 +658,17 @@ class ModelManager:
                 return False
             return raw.strip().lower() in {"1", "true", "yes", "on"}
 
-        return {
-            "strict_feature_schema": _env_flag("ENFORCE_MODEL_FEATURES"),
-            "strict_tuning_resume_validation": _env_flag(
-                "STRICT_TUNING_RESUME_VALIDATION"
-            ),
-            "strict_split_strategy_validation": _env_flag(
-                "STRICT_SPLIT_STRATEGY_VALIDATION"
-            ),
-        }
+        return ModelManager._normalize_strict_config(
+            {
+                "strict_feature_schema": _env_flag("ENFORCE_MODEL_FEATURES"),
+                "strict_tuning_resume_validation": _env_flag(
+                    "STRICT_TUNING_RESUME_VALIDATION"
+                ),
+                "strict_split_strategy_validation": _env_flag(
+                    "STRICT_SPLIT_STRATEGY_VALIDATION"
+                ),
+            }
+        )
 
     def get_diagnostics(self) -> dict[str, Any]:
         """Get a diagnostic snapshot of the ModelManager state.
@@ -725,7 +731,9 @@ class ModelManager:
                 DIAGNOSTIC_KEY_ML_FEATURE_SCHEMA_HASH: training_identity.get(
                     TRAINING_IDENTITY_KEY_FEATURE_SCHEMA_HASH
                 ),
-                DIAGNOSTIC_KEY_CONFIG: self._effective_strict_config(),
+                DIAGNOSTIC_KEY_CONFIG: self._normalize_strict_config(
+                    self._effective_strict_config()
+                ),
             }
             diagnostics[DIAGNOSTIC_KEY_ML_HEALTH] = self._build_ml_health_summary(
                 diagnostics
