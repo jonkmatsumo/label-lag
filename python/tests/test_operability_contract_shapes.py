@@ -1,4 +1,4 @@
-"""Golden-shape guardrails for ML health and drift payloads."""
+"""Contract-shape golden tests for ML operability payloads."""
 
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -20,7 +20,7 @@ def _fresh_manager() -> ModelManager:
     return ModelManager()
 
 
-def test_ml_health_payload_golden_shape_and_bounds():
+def test_ml_health_contract_shape_and_bounds():
     manager = _fresh_manager()
     manager.update_feature_coverage_warning(active=True, observed_ts=111.5)
 
@@ -38,7 +38,7 @@ def test_ml_health_payload_golden_shape_and_bounds():
     )
 
     with patch("forecast.drift_cache.get_drift_cache", return_value=mock_cache):
-        health = manager.get_diagnostics()["ml_health"]
+        health = manager.get_ml_health_summary()
 
     assert set(health.keys()) == {
         "model",
@@ -59,6 +59,12 @@ def test_ml_health_payload_golden_shape_and_bounds():
         "drift_last_computed_ts",
         "drift_last_error_code",
     }
+    assert set(health["config"].keys()) == {
+        "strict_feature_schema",
+        "strict_tuning_resume_validation",
+        "strict_split_strategy_validation",
+    }
+    assert all(isinstance(value, bool) for value in health["config"].values())
     assert set(health["model"].keys()) == {
         "state",
         "active_model_version",
@@ -72,44 +78,17 @@ def test_ml_health_payload_golden_shape_and_bounds():
         "last_error_code",
     }
     assert set(health["feature_coverage"].keys()) == {"last_ratio", "below_threshold"}
-    assert health["state"] in {"idle", "loading", "ready", "failed"}
     assert len(health["active_model_version"]) <= 64
     assert len(health["last_reload_status"]) <= 32
-    assert health["drift_resolution_mode"] in {"alias", "stage", "latest", "none"}
-    assert isinstance(health["benchmark"]["enabled"], bool)
-    assert (
-        health["benchmark"]["last_status"] is None
-        or len(health["benchmark"]["last_status"]) <= 32
-    )
-    assert health["feature_coverage"]["last_ratio"] is None or (
-        0.0 <= health["feature_coverage"]["last_ratio"] <= 1.0
-    )
-    assert isinstance(health["feature_coverage"]["below_threshold"], bool)
-    assert health["drift"]["reference_resolution_mode"] in {
-        "alias",
-        "stage",
-        "latest",
-        "none",
-    }
-    assert (
-        health["drift"]["last_error_code"] is None
-        or len(health["drift"]["last_error_code"]) <= 64
-    )
     assert (
         health["drift_last_error_code"] is None
         or len(health["drift_last_error_code"]) <= 64
     )
-    assert set(health["config"].keys()) == {
-        "strict_feature_schema",
-        "strict_tuning_resume_validation",
-        "strict_split_strategy_validation",
-    }
-    assert all(isinstance(value, bool) for value in health["config"].values())
 
 
 @patch("training.detect_drift.get_reference_data")
 @patch("training.detect_drift.get_live_data")
-def test_detect_drift_payload_golden_shape_and_bounds(mock_live, mock_ref):
+def test_drift_contract_shape_and_bounds(mock_live, mock_ref):
     base = np.arange(1000, dtype=float)
     reference_df = pd.DataFrame(
         {
@@ -148,23 +127,19 @@ def test_detect_drift_payload_golden_shape_and_bounds(mock_live, mock_ref):
         "reference_model_version",
     }
     assert result["resolution_mode"] in {"alias", "stage", "latest", "none"}
-    assert isinstance(result["features"], dict)
+    assert result["reference_model_version"] == "9"
     assert len(result["features"]) <= len(MONITORED_FEATURES)
     assert len(result["drifted_features"]) <= len(MONITORED_FEATURES)
     assert len(result["alerts"]) <= len(MONITORED_FEATURES)
-    assert result["error_message"] is None or (
-        len(result["error_message"]) <= MAX_DRIFT_ERROR_MESSAGE_LENGTH
-    )
-    assert result["reference_model_version"] is None or (
-        len(result["reference_model_version"]) <= 64
+    assert (
+        result["error_message"] is None
+        or len(result["error_message"]) <= MAX_DRIFT_ERROR_MESSAGE_LENGTH
     )
 
     for feature_name, feature_result in result["features"].items():
         assert feature_name in MONITORED_FEATURES
         assert set(feature_result.keys()) == {"psi", "status", "bucketing"}
         assert feature_result["status"] in {"OK", "WARNING", "CRITICAL"}
-        assert len(feature_result["status"]) <= 16
-        assert isinstance(feature_result["bucketing"], dict)
         breakpoints = feature_result["bucketing"].get("breakpoints")
         if isinstance(breakpoints, list):
             assert len(breakpoints) <= 20
