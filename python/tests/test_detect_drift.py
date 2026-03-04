@@ -677,6 +677,8 @@ class TestDetectDrift:
         assert result["error_code"] == DriftErrorCode.NO_REFERENCE_DATA.value
         assert result["error_message"] == "No reference data available"
         assert len(result["error_message"]) <= MAX_DRIFT_ERROR_MESSAGE_LENGTH
+        assert result["drift_error"] == DriftErrorCode.NO_REFERENCE_DATA.value
+        assert result["error"] == result["error_message"]
         assert result["resolution_mode"] == DriftResolutionMode.NONE.value
         assert result["reference_model_version"] is None
 
@@ -701,6 +703,9 @@ class TestDetectDrift:
         )
         assert "Insufficient reference data" in result["error_message"]
         assert len(result["error_message"]) <= MAX_DRIFT_ERROR_MESSAGE_LENGTH
+        assert (
+            result["drift_error"] == DriftErrorCode.INSUFFICIENT_REFERENCE_SAMPLES.value
+        )
         assert result["resolution_mode"] == DriftResolutionMode.NONE.value
         assert result["reference_model_version"] is None
 
@@ -735,6 +740,7 @@ class TestDetectDrift:
             == "Drift signal suppressed due to insufficient bucket mass"
         )
         assert len(result["error_message"]) <= MAX_DRIFT_ERROR_MESSAGE_LENGTH
+        assert result["drift_error"] == DriftErrorCode.INSUFFICIENT_BUCKET_MASS.value
         assert result["resolution_mode"] in {
             DriftResolutionMode.ALIAS.value,
             DriftResolutionMode.STAGE.value,
@@ -913,3 +919,41 @@ class TestDetectDrift:
         assert result["error"] == "Insufficient reference data"
         assert result["resolution_mode"] == DriftResolutionMode.LATEST.value
         assert result["reference_model_version"] == "11"
+
+    @pytest.mark.parametrize(
+        ("raw_mode", "expected_mode"),
+        [
+            ("alias", DriftResolutionMode.ALIAS.value),
+            ("production_stage", DriftResolutionMode.STAGE.value),
+            ("stage", DriftResolutionMode.STAGE.value),
+            ("latest_version", DriftResolutionMode.LATEST.value),
+            ("latest", DriftResolutionMode.LATEST.value),
+            ("unexpected_mode", DriftResolutionMode.NONE.value),
+        ],
+    )
+    @patch("training.detect_drift.get_reference_data")
+    @patch("training.detect_drift.get_live_data")
+    def test_resolution_mode_is_normalized(
+        self, mock_live, mock_ref, raw_mode, expected_mode
+    ):
+        base = np.arange(1000, dtype=float)
+        stable_reference = pd.DataFrame(
+            {
+                "velocity_24h": base,
+                "amount_to_avg_ratio_30d": base * 0.5,
+                "balance_volatility_z_score": base - 500.0,
+            }
+        )
+        mock_ref.return_value = (
+            stable_reference,
+            {
+                "resolution_strategy": raw_mode,
+                "selected_model_version": "9",
+                "selected_run_id": "run-v9",
+            },
+        )
+        mock_live.return_value = stable_reference.copy()
+
+        result = detect_drift()
+
+        assert result["resolution_mode"] == expected_mode
