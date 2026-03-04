@@ -13,6 +13,7 @@ from training.detect_drift import (
     MONITORED_FEATURES,
     detect_drift,
 )
+from training.reason_codes import DriftErrorCode, DriftResolutionMode
 
 
 def _fresh_manager() -> ModelManager:
@@ -22,7 +23,11 @@ def _fresh_manager() -> ModelManager:
 
 def test_ml_health_contract_shape_and_bounds():
     manager = _fresh_manager()
-    manager.update_feature_coverage_warning(active=True, observed_ts=111.5)
+    manager.update_feature_coverage_warning(
+        active=True,
+        coverage_ratio=3.5,
+        observed_ts=111.5,
+    )
 
     mock_cache = SimpleNamespace(
         _cache=SimpleNamespace(
@@ -105,6 +110,8 @@ def test_ml_health_contract_shape_and_bounds():
         health["feature_coverage"]["last_ratio"], float
     )
     assert isinstance(health["feature_coverage"]["below_threshold"], bool)
+    assert health["feature_coverage"]["last_ratio"] == 1.0
+    assert 0.0 <= health["feature_coverage"]["last_ratio"] <= 1.0
     assert len(health["active_model_version"]) <= 64
     assert len(health["last_reload_status"]) <= 32
     assert (
@@ -200,7 +207,10 @@ def test_drift_error_contract_shape_and_bounds(mock_live, mock_ref):
         "reference_model_version",
         "error",
     }
-    assert result["error_code"] == "no_reference_data"
+    assert result["error_code"] == DriftErrorCode.NO_REFERENCE_DATA.value
+    assert len(result["error_code"]) <= 64
     assert isinstance(result["error_message"], str)
+    assert result["error_message"] == "No reference data available"
     assert len(result["error_message"]) <= MAX_DRIFT_ERROR_MESSAGE_LENGTH
     assert result["error"] == result["error_message"]
+    assert result["resolution_mode"] == DriftResolutionMode.NONE.value
