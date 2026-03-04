@@ -513,6 +513,20 @@ class ModelManager:
             return None
         return max(0.0, min(1.0, ratio))
 
+    @staticmethod
+    def _coerce_bool(value: Any) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int | float):
+            return bool(value)
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "yes", "on"}:
+                return True
+            if normalized in {"0", "false", "no", "off", ""}:
+                return False
+        return bool(value)
+
     @classmethod
     def _normalize_feature_coverage_ratio(cls, value: Any) -> float | None:
         ratio = cls._coerce_float_or_none(value)
@@ -525,7 +539,7 @@ class ModelManager:
         if not isinstance(config_snapshot, dict):
             return {key: False for key in cls._STRICT_CONFIG_KEYS}
         return {
-            key: bool(config_snapshot.get(key, False))
+            key: cls._coerce_bool(config_snapshot.get(key, False))
             for key in cls._STRICT_CONFIG_KEYS
         }
 
@@ -676,19 +690,13 @@ class ModelManager:
 
     @staticmethod
     def _effective_strict_config() -> dict[str, bool]:
-        def _env_flag(name: str) -> bool:
-            raw = os.getenv(name)
-            if raw is None:
-                return False
-            return raw.strip().lower() in {"1", "true", "yes", "on"}
-
         return ModelManager._normalize_strict_config(
             {
-                "strict_feature_schema": _env_flag("ENFORCE_MODEL_FEATURES"),
-                "strict_tuning_resume_validation": _env_flag(
+                "strict_feature_schema": os.getenv("ENFORCE_MODEL_FEATURES"),
+                "strict_tuning_resume_validation": os.getenv(
                     "STRICT_TUNING_RESUME_VALIDATION"
                 ),
-                "strict_split_strategy_validation": _env_flag(
+                "strict_split_strategy_validation": os.getenv(
                     "STRICT_SPLIT_STRATEGY_VALIDATION"
                 ),
             }
