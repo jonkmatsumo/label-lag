@@ -124,6 +124,7 @@ DIAGNOSTIC_KEY_BENCHMARK_LAST_STATUS = "benchmark_last_status"
 DIAGNOSTIC_KEY_DEGRADED_REASONS = "degraded_reasons"
 DIAGNOSTIC_KEY_ACTIVE_MODEL_VERSION = "active_model_version"
 DIAGNOSTIC_KEY_FEATURE_COVERAGE_WARNING_ACTIVE = "feature_coverage_warning_active"
+DIAGNOSTIC_KEY_FEATURE_COVERAGE_LAST_RATIO = "feature_coverage_last_ratio"
 DIAGNOSTIC_KEY_FEATURE_COVERAGE_WARNING_LAST_SEEN_TS = (
     "feature_coverage_warning_last_seen_ts"
 )

@@ -161,6 +161,7 @@ class ModelManager:
         self._benchmark_last_run_ts: float | None = None
         self._benchmark_last_status: str | None = None
         self._feature_coverage_warning_active: bool = False
+        self._feature_coverage_last_ratio: float | None = None
         self._feature_coverage_warning_last_seen_ts: float | None = None
         self._feature_coverage_last_ratio: float | None = None
         self._initialized = True
@@ -505,6 +506,13 @@ class ModelManager:
         except (TypeError, ValueError):
             return None
 
+    @staticmethod
+    def _coerce_ratio_or_none(value: Any) -> float | None:
+        ratio = ModelManager._coerce_float_or_none(value)
+        if ratio is None:
+            return None
+        return max(0.0, min(1.0, ratio))
+
     @classmethod
     def _normalize_feature_coverage_ratio(cls, value: Any) -> float | None:
         ratio = cls._coerce_float_or_none(value)
@@ -613,7 +621,7 @@ class ModelManager:
         }
 
         feature_coverage_summary = {
-            "last_ratio": self._normalize_feature_coverage_ratio(
+            "last_ratio": self._coerce_ratio_or_none(
                 diagnostics_snapshot.get(DIAGNOSTIC_KEY_FEATURE_COVERAGE_LAST_RATIO)
             ),
             "below_threshold": bool(
@@ -763,13 +771,15 @@ class ModelManager:
         self,
         *,
         active: bool,
+        coverage_ratio: float | None = None,
         observed_ts: float | None = None,
         ratio: float | None = None,
     ) -> None:
         """Update coverage warning diagnostics state."""
         with self._lock:
             self._feature_coverage_warning_active = bool(active)
-            normalized_ratio = self._normalize_feature_coverage_ratio(ratio)
+            ratio_input = coverage_ratio if coverage_ratio is not None else ratio
+            normalized_ratio = self._normalize_feature_coverage_ratio(ratio_input)
             if normalized_ratio is not None:
                 self._feature_coverage_last_ratio = normalized_ratio
             if active:
