@@ -131,6 +131,7 @@ _LEGACY_RESOLUTION_MODE_ALIASES = {
     "production_stage": DriftResolutionMode.STAGE.value,
     "latest_version": DriftResolutionMode.LATEST.value,
 }
+MAX_DRIFT_ERROR_CODE_LENGTH = 64
 
 
 def calculate_psi(
@@ -384,6 +385,15 @@ def _bounded_error_message(message: Any) -> str:
     return str(message).strip()[:MAX_DRIFT_ERROR_MESSAGE_LENGTH]
 
 
+def _bounded_error_code(code: Any) -> str | None:
+    if code is None:
+        return None
+    rendered = str(code).strip()
+    if not rendered:
+        return None
+    return rendered[:MAX_DRIFT_ERROR_CODE_LENGTH]
+
+
 def _set_canonical_error(
     results: dict[str, Any],
     *,
@@ -391,9 +401,12 @@ def _set_canonical_error(
     message: Any,
 ) -> None:
     bounded_message = _bounded_error_message(message)
+    bounded_code = _bounded_error_code(code.value) or code.value
     results["error"] = bounded_message
-    results["error_code"] = code.value
+    results["error_code"] = bounded_code
     results["error_message"] = bounded_message
+    if results.get("drift_error") is None:
+        results["drift_error"] = bounded_code
 
 
 def _normalize_error_code(raw_code: Any) -> str | None:
@@ -724,7 +737,7 @@ def main() -> int:
     if args.json:
         print(json.dumps(results, indent=2))
 
-    if "error" in results:
+    if results.get("error_code") is not None:
         return 2
     if results["drift_detected"]:
         return 1
