@@ -36,7 +36,7 @@ These keys are guaranteed to exist for operability guardrails, including idle st
 | `ml.training.run_id` | `string \| null` | Training run correlation id. |
 | `ml.model.version` | `string \| null` | Training-side model version value. |
 | `ml.feature.schema_hash` | `string \| null` | Training-side feature schema hash. |
-| `config` | `object` | Effective strict-mode runtime config (`strict_feature_schema`, `strict_tuning_resume_validation`, `strict_split_strategy_validation`). |
+| `config` | `object` | Effective strict-mode runtime config (`strict_feature_schema`, `strict_tuning_resume_validation`, `strict_split_strategy_validation`). Also projected to forecast `GetHealth` component flags. |
 | `ml_health` | `object` | Compact bounded operator summary derived from diagnostics + last drift cache snapshot when available. |
 
 ## Nullable Value Conditions (Keys Still Present)
@@ -127,6 +127,12 @@ backward compatibility.
 - `strict_tuning_resume_validation`
 - `strict_split_strategy_validation`
 
+Forecast `GetHealth` strict flag projection:
+
+- Reads `diagnostics.config` when present.
+- Falls back to `diagnostics.ml_health.config` when top-level `config` is missing.
+- Defaults each strict flag to `false` when neither source is available.
+
 Legacy aliases retained in `ml_health`:
 
 - `state`
@@ -185,8 +191,16 @@ Legacy normalization behavior:
 
 - Legacy resolution values (`production_stage`, `latest_version`) are normalized
   to canonical `resolution_mode` (`stage`, `latest`).
+- Canonical `resolution_mode` values (`alias`, `stage`, `latest`, `none`) are
+  passed through unchanged.
+- If top-level `resolution_mode` is missing/invalid, the value is derived from
+  `reference_resolution.resolution_mode` or
+  `reference_resolution.resolution_strategy`.
 - When only legacy error fields are present, canonical `error_code` /
   `error_message` are backfilled.
+- Legacy error-code aliases (for example `insufficient_reference_data`,
+  `no_reference_model`, `no_live_window`) are normalized into canonical
+  `error_code` values.
 - `error_message` is capped at 200 characters.
 
 ## Example Payload
