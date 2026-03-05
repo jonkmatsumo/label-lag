@@ -1,4 +1,6 @@
 import time
+from datetime import datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -165,3 +167,78 @@ class TestModelManagerDiagnostics:
         recovered = manager.get_diagnostics()
         assert recovered["feature_coverage_last_ratio"] == 1.0
         assert recovered["ml_health"]["feature_coverage"]["last_ratio"] == 1.0
+
+    def test_ml_health_summary_shape_is_stable_and_bounded(self):
+        manager = self._fresh_manager()
+        manager.update_feature_coverage_warning(
+            active=True, observed_ts=111.5, ratio=0.5
+        )
+        mock_cache = SimpleNamespace(
+            _cache=SimpleNamespace(
+                computed_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+                result={
+                    "resolution_mode": "stage",
+                    "error_code": "no_reference_data",
+                    "reference_resolution": {"selected_run_id": "run-1"},
+                },
+            )
+        )
+
+        with patch("forecast.drift_cache.get_drift_cache", return_value=mock_cache):
+            health = manager.get_diagnostics()["ml_health"]
+
+        assert {"model", "benchmark", "drift", "feature_coverage"}.issubset(
+            health.keys()
+        )
+        assert set(health["model"].keys()) == {
+            "state",
+            "active_model_version",
+            "last_reload_status",
+            "last_reload_ts",
+            "schema_mismatch_detected",
+        }
+        assert set(health["benchmark"].keys()) == {
+            "enabled",
+            "last_status",
+            "last_run_ts",
+        }
+        assert set(health["drift"].keys()) == {
+            "reference_resolution_mode",
+            "last_error_code",
+        }
+        assert set(health["feature_coverage"].keys()) == {
+            "last_ratio",
+            "below_threshold",
+        }
+
+        assert isinstance(health["model"]["state"], str)
+        assert isinstance(health["model"]["active_model_version"], str)
+        assert isinstance(health["model"]["last_reload_status"], str)
+        assert health["model"]["last_reload_ts"] is None or isinstance(
+            health["model"]["last_reload_ts"], float
+        )
+        assert isinstance(health["model"]["schema_mismatch_detected"], bool)
+        assert isinstance(health["benchmark"]["enabled"], bool)
+        assert health["benchmark"]["last_status"] is None or isinstance(
+            health["benchmark"]["last_status"], str
+        )
+        assert health["benchmark"]["last_run_ts"] is None or isinstance(
+            health["benchmark"]["last_run_ts"], float
+        )
+        assert health["drift"]["reference_resolution_mode"] in {
+            "alias",
+            "stage",
+            "latest",
+            "none",
+        }
+        assert health["drift"]["last_error_code"] is None or isinstance(
+            health["drift"]["last_error_code"], str
+        )
+        assert health["feature_coverage"]["last_ratio"] is None or isinstance(
+            health["feature_coverage"]["last_ratio"], float
+        )
+        assert isinstance(health["feature_coverage"]["below_threshold"], bool)
+
+        for value in health.values():
+            if isinstance(value, list):
+                assert len(value) <= 3
