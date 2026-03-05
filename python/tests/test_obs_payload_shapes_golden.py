@@ -13,6 +13,7 @@ from training.detect_drift import (
     MONITORED_FEATURES,
     detect_drift,
 )
+from training.reason_codes import DriftErrorCode
 
 
 def _fresh_manager() -> ModelManager:
@@ -22,7 +23,7 @@ def _fresh_manager() -> ModelManager:
 
 def test_ml_health_payload_golden_shape_and_bounds():
     manager = _fresh_manager()
-    manager.update_feature_coverage_warning(active=True, observed_ts=111.5)
+    manager.update_feature_coverage_warning(active=True, observed_ts=111.5, ratio=0.35)
 
     mock_cache = SimpleNamespace(
         _cache=SimpleNamespace(
@@ -84,6 +85,7 @@ def test_ml_health_payload_golden_shape_and_bounds():
     assert health["feature_coverage"]["last_ratio"] is None or (
         0.0 <= health["feature_coverage"]["last_ratio"] <= 1.0
     )
+    assert health["feature_coverage"]["last_ratio"] == 0.35
     assert isinstance(health["feature_coverage"]["below_threshold"], bool)
     assert health["drift"]["reference_resolution_mode"] in {
         "alias",
@@ -168,3 +170,35 @@ def test_detect_drift_payload_golden_shape_and_bounds(mock_live, mock_ref):
         breakpoints = feature_result["bucketing"].get("breakpoints")
         if isinstance(breakpoints, list):
             assert len(breakpoints) <= 20
+
+
+@patch("training.detect_drift.get_reference_data")
+@patch("training.detect_drift.get_live_data")
+def test_detect_drift_error_payload_golden_shape_and_bounds(mock_live, mock_ref):
+    mock_ref.return_value = None
+    mock_live.return_value = pd.DataFrame()
+
+    result = detect_drift()
+
+    assert set(result.keys()) == {
+        "timestamp",
+        "hours_analyzed",
+        "threshold",
+        "reference_size",
+        "live_size",
+        "features",
+        "drift_detected",
+        "drifted_features",
+        "drift_error",
+        "error_code",
+        "error_message",
+        "resolution_mode",
+        "alerts",
+        "reference_resolution",
+        "reference_model_version",
+        "error",
+    }
+    assert result["error_code"] == DriftErrorCode.NO_REFERENCE_DATA.value
+    assert result["error_message"] is not None
+    assert len(result["error_message"]) <= MAX_DRIFT_ERROR_MESSAGE_LENGTH
+    assert result["error"] == result["error_message"]
