@@ -1,6 +1,8 @@
 import time
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from forecast.model_manager import ModelManager
 
 
@@ -142,3 +144,24 @@ class TestModelManagerDiagnostics:
         assert recovered["feature_coverage_warning_active"] is False
         # Last warning timestamp remains set to latest warning event.
         assert recovered["feature_coverage_warning_last_seen_ts"] == 111.5
+
+    def test_diagnostics_track_feature_coverage_last_ratio(self):
+        manager = self._fresh_manager()
+
+        initial = manager.get_diagnostics()
+        assert initial["feature_coverage_last_ratio"] is None
+        assert initial["ml_health"]["feature_coverage"]["last_ratio"] is None
+
+        manager.update_feature_coverage_warning(
+            active=True, observed_ts=111.5, ratio=0.42
+        )
+        warned = manager.get_diagnostics()
+        assert warned["feature_coverage_last_ratio"] == pytest.approx(0.42)
+        assert warned["ml_health"]["feature_coverage"]["last_ratio"] == pytest.approx(
+            0.42
+        )
+
+        manager.update_feature_coverage_warning(active=False, ratio=3.0)
+        recovered = manager.get_diagnostics()
+        assert recovered["feature_coverage_last_ratio"] == 1.0
+        assert recovered["ml_health"]["feature_coverage"]["last_ratio"] == 1.0
