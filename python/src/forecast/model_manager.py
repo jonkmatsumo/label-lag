@@ -27,6 +27,7 @@ from training.reason_codes import (
     DIAGNOSTIC_KEY_CALIBRATOR_LOADED,
     DIAGNOSTIC_KEY_CONFIG,
     DIAGNOSTIC_KEY_DEGRADED_REASONS,
+    DIAGNOSTIC_KEY_FEATURE_COVERAGE_LAST_RATIO,
     DIAGNOSTIC_KEY_FEATURE_COVERAGE_WARNING_ACTIVE,
     DIAGNOSTIC_KEY_FEATURE_COVERAGE_WARNING_LAST_SEEN_TS,
     DIAGNOSTIC_KEY_HAS_BUNDLE,
@@ -161,6 +162,7 @@ class ModelManager:
         self._benchmark_last_status: str | None = None
         self._feature_coverage_warning_active: bool = False
         self._feature_coverage_warning_last_seen_ts: float | None = None
+        self._feature_coverage_last_ratio: float | None = None
         self._initialized = True
 
     @staticmethod
@@ -501,6 +503,13 @@ class ModelManager:
             return None
 
     @classmethod
+    def _normalize_feature_coverage_ratio(cls, value: Any) -> float | None:
+        ratio = cls._coerce_float_or_none(value)
+        if ratio is None:
+            return None
+        return max(0.0, min(1.0, ratio))
+
+    @classmethod
     def _normalize_strict_config(cls, config_snapshot: Any) -> dict[str, bool]:
         if not isinstance(config_snapshot, dict):
             return {key: False for key in cls._STRICT_CONFIG_KEYS}
@@ -597,8 +606,8 @@ class ModelManager:
         }
 
         feature_coverage_summary = {
-            "last_ratio": self._coerce_float_or_none(
-                diagnostics_snapshot.get("feature_coverage_last_ratio")
+            "last_ratio": self._normalize_feature_coverage_ratio(
+                diagnostics_snapshot.get(DIAGNOSTIC_KEY_FEATURE_COVERAGE_LAST_RATIO)
             ),
             "below_threshold": bool(
                 diagnostics_snapshot.get(
@@ -719,6 +728,9 @@ class ModelManager:
                 DIAGNOSTIC_KEY_FEATURE_COVERAGE_WARNING_ACTIVE: (
                     self._feature_coverage_warning_active
                 ),
+                DIAGNOSTIC_KEY_FEATURE_COVERAGE_LAST_RATIO: (
+                    self._feature_coverage_last_ratio
+                ),
                 DIAGNOSTIC_KEY_FEATURE_COVERAGE_WARNING_LAST_SEEN_TS: (
                     self._feature_coverage_warning_last_seen_ts
                 ),
@@ -741,11 +753,18 @@ class ModelManager:
             return diagnostics
 
     def update_feature_coverage_warning(
-        self, *, active: bool, observed_ts: float | None = None
+        self,
+        *,
+        active: bool,
+        observed_ts: float | None = None,
+        ratio: float | None = None,
     ) -> None:
         """Update coverage warning diagnostics state."""
         with self._lock:
             self._feature_coverage_warning_active = bool(active)
+            normalized_ratio = self._normalize_feature_coverage_ratio(ratio)
+            if normalized_ratio is not None:
+                self._feature_coverage_last_ratio = normalized_ratio
             if active:
                 self._feature_coverage_warning_last_seen_ts = (
                     observed_ts if observed_ts is not None else time.time()

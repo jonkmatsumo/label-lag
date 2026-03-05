@@ -127,10 +127,10 @@ DIAGNOSTIC_KEY_FEATURE_COVERAGE_WARNING_ACTIVE = "feature_coverage_warning_activ
 DIAGNOSTIC_KEY_FEATURE_COVERAGE_WARNING_LAST_SEEN_TS = (
     "feature_coverage_warning_last_seen_ts"
 )
+DIAGNOSTIC_KEY_FEATURE_COVERAGE_LAST_RATIO = "feature_coverage_last_ratio"
 DIAGNOSTIC_KEY_ML_TRAINING_RUN_ID = "ml.training.run_id"
 DIAGNOSTIC_KEY_ML_MODEL_VERSION = "ml.model.version"
 DIAGNOSTIC_KEY_ML_FEATURE_SCHEMA_HASH = "ml.feature.schema_hash"
-DIAGNOSTIC_KEY_ML_HEALTH = "ml_health"
 DIAGNOSTIC_KEY_ML_HEALTH = "ml_health"
 DIAGNOSTIC_KEY_CONFIG = "config"
 
