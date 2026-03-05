@@ -12,6 +12,7 @@ from training.detect_drift import (
     MAX_DRIFT_ERROR_MESSAGE_LENGTH,
     MIN_REFERENCE_SAMPLES,
     PSI_THRESHOLD_CRITICAL,
+    _finalize_drift_error_contract,
     calculate_psi,
     detect_drift,
     get_reference_data,
@@ -768,4 +769,113 @@ class TestDetectDrift:
         assert result["error_code"] is None
         assert result["error_message"] is None
         assert result["resolution_mode"] == DriftResolutionMode.ALIAS.value
+        assert result["reference_model_version"] == "9"
+
+    @patch("training.detect_drift.get_reference_data")
+    @patch("training.detect_drift.get_live_data")
+    def test_drift_error_contract_stable_across_failure_modes(
+        self, mock_live, mock_ref
+    ):
+        sparse_reference_size = MIN_REFERENCE_SAMPLES + 20
+        sparse_reference = np.array([0.0] * (sparse_reference_size - 10) + [1.0] * 10)
+        sparse_live = np.array([0.0] * (sparse_reference_size - 30) + [8.0] * 30)
+
+        stable_base = np.arange(1000, dtype=float)
+        stable_df = pd.DataFrame(
+            {
+                "velocity_24h": stable_base,
+                "amount_to_avg_ratio_30d": stable_base * 0.5,
+                "balance_volatility_z_score": stable_base - 500.0,
+            }
+        )
+
+        scenarios = [
+            {
+                "name": "no_reference_model",
+                "reference_payload": None,
+                "live_payload": pd.DataFrame(),
+                "expected_code": DriftErrorCode.NO_REFERENCE_DATA.value,
+                "expected_mode": DriftResolutionMode.NONE.value,
+            },
+            {
+                "name": "insufficient_reference_samples",
+                "reference_payload": pd.DataFrame(
+                    {
+                        "velocity_24h": [0.0] * 50,
+                        "amount_to_avg_ratio_30d": [0.0] * 50,
+                        "balance_volatility_z_score": [0.0] * 50,
+                    }
+                ),
+                "live_payload": pd.DataFrame(),
+                "expected_code": DriftErrorCode.INSUFFICIENT_REFERENCE_SAMPLES.value,
+                "expected_mode": DriftResolutionMode.NONE.value,
+            },
+            {
+                "name": "insufficient_bucket_mass",
+                "reference_payload": pd.DataFrame(
+                    {
+                        "velocity_24h": sparse_reference,
+                        "amount_to_avg_ratio_30d": sparse_reference,
+                        "balance_volatility_z_score": sparse_reference,
+                    }
+                ),
+                "live_payload": pd.DataFrame(
+                    {
+                        "velocity_24h": sparse_live,
+                        "amount_to_avg_ratio_30d": sparse_live,
+                        "balance_volatility_z_score": sparse_live,
+                    }
+                ),
+                "expected_code": DriftErrorCode.INSUFFICIENT_BUCKET_MASS.value,
+                "expected_mode": DriftResolutionMode.NONE.value,
+            },
+            {
+                "name": "success",
+                "reference_payload": (
+                    stable_df,
+                    {
+                        "resolution_strategy": "alias",
+                        "selected_model_version": "9",
+                        "selected_run_id": "run-v9",
+                    },
+                ),
+                "live_payload": stable_df.copy(),
+                "expected_code": None,
+                "expected_mode": DriftResolutionMode.ALIAS.value,
+            },
+        ]
+
+        for scenario in scenarios:
+            mock_ref.return_value = scenario["reference_payload"]
+            mock_live.return_value = scenario["live_payload"]
+            result = detect_drift()
+
+            assert "error_code" in result, scenario["name"]
+            assert "error_message" in result, scenario["name"]
+            assert "resolution_mode" in result, scenario["name"]
+            assert result["error_code"] == scenario["expected_code"], scenario["name"]
+            assert result["resolution_mode"] == scenario["expected_mode"], scenario[
+                "name"
+            ]
+            if result["error_message"] is not None:
+                assert len(result["error_message"]) <= MAX_DRIFT_ERROR_MESSAGE_LENGTH, (
+                    scenario["name"]
+                )
+
+    def test_drift_error_contract_maps_legacy_fields(self):
+        legacy = {
+            "drift_error": DriftErrorCode.INSUFFICIENT_BUCKET_MASS.value,
+            "error_code": None,
+            "error_message": None,
+            "error": "x" * (MAX_DRIFT_ERROR_MESSAGE_LENGTH + 20),
+            "resolution_mode": "production_stage",
+            "reference_model_version": " 9 ",
+        }
+
+        result = _finalize_drift_error_contract(legacy)
+
+        assert result["error_code"] == DriftErrorCode.INSUFFICIENT_BUCKET_MASS.value
+        assert len(result["error_message"]) == MAX_DRIFT_ERROR_MESSAGE_LENGTH
+        assert result["error"] == result["error_message"]
+        assert result["resolution_mode"] == DriftResolutionMode.STAGE.value
         assert result["reference_model_version"] == "9"

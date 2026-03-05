@@ -18,6 +18,7 @@ import pandas as pd
 
 from training.crud_client import get_crud_client
 from training.reason_codes import (
+    DRIFT_ERROR_CODES,
     DriftErrorCode,
     DriftFallbackReason,
     DriftResolutionMode,
@@ -105,6 +106,16 @@ DRIFT_REFERENCE_MODEL_ALIAS = os.getenv("DRIFT_REFERENCE_MODEL_ALIAS", "").strip
 _DRIFT_STAGE_FALLBACK_WARNED = False
 _DRIFT_LATEST_FALLBACK_WARNED = False
 MAX_DRIFT_ERROR_MESSAGE_LENGTH = 200
+_DEFAULT_DRIFT_ERROR_MESSAGES = {
+    DriftErrorCode.NO_REFERENCE_DATA.value: "No reference data available",
+    DriftErrorCode.INSUFFICIENT_REFERENCE_SAMPLES.value: (
+        "Insufficient reference data"
+    ),
+    DriftErrorCode.NO_LIVE_DATA.value: "No live data available",
+    DriftErrorCode.INSUFFICIENT_BUCKET_MASS.value: (
+        "Drift signal suppressed due to insufficient bucket mass"
+    ),
+}
 
 
 def calculate_psi(
@@ -367,6 +378,76 @@ def _set_canonical_error(
     results["error_message"] = bounded_message
 
 
+def _normalize_error_code(raw_code: Any) -> str | None:
+    if raw_code is None:
+        return None
+    normalized = str(raw_code).strip()
+    if not normalized:
+        return None
+    if normalized in DRIFT_ERROR_CODES:
+        return normalized
+    if normalized == DriftFallbackReason.INSUFFICIENT_BUCKET_MASS.value:
+        return DriftErrorCode.INSUFFICIENT_BUCKET_MASS.value
+    return None
+
+
+def _infer_error_code_from_message(message: Any) -> str | None:
+    if message is None:
+        return None
+    lowered = str(message).strip().lower()
+    if not lowered:
+        return None
+    if "insufficient reference data" in lowered:
+        return DriftErrorCode.INSUFFICIENT_REFERENCE_SAMPLES.value
+    if "reference data" in lowered:
+        return DriftErrorCode.NO_REFERENCE_DATA.value
+    if "live data" in lowered:
+        return DriftErrorCode.NO_LIVE_DATA.value
+    if "bucket mass" in lowered:
+        return DriftErrorCode.INSUFFICIENT_BUCKET_MASS.value
+    return None
+
+
+def _finalize_drift_error_contract(results: dict[str, Any]) -> dict[str, Any]:
+    """Normalize additive drift error contract fields for stability."""
+    raw_resolution_mode = results.get("resolution_mode")
+    normalized_resolution_mode = _normalize_resolution_mode(raw_resolution_mode)
+    if normalized_resolution_mode == DriftResolutionMode.NONE.value:
+        reference_resolution = results.get("reference_resolution")
+        if isinstance(reference_resolution, dict):
+            normalized_resolution_mode = _normalize_resolution_mode(
+                reference_resolution.get("resolution_strategy")
+            )
+    results["resolution_mode"] = normalized_resolution_mode
+
+    error_code = _normalize_error_code(results.get("error_code"))
+    if error_code is None:
+        error_code = _normalize_error_code(results.get("drift_error"))
+    if error_code is None:
+        error_code = _infer_error_code_from_message(results.get("error"))
+
+    error_message = results.get("error_message")
+    if error_message is None:
+        error_message = results.get("error")
+    if error_message is None and error_code is not None:
+        error_message = _DEFAULT_DRIFT_ERROR_MESSAGES.get(error_code)
+    if error_message is not None:
+        bounded_error_message = _bounded_error_message(error_message)
+        results["error_message"] = bounded_error_message
+        results["error"] = bounded_error_message
+    else:
+        results["error_message"] = None
+
+    results["error_code"] = error_code
+
+    reference_model_version = results.get("reference_model_version")
+    if reference_model_version is not None:
+        text = str(reference_model_version).strip()
+        results["reference_model_version"] = text[:64] if text else None
+
+    return results
+
+
 def get_reference_data(
     *, include_metadata: bool = False
 ) -> pd.DataFrame | tuple[pd.DataFrame | None, dict[str, Any]] | None:
@@ -501,7 +582,7 @@ def detect_drift(
             code=DriftErrorCode.NO_REFERENCE_DATA,
             message="No reference data available",
         )
-        return results
+        return _finalize_drift_error_contract(results)
 
     results["reference_size"] = len(df_reference)
 
@@ -516,7 +597,7 @@ def detect_drift(
             code=DriftErrorCode.INSUFFICIENT_REFERENCE_SAMPLES,
             message=msg,
         )
-        return results
+        return _finalize_drift_error_contract(results)
 
     df_current = get_live_data(hours=hours)
     if len(df_current) == 0:
@@ -525,7 +606,7 @@ def detect_drift(
             code=DriftErrorCode.NO_LIVE_DATA,
             message="No live data available",
         )
-        return results
+        return _finalize_drift_error_contract(results)
 
     results["live_size"] = len(df_current)
 
@@ -602,7 +683,7 @@ def detect_drift(
             results["drift_detected"] = True
             results["drifted_features"].append(feature)
 
-    return results
+    return _finalize_drift_error_contract(results)
 
 
 def main() -> int:

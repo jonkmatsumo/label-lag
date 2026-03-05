@@ -18,12 +18,36 @@ class ForecastService(forecast_pb2_grpc.ForecastServiceServicer):
         version = (
             manager.model_version if manager.model_loaded else forecaster.model_version
         )
+        diagnostics = manager.get_diagnostics()
+        strict_config = diagnostics.get("config", {})
+        strict_feature_schema = (
+            bool(strict_config.get("strict_feature_schema", False))
+            if isinstance(strict_config, dict)
+            else False
+        )
+        strict_tuning_resume_validation = (
+            bool(strict_config.get("strict_tuning_resume_validation", False))
+            if isinstance(strict_config, dict)
+            else False
+        )
+        strict_split_strategy_validation = (
+            bool(strict_config.get("strict_split_strategy_validation", False))
+            if isinstance(strict_config, dict)
+            else False
+        )
 
         return forecast_pb2.GetHealthResponse(
             status="healthy",
             components={
                 "model_loaded": "true" if manager.model_loaded else "false",
                 "version": version or "unknown",
+                "strict_feature_schema": ("true" if strict_feature_schema else "false"),
+                "strict_tuning_resume_validation": (
+                    "true" if strict_tuning_resume_validation else "false"
+                ),
+                "strict_split_strategy_validation": (
+                    "true" if strict_split_strategy_validation else "false"
+                ),
             },
         )
 
