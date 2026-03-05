@@ -465,11 +465,14 @@ class ModelManager:
 
     @staticmethod
     def _normalize_resolution_mode(raw_mode: Any) -> str:
-        if raw_mode == "alias":
-            return "alias"
-        if raw_mode == "production_stage":
+        if raw_mode is None:
+            return "none"
+        normalized = str(raw_mode).strip().lower()
+        if normalized in {"alias", "stage", "latest", "none"}:
+            return normalized
+        if normalized == "production_stage":
             return "stage"
-        if raw_mode == "latest_version":
+        if normalized == "latest_version":
             return "latest"
         return "none"
 
@@ -539,11 +542,15 @@ class ModelManager:
 
                 result_payload = getattr(cached_result, "result", {})
                 if isinstance(result_payload, dict):
+                    drift_resolution_mode = self._normalize_resolution_mode(
+                        result_payload.get("resolution_mode")
+                    )
                     resolution = result_payload.get("reference_resolution")
                     if isinstance(resolution, dict):
-                        drift_resolution_mode = self._normalize_resolution_mode(
-                            resolution.get("resolution_strategy")
-                        )
+                        if drift_resolution_mode == "none":
+                            drift_resolution_mode = self._normalize_resolution_mode(
+                                resolution.get("resolution_strategy")
+                            )
                         selected_run_id = resolution.get("selected_run_id")
                         if selected_run_id is not None:
                             drift_reference_available = bool(
