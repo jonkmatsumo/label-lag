@@ -19,6 +19,7 @@ import pandas as pd
 from training.crud_client import get_crud_client
 from training.reason_codes import (
     DRIFT_ERROR_CODES,
+    DRIFT_RESOLUTION_MODES,
     DriftErrorCode,
     DriftFallbackReason,
     DriftResolutionMode,
@@ -115,6 +116,20 @@ _DEFAULT_DRIFT_ERROR_MESSAGES = {
     DriftErrorCode.INSUFFICIENT_BUCKET_MASS.value: (
         "Drift signal suppressed due to insufficient bucket mass"
     ),
+}
+_LEGACY_DRIFT_ERROR_CODE_ALIASES = {
+    "no_reference_model": DriftErrorCode.NO_REFERENCE_DATA.value,
+    "no_reference": DriftErrorCode.NO_REFERENCE_DATA.value,
+    "insufficient_reference_data": (
+        DriftErrorCode.INSUFFICIENT_REFERENCE_SAMPLES.value
+    ),
+    "insufficient_reference": DriftErrorCode.INSUFFICIENT_REFERENCE_SAMPLES.value,
+    "no_live_window": DriftErrorCode.NO_LIVE_DATA.value,
+    "insufficient_bucket_mass": DriftErrorCode.INSUFFICIENT_BUCKET_MASS.value,
+}
+_LEGACY_RESOLUTION_MODE_ALIASES = {
+    "production_stage": DriftResolutionMode.STAGE.value,
+    "latest_version": DriftResolutionMode.LATEST.value,
 }
 
 
@@ -353,16 +368,19 @@ def _select_reference_model_version(
 
 
 def _normalize_resolution_mode(raw_strategy: Any) -> str:
-    if raw_strategy == "alias":
-        return DriftResolutionMode.ALIAS.value
-    if raw_strategy == "production_stage":
-        return DriftResolutionMode.STAGE.value
-    if raw_strategy == "latest_version":
-        return DriftResolutionMode.LATEST.value
+    if raw_strategy is None:
+        return DriftResolutionMode.NONE.value
+    normalized = str(raw_strategy).strip().lower()
+    if normalized in DRIFT_RESOLUTION_MODES:
+        return normalized
+    if normalized in _LEGACY_RESOLUTION_MODE_ALIASES:
+        return _LEGACY_RESOLUTION_MODE_ALIASES[normalized]
     return DriftResolutionMode.NONE.value
 
 
 def _bounded_error_message(message: Any) -> str:
+    if message is None:
+        return ""
     return str(message).strip()[:MAX_DRIFT_ERROR_MESSAGE_LENGTH]
 
 
@@ -384,9 +402,12 @@ def _normalize_error_code(raw_code: Any) -> str | None:
     normalized = str(raw_code).strip()
     if not normalized:
         return None
-    if normalized in DRIFT_ERROR_CODES:
-        return normalized
-    if normalized == DriftFallbackReason.INSUFFICIENT_BUCKET_MASS.value:
+    lowered = normalized.lower()
+    if lowered in DRIFT_ERROR_CODES:
+        return lowered
+    if lowered in _LEGACY_DRIFT_ERROR_CODE_ALIASES:
+        return _LEGACY_DRIFT_ERROR_CODE_ALIASES[lowered]
+    if lowered == DriftFallbackReason.INSUFFICIENT_BUCKET_MASS.value:
         return DriftErrorCode.INSUFFICIENT_BUCKET_MASS.value
     return None
 
@@ -416,7 +437,8 @@ def _finalize_drift_error_contract(results: dict[str, Any]) -> dict[str, Any]:
         reference_resolution = results.get("reference_resolution")
         if isinstance(reference_resolution, dict):
             normalized_resolution_mode = _normalize_resolution_mode(
-                reference_resolution.get("resolution_strategy")
+                reference_resolution.get("resolution_mode")
+                or reference_resolution.get("resolution_strategy")
             )
     results["resolution_mode"] = normalized_resolution_mode
 
@@ -433,8 +455,12 @@ def _finalize_drift_error_contract(results: dict[str, Any]) -> dict[str, Any]:
         error_message = _DEFAULT_DRIFT_ERROR_MESSAGES.get(error_code)
     if error_message is not None:
         bounded_error_message = _bounded_error_message(error_message)
-        results["error_message"] = bounded_error_message
-        results["error"] = bounded_error_message
+        if bounded_error_message:
+            results["error_message"] = bounded_error_message
+            results["error"] = bounded_error_message
+        else:
+            results["error_message"] = None
+            results["error"] = None
     else:
         results["error_message"] = None
 
