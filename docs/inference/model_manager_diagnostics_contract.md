@@ -32,6 +32,7 @@ These keys are guaranteed to exist for operability guardrails, including idle st
 | `active_model_version` | `string` | Backward-compatible alias for currently active model version. |
 | `feature_coverage_warning_active` | `bool` | Coverage warning latch. |
 | `feature_coverage_warning_last_seen_ts` | `float \| null` | Last warning observation timestamp. |
+| `feature_coverage_last_ratio` | `float \| null` | Last observed inference feature coverage ratio (clamped to `[0.0, 1.0]`). |
 | `ml.training.run_id` | `string \| null` | Training run correlation id. |
 | `ml.model.version` | `string \| null` | Training-side model version value. |
 | `ml.feature.schema_hash` | `string \| null` | Training-side feature schema hash. |
@@ -48,6 +49,7 @@ These keys are guaranteed to exist for operability guardrails, including idle st
 | `benchmark_last_run_ts` | Null until benchmark path has run or skipped. |
 | `benchmark_last_status` | Null until benchmark path has run or skipped. |
 | `feature_coverage_warning_last_seen_ts` | Null until coverage warning has been observed. |
+| `feature_coverage_last_ratio` | Null until at least one feature coverage observation has been recorded. |
 | `ml.training.run_id` / `ml.model.version` / `ml.feature.schema_hash` | Null when training identity artifact is unavailable. |
 | `ml_health.model.last_reload_ts` / `ml_health.benchmark.last_status` / `ml_health.benchmark.last_run_ts` / `ml_health.drift.last_error_code` / legacy aliases (`ml_health.last_reload_ts`, `ml_health.benchmark_status`, `ml_health.drift_last_computed_ts`, `ml_health.drift_last_error_code`) | Null when source value has not been observed yet. |
 | `ml_health.drift_reference_available` | Null when no drift run has been cached yet. |
@@ -140,6 +142,12 @@ Legacy aliases retained in `ml_health`:
 - `drift_last_computed_ts`
 - `drift_last_error_code`
 
+`ml_health.feature_coverage.last_ratio` semantics:
+
+- Bounded float in `[0.0, 1.0]` when observed.
+- `null` before first coverage observation.
+- Mirrors root diagnostic `feature_coverage_last_ratio`.
+
 ## Drift Error Fields (Canonical)
 
 `training.detect_drift.detect_drift()` includes additive canonical fields:
@@ -148,6 +156,9 @@ Legacy aliases retained in `ml_health`:
 - `error_message`: short operator-facing message or `null`, capped at 200 chars.
 - `resolution_mode`: canonical reference resolution mode.
 - `reference_model_version`: selected reference model version when available.
+- Legacy fields remain for compatibility:
+  - `drift_error` (legacy guardrail/fallback indicator)
+  - `error` (legacy error text alias for `error_message`)
 
 Allowed `error_code` values:
 
@@ -169,6 +180,14 @@ Allowed `resolution_mode` values:
 - `stage`: resolved by legacy Production stage fallback.
 - `latest`: resolved by latest version fallback.
 - `none`: no reference could be resolved.
+
+Legacy normalization behavior:
+
+- Legacy resolution values (`production_stage`, `latest_version`) are normalized
+  to canonical `resolution_mode` (`stage`, `latest`).
+- When only legacy error fields are present, canonical `error_code` /
+  `error_message` are backfilled.
+- `error_message` is capped at 200 characters.
 
 ## Example Payload
 
