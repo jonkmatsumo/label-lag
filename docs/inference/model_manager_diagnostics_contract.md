@@ -1,4 +1,4 @@
-# ModelManager Diagnostics Snapshot Contract
+# ML Operability Payload Contract
 
 This contract describes the payload returned by
 `forecast.model_manager.ModelManager.get_diagnostics()`.
@@ -31,7 +31,6 @@ These keys are guaranteed to exist for operability guardrails, including idle st
 | `degraded_reasons` | `list[string]` | Bounded degraded-reason vocabulary. |
 | `active_model_version` | `string` | Backward-compatible alias for currently active model version. |
 | `feature_coverage_warning_active` | `bool` | Coverage warning latch. |
-| `feature_coverage_last_ratio` | `float \| null` | Last observed required-feature coverage ratio, clamped to `[0.0, 1.0]`. |
 | `feature_coverage_warning_last_seen_ts` | `float \| null` | Last warning observation timestamp. |
 | `feature_coverage_last_ratio` | `float \| null` | Last observed inference feature coverage ratio (clamped to `[0.0, 1.0]`). |
 | `ml.training.run_id` | `string \| null` | Training run correlation id. |
@@ -49,7 +48,6 @@ These keys are guaranteed to exist for operability guardrails, including idle st
 | `last_reload_reason` | Null unless `last_reload_status=failed`. |
 | `benchmark_last_run_ts` | Null until benchmark path has run or skipped. |
 | `benchmark_last_status` | Null until benchmark path has run or skipped. |
-| `feature_coverage_last_ratio` | Null until at least one model prediction reports required-feature coverage. |
 | `feature_coverage_warning_last_seen_ts` | Null until coverage warning has been observed. |
 | `feature_coverage_last_ratio` | Null until at least one feature coverage observation has been recorded. |
 | `ml.training.run_id` / `ml.model.version` / `ml.feature.schema_hash` | Null when training identity artifact is unavailable. |
@@ -159,22 +157,68 @@ Legacy aliases retained in `ml_health`:
 - `null` before first coverage observation.
 - Mirrors root diagnostic `feature_coverage_last_ratio`.
 
-## Drift Error Fields (Canonical)
+## Drift Result Contract
 
-`training.detect_drift.detect_drift()` includes additive canonical fields:
+`training.detect_drift.detect_drift()` returns the same top-level core shape for
+success and failure modes.
+
+Core top-level keys (always present):
+
+- `timestamp`
+- `hours_analyzed`
+- `threshold`
+- `reference_size`
+- `live_size`
+- `features`
+- `drift_detected`
+- `drifted_features`
+- `drift_error`
+- `error_code`
+- `error_message`
+- `error`
+- `resolution_mode`
+- `alerts`
+- `reference_resolution`
+- `reference_model_version`
+
+Field semantics:
 
 - `error_code`: bounded reason code or `null` (max 64 chars).
 - `error_message`: short operator-facing message or `null`, capped at 200 chars.
+- `error`: legacy alias that mirrors `error_message` (`null` on no-error paths).
 - `resolution_mode`: canonical reference resolution mode.
 - `reference_model_version`: selected reference model version when available.
-- Legacy fields remain for compatibility:
-  - `drift_error` (legacy guardrail/fallback indicator)
-  - `error` (legacy error text alias for `error_message`)
-
-Legacy compatibility fields remain:
-
 - `drift_error`: legacy drift code mirror (set when canonical `error_code` is set).
-- `error`: legacy message mirror of `error_message`.
+
+`reference_resolution` shape (always present):
+
+- `requested_alias`: string or `null`
+- `resolution_strategy`: canonical mode (`alias`/`stage`/`latest`/`none`)
+- `resolution_mode`: canonical mode (`alias`/`stage`/`latest`/`none`)
+- `alias_candidate_count`: integer (`0` when none)
+- `alias_ambiguous`: boolean
+- `selected_model_version`: string or `null`
+- `selected_run_id`: string or `null`
+
+`features.<feature_name>` shape (for included monitored features):
+
+- `psi`: float
+- `status`: `OK` / `WARNING` / `CRITICAL`
+- `drift_error`: string or `null`
+- `bucketing`: normalized metadata map with bounded keys:
+  - `buckettype_requested`
+  - `buckettype_used`
+  - `buckets_requested`
+  - `buckets_used`
+  - `bucketing_fallback_reason`
+  - `reference_sample_size`
+  - `nonempty_buckets`
+  - `nonempty_buckets_ratio`
+  - `min_expected_count`
+  - `bucket_mass_ok`
+  - `bucket_mass_guardrail_applied`
+  - `drift_error`
+  - `breakpoints`
 
 Allowed `error_code` values:
 
