@@ -10,6 +10,33 @@ from forecast.v1 import forecast_pb2, forecast_pb2_grpc
 
 logger = logging.getLogger(__name__)
 
+_STRICT_CONFIG_KEYS = (
+    "strict_feature_schema",
+    "strict_tuning_resume_validation",
+    "strict_split_strategy_validation",
+)
+
+
+def _normalize_strict_config(config_snapshot):
+    if not isinstance(config_snapshot, dict):
+        return {key: False for key in _STRICT_CONFIG_KEYS}
+    return {key: bool(config_snapshot.get(key, False)) for key in _STRICT_CONFIG_KEYS}
+
+
+def _extract_effective_strict_config(diagnostics):
+    if not isinstance(diagnostics, dict):
+        return _normalize_strict_config(None)
+
+    direct_config = diagnostics.get("config")
+    if isinstance(direct_config, dict):
+        return _normalize_strict_config(direct_config)
+
+    ml_health = diagnostics.get("ml_health")
+    if isinstance(ml_health, dict):
+        return _normalize_strict_config(ml_health.get("config"))
+
+    return _normalize_strict_config(None)
+
 
 class ForecastService(forecast_pb2_grpc.ForecastServiceServicer):
     def GetHealth(self, request, context):  # noqa: N802
@@ -19,36 +46,21 @@ class ForecastService(forecast_pb2_grpc.ForecastServiceServicer):
             manager.model_version if manager.model_loaded else forecaster.model_version
         )
         diagnostics = manager.get_diagnostics()
-        strict_config = diagnostics.get("config", {})
-        strict_feature_schema = (
-            bool(strict_config.get("strict_feature_schema", False))
-            if isinstance(strict_config, dict)
-            else False
-        )
-        strict_tuning_resume_validation = (
-            bool(strict_config.get("strict_tuning_resume_validation", False))
-            if isinstance(strict_config, dict)
-            else False
-        )
-        strict_split_strategy_validation = (
-            bool(strict_config.get("strict_split_strategy_validation", False))
-            if isinstance(strict_config, dict)
-            else False
+        strict_config = _extract_effective_strict_config(diagnostics)
+        components = {
+            "model_loaded": "true" if manager.model_loaded else "false",
+            "version": version or "unknown",
+        }
+        components.update(
+            {
+                key: ("true" if strict_config[key] else "false")
+                for key in _STRICT_CONFIG_KEYS
+            }
         )
 
         return forecast_pb2.GetHealthResponse(
             status="healthy",
-            components={
-                "model_loaded": "true" if manager.model_loaded else "false",
-                "version": version or "unknown",
-                "strict_feature_schema": ("true" if strict_feature_schema else "false"),
-                "strict_tuning_resume_validation": (
-                    "true" if strict_tuning_resume_validation else "false"
-                ),
-                "strict_split_strategy_validation": (
-                    "true" if strict_split_strategy_validation else "false"
-                ),
-            },
+            components=components,
         )
 
     def GetDriftMonitoring(self, request, context):  # noqa: N802

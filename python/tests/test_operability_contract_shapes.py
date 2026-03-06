@@ -78,12 +78,41 @@ def test_ml_health_contract_shape_and_bounds():
         "last_error_code",
     }
     assert set(health["feature_coverage"].keys()) == {"last_ratio", "below_threshold"}
+    assert isinstance(health["model"]["state"], str)
+    assert isinstance(health["model"]["active_model_version"], str)
+    assert isinstance(health["model"]["last_reload_status"], str)
+    assert health["model"]["last_reload_ts"] is None or isinstance(
+        health["model"]["last_reload_ts"], float
+    )
+    assert isinstance(health["model"]["schema_mismatch_detected"], bool)
+    assert isinstance(health["benchmark"]["enabled"], bool)
+    assert health["benchmark"]["last_status"] is None or isinstance(
+        health["benchmark"]["last_status"], str
+    )
+    assert health["benchmark"]["last_run_ts"] is None or isinstance(
+        health["benchmark"]["last_run_ts"], float
+    )
+    assert health["drift"]["reference_resolution_mode"] in {
+        "alias",
+        "stage",
+        "latest",
+        "none",
+    }
+    assert health["drift"]["last_error_code"] is None or isinstance(
+        health["drift"]["last_error_code"], str
+    )
+    assert health["feature_coverage"]["last_ratio"] is None or isinstance(
+        health["feature_coverage"]["last_ratio"], float
+    )
+    assert isinstance(health["feature_coverage"]["below_threshold"], bool)
     assert len(health["active_model_version"]) <= 64
     assert len(health["last_reload_status"]) <= 32
     assert (
         health["drift_last_error_code"] is None
         or len(health["drift_last_error_code"]) <= 64
     )
+    for value in health.values():
+        assert not isinstance(value, list | tuple | set)
 
 
 @patch("training.detect_drift.get_reference_data")
@@ -143,3 +172,35 @@ def test_drift_contract_shape_and_bounds(mock_live, mock_ref):
         breakpoints = feature_result["bucketing"].get("breakpoints")
         if isinstance(breakpoints, list):
             assert len(breakpoints) <= 20
+
+
+@patch("training.detect_drift.get_reference_data")
+@patch("training.detect_drift.get_live_data")
+def test_drift_error_contract_shape_and_bounds(mock_live, mock_ref):
+    mock_ref.return_value = None
+    mock_live.return_value = pd.DataFrame()
+
+    result = detect_drift()
+
+    assert set(result.keys()) == {
+        "timestamp",
+        "hours_analyzed",
+        "threshold",
+        "reference_size",
+        "live_size",
+        "features",
+        "drift_detected",
+        "drifted_features",
+        "drift_error",
+        "error_code",
+        "error_message",
+        "resolution_mode",
+        "alerts",
+        "reference_resolution",
+        "reference_model_version",
+        "error",
+    }
+    assert result["error_code"] == "no_reference_data"
+    assert isinstance(result["error_message"], str)
+    assert len(result["error_message"]) <= MAX_DRIFT_ERROR_MESSAGE_LENGTH
+    assert result["error"] == result["error_message"]

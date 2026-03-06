@@ -843,6 +843,20 @@ class TestDetectDrift:
                 "expected_code": None,
                 "expected_mode": DriftResolutionMode.ALIAS.value,
             },
+            {
+                "name": "success_stage_mode_from_canonical_reference_metadata",
+                "reference_payload": (
+                    stable_df,
+                    {
+                        "resolution_mode": "stage",
+                        "selected_model_version": "7",
+                        "selected_run_id": "run-v7",
+                    },
+                ),
+                "live_payload": stable_df.copy(),
+                "expected_code": None,
+                "expected_mode": DriftResolutionMode.STAGE.value,
+            },
         ]
 
         for scenario in scenarios:
@@ -879,3 +893,23 @@ class TestDetectDrift:
         assert result["error"] == result["error_message"]
         assert result["resolution_mode"] == DriftResolutionMode.STAGE.value
         assert result["reference_model_version"] == "9"
+
+    def test_drift_error_contract_maps_legacy_alias_error_codes(self):
+        legacy = {
+            "drift_error": None,
+            "error_code": "insufficient_reference_data",
+            "error_message": None,
+            "error": None,
+            "resolution_mode": "latest",
+            "reference_model_version": " 11 ",
+        }
+
+        result = _finalize_drift_error_contract(legacy)
+
+        assert (
+            result["error_code"] == DriftErrorCode.INSUFFICIENT_REFERENCE_SAMPLES.value
+        )
+        assert result["error_message"] == "Insufficient reference data"
+        assert result["error"] == "Insufficient reference data"
+        assert result["resolution_mode"] == DriftResolutionMode.LATEST.value
+        assert result["reference_model_version"] == "11"
