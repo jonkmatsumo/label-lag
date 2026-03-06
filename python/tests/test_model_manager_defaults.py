@@ -203,6 +203,94 @@ def test_ml_health_summary_is_stable_and_bounded():
     )
 
 
+def test_ml_health_summary_uses_null_for_unset_optional_fields():
+    manager = _fresh_manager()
+    mock_cache = SimpleNamespace(_cache=None)
+
+    with patch("forecast.drift_cache.get_drift_cache", return_value=mock_cache):
+        health = manager.get_ml_health_summary()
+
+    assert health["model"]["last_reload_ts"] is None
+    assert health["benchmark"]["last_status"] is None
+    assert health["benchmark"]["last_run_ts"] is None
+    assert health["feature_coverage"]["last_ratio"] is None
+    assert health["feature_coverage_last_seen_ts"] is None
+    assert health["drift"]["last_error_code"] is None
+    assert health["drift_reference_available"] is None
+    assert health["drift_last_computed_ts"] is None
+    assert health["drift_last_error_code"] is None
+
+
+def test_ml_health_summary_rebuilds_canonical_shape_when_payload_incomplete():
+    manager = _fresh_manager()
+    incomplete = {
+        "state": "ready",
+        "active_model_version": "v" * 200,
+        "last_reload_status": "status-" * 20,
+        "last_reload_ts": "nan",
+        "schema_mismatch_detected": False,
+        "benchmark_last_status": "benchmark-status-" * 20,
+        "benchmark_last_run_ts": "inf",
+        "feature_coverage_warning_active": True,
+        "feature_coverage_last_ratio": 1.7,
+        "feature_coverage_warning_last_seen_ts": "not-a-float",
+        "config": {
+            "strict_feature_schema": "yes",
+            "strict_tuning_resume_validation": "0",
+            "strict_split_strategy_validation": 1,
+            "unexpected_key": True,
+        },
+        "ml_health": {"model": [], "unexpected_nested": {"a": "b"}},
+    }
+
+    with (
+        patch.object(manager, "get_diagnostics", return_value=incomplete),
+        patch(
+            "forecast.drift_cache.get_drift_cache",
+            return_value=SimpleNamespace(_cache=None),
+        ),
+    ):
+        health = manager.get_ml_health_summary()
+
+    assert set(health["config"].keys()) == {
+        "strict_feature_schema",
+        "strict_tuning_resume_validation",
+        "strict_split_strategy_validation",
+    }
+    assert health["config"] == {
+        "strict_feature_schema": True,
+        "strict_tuning_resume_validation": False,
+        "strict_split_strategy_validation": True,
+    }
+    assert set(health["model"].keys()) == {
+        "state",
+        "active_model_version",
+        "last_reload_status",
+        "last_reload_ts",
+        "schema_mismatch_detected",
+    }
+    assert set(health["benchmark"].keys()) == {"enabled", "last_status", "last_run_ts"}
+    assert set(health["drift"].keys()) == {
+        "reference_resolution_mode",
+        "last_error_code",
+    }
+    assert set(health["feature_coverage"].keys()) == {"last_ratio", "below_threshold"}
+    assert len(health["active_model_version"]) <= 64
+    assert len(health["last_reload_status"]) <= 32
+    assert health["last_reload_ts"] is None
+    assert health["benchmark"]["last_run_ts"] is None
+    assert health["feature_coverage_last_seen_ts"] is None
+    assert health["benchmark"]["last_status"] is None or (
+        len(health["benchmark"]["last_status"]) <= 32
+    )
+    assert health["feature_coverage"]["last_ratio"] == 1.0
+    assert all(
+        not isinstance(value, list | tuple | set)
+        for key, value in health.items()
+        if key not in {"model", "benchmark", "drift", "feature_coverage", "config"}
+    )
+
+
 def test_ml_health_feature_coverage_ratio_tracks_last_observation():
     manager = _fresh_manager()
     manager.update_feature_coverage_warning(
