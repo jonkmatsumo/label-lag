@@ -157,6 +157,7 @@ def test_drift_contract_shape_and_bounds(mock_live, mock_ref):
         "drift_error",
         "error_code",
         "error_message",
+        "error",
         "resolution_mode",
         "alerts",
         "reference_resolution",
@@ -171,11 +172,20 @@ def test_drift_contract_shape_and_bounds(mock_live, mock_ref):
         result["error_message"] is None
         or len(result["error_message"]) <= MAX_DRIFT_ERROR_MESSAGE_LENGTH
     )
+    assert result["error"] is None
 
     for feature_name, feature_result in result["features"].items():
         assert feature_name in MONITORED_FEATURES
-        assert set(feature_result.keys()) == {"psi", "status", "bucketing"}
+        assert set(feature_result.keys()) == {
+            "psi",
+            "status",
+            "drift_error",
+            "bucketing",
+        }
         assert feature_result["status"] in {"OK", "WARNING", "CRITICAL"}
+        assert feature_result["drift_error"] is None or isinstance(
+            feature_result["drift_error"], str
+        )
         breakpoints = feature_result["bucketing"].get("breakpoints")
         if isinstance(breakpoints, list):
             assert len(breakpoints) <= 20
