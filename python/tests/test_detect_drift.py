@@ -19,6 +19,49 @@ from training.detect_drift import (
 )
 from training.reason_codes import DriftErrorCode, DriftResolutionMode
 
+DRIFT_RESULT_CORE_KEYS = {
+    "timestamp",
+    "hours_analyzed",
+    "threshold",
+    "reference_size",
+    "live_size",
+    "features",
+    "drift_detected",
+    "drifted_features",
+    "drift_error",
+    "error_code",
+    "error_message",
+    "error",
+    "resolution_mode",
+    "alerts",
+    "reference_resolution",
+    "reference_model_version",
+}
+REFERENCE_RESOLUTION_KEYS = {
+    "requested_alias",
+    "resolution_strategy",
+    "resolution_mode",
+    "alias_candidate_count",
+    "alias_ambiguous",
+    "selected_model_version",
+    "selected_run_id",
+}
+BUCKETING_METADATA_KEYS = {
+    "buckettype_requested",
+    "buckettype_used",
+    "buckets_requested",
+    "buckets_used",
+    "bucketing_fallback_reason",
+    "reference_sample_size",
+    "nonempty_buckets",
+    "nonempty_buckets_ratio",
+    "min_expected_count",
+    "bucket_mass_ok",
+    "bucket_mass_guardrail_applied",
+    "drift_error",
+    "breakpoints",
+}
+
 
 class TestCalculatePsi:
     """Tests for calculate_psi function."""
@@ -378,8 +421,11 @@ class TestReferenceResolution:
 
         result = detect_drift()
 
+        assert set(result["reference_resolution"].keys()) == REFERENCE_RESOLUTION_KEYS
+        assert result["reference_resolution"]["resolution_mode"] == "alias"
         assert result["reference_resolution"]["resolution_strategy"] == "alias"
         assert result["reference_resolution"]["selected_model_version"] == "9"
+        assert result["reference_resolution"]["selected_run_id"] == "run-v9"
 
 
 class TestDetectDrift:
@@ -774,6 +820,7 @@ class TestDetectDrift:
 
         assert result["error_code"] is None
         assert result["error_message"] is None
+        assert result["error"] is None
         assert result["resolution_mode"] == DriftResolutionMode.ALIAS.value
         assert result["reference_model_version"] == "9"
 
@@ -802,6 +849,7 @@ class TestDetectDrift:
                 "live_payload": pd.DataFrame(),
                 "expected_code": DriftErrorCode.NO_REFERENCE_DATA.value,
                 "expected_mode": DriftResolutionMode.NONE.value,
+                "expected_reference_version": None,
             },
             {
                 "name": "insufficient_reference_samples",
@@ -815,6 +863,7 @@ class TestDetectDrift:
                 "live_payload": pd.DataFrame(),
                 "expected_code": DriftErrorCode.INSUFFICIENT_REFERENCE_SAMPLES.value,
                 "expected_mode": DriftResolutionMode.NONE.value,
+                "expected_reference_version": None,
             },
             {
                 "name": "insufficient_bucket_mass",
@@ -834,6 +883,7 @@ class TestDetectDrift:
                 ),
                 "expected_code": DriftErrorCode.INSUFFICIENT_BUCKET_MASS.value,
                 "expected_mode": DriftResolutionMode.NONE.value,
+                "expected_reference_version": None,
             },
             {
                 "name": "success",
@@ -848,6 +898,7 @@ class TestDetectDrift:
                 "live_payload": stable_df.copy(),
                 "expected_code": None,
                 "expected_mode": DriftResolutionMode.ALIAS.value,
+                "expected_reference_version": "9",
             },
             {
                 "name": "success_stage_mode_from_canonical_reference_metadata",
@@ -862,6 +913,7 @@ class TestDetectDrift:
                 "live_payload": stable_df.copy(),
                 "expected_code": None,
                 "expected_mode": DriftResolutionMode.STAGE.value,
+                "expected_reference_version": "7",
             },
         ]
 
@@ -870,6 +922,7 @@ class TestDetectDrift:
             mock_live.return_value = scenario["live_payload"]
             result = detect_drift()
 
+            assert set(result.keys()) == DRIFT_RESULT_CORE_KEYS, scenario["name"]
             assert "error_code" in result, scenario["name"]
             assert "error_message" in result, scenario["name"]
             assert "resolution_mode" in result, scenario["name"]
@@ -877,10 +930,50 @@ class TestDetectDrift:
             assert result["resolution_mode"] == scenario["expected_mode"], scenario[
                 "name"
             ]
+            assert (
+                result["reference_model_version"]
+                == scenario["expected_reference_version"]
+            ), scenario["name"]
+            assert (
+                set(result["reference_resolution"].keys()) == REFERENCE_RESOLUTION_KEYS
+            ), scenario["name"]
+            assert (
+                result["reference_resolution"]["resolution_mode"]
+                == result["resolution_mode"]
+            ), scenario["name"]
+            assert (
+                result["reference_resolution"]["resolution_strategy"]
+                == result["resolution_mode"]
+            ), scenario["name"]
+            assert isinstance(
+                result["reference_resolution"]["alias_candidate_count"], int
+            ), scenario["name"]
+            assert isinstance(
+                result["reference_resolution"]["alias_ambiguous"], bool
+            ), scenario["name"]
+            if result["error_code"] is None:
+                assert result["error"] is None, scenario["name"]
+            else:
+                assert result["error"] == result["error_message"], scenario["name"]
             if result["error_message"] is not None:
                 assert len(result["error_message"]) <= MAX_DRIFT_ERROR_MESSAGE_LENGTH, (
                     scenario["name"]
                 )
+            for feature_name, feature_result in result["features"].items():
+                assert feature_name in {
+                    "velocity_24h",
+                    "amount_to_avg_ratio_30d",
+                    "balance_volatility_z_score",
+                }, scenario["name"]
+                assert set(feature_result.keys()) == {
+                    "psi",
+                    "status",
+                    "drift_error",
+                    "bucketing",
+                }, scenario["name"]
+                assert (
+                    set(feature_result["bucketing"].keys()) == BUCKETING_METADATA_KEYS
+                ), scenario["name"]
 
     def test_drift_error_contract_maps_legacy_fields(self):
         legacy = {
