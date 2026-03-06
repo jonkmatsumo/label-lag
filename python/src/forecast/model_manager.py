@@ -8,6 +8,7 @@ Provides a singleton ModelManager that handles:
 
 import json
 import logging
+import math
 import os
 import pickle
 import time
@@ -124,6 +125,9 @@ class ModelManager:
         "strict_feature_schema",
         "strict_tuning_resume_validation",
         "strict_split_strategy_validation",
+    )
+    _ML_HEALTH_REQUIRED_SECTIONS = frozenset(
+        {"model", "benchmark", "drift", "feature_coverage", "config"}
     )
 
     def __new__(cls) -> "ModelManager":
@@ -500,11 +504,21 @@ class ModelManager:
         if isinstance(value, bool):
             return None
         if isinstance(value, int | float):
-            return float(value)
+            parsed = float(value)
+            return parsed if math.isfinite(parsed) else None
         try:
-            return float(value)
+            parsed = float(value)
+            return parsed if math.isfinite(parsed) else None
         except (TypeError, ValueError):
             return None
+
+    @staticmethod
+    def _coerce_reference_available(selected_run_id: Any) -> bool | None:
+        if selected_run_id is None:
+            return None
+        if isinstance(selected_run_id, list | tuple | set | dict):
+            return None
+        return bool(str(selected_run_id).strip())
 
     @staticmethod
     def _coerce_ratio_or_none(value: Any) -> float | None:
@@ -560,7 +574,9 @@ class ModelManager:
             if cached_result is not None:
                 computed_at = getattr(cached_result, "computed_at", None)
                 if computed_at is not None and hasattr(computed_at, "timestamp"):
-                    drift_last_computed_ts = float(computed_at.timestamp())
+                    drift_last_computed_ts = self._coerce_float_or_none(
+                        computed_at.timestamp()
+                    )
 
                 result_payload = getattr(cached_result, "result", {})
                 if isinstance(result_payload, dict):
@@ -574,10 +590,9 @@ class ModelManager:
                                 resolution.get("resolution_strategy")
                             )
                         selected_run_id = resolution.get("selected_run_id")
-                        if selected_run_id is not None:
-                            drift_reference_available = bool(
-                                str(selected_run_id).strip()
-                            )
+                        drift_reference_available = self._coerce_reference_available(
+                            selected_run_id
+                        )
 
                     error_code = result_payload.get("error_code")
                     if isinstance(error_code, str) and error_code.strip():
@@ -686,7 +701,11 @@ class ModelManager:
         """Get the current bounded ML health summary snapshot."""
         diagnostics = self.get_diagnostics()
         payload = diagnostics.get(DIAGNOSTIC_KEY_ML_HEALTH)
-        return payload if isinstance(payload, dict) else {}
+        if isinstance(payload, dict) and self._ML_HEALTH_REQUIRED_SECTIONS.issubset(
+            payload.keys()
+        ):
+            return payload
+        return self._build_ml_health_summary(diagnostics)
 
     @staticmethod
     def _effective_strict_config() -> dict[str, bool]:
