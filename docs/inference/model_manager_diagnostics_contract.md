@@ -31,6 +31,7 @@ These keys are guaranteed to exist for operability guardrails, including idle st
 | `degraded_reasons` | `list[string]` | Bounded degraded-reason vocabulary. |
 | `active_model_version` | `string` | Backward-compatible alias for currently active model version. |
 | `feature_coverage_warning_active` | `bool` | Coverage warning latch. |
+| `feature_coverage_last_ratio` | `float \| null` | Last observed required-feature coverage ratio, clamped to `[0.0, 1.0]`. |
 | `feature_coverage_warning_last_seen_ts` | `float \| null` | Last warning observation timestamp. |
 | `feature_coverage_last_ratio` | `float \| null` | Last observed inference feature coverage ratio (clamped to `[0.0, 1.0]`). |
 | `ml.training.run_id` | `string \| null` | Training run correlation id. |
@@ -48,6 +49,7 @@ These keys are guaranteed to exist for operability guardrails, including idle st
 | `last_reload_reason` | Null unless `last_reload_status=failed`. |
 | `benchmark_last_run_ts` | Null until benchmark path has run or skipped. |
 | `benchmark_last_status` | Null until benchmark path has run or skipped. |
+| `feature_coverage_last_ratio` | Null until at least one model prediction reports required-feature coverage. |
 | `feature_coverage_warning_last_seen_ts` | Null until coverage warning has been observed. |
 | `feature_coverage_last_ratio` | Null until at least one feature coverage observation has been recorded. |
 | `ml.training.run_id` / `ml.model.version` / `ml.feature.schema_hash` | Null when training identity artifact is unavailable. |
@@ -127,6 +129,9 @@ backward compatibility.
 - `strict_tuning_resume_validation`
 - `strict_split_strategy_validation`
 
+Effective strict config values are normalized from env/runtime values using
+boolean semantics (`1/true/yes/on` => `true`, `0/false/no/off` => `false`).
+
 Forecast `GetHealth` strict flag projection:
 
 - Reads `diagnostics.config` when present.
@@ -158,13 +163,18 @@ Legacy aliases retained in `ml_health`:
 
 `training.detect_drift.detect_drift()` includes additive canonical fields:
 
-- `error_code`: bounded reason code or `null`.
+- `error_code`: bounded reason code or `null` (max 64 chars).
 - `error_message`: short operator-facing message or `null`, capped at 200 chars.
 - `resolution_mode`: canonical reference resolution mode.
 - `reference_model_version`: selected reference model version when available.
 - Legacy fields remain for compatibility:
   - `drift_error` (legacy guardrail/fallback indicator)
   - `error` (legacy error text alias for `error_message`)
+
+Legacy compatibility fields remain:
+
+- `drift_error`: legacy drift code mirror (set when canonical `error_code` is set).
+- `error`: legacy message mirror of `error_message`.
 
 Allowed `error_code` values:
 
@@ -222,6 +232,7 @@ Legacy normalization behavior:
   "degraded_reasons": [],
   "active_model_version": "v17",
   "feature_coverage_warning_active": false,
+  "feature_coverage_last_ratio": 1.0,
   "feature_coverage_warning_last_seen_ts": null,
   "ml.training.run_id": "bf0e9d26c4f94ce5b8ef93f7bdf98b2a",
   "ml.model.version": "17",

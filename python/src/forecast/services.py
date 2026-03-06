@@ -315,7 +315,7 @@ class SignalForecaster:
                 if hasattr(manager, "update_feature_coverage_warning"):
                     manager.update_feature_coverage_warning(
                         active=coverage_warning_active,
-                        ratio=coverage_ratio,
+                        coverage_ratio=coverage_ratio,
                     )
 
                 log_data = {

@@ -142,3 +142,20 @@ class TestCoverageMetrics:
             forecaster._predict_with_model(mock_manager, features)
 
         mock_labels.assert_not_called()
+
+    def test_coverage_ratio_forwarded_to_manager_diagnostics(
+        self, forecaster, mock_manager
+    ):
+        """Coverage ratio should be forwarded for diagnostics health summaries."""
+        mock_manager.required_features = ["velocity_24h", "merchant_risk_score"]
+        features = FeatureVector()
+        features.velocity_24h = 10
+        features.merchant_risk_score = None
+        forecaster._calculate_probability = MagicMock(return_value=0.1)
+
+        forecaster._predict_with_model(mock_manager, features)
+
+        mock_manager.update_feature_coverage_warning.assert_called_once_with(
+            active=True,
+            coverage_ratio=0.5,
+        )

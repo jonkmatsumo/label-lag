@@ -201,3 +201,25 @@ def test_ml_health_summary_is_stable_and_bounded():
         for key, value in health.items()
         if key not in {"config", "model", "benchmark", "drift", "feature_coverage"}
     )
+
+
+def test_ml_health_feature_coverage_ratio_tracks_last_observation():
+    manager = _fresh_manager()
+    manager.update_feature_coverage_warning(
+        active=True,
+        coverage_ratio=1.25,
+        observed_ts=123.0,
+    )
+
+    diagnostics = manager.get_diagnostics()
+    health = diagnostics["ml_health"]
+
+    assert diagnostics["feature_coverage_last_ratio"] == 1.0
+    assert health["feature_coverage"]["last_ratio"] == 1.0
+    assert health["feature_coverage"]["below_threshold"] is True
+
+    manager.update_feature_coverage_warning(active=False, coverage_ratio=-0.2)
+    refreshed = manager.get_ml_health_summary()
+
+    assert refreshed["feature_coverage"]["last_ratio"] == 0.0
+    assert refreshed["feature_coverage"]["below_threshold"] is False
