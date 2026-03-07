@@ -144,6 +144,7 @@ def test_detect_drift_payload_golden_shape_and_bounds(mock_live, mock_ref):
         "drift_error",
         "error_code",
         "error_message",
+        "error",
         "resolution_mode",
         "alerts",
         "reference_resolution",
@@ -157,15 +158,24 @@ def test_detect_drift_payload_golden_shape_and_bounds(mock_live, mock_ref):
     assert result["error_message"] is None or (
         len(result["error_message"]) <= MAX_DRIFT_ERROR_MESSAGE_LENGTH
     )
+    assert result["error"] is None
     assert result["reference_model_version"] is None or (
         len(result["reference_model_version"]) <= 64
     )
 
     for feature_name, feature_result in result["features"].items():
         assert feature_name in MONITORED_FEATURES
-        assert set(feature_result.keys()) == {"psi", "status", "bucketing"}
+        assert set(feature_result.keys()) == {
+            "psi",
+            "status",
+            "drift_error",
+            "bucketing",
+        }
         assert feature_result["status"] in {"OK", "WARNING", "CRITICAL"}
         assert len(feature_result["status"]) <= 16
+        assert feature_result["drift_error"] is None or isinstance(
+            feature_result["drift_error"], str
+        )
         assert isinstance(feature_result["bucketing"], dict)
         breakpoints = feature_result["bucketing"].get("breakpoints")
         if isinstance(breakpoints, list):
