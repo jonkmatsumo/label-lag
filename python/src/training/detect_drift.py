@@ -655,11 +655,12 @@ def _finalize_drift_error_contract(results: dict[str, Any]) -> dict[str, Any]:
         results.get("reference_resolution"),
         fallback_mode=raw_resolution_mode,
     )
-    normalized_resolution_mode = _normalize_resolution_mode(
-        results.get("resolution_mode")
-        or reference_resolution.get("resolution_mode")
-        or reference_resolution.get("resolution_strategy")
-    )
+    normalized_resolution_mode = raw_resolution_mode
+    if normalized_resolution_mode == DriftResolutionMode.NONE.value:
+        normalized_resolution_mode = _normalize_resolution_mode(
+            reference_resolution.get("resolution_mode")
+            or reference_resolution.get("resolution_strategy")
+        )
     reference_resolution["resolution_strategy"] = normalized_resolution_mode
     reference_resolution["resolution_mode"] = normalized_resolution_mode
     results["reference_resolution"] = reference_resolution

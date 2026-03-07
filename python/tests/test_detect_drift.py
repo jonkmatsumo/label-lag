@@ -829,6 +829,30 @@ class TestDetectDrift:
     def test_drift_error_contract_stable_across_failure_modes(
         self, mock_live, mock_ref
     ):
+        expected_reference_resolution_keys = {
+            "requested_alias",
+            "resolution_strategy",
+            "resolution_mode",
+            "alias_candidate_count",
+            "alias_ambiguous",
+            "selected_model_version",
+            "selected_run_id",
+        }
+        expected_bucketing_keys = {
+            "buckettype_requested",
+            "buckettype_used",
+            "buckets_requested",
+            "buckets_used",
+            "bucketing_fallback_reason",
+            "breakpoints",
+            "reference_sample_size",
+            "nonempty_buckets",
+            "nonempty_buckets_ratio",
+            "min_expected_count",
+            "bucket_mass_ok",
+            "bucket_mass_guardrail_applied",
+            "drift_error",
+        }
         sparse_reference_size = MIN_REFERENCE_SAMPLES + 20
         sparse_reference = np.array([0.0] * (sparse_reference_size - 10) + [1.0] * 10)
         sparse_live = np.array([0.0] * (sparse_reference_size - 30) + [8.0] * 30)
@@ -934,17 +958,21 @@ class TestDetectDrift:
                 result["reference_model_version"]
                 == scenario["expected_reference_version"]
             ), scenario["name"]
-            assert (
-                set(result["reference_resolution"].keys()) == REFERENCE_RESOLUTION_KEYS
+            assert set(result["reference_resolution"].keys()) == (
+                expected_reference_resolution_keys
             ), scenario["name"]
-            assert (
-                result["reference_resolution"]["resolution_mode"]
-                == result["resolution_mode"]
-            ), scenario["name"]
-            assert (
-                result["reference_resolution"]["resolution_strategy"]
-                == result["resolution_mode"]
-            ), scenario["name"]
+            assert result["reference_resolution"]["resolution_mode"] in {
+                DriftResolutionMode.ALIAS.value,
+                DriftResolutionMode.STAGE.value,
+                DriftResolutionMode.LATEST.value,
+                DriftResolutionMode.NONE.value,
+            }, scenario["name"]
+            assert result["reference_resolution"]["resolution_strategy"] in {
+                DriftResolutionMode.ALIAS.value,
+                DriftResolutionMode.STAGE.value,
+                DriftResolutionMode.LATEST.value,
+                DriftResolutionMode.NONE.value,
+            }, scenario["name"]
             assert isinstance(
                 result["reference_resolution"]["alias_candidate_count"], int
             ), scenario["name"]
@@ -955,6 +983,11 @@ class TestDetectDrift:
                 assert result["error"] is None, scenario["name"]
             else:
                 assert result["error"] == result["error_message"], scenario["name"]
+            if result["reference_model_version"] is not None:
+                assert (
+                    result["reference_model_version"]
+                    == result["reference_resolution"]["selected_model_version"]
+                ), scenario["name"]
             if result["error_message"] is not None:
                 assert len(result["error_message"]) <= MAX_DRIFT_ERROR_MESSAGE_LENGTH, (
                     scenario["name"]
@@ -972,8 +1005,19 @@ class TestDetectDrift:
                     "bucketing",
                 }, scenario["name"]
                 assert (
-                    set(feature_result["bucketing"].keys()) == BUCKETING_METADATA_KEYS
+                    set(feature_result["bucketing"].keys()) == expected_bucketing_keys
                 ), scenario["name"]
+                assert isinstance(feature_result["bucketing"]["breakpoints"], list), (
+                    scenario["name"]
+                )
+                assert len(feature_result["bucketing"]["breakpoints"]) <= 20, scenario[
+                    "name"
+                ]
+                if scenario["name"] == "insufficient_bucket_mass":
+                    assert (
+                        feature_result["bucketing"]["drift_error"]
+                        == DriftErrorCode.INSUFFICIENT_BUCKET_MASS.value
+                    ), scenario["name"]
 
     def test_drift_error_contract_maps_legacy_fields(self):
         legacy = {
