@@ -9,7 +9,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+ARG UV_VERSION=0.9.22
+RUN pip install --no-cache-dir "uv==${UV_VERSION}"
 
 COPY pyproject.toml uv.lock README.md ./
 
