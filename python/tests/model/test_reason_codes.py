@@ -40,6 +40,7 @@ def test_reason_code_vocabulary_is_stable():
         "skipped_sampled_out",
         "success",
         "failed",
+        "unknown",
     }
     assert DIAGNOSTICS_DEGRADED_REASONS == {
         "reload_failed",

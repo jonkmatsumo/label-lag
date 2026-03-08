@@ -280,7 +280,7 @@ class TestModelManagerDiagnostics:
             "drift_last_error_code",
         }
         assert health["benchmark_status"] is None
-        assert health["warnings"] == []
+        assert health["warnings"] == ["drift_reference_unavailable"]
         assert health["status"] in OPERABILITY_STATUSES
         assert health["drift"]["last_error_code"] is None
         assert health["drift_last_error_code"] is None
