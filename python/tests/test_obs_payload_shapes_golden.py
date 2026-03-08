@@ -47,6 +47,7 @@ def test_ml_health_payload_golden_shape_and_bounds():
         "drift",
         "feature_coverage",
         "config",
+        "status",
         "state",
         "active_model_version",
         "last_reload_status",
@@ -73,6 +74,7 @@ def test_ml_health_payload_golden_shape_and_bounds():
         "last_error_code",
     }
     assert set(health["feature_coverage"].keys()) == {"last_ratio", "below_threshold"}
+    assert health["status"] in {"success", "failure", "unknown", "not_run"}
     assert health["state"] in {"idle", "loading", "ready", "failed"}
     assert len(health["active_model_version"]) <= 64
     assert len(health["last_reload_status"]) <= 32

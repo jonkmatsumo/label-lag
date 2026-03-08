@@ -21,6 +21,7 @@ ML_HEALTH_REQUIRED_KEYS = {
     "drift",
     "feature_coverage",
     "config",
+    "status",
     "state",
     "active_model_version",
     "last_reload_status",
@@ -114,6 +115,7 @@ def _assert_ml_health_contract(health: dict) -> None:
     assert set(health["config"].keys()) == ML_HEALTH_CONFIG_KEYS
 
     assert isinstance(health["state"], str)
+    assert health["status"] in {"success", "failure", "unknown", "not_run"}
     assert isinstance(health["active_model_version"], str)
     assert isinstance(health["last_reload_status"], str)
     assert isinstance(health["schema_mismatch_detected"], bool)

@@ -22,6 +22,7 @@ ML_HEALTH_KEYS = {
     "drift",
     "feature_coverage",
     "config",
+    "status",
     "state",
     "active_model_version",
     "last_reload_status",
@@ -139,6 +140,7 @@ def test_ml_health_contract_guard_shape_types_and_bounds():
     assert set(health["config"].keys()) == ML_HEALTH_CONFIG_KEYS
 
     assert isinstance(health["state"], str)
+    assert health["status"] in {"success", "failure", "unknown", "not_run"}
     assert isinstance(health["active_model_version"], str)
     assert isinstance(health["last_reload_status"], str)
     assert len(health["active_model_version"]) <= 64

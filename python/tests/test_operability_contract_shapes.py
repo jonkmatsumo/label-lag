@@ -51,6 +51,7 @@ def test_ml_health_contract_shape_and_bounds():
         "drift",
         "feature_coverage",
         "config",
+        "status",
         "state",
         "active_model_version",
         "last_reload_status",
@@ -83,6 +84,7 @@ def test_ml_health_contract_shape_and_bounds():
         "last_error_code",
     }
     assert set(health["feature_coverage"].keys()) == {"last_ratio", "below_threshold"}
+    assert health["status"] in {"success", "failure", "unknown", "not_run"}
     assert isinstance(health["model"]["state"], str)
     assert isinstance(health["model"]["active_model_version"], str)
     assert isinstance(health["model"]["last_reload_status"], str)

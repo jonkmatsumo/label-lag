@@ -10,6 +10,7 @@ from training.reason_codes import (
     DIAGNOSTIC_KEY_ML_TRAINING_RUN_ID,
     DIAGNOSTIC_KEY_SCHEMA_MISMATCH_DETECTED,
     DIAGNOSTIC_KEY_STATE,
+    DIAGNOSTIC_KEY_STATUS,
     DIAGNOSTICS_DEGRADED_REASONS,
     DRIFT_ERROR_CODES,
     DRIFT_FALLBACK_REASONS,
@@ -27,6 +28,7 @@ from training.reason_codes import (
     MLFLOW_TAG_TUNING_RESUME_REASON,
     MODEL_MANAGER_BASELINE_DIAGNOSTIC_KEYS,
     MODEL_MANAGER_STATES,
+    OPERABILITY_STATUSES,
     RELOAD_FAILURE_REASONS,
     RELOAD_STATUSES,
     RESUME_VALIDATION_REASONS,
@@ -55,7 +57,9 @@ def test_reason_code_sets_are_bounded_and_stable():
         "skipped_sampled_out",
         "success",
         "failed",
+        "unknown",
     }
+    assert OPERABILITY_STATUSES == {"success", "failure", "unknown", "not_run"}
     assert DIAGNOSTICS_DEGRADED_REASONS == {
         "reload_failed",
         "schema_mismatch",
@@ -91,6 +95,7 @@ def test_mlflow_reason_metadata_keys_stable():
 
 def test_model_manager_diagnostics_metadata_keys_stable():
     assert DIAGNOSTIC_KEY_STATE == "state"
+    assert DIAGNOSTIC_KEY_STATUS == "status"
     assert DIAGNOSTIC_KEY_ACTIVE_MODEL_VERSION == "active_model_version"
     assert DIAGNOSTIC_KEY_LAST_RELOAD_STATUS == "last_reload_status"
     assert DIAGNOSTIC_KEY_SCHEMA_MISMATCH_DETECTED == "schema_mismatch_detected"

@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from forecast.model_manager import ModelManager
+from training.reason_codes import OPERABILITY_STATUSES
 
 
 class TestModelManagerDiagnostics:
@@ -190,6 +191,7 @@ class TestModelManagerDiagnostics:
         assert {"model", "benchmark", "drift", "feature_coverage"}.issubset(
             health.keys()
         )
+        assert health["status"] in OPERABILITY_STATUSES
         assert set(health["model"].keys()) == {
             "state",
             "active_model_version",
@@ -261,6 +263,7 @@ class TestModelManagerDiagnostics:
             "drift",
             "feature_coverage",
             "config",
+            "status",
             "state",
             "active_model_version",
             "last_reload_status",
@@ -275,6 +278,7 @@ class TestModelManagerDiagnostics:
             "drift_last_error_code",
         }
         assert health["benchmark_status"] is None
+        assert health["status"] in OPERABILITY_STATUSES
         assert health["drift"]["last_error_code"] is None
         assert health["drift_last_error_code"] is None
         assert health["drift_last_computed_ts"] is None

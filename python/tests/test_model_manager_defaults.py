@@ -5,7 +5,10 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from forecast.model_manager import ModelManager
-from training.reason_codes import MODEL_MANAGER_BASELINE_DIAGNOSTIC_KEYS
+from training.reason_codes import (
+    MODEL_MANAGER_BASELINE_DIAGNOSTIC_KEYS,
+    OPERABILITY_STATUSES,
+)
 
 
 def _fresh_manager() -> ModelManager:
@@ -113,6 +116,7 @@ def test_ml_health_summary_is_stable_and_bounded():
         "drift",
         "feature_coverage",
         "config",
+        "status",
         "state",
         "active_model_version",
         "last_reload_status",
@@ -150,6 +154,7 @@ def test_ml_health_summary_is_stable_and_bounded():
     }
 
     assert isinstance(health["state"], str)
+    assert health["status"] in OPERABILITY_STATUSES
     assert isinstance(health["active_model_version"], str)
     assert isinstance(health["last_reload_status"], str)
     assert health["last_reload_ts"] is None or isinstance(
@@ -269,6 +274,7 @@ def test_ml_health_summary_rebuilds_canonical_shape_when_payload_incomplete():
         "last_reload_ts",
         "schema_mismatch_detected",
     }
+    assert health["status"] in OPERABILITY_STATUSES
     assert set(health["benchmark"].keys()) == {"enabled", "last_status", "last_run_ts"}
     assert set(health["drift"].keys()) == {
         "reference_resolution_mode",
