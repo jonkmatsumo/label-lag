@@ -59,6 +59,7 @@ class BenchmarkStatus(str, Enum):
     SKIPPED_SAMPLED_OUT = "skipped_sampled_out"
     SUCCESS = "success"
     FAILED = "failed"
+    UNKNOWN = "unknown"
 
 
 class ModelManagerState(str, Enum):
@@ -76,6 +77,15 @@ class ReloadStatus(str, Enum):
     IDLE = "idle"
     SUCCESS = "success"
     FAILED = "failed"
+
+
+class OperabilityStatus(str, Enum):
+    """Canonical operator-facing status vocabulary for health summaries."""
+
+    SUCCESS = "success"
+    FAILURE = "failure"
+    UNKNOWN = "unknown"
+    NOT_RUN = "not_run"
 
 
 class ResumeValidationReason(str, Enum):
@@ -103,6 +113,7 @@ DRIFT_RESOLUTION_MODES = frozenset(reason.value for reason in DriftResolutionMod
 BENCHMARK_STATUSES = frozenset(reason.value for reason in BenchmarkStatus)
 MODEL_MANAGER_STATES = frozenset(reason.value for reason in ModelManagerState)
 RELOAD_STATUSES = frozenset(reason.value for reason in ReloadStatus)
+OPERABILITY_STATUSES = frozenset(reason.value for reason in OperabilityStatus)
 RESUME_VALIDATION_REASONS = frozenset(reason.value for reason in ResumeValidationReason)
 DIAGNOSTICS_DEGRADED_REASONS = frozenset(
     reason.value for reason in DiagnosticsDegradedReason
@@ -110,6 +121,7 @@ DIAGNOSTICS_DEGRADED_REASONS = frozenset(
 
 # Diagnostics snapshot keys used by ModelManager.get_diagnostics().
 DIAGNOSTIC_KEY_STATE = "state"
+DIAGNOSTIC_KEY_STATUS = "status"
 DIAGNOSTIC_KEY_MODEL_VERSION = "model_version"
 DIAGNOSTIC_KEY_MODEL_SOURCE = "model_source"
 DIAGNOSTIC_KEY_LAST_ERROR = "last_error"
