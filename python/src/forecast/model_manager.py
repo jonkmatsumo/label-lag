@@ -45,6 +45,7 @@ from training.reason_codes import (
     DIAGNOSTIC_KEY_SCHEMA_MISMATCH_DETECTED,
     DIAGNOSTIC_KEY_STATE,
     DIAGNOSTIC_KEY_STATUS,
+    DIAGNOSTIC_KEY_WARNINGS,
     TRACE_KEY_ML_FEATURE_SCHEMA_HASH,
     TRACE_KEY_ML_MODEL_VERSION,
     TRACE_KEY_ML_TRAINING_RUN_ID,
@@ -55,6 +56,7 @@ from training.reason_codes import (
     TRAINING_IDENTITY_KEY_SCHEMA_VERSION,
     BenchmarkStatus,
     DiagnosticsDegradedReason,
+    DiagnosticsWarningCode,
     ModelManagerState,
     OperabilityStatus,
     ReloadFailureReason,
@@ -147,6 +149,7 @@ class ModelManager:
         "drift",
         "feature_coverage",
         "config",
+        "warnings",
         "status",
         "state",
         "active_model_version",
@@ -513,6 +516,33 @@ class ModelManager:
             return "latest"
         return "none"
 
+    @classmethod
+    def _normalize_warning_codes(cls, raw_warnings: Any) -> list[str]:
+        if isinstance(raw_warnings, str):
+            candidates: list[Any] = [raw_warnings]
+        elif isinstance(raw_warnings, list | tuple | set):
+            candidates = list(raw_warnings)
+        else:
+            candidates = []
+        normalized: list[str] = []
+        for candidate in candidates:
+            warning = cls._bounded_optional_str(candidate, max_len=64)
+            if warning is None:
+                continue
+            warning = warning.lower()
+            if warning not in {
+                DiagnosticsWarningCode.SCHEMA_MISMATCH_DETECTED.value,
+                DiagnosticsWarningCode.RELOAD_FAILED_USING_LAST_KNOWN_GOOD.value,
+                DiagnosticsWarningCode.FEATURE_COVERAGE_BELOW_THRESHOLD.value,
+                DiagnosticsWarningCode.DRIFT_REFERENCE_UNAVAILABLE.value,
+            }:
+                continue
+            if warning not in normalized:
+                normalized.append(warning)
+            if len(normalized) >= 4:
+                break
+        return normalized
+
     @staticmethod
     def _normalize_benchmark_last_status(raw_status: Any) -> str | None:
         normalized = ModelManager._bounded_optional_str(raw_status, max_len=32)
@@ -764,6 +794,16 @@ class ModelManager:
             diagnostics_snapshot.get(DIAGNOSTIC_KEY_STATUS),
             fallback_state=model_state,
         )
+        warnings = self._normalize_warning_codes(
+            diagnostics_snapshot.get(DIAGNOSTIC_KEY_WARNINGS)
+        )
+        if drift_reference_available is False:
+            warnings = self._normalize_warning_codes(
+                [
+                    *warnings,
+                    DiagnosticsWarningCode.DRIFT_REFERENCE_UNAVAILABLE.value,
+                ]
+            )
 
         # Keep legacy scalar aliases for compatibility with existing consumers.
         payload = {
@@ -772,6 +812,7 @@ class ModelManager:
             "drift": drift_summary,
             "feature_coverage": feature_coverage_summary,
             "config": strict_config,
+            "warnings": warnings,
             "status": health_status,
             "state": model_summary["state"],
             "active_model_version": model_summary["active_model_version"],
@@ -907,8 +948,30 @@ class ModelManager:
                     self._effective_strict_config()
                 ),
             }
+            diagnostics[DIAGNOSTIC_KEY_WARNINGS] = self._normalize_warning_codes(
+                [
+                    DiagnosticsWarningCode.SCHEMA_MISMATCH_DETECTED.value
+                    if self.schema_mismatch_detected
+                    else None,
+                    DiagnosticsWarningCode.FEATURE_COVERAGE_BELOW_THRESHOLD.value
+                    if self._feature_coverage_warning_active
+                    else None,
+                    DiagnosticsWarningCode.RELOAD_FAILED_USING_LAST_KNOWN_GOOD.value
+                    if (
+                        self.model_source == "fallback"
+                        or (
+                            self._state == ModelManagerState.FAILED.value
+                            and bundle is not None
+                        )
+                    )
+                    else None,
+                ]
+            )
             diagnostics[DIAGNOSTIC_KEY_ML_HEALTH] = self._build_ml_health_summary(
                 diagnostics
+            )
+            diagnostics[DIAGNOSTIC_KEY_WARNINGS] = self._normalize_warning_codes(
+                diagnostics[DIAGNOSTIC_KEY_ML_HEALTH].get("warnings")
             )
             return diagnostics
 
