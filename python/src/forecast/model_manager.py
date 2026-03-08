@@ -129,6 +129,35 @@ class ModelManager:
     _ML_HEALTH_REQUIRED_SECTIONS = frozenset(
         {"model", "benchmark", "drift", "feature_coverage", "config"}
     )
+    _ML_HEALTH_MODEL_KEYS = (
+        "state",
+        "active_model_version",
+        "last_reload_status",
+        "last_reload_ts",
+        "schema_mismatch_detected",
+    )
+    _ML_HEALTH_BENCHMARK_KEYS = ("enabled", "last_status", "last_run_ts")
+    _ML_HEALTH_DRIFT_KEYS = ("reference_resolution_mode", "last_error_code")
+    _ML_HEALTH_FEATURE_COVERAGE_KEYS = ("last_ratio", "below_threshold")
+    _ML_HEALTH_TOP_LEVEL_KEYS = (
+        "model",
+        "benchmark",
+        "drift",
+        "feature_coverage",
+        "config",
+        "state",
+        "active_model_version",
+        "last_reload_status",
+        "last_reload_ts",
+        "schema_mismatch_detected",
+        "benchmark_status",
+        "feature_coverage_status",
+        "feature_coverage_last_seen_ts",
+        "drift_reference_available",
+        "drift_resolution_mode",
+        "drift_last_computed_ts",
+        "drift_last_error_code",
+    )
 
     def __new__(cls) -> "ModelManager":
         """Create singleton instance."""
@@ -572,6 +601,7 @@ class ModelManager:
             cache = get_drift_cache()
             cached_result = getattr(cache, "_cache", None)
             if cached_result is not None:
+                drift_reference_available = False
                 computed_at = getattr(cached_result, "computed_at", None)
                 if computed_at is not None and hasattr(computed_at, "timestamp"):
                     drift_last_computed_ts = self._coerce_float_or_none(
@@ -589,10 +619,21 @@ class ModelManager:
                             drift_resolution_mode = self._normalize_resolution_mode(
                                 resolution.get("resolution_strategy")
                             )
-                        selected_run_id = resolution.get("selected_run_id")
-                        drift_reference_available = self._coerce_reference_available(
-                            selected_run_id
+                        selected_run_id = self._bounded_optional_str(
+                            resolution.get("selected_run_id"),
+                            max_len=128,
                         )
+                        selected_model_version = self._bounded_optional_str(
+                            resolution.get("selected_model_version"),
+                            max_len=64,
+                        )
+                        drift_reference_available = bool(
+                            selected_run_id
+                            or selected_model_version
+                            or drift_resolution_mode != "none"
+                        )
+                    else:
+                        drift_reference_available = drift_resolution_mode != "none"
 
                     error_code = result_payload.get("error_code")
                     if isinstance(error_code, str) and error_code.strip():
@@ -673,7 +714,7 @@ class ModelManager:
         }
 
         # Keep legacy scalar aliases for compatibility with existing consumers.
-        return {
+        payload = {
             "model": model_summary,
             "benchmark": benchmark_summary,
             "drift": drift_summary,
@@ -696,6 +737,18 @@ class ModelManager:
             "drift_last_computed_ts": drift_last_computed_ts,
             "drift_last_error_code": drift_summary["last_error_code"],
         }
+        # Defensive fill to keep section + alias presence stable under refactors.
+        for key in self._ML_HEALTH_TOP_LEVEL_KEYS:
+            payload.setdefault(key, None)
+        for key in self._ML_HEALTH_MODEL_KEYS:
+            model_summary.setdefault(key, None)
+        for key in self._ML_HEALTH_BENCHMARK_KEYS:
+            benchmark_summary.setdefault(key, None)
+        for key in self._ML_HEALTH_DRIFT_KEYS:
+            drift_summary.setdefault(key, None)
+        for key in self._ML_HEALTH_FEATURE_COVERAGE_KEYS:
+            feature_coverage_summary.setdefault(key, None)
+        return payload
 
     def get_ml_health_summary(self) -> dict[str, Any]:
         """Get the current bounded ML health summary snapshot."""

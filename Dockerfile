@@ -10,8 +10,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+# Install uv directly from PyPI to avoid GHCR metadata timeouts in CI.
+ARG UV_VERSION=0.9.22
+RUN pip install --no-cache-dir "uv==${UV_VERSION}"
 
 # Copy dependency files first (changes rarely)
 COPY pyproject.toml uv.lock README.md ./

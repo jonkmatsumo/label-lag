@@ -107,11 +107,14 @@ DRIFT_REFERENCE_MODEL_ALIAS = os.getenv("DRIFT_REFERENCE_MODEL_ALIAS", "").strip
 _DRIFT_STAGE_FALLBACK_WARNED = False
 _DRIFT_LATEST_FALLBACK_WARNED = False
 MAX_DRIFT_ERROR_MESSAGE_LENGTH = 200
-MAX_DRIFT_REFERENCE_VERSION_LENGTH = 64
-MAX_DRIFT_REFERENCE_RUN_ID_LENGTH = 128
-MAX_DRIFT_REFERENCE_ALIAS_LENGTH = 64
+MAX_REFERENCE_METADATA_TEXT_LENGTH = 64
+MAX_REFERENCE_RUN_ID_LENGTH = 128
+MAX_BREAKPOINTS_COUNT = 20
+MAX_DRIFT_REFERENCE_VERSION_LENGTH = MAX_REFERENCE_METADATA_TEXT_LENGTH
+MAX_DRIFT_REFERENCE_RUN_ID_LENGTH = MAX_REFERENCE_RUN_ID_LENGTH
+MAX_DRIFT_REFERENCE_ALIAS_LENGTH = MAX_REFERENCE_METADATA_TEXT_LENGTH
 MAX_DRIFT_BUCKETTYPE_LENGTH = 24
-MAX_DRIFT_BREAKPOINTS = 20
+MAX_DRIFT_BREAKPOINTS = MAX_BREAKPOINTS_COUNT
 _DEFAULT_DRIFT_ERROR_MESSAGES = {
     DriftErrorCode.NO_REFERENCE_DATA.value: "No reference data available",
     DriftErrorCode.INSUFFICIENT_REFERENCE_SAMPLES.value: (
@@ -137,6 +140,30 @@ _LEGACY_RESOLUTION_MODE_ALIASES = {
     "latest_version": DriftResolutionMode.LATEST.value,
 }
 MAX_DRIFT_ERROR_CODE_LENGTH = 64
+_REFERENCE_RESOLUTION_METADATA_KEYS = (
+    "requested_alias",
+    "resolution_strategy",
+    "resolution_mode",
+    "alias_candidate_count",
+    "alias_ambiguous",
+    "selected_model_version",
+    "selected_run_id",
+)
+_BUCKETING_METADATA_KEYS = (
+    "buckettype_requested",
+    "buckettype_used",
+    "buckets_requested",
+    "buckets_used",
+    "bucketing_fallback_reason",
+    "breakpoints",
+    "reference_sample_size",
+    "nonempty_buckets",
+    "nonempty_buckets_ratio",
+    "min_expected_count",
+    "bucket_mass_ok",
+    "bucket_mass_guardrail_applied",
+    "drift_error",
+)
 
 
 def calculate_psi(
@@ -464,58 +491,108 @@ def _bounded_error_code(code: Any) -> str | None:
     return rendered[:MAX_DRIFT_ERROR_CODE_LENGTH]
 
 
+def _bounded_optional_text(value: Any, *, max_len: int) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    return text[:max_len]
+
+
+def _normalize_reference_resolution_metadata(
+    raw_resolution: Any,
+    *,
+    fallback_mode: str,
+) -> dict[str, Any]:
+    metadata = raw_resolution if isinstance(raw_resolution, dict) else {}
+    raw_resolution_strategy = _bounded_optional_text(
+        metadata.get("resolution_strategy"),
+        max_len=MAX_REFERENCE_METADATA_TEXT_LENGTH,
+    )
+    canonical_resolution_mode = _normalize_resolution_mode(
+        metadata.get("resolution_mode") or raw_resolution_strategy or fallback_mode
+    )
+    alias_candidate_count = _coerce_int_or_none(metadata.get("alias_candidate_count"))
+    if alias_candidate_count is None or alias_candidate_count < 0:
+        alias_candidate_count = 0
+
+    normalized = {
+        "requested_alias": _bounded_optional_text(
+            metadata.get("requested_alias") or DRIFT_REFERENCE_MODEL_ALIAS,
+            max_len=MAX_REFERENCE_METADATA_TEXT_LENGTH,
+        ),
+        "resolution_strategy": raw_resolution_strategy or canonical_resolution_mode,
+        "resolution_mode": canonical_resolution_mode,
+        "alias_candidate_count": alias_candidate_count,
+        "alias_ambiguous": bool(metadata.get("alias_ambiguous", False)),
+        "selected_model_version": _bounded_optional_text(
+            metadata.get("selected_model_version"),
+            max_len=MAX_REFERENCE_METADATA_TEXT_LENGTH,
+        ),
+        "selected_run_id": _bounded_optional_text(
+            metadata.get("selected_run_id"),
+            max_len=MAX_REFERENCE_RUN_ID_LENGTH,
+        ),
+    }
+    for key in _REFERENCE_RESOLUTION_METADATA_KEYS:
+        normalized.setdefault(key, None)
+    return normalized
+
+
 def _normalize_bucketing_metadata(raw_bucketing: Any) -> dict[str, Any]:
-    source = raw_bucketing if isinstance(raw_bucketing, dict) else {}
-    breakpoints = None
-    raw_breakpoints = source.get("breakpoints")
+    metadata = raw_bucketing if isinstance(raw_bucketing, dict) else {}
+    normalized_breakpoints: list[float] = []
+    raw_breakpoints = metadata.get("breakpoints")
     if isinstance(raw_breakpoints, list | tuple):
-        normalized_breakpoints = []
-        for point in list(raw_breakpoints)[:MAX_DRIFT_BREAKPOINTS]:
-            parsed = _coerce_float_or_none(point)
+        for value in raw_breakpoints:
+            parsed = _coerce_float_or_none(value)
             if parsed is not None:
                 normalized_breakpoints.append(parsed)
-        breakpoints = normalized_breakpoints
+            if len(normalized_breakpoints) >= MAX_BREAKPOINTS_COUNT:
+                break
 
-    bucket_mass_ok_raw = source.get("bucket_mass_ok")
-    bucket_mass_guardrail_raw = source.get("bucket_mass_guardrail_applied")
-    drift_error = _bounded_error_code(source.get("drift_error"))
+    drift_error = _normalize_error_code(metadata.get("drift_error"))
     if drift_error is None:
-        drift_error = _normalize_error_code(source.get("drift_error"))
+        drift_error = _bounded_error_code(metadata.get("drift_error"))
 
-    return {
-        "buckettype_requested": _bounded_metadata_text(
-            source.get("buckettype_requested"),
+    normalized = {
+        "buckettype_requested": _bounded_optional_text(
+            metadata.get("buckettype_requested"),
             max_len=MAX_DRIFT_BUCKETTYPE_LENGTH,
         ),
-        "buckettype_used": _bounded_metadata_text(
-            source.get("buckettype_used"),
+        "buckettype_used": _bounded_optional_text(
+            metadata.get("buckettype_used"),
             max_len=MAX_DRIFT_BUCKETTYPE_LENGTH,
         ),
-        "buckets_requested": _coerce_int_or_none(source.get("buckets_requested")),
-        "buckets_used": _coerce_int_or_none(source.get("buckets_used")),
-        "bucketing_fallback_reason": _bounded_metadata_text(
-            source.get("bucketing_fallback_reason"),
+        "buckets_requested": _coerce_int_or_none(metadata.get("buckets_requested")),
+        "buckets_used": _coerce_int_or_none(metadata.get("buckets_used")),
+        "bucketing_fallback_reason": _bounded_optional_text(
+            metadata.get("bucketing_fallback_reason"),
             max_len=MAX_DRIFT_ERROR_CODE_LENGTH,
         ),
+        "breakpoints": normalized_breakpoints,
         "reference_sample_size": _coerce_int_or_none(
-            source.get("reference_sample_size")
+            metadata.get("reference_sample_size")
         ),
-        "nonempty_buckets": _coerce_int_or_none(source.get("nonempty_buckets")),
+        "nonempty_buckets": _coerce_int_or_none(metadata.get("nonempty_buckets")),
         "nonempty_buckets_ratio": _coerce_float_or_none(
-            source.get("nonempty_buckets_ratio")
+            metadata.get("nonempty_buckets_ratio")
         ),
-        "min_expected_count": _coerce_float_or_none(source.get("min_expected_count")),
+        "min_expected_count": _coerce_float_or_none(metadata.get("min_expected_count")),
         "bucket_mass_ok": (
-            bool(bucket_mass_ok_raw) if bucket_mass_ok_raw is not None else None
+            bool(metadata["bucket_mass_ok"]) if "bucket_mass_ok" in metadata else None
         ),
         "bucket_mass_guardrail_applied": (
-            bool(bucket_mass_guardrail_raw)
-            if bucket_mass_guardrail_raw is not None
+            bool(metadata["bucket_mass_guardrail_applied"])
+            if "bucket_mass_guardrail_applied" in metadata
             else None
         ),
         "drift_error": drift_error,
-        "breakpoints": breakpoints,
     }
+    for key in _BUCKETING_METADATA_KEYS:
+        normalized.setdefault(key, None)
+    return normalized
 
 
 def _set_canonical_error(
@@ -568,11 +645,17 @@ def _infer_error_code_from_message(message: Any) -> str | None:
 
 def _finalize_drift_error_contract(results: dict[str, Any]) -> dict[str, Any]:
     """Normalize additive drift error contract fields for stability."""
-    reference_resolution = _normalize_reference_resolution(
-        results.get("reference_resolution")
+    results.setdefault("error_code", None)
+    results.setdefault("error_message", None)
+    results.setdefault("drift_error", None)
+    results.setdefault("reference_resolution", {})
+    results.setdefault("reference_model_version", None)
+    raw_resolution_mode = _normalize_resolution_mode(results.get("resolution_mode"))
+    reference_resolution = _normalize_reference_resolution_metadata(
+        results.get("reference_resolution"),
+        fallback_mode=raw_resolution_mode,
     )
-    raw_resolution_mode = results.get("resolution_mode")
-    normalized_resolution_mode = _normalize_resolution_mode(raw_resolution_mode)
+    normalized_resolution_mode = raw_resolution_mode
     if normalized_resolution_mode == DriftResolutionMode.NONE.value:
         normalized_resolution_mode = _normalize_resolution_mode(
             reference_resolution.get("resolution_mode")
@@ -606,19 +689,24 @@ def _finalize_drift_error_contract(results: dict[str, Any]) -> dict[str, Any]:
         results["error_message"] = None
         results["error"] = None
 
+    if error_code is not None:
+        results["drift_error"] = error_code
+    else:
+        results["drift_error"] = _normalize_error_code(results.get("drift_error"))
+    if results["drift_error"] is None:
+        results["drift_error"] = _bounded_error_code(results.get("drift_error"))
+
     results["error_code"] = error_code
 
-    normalized_drift_error = _normalize_error_code(results.get("drift_error"))
-    if normalized_drift_error is None:
-        normalized_drift_error = _bounded_error_code(results.get("drift_error"))
-    results["drift_error"] = error_code or normalized_drift_error
-
-    reference_model_version = _bounded_metadata_text(
+    reference_model_version = _bounded_optional_text(
         results.get("reference_model_version"),
-        max_len=MAX_DRIFT_REFERENCE_VERSION_LENGTH,
+        max_len=MAX_REFERENCE_METADATA_TEXT_LENGTH,
     )
     if reference_model_version is None:
-        reference_model_version = reference_resolution.get("selected_model_version")
+        reference_model_version = _bounded_optional_text(
+            reference_resolution.get("selected_model_version"),
+            max_len=MAX_REFERENCE_METADATA_TEXT_LENGTH,
+        )
     results["reference_model_version"] = reference_model_version
     if reference_resolution.get("selected_model_version") is None:
         reference_resolution["selected_model_version"] = reference_model_version
@@ -799,10 +887,8 @@ def detect_drift(
         psi, bucketing_raw = calculate_psi(
             expected, actual, buckettype="quantiles", buckets=10
         )
-        bucketing = _normalize_bucketing_metadata(bucketing_raw)
-        drift_error = (
-            bucketing.get("drift_error") if isinstance(bucketing, dict) else None
-        )
+        normalized_bucketing = _normalize_bucketing_metadata(bucketing_raw)
+        drift_error = _normalize_error_code(normalized_bucketing.get("drift_error"))
 
         if drift_error == DriftFallbackReason.INSUFFICIENT_BUCKET_MASS.value:
             results["drift_error"] = drift_error
@@ -816,7 +902,7 @@ def detect_drift(
                 "psi": round(psi, 4),
                 "status": "OK",
                 "drift_error": drift_error,
-                "bucketing": bucketing,
+                "bucketing": normalized_bucketing,
             }
             continue
 
@@ -856,8 +942,8 @@ def detect_drift(
         results["features"][feature] = {
             "psi": round(psi, 4),
             "status": status,
-            "drift_error": None,
-            "bucketing": bucketing,
+            "drift_error": drift_error,
+            "bucketing": normalized_bucketing,
         }
 
         if status == "CRITICAL":

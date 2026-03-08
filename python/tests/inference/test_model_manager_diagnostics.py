@@ -242,3 +242,73 @@ class TestModelManagerDiagnostics:
         for value in health.values():
             if isinstance(value, list):
                 assert len(value) <= 3
+
+    def test_ml_health_summary_optional_fields_use_null_not_omitted(self):
+        manager = self._fresh_manager()
+        mock_cache = SimpleNamespace(
+            _cache=SimpleNamespace(
+                computed_at=None,
+                result={"resolution_mode": "none"},
+            )
+        )
+
+        with patch("forecast.drift_cache.get_drift_cache", return_value=mock_cache):
+            health = manager.get_diagnostics()["ml_health"]
+
+        assert set(health.keys()) == {
+            "model",
+            "benchmark",
+            "drift",
+            "feature_coverage",
+            "config",
+            "state",
+            "active_model_version",
+            "last_reload_status",
+            "last_reload_ts",
+            "schema_mismatch_detected",
+            "benchmark_status",
+            "feature_coverage_status",
+            "feature_coverage_last_seen_ts",
+            "drift_reference_available",
+            "drift_resolution_mode",
+            "drift_last_computed_ts",
+            "drift_last_error_code",
+        }
+        assert health["benchmark_status"] is None
+        assert health["drift"]["last_error_code"] is None
+        assert health["drift_last_error_code"] is None
+        assert health["drift_last_computed_ts"] is None
+        assert health["drift_reference_available"] is False
+        assert health["feature_coverage"]["last_ratio"] is None
+
+    def test_ml_health_summary_bounds_drift_strings_and_ignores_dynamic_maps(self):
+        manager = self._fresh_manager()
+        mock_cache = SimpleNamespace(
+            _cache=SimpleNamespace(
+                computed_at=datetime(2026, 1, 3, tzinfo=timezone.utc),
+                result={
+                    "resolution_mode": "x" * 300,
+                    "error_code": "e" * 300,
+                    "reference_resolution": {
+                        "resolution_strategy": {"unexpected": "mapping"},
+                        "selected_run_id": "   ",
+                        "selected_model_version": "",
+                        "unexpected_nested": {"inner": "value"},
+                    },
+                },
+            )
+        )
+
+        with patch("forecast.drift_cache.get_drift_cache", return_value=mock_cache):
+            health = manager.get_diagnostics()["ml_health"]
+
+        assert set(health["drift"].keys()) == {
+            "reference_resolution_mode",
+            "last_error_code",
+        }
+        assert health["drift"]["reference_resolution_mode"] == "none"
+        assert health["drift_reference_available"] is False
+        assert isinstance(health["drift_last_computed_ts"], float)
+        assert len(health["drift"]["last_error_code"]) == 64
+        assert len(health["drift_last_error_code"]) == 64
+        assert "reference_resolution" not in health["drift"]

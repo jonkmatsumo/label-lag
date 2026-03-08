@@ -1,7 +1,11 @@
-# ML Operability Payload Contract
+# ML Operability Contract (Diagnostics + Drift)
 
-This contract describes the payload returned by
-`forecast.model_manager.ModelManager.get_diagnostics()`.
+This is the canonical contract reference for:
+
+- `forecast.model_manager.ModelManager.get_diagnostics()`
+- `diagnostics.ml_health`
+- strict-config visibility (`diagnostics.config` / `diagnostics.ml_health.config`)
+- `training.detect_drift.detect_drift()` drift result/error payloads
 
 ## Guardrail Baseline Subset (Always Present)
 
@@ -32,7 +36,6 @@ These keys are guaranteed to exist for operability guardrails, including idle st
 | `active_model_version` | `string` | Backward-compatible alias for currently active model version. |
 | `feature_coverage_warning_active` | `bool` | Coverage warning latch. |
 | `feature_coverage_warning_last_seen_ts` | `float \| null` | Last warning observation timestamp. |
-| `feature_coverage_last_ratio` | `float \| null` | Last observed inference feature coverage ratio (clamped to `[0.0, 1.0]`). |
 | `ml.training.run_id` | `string \| null` | Training run correlation id. |
 | `ml.model.version` | `string \| null` | Training-side model version value. |
 | `ml.feature.schema_hash` | `string \| null` | Training-side feature schema hash. |
@@ -49,7 +52,6 @@ These keys are guaranteed to exist for operability guardrails, including idle st
 | `benchmark_last_run_ts` | Null until benchmark path has run or skipped. |
 | `benchmark_last_status` | Null until benchmark path has run or skipped. |
 | `feature_coverage_warning_last_seen_ts` | Null until coverage warning has been observed. |
-| `feature_coverage_last_ratio` | Null until at least one feature coverage observation has been recorded. |
 | `ml.training.run_id` / `ml.model.version` / `ml.feature.schema_hash` | Null when training identity artifact is unavailable. |
 | `ml_health.model.last_reload_ts` / `ml_health.benchmark.last_status` / `ml_health.benchmark.last_run_ts` / `ml_health.drift.last_error_code` / legacy aliases (`ml_health.last_reload_ts`, `ml_health.benchmark_status`, `ml_health.drift_last_computed_ts`, `ml_health.drift_last_error_code`) | Null when source value has not been observed yet. |
 | `ml_health.drift_reference_available` | Null when no drift run has been cached yet. |
@@ -157,7 +159,7 @@ Legacy aliases retained in `ml_health`:
 - `null` before first coverage observation.
 - Mirrors root diagnostic `feature_coverage_last_ratio`.
 
-## Drift Result Contract
+## Drift Contract (Canonical)
 
 `training.detect_drift.detect_drift()` returns the same top-level core shape for
 success and failure modes.
@@ -257,6 +259,43 @@ Legacy normalization behavior:
   `error_code` values.
 - `error_message` is capped at 200 characters.
 
+### Reference Resolution Metadata (Always Present)
+
+`reference_resolution` is always a map with these keys:
+
+- `requested_alias`
+- `resolution_strategy`
+- `resolution_mode`
+- `alias_candidate_count`
+- `alias_ambiguous`
+- `selected_model_version`
+- `selected_run_id`
+
+Notes:
+
+- `resolution_mode` is canonical (`alias|stage|latest|none`).
+- `resolution_strategy` may preserve legacy values for compatibility.
+- `alias_candidate_count` is always an integer (default `0`).
+- `alias_ambiguous` is always a boolean (default `false`).
+
+### Per-Feature Bucketing Metadata (When Feature Is Evaluated)
+
+Each `features.<name>.bucketing` map includes:
+
+- `buckettype_requested`
+- `buckettype_used`
+- `buckets_requested`
+- `buckets_used`
+- `bucketing_fallback_reason`
+- `breakpoints` (bounded list)
+- `reference_sample_size`
+- `nonempty_buckets`
+- `nonempty_buckets_ratio`
+- `min_expected_count`
+- `bucket_mass_ok`
+- `bucket_mass_guardrail_applied`
+- `drift_error`
+
 ## Example Payload
 
 ```json
@@ -325,5 +364,55 @@ Legacy normalization behavior:
     "drift_last_computed_ts": 1769246700.05,
     "drift_last_error_code": null
   }
+}
+```
+
+### Drift Result Example (Success Path)
+
+```json
+{
+  "timestamp": "2026-01-24T12:00:00+00:00",
+  "hours_analyzed": 24,
+  "threshold": 0.25,
+  "reference_size": 1000,
+  "live_size": 1000,
+  "features": {
+    "velocity_24h": {
+      "psi": 0.0,
+      "status": "OK",
+      "bucketing": {
+        "buckettype_requested": "quantiles",
+        "buckettype_used": "quantiles",
+        "buckets_requested": 10,
+        "buckets_used": 10,
+        "bucketing_fallback_reason": null,
+        "breakpoints": [0.0, 100.0],
+        "reference_sample_size": 1000,
+        "nonempty_buckets": 10,
+        "nonempty_buckets_ratio": 1.0,
+        "min_expected_count": 100.0,
+        "bucket_mass_ok": true,
+        "bucket_mass_guardrail_applied": true,
+        "drift_error": null
+      }
+    }
+  },
+  "drift_detected": false,
+  "drifted_features": [],
+  "drift_error": null,
+  "error_code": null,
+  "error_message": null,
+  "resolution_mode": "alias",
+  "alerts": [],
+  "reference_resolution": {
+    "requested_alias": "champion",
+    "resolution_strategy": "alias",
+    "resolution_mode": "alias",
+    "alias_candidate_count": 1,
+    "alias_ambiguous": false,
+    "selected_model_version": "9",
+    "selected_run_id": "run-v9"
+  },
+  "reference_model_version": "9"
 }
 ```
