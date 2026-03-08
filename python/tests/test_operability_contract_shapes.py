@@ -168,9 +168,16 @@ def test_drift_contract_shape_and_bounds(mock_live, mock_ref):
         "alerts",
         "reference_resolution",
         "reference_model_version",
+        "reference_resolution_mode_requested",
+        "reference_resolution_mode",
+        "reference_model_version_chosen",
+        "reference_alias_requested",
+        "reference_resolution_warning",
     }
     assert result["resolution_mode"] in {"alias", "stage", "latest", "none"}
+    assert result["reference_resolution_mode"] == result["resolution_mode"]
     assert result["reference_model_version"] == "9"
+    assert result["reference_model_version_chosen"] == "9"
     assert len(result["features"]) <= len(MONITORED_FEATURES)
     assert len(result["drifted_features"]) <= len(MONITORED_FEATURES)
     assert len(result["alerts"]) <= len(MONITORED_FEATURES)
@@ -221,6 +228,11 @@ def test_drift_error_contract_shape_and_bounds(mock_live, mock_ref):
         "alerts",
         "reference_resolution",
         "reference_model_version",
+        "reference_resolution_mode_requested",
+        "reference_resolution_mode",
+        "reference_model_version_chosen",
+        "reference_alias_requested",
+        "reference_resolution_warning",
         "error",
     }
     assert result["error_code"] == DriftErrorCode.NO_REFERENCE_DATA.value

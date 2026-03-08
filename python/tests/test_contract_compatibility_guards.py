@@ -70,6 +70,11 @@ DRIFT_RESULT_KEYS = {
     "alerts",
     "reference_resolution",
     "reference_model_version",
+    "reference_resolution_mode_requested",
+    "reference_resolution_mode",
+    "reference_model_version_chosen",
+    "reference_alias_requested",
+    "reference_resolution_warning",
 }
 REFERENCE_RESOLUTION_KEYS = {
     "requested_alias",
@@ -276,12 +281,26 @@ def test_drift_contract_guard_shape_across_modes(
     assert result["error_code"] == expected_code
     assert result["resolution_mode"] == expected_mode
     assert result["reference_model_version"] == expected_version
+    assert result["reference_model_version_chosen"] == expected_version
     assert isinstance(result["timestamp"], str)
     assert (
         result["error_message"] is None
         or len(result["error_message"]) <= MAX_DRIFT_ERROR_MESSAGE_LENGTH
     )
     assert set(result["reference_resolution"].keys()) == REFERENCE_RESOLUTION_KEYS
+    assert result["reference_resolution_mode"] == result["resolution_mode"]
+    assert result["reference_resolution_mode_requested"] in {
+        DriftResolutionMode.ALIAS.value,
+        DriftResolutionMode.STAGE.value,
+        DriftResolutionMode.LATEST.value,
+        DriftResolutionMode.NONE.value,
+    }
+    assert result["reference_alias_requested"] is None or isinstance(
+        result["reference_alias_requested"], str
+    )
+    assert result["reference_resolution_warning"] is None or isinstance(
+        result["reference_resolution_warning"], str
+    )
     assert (
         result["reference_resolution"]["resolution_mode"] == result["resolution_mode"]
     )

@@ -36,6 +36,11 @@ DRIFT_RESULT_CORE_KEYS = {
     "alerts",
     "reference_resolution",
     "reference_model_version",
+    "reference_resolution_mode_requested",
+    "reference_resolution_mode",
+    "reference_model_version_chosen",
+    "reference_alias_requested",
+    "reference_resolution_warning",
 }
 REFERENCE_RESOLUTION_KEYS = {
     "requested_alias",
@@ -427,6 +432,96 @@ class TestReferenceResolution:
         assert result["reference_resolution"]["selected_model_version"] == "9"
         assert result["reference_resolution"]["selected_run_id"] == "run-v9"
 
+    @patch("training.detect_drift.get_live_data")
+    @patch("training.detect_drift.get_reference_data")
+    def test_reference_metadata_fields_when_alias_requested_and_used(
+        self, mock_reference, mock_live
+    ):
+        stable_df = pd.DataFrame(
+            {
+                "velocity_24h": np.arange(1000, dtype=float),
+                "amount_to_avg_ratio_30d": np.arange(1000, dtype=float) * 0.5,
+                "balance_volatility_z_score": np.arange(1000, dtype=float) - 250.0,
+            }
+        )
+        mock_reference.return_value = (
+            stable_df,
+            {
+                "requested_alias": "champion",
+                "requested_mode": "alias",
+                "resolution_strategy": "alias",
+                "selected_model_version": "9",
+                "selected_run_id": "run-v9",
+            },
+        )
+        mock_live.return_value = stable_df.copy()
+
+        result = detect_drift()
+
+        assert result["reference_resolution_mode_requested"] == "alias"
+        assert result["reference_resolution_mode"] == "alias"
+        assert result["reference_model_version_chosen"] == "9"
+        assert result["reference_alias_requested"] == "champion"
+        assert result["reference_resolution_warning"] is None
+
+    @patch("training.detect_drift.get_live_data")
+    @patch("training.detect_drift.get_reference_data")
+    def test_reference_metadata_fields_when_alias_falls_back_to_stage(
+        self, mock_reference, mock_live
+    ):
+        stable_df = pd.DataFrame(
+            {
+                "velocity_24h": np.arange(1000, dtype=float),
+                "amount_to_avg_ratio_30d": np.arange(1000, dtype=float) * 0.5,
+                "balance_volatility_z_score": np.arange(1000, dtype=float) - 250.0,
+            }
+        )
+        mock_reference.return_value = (
+            stable_df,
+            {
+                "requested_alias": "champion",
+                "requested_mode": "alias",
+                "resolution_strategy": "production_stage",
+                "selected_model_version": "7",
+                "selected_run_id": "run-v7",
+                "resolution_warning": "alias_not_found_fallback",
+            },
+        )
+        mock_live.return_value = stable_df.copy()
+
+        result = detect_drift()
+
+        assert result["reference_resolution_mode_requested"] == "alias"
+        assert result["reference_resolution_mode"] == "stage"
+        assert result["reference_model_version_chosen"] == "7"
+        assert result["reference_alias_requested"] == "champion"
+        assert result["reference_resolution_warning"] == "alias_not_found_fallback"
+
+    @patch("training.detect_drift.get_live_data")
+    @patch("training.detect_drift.get_reference_data")
+    def test_reference_metadata_fields_when_no_reference_available(
+        self, mock_reference, mock_live
+    ):
+        mock_reference.return_value = (
+            None,
+            {
+                "requested_alias": "champion",
+                "requested_mode": "alias",
+                "resolution_warning": "no_reference_versions_available",
+            },
+        )
+        mock_live.return_value = pd.DataFrame()
+
+        result = detect_drift()
+
+        assert result["reference_resolution_mode_requested"] == "alias"
+        assert result["reference_resolution_mode"] == "none"
+        assert result["reference_model_version_chosen"] is None
+        assert result["reference_alias_requested"] == "champion"
+        assert (
+            result["reference_resolution_warning"] == "no_reference_versions_available"
+        )
+
 
 class TestDetectDrift:
     """Tests for detect_drift function."""
@@ -727,6 +822,7 @@ class TestDetectDrift:
         assert result["error"] == result["error_message"]
         assert result["resolution_mode"] == DriftResolutionMode.NONE.value
         assert result["reference_model_version"] is None
+        assert result["reference_model_version_chosen"] is None
 
     @patch("training.detect_drift.get_reference_data")
     @patch("training.detect_drift.get_live_data")
@@ -754,6 +850,7 @@ class TestDetectDrift:
         )
         assert result["resolution_mode"] == DriftResolutionMode.NONE.value
         assert result["reference_model_version"] is None
+        assert result["reference_model_version_chosen"] is None
 
     @patch("training.detect_drift.get_reference_data")
     @patch("training.detect_drift.get_live_data")
@@ -794,6 +891,7 @@ class TestDetectDrift:
             DriftResolutionMode.NONE.value,
         }
         assert result["reference_model_version"] is None
+        assert result["reference_model_version_chosen"] is None
 
     @patch("training.detect_drift.get_reference_data")
     @patch("training.detect_drift.get_live_data")
@@ -823,6 +921,7 @@ class TestDetectDrift:
         assert result["error"] is None
         assert result["resolution_mode"] == DriftResolutionMode.ALIAS.value
         assert result["reference_model_version"] == "9"
+        assert result["reference_model_version_chosen"] == "9"
 
     @patch("training.detect_drift.get_reference_data")
     @patch("training.detect_drift.get_live_data")
@@ -958,6 +1057,13 @@ class TestDetectDrift:
                 result["reference_model_version"]
                 == scenario["expected_reference_version"]
             ), scenario["name"]
+            assert (
+                result["reference_model_version_chosen"]
+                == scenario["expected_reference_version"]
+            ), scenario["name"]
+            assert result["reference_resolution_mode"] == result["resolution_mode"], (
+                scenario["name"]
+            )
             assert set(result["reference_resolution"].keys()) == (
                 expected_reference_resolution_keys
             ), scenario["name"]
@@ -988,6 +1094,10 @@ class TestDetectDrift:
                     result["reference_model_version"]
                     == result["reference_resolution"]["selected_model_version"]
                 ), scenario["name"]
+            assert (
+                result["reference_model_version_chosen"]
+                == result["reference_model_version"]
+            ), scenario["name"]
             if result["error_message"] is not None:
                 assert len(result["error_message"]) <= MAX_DRIFT_ERROR_MESSAGE_LENGTH, (
                     scenario["name"]
@@ -1036,6 +1146,8 @@ class TestDetectDrift:
         assert result["error"] == result["error_message"]
         assert result["resolution_mode"] == DriftResolutionMode.STAGE.value
         assert result["reference_model_version"] == "9"
+        assert result["reference_model_version_chosen"] == "9"
+        assert result["reference_resolution_mode"] == DriftResolutionMode.STAGE.value
 
     def test_drift_error_contract_maps_legacy_alias_error_codes(self):
         legacy = {
@@ -1056,6 +1168,8 @@ class TestDetectDrift:
         assert result["error"] == "Insufficient reference data"
         assert result["resolution_mode"] == DriftResolutionMode.LATEST.value
         assert result["reference_model_version"] == "11"
+        assert result["reference_model_version_chosen"] == "11"
+        assert result["reference_resolution_mode"] == DriftResolutionMode.LATEST.value
 
     @pytest.mark.parametrize(
         ("raw_mode", "expected_mode"),
@@ -1094,3 +1208,4 @@ class TestDetectDrift:
         result = detect_drift()
 
         assert result["resolution_mode"] == expected_mode
+        assert result["reference_resolution_mode"] == expected_mode

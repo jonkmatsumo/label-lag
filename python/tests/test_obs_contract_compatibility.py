@@ -70,6 +70,11 @@ DRIFT_REQUIRED_KEYS = {
     "alerts",
     "reference_resolution",
     "reference_model_version",
+    "reference_resolution_mode_requested",
+    "reference_resolution_mode",
+    "reference_model_version_chosen",
+    "reference_alias_requested",
+    "reference_resolution_warning",
 }
 DRIFT_OPTIONAL_KEYS = {"error"}
 DRIFT_REFERENCE_RESOLUTION_KEYS = {
@@ -203,7 +208,17 @@ def _assert_drift_contract(result: dict) -> None:
         result["error_message"], max_len=MAX_DRIFT_ERROR_MESSAGE_LENGTH
     )
     _assert_bounded_optional_str(result["reference_model_version"], max_len=64)
+    _assert_bounded_optional_str(result["reference_model_version_chosen"], max_len=64)
+    _assert_bounded_optional_str(result["reference_alias_requested"], max_len=64)
+    _assert_bounded_optional_str(result["reference_resolution_warning"], max_len=64)
     assert result["resolution_mode"] in {"alias", "stage", "latest", "none"}
+    assert result["reference_resolution_mode"] == result["resolution_mode"]
+    assert result["reference_resolution_mode_requested"] in {
+        "alias",
+        "stage",
+        "latest",
+        "none",
+    }
 
     reference_resolution = result["reference_resolution"]
     assert isinstance(reference_resolution, dict)
@@ -229,6 +244,7 @@ def _assert_drift_contract(result: dict) -> None:
             result["reference_model_version"]
             == reference_resolution["selected_model_version"]
         )
+    assert result["reference_model_version_chosen"] == result["reference_model_version"]
 
     for feature_result in result["features"].values():
         assert "psi" in feature_result
