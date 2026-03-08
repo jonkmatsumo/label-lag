@@ -116,6 +116,7 @@ def test_ml_health_summary_is_stable_and_bounded():
         "drift",
         "feature_coverage",
         "config",
+        "warnings",
         "status",
         "state",
         "active_model_version",
@@ -154,6 +155,7 @@ def test_ml_health_summary_is_stable_and_bounded():
     }
 
     assert isinstance(health["state"], str)
+    assert isinstance(health["warnings"], list)
     assert health["status"] in OPERABILITY_STATUSES
     assert isinstance(health["active_model_version"], str)
     assert isinstance(health["last_reload_status"], str)
@@ -204,7 +206,8 @@ def test_ml_health_summary_is_stable_and_bounded():
     assert all(
         not isinstance(value, list | tuple | set)
         for key, value in health.items()
-        if key not in {"config", "model", "benchmark", "drift", "feature_coverage"}
+        if key
+        not in {"config", "model", "benchmark", "drift", "feature_coverage", "warnings"}
     )
 
 
@@ -293,7 +296,8 @@ def test_ml_health_summary_rebuilds_canonical_shape_when_payload_incomplete():
     assert all(
         not isinstance(value, list | tuple | set)
         for key, value in health.items()
-        if key not in {"model", "benchmark", "drift", "feature_coverage", "config"}
+        if key
+        not in {"model", "benchmark", "drift", "feature_coverage", "config", "warnings"}
     )
 
 

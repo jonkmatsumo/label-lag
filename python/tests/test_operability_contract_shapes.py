@@ -51,6 +51,7 @@ def test_ml_health_contract_shape_and_bounds():
         "drift",
         "feature_coverage",
         "config",
+        "warnings",
         "status",
         "state",
         "active_model_version",
@@ -84,6 +85,7 @@ def test_ml_health_contract_shape_and_bounds():
         "last_error_code",
     }
     assert set(health["feature_coverage"].keys()) == {"last_ratio", "below_threshold"}
+    assert isinstance(health["warnings"], list)
     assert health["status"] in {"success", "failure", "unknown", "not_run"}
     assert isinstance(health["model"]["state"], str)
     assert isinstance(health["model"]["active_model_version"], str)
@@ -120,7 +122,9 @@ def test_ml_health_contract_shape_and_bounds():
         health["drift_last_error_code"] is None
         or len(health["drift_last_error_code"]) <= 64
     )
-    for value in health.values():
+    for key, value in health.items():
+        if key == "warnings":
+            continue
         assert not isinstance(value, list | tuple | set)
 
 

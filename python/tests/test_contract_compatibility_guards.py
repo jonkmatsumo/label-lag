@@ -22,6 +22,7 @@ ML_HEALTH_KEYS = {
     "drift",
     "feature_coverage",
     "config",
+    "warnings",
     "status",
     "state",
     "active_model_version",
@@ -140,6 +141,15 @@ def test_ml_health_contract_guard_shape_types_and_bounds():
     assert set(health["config"].keys()) == ML_HEALTH_CONFIG_KEYS
 
     assert isinstance(health["state"], str)
+    assert isinstance(health["warnings"], list)
+    assert set(health["warnings"]).issubset(
+        {
+            "schema_mismatch_detected",
+            "reload_failed_using_last_known_good",
+            "feature_coverage_below_threshold",
+            "drift_reference_unavailable",
+        }
+    )
     assert health["status"] in {"success", "failure", "unknown", "not_run"}
     assert isinstance(health["active_model_version"], str)
     assert isinstance(health["last_reload_status"], str)
@@ -178,7 +188,8 @@ def test_ml_health_contract_guard_shape_types_and_bounds():
     assert all(
         not isinstance(value, list | tuple | set)
         for key, value in health.items()
-        if key not in {"model", "benchmark", "drift", "feature_coverage", "config"}
+        if key
+        not in {"model", "benchmark", "drift", "feature_coverage", "config", "warnings"}
     )
 
 

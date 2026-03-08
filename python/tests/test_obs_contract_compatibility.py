@@ -21,6 +21,7 @@ ML_HEALTH_REQUIRED_KEYS = {
     "drift",
     "feature_coverage",
     "config",
+    "warnings",
     "status",
     "state",
     "active_model_version",
@@ -115,6 +116,16 @@ def _assert_ml_health_contract(health: dict) -> None:
     assert set(health["config"].keys()) == ML_HEALTH_CONFIG_KEYS
 
     assert isinstance(health["state"], str)
+    assert isinstance(health["warnings"], list)
+    assert len(health["warnings"]) <= 4
+    assert set(health["warnings"]).issubset(
+        {
+            "schema_mismatch_detected",
+            "reload_failed_using_last_known_good",
+            "feature_coverage_below_threshold",
+            "drift_reference_unavailable",
+        }
+    )
     assert health["status"] in {"success", "failure", "unknown", "not_run"}
     assert isinstance(health["active_model_version"], str)
     assert isinstance(health["last_reload_status"], str)
@@ -160,7 +171,14 @@ def _assert_ml_health_contract(health: dict) -> None:
     assert all(isinstance(value, bool) for value in health["config"].values())
 
     for key, value in health.items():
-        if key in {"model", "benchmark", "drift", "feature_coverage", "config"}:
+        if key in {
+            "model",
+            "benchmark",
+            "drift",
+            "feature_coverage",
+            "config",
+            "warnings",
+        }:
             continue
         assert not isinstance(value, dict | list | tuple | set)
 

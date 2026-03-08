@@ -191,6 +191,7 @@ class TestModelManagerDiagnostics:
         assert {"model", "benchmark", "drift", "feature_coverage"}.issubset(
             health.keys()
         )
+        assert isinstance(health["warnings"], list)
         assert health["status"] in OPERABILITY_STATUSES
         assert set(health["model"].keys()) == {
             "state",
@@ -263,6 +264,7 @@ class TestModelManagerDiagnostics:
             "drift",
             "feature_coverage",
             "config",
+            "warnings",
             "status",
             "state",
             "active_model_version",
@@ -278,6 +280,7 @@ class TestModelManagerDiagnostics:
             "drift_last_error_code",
         }
         assert health["benchmark_status"] is None
+        assert health["warnings"] == []
         assert health["status"] in OPERABILITY_STATUSES
         assert health["drift"]["last_error_code"] is None
         assert health["drift_last_error_code"] is None
