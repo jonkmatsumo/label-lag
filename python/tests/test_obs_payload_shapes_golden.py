@@ -47,6 +47,8 @@ def test_ml_health_payload_golden_shape_and_bounds():
         "drift",
         "feature_coverage",
         "config",
+        "warnings",
+        "status",
         "state",
         "active_model_version",
         "last_reload_status",
@@ -73,6 +75,8 @@ def test_ml_health_payload_golden_shape_and_bounds():
         "last_error_code",
     }
     assert set(health["feature_coverage"].keys()) == {"last_ratio", "below_threshold"}
+    assert isinstance(health["warnings"], list)
+    assert health["status"] in {"success", "failure", "unknown", "not_run"}
     assert health["state"] in {"idle", "loading", "ready", "failed"}
     assert len(health["active_model_version"]) <= 64
     assert len(health["last_reload_status"]) <= 32
@@ -149,8 +153,14 @@ def test_detect_drift_payload_golden_shape_and_bounds(mock_live, mock_ref):
         "alerts",
         "reference_resolution",
         "reference_model_version",
+        "reference_resolution_mode_requested",
+        "reference_resolution_mode",
+        "reference_model_version_chosen",
+        "reference_alias_requested",
+        "reference_resolution_warning",
     }
     assert result["resolution_mode"] in {"alias", "stage", "latest", "none"}
+    assert result["reference_resolution_mode"] == result["resolution_mode"]
     assert isinstance(result["features"], dict)
     assert len(result["features"]) <= len(MONITORED_FEATURES)
     assert len(result["drifted_features"]) <= len(MONITORED_FEATURES)
@@ -161,6 +171,9 @@ def test_detect_drift_payload_golden_shape_and_bounds(mock_live, mock_ref):
     assert result["error"] is None
     assert result["reference_model_version"] is None or (
         len(result["reference_model_version"]) <= 64
+    )
+    assert result["reference_model_version_chosen"] is None or (
+        len(result["reference_model_version_chosen"]) <= 64
     )
 
     for feature_name, feature_result in result["features"].items():
@@ -206,6 +219,11 @@ def test_detect_drift_error_payload_golden_shape_and_bounds(mock_live, mock_ref)
         "alerts",
         "reference_resolution",
         "reference_model_version",
+        "reference_resolution_mode_requested",
+        "reference_resolution_mode",
+        "reference_model_version_chosen",
+        "reference_alias_requested",
+        "reference_resolution_warning",
         "error",
     }
     assert result["error_code"] == DriftErrorCode.NO_REFERENCE_DATA.value

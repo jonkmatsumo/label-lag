@@ -22,6 +22,8 @@ ML_HEALTH_KEYS = {
     "drift",
     "feature_coverage",
     "config",
+    "warnings",
+    "status",
     "state",
     "active_model_version",
     "last_reload_status",
@@ -68,6 +70,11 @@ DRIFT_RESULT_KEYS = {
     "alerts",
     "reference_resolution",
     "reference_model_version",
+    "reference_resolution_mode_requested",
+    "reference_resolution_mode",
+    "reference_model_version_chosen",
+    "reference_alias_requested",
+    "reference_resolution_warning",
 }
 REFERENCE_RESOLUTION_KEYS = {
     "requested_alias",
@@ -139,6 +146,16 @@ def test_ml_health_contract_guard_shape_types_and_bounds():
     assert set(health["config"].keys()) == ML_HEALTH_CONFIG_KEYS
 
     assert isinstance(health["state"], str)
+    assert isinstance(health["warnings"], list)
+    assert set(health["warnings"]).issubset(
+        {
+            "schema_mismatch_detected",
+            "reload_failed_using_last_known_good",
+            "feature_coverage_below_threshold",
+            "drift_reference_unavailable",
+        }
+    )
+    assert health["status"] in {"success", "failure", "unknown", "not_run"}
     assert isinstance(health["active_model_version"], str)
     assert isinstance(health["last_reload_status"], str)
     assert len(health["active_model_version"]) <= 64
@@ -176,7 +193,8 @@ def test_ml_health_contract_guard_shape_types_and_bounds():
     assert all(
         not isinstance(value, list | tuple | set)
         for key, value in health.items()
-        if key not in {"model", "benchmark", "drift", "feature_coverage", "config"}
+        if key
+        not in {"model", "benchmark", "drift", "feature_coverage", "config", "warnings"}
     )
 
 
@@ -263,12 +281,26 @@ def test_drift_contract_guard_shape_across_modes(
     assert result["error_code"] == expected_code
     assert result["resolution_mode"] == expected_mode
     assert result["reference_model_version"] == expected_version
+    assert result["reference_model_version_chosen"] == expected_version
     assert isinstance(result["timestamp"], str)
     assert (
         result["error_message"] is None
         or len(result["error_message"]) <= MAX_DRIFT_ERROR_MESSAGE_LENGTH
     )
     assert set(result["reference_resolution"].keys()) == REFERENCE_RESOLUTION_KEYS
+    assert result["reference_resolution_mode"] == result["resolution_mode"]
+    assert result["reference_resolution_mode_requested"] in {
+        DriftResolutionMode.ALIAS.value,
+        DriftResolutionMode.STAGE.value,
+        DriftResolutionMode.LATEST.value,
+        DriftResolutionMode.NONE.value,
+    }
+    assert result["reference_alias_requested"] is None or isinstance(
+        result["reference_alias_requested"], str
+    )
+    assert result["reference_resolution_warning"] is None or isinstance(
+        result["reference_resolution_warning"], str
+    )
     assert (
         result["reference_resolution"]["resolution_mode"] == result["resolution_mode"]
     )

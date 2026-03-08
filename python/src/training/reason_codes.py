@@ -59,6 +59,7 @@ class BenchmarkStatus(str, Enum):
     SKIPPED_SAMPLED_OUT = "skipped_sampled_out"
     SUCCESS = "success"
     FAILED = "failed"
+    UNKNOWN = "unknown"
 
 
 class ModelManagerState(str, Enum):
@@ -78,6 +79,15 @@ class ReloadStatus(str, Enum):
     FAILED = "failed"
 
 
+class OperabilityStatus(str, Enum):
+    """Canonical operator-facing status vocabulary for health summaries."""
+
+    SUCCESS = "success"
+    FAILURE = "failure"
+    UNKNOWN = "unknown"
+    NOT_RUN = "not_run"
+
+
 class ResumeValidationReason(str, Enum):
     """Reason codes for Optuna resume validation outcomes."""
 
@@ -94,6 +104,15 @@ class DiagnosticsDegradedReason(str, Enum):
     FEATURE_COVERAGE_WARNING = "feature_coverage_warning"
 
 
+class DiagnosticsWarningCode(str, Enum):
+    """Compact bounded warning codes for operator-facing diagnostics summaries."""
+
+    SCHEMA_MISMATCH_DETECTED = "schema_mismatch_detected"
+    RELOAD_FAILED_USING_LAST_KNOWN_GOOD = "reload_failed_using_last_known_good"
+    FEATURE_COVERAGE_BELOW_THRESHOLD = "feature_coverage_below_threshold"
+    DRIFT_REFERENCE_UNAVAILABLE = "drift_reference_unavailable"
+
+
 RELOAD_FAILURE_REASONS = frozenset(reason.value for reason in ReloadFailureReason)
 SCHEMA_MISMATCH_REASONS = frozenset(reason.value for reason in SchemaMismatchReason)
 CALIBRATION_SKIP_REASONS = frozenset(reason.value for reason in CalibrationSkipReason)
@@ -103,13 +122,17 @@ DRIFT_RESOLUTION_MODES = frozenset(reason.value for reason in DriftResolutionMod
 BENCHMARK_STATUSES = frozenset(reason.value for reason in BenchmarkStatus)
 MODEL_MANAGER_STATES = frozenset(reason.value for reason in ModelManagerState)
 RELOAD_STATUSES = frozenset(reason.value for reason in ReloadStatus)
+OPERABILITY_STATUSES = frozenset(reason.value for reason in OperabilityStatus)
 RESUME_VALIDATION_REASONS = frozenset(reason.value for reason in ResumeValidationReason)
 DIAGNOSTICS_DEGRADED_REASONS = frozenset(
     reason.value for reason in DiagnosticsDegradedReason
 )
+DIAGNOSTICS_WARNING_CODES = frozenset(reason.value for reason in DiagnosticsWarningCode)
 
 # Diagnostics snapshot keys used by ModelManager.get_diagnostics().
 DIAGNOSTIC_KEY_STATE = "state"
+DIAGNOSTIC_KEY_STATUS = "status"
+DIAGNOSTIC_KEY_WARNINGS = "warnings"
 DIAGNOSTIC_KEY_MODEL_VERSION = "model_version"
 DIAGNOSTIC_KEY_MODEL_SOURCE = "model_source"
 DIAGNOSTIC_KEY_LAST_ERROR = "last_error"

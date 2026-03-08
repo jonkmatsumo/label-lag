@@ -51,6 +51,8 @@ def test_ml_health_contract_shape_and_bounds():
         "drift",
         "feature_coverage",
         "config",
+        "warnings",
+        "status",
         "state",
         "active_model_version",
         "last_reload_status",
@@ -83,6 +85,8 @@ def test_ml_health_contract_shape_and_bounds():
         "last_error_code",
     }
     assert set(health["feature_coverage"].keys()) == {"last_ratio", "below_threshold"}
+    assert isinstance(health["warnings"], list)
+    assert health["status"] in {"success", "failure", "unknown", "not_run"}
     assert isinstance(health["model"]["state"], str)
     assert isinstance(health["model"]["active_model_version"], str)
     assert isinstance(health["model"]["last_reload_status"], str)
@@ -118,7 +122,9 @@ def test_ml_health_contract_shape_and_bounds():
         health["drift_last_error_code"] is None
         or len(health["drift_last_error_code"]) <= 64
     )
-    for value in health.values():
+    for key, value in health.items():
+        if key == "warnings":
+            continue
         assert not isinstance(value, list | tuple | set)
 
 
@@ -162,9 +168,16 @@ def test_drift_contract_shape_and_bounds(mock_live, mock_ref):
         "alerts",
         "reference_resolution",
         "reference_model_version",
+        "reference_resolution_mode_requested",
+        "reference_resolution_mode",
+        "reference_model_version_chosen",
+        "reference_alias_requested",
+        "reference_resolution_warning",
     }
     assert result["resolution_mode"] in {"alias", "stage", "latest", "none"}
+    assert result["reference_resolution_mode"] == result["resolution_mode"]
     assert result["reference_model_version"] == "9"
+    assert result["reference_model_version_chosen"] == "9"
     assert len(result["features"]) <= len(MONITORED_FEATURES)
     assert len(result["drifted_features"]) <= len(MONITORED_FEATURES)
     assert len(result["alerts"]) <= len(MONITORED_FEATURES)
@@ -215,6 +228,11 @@ def test_drift_error_contract_shape_and_bounds(mock_live, mock_ref):
         "alerts",
         "reference_resolution",
         "reference_model_version",
+        "reference_resolution_mode_requested",
+        "reference_resolution_mode",
+        "reference_model_version_chosen",
+        "reference_alias_requested",
+        "reference_resolution_warning",
         "error",
     }
     assert result["error_code"] == DriftErrorCode.NO_REFERENCE_DATA.value
