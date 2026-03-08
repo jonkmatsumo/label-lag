@@ -21,6 +21,7 @@ These keys are guaranteed to exist for operability guardrails, including idle st
 | Field | Type | Notes |
 | --- | --- | --- |
 | `state` | `string` | ModelManager lifecycle state. |
+| `status` | `string` | Canonical operator status (`success`, `failure`, `unknown`, `not_run`). |
 | `model_version` | `string` | Active model version or `"unknown"`. |
 | `model_source` | `string` | Active source (`mlflow`, `fallback`, `none`). |
 | `last_error` | `string \| null` | Last error text when present. |
@@ -40,6 +41,7 @@ These keys are guaranteed to exist for operability guardrails, including idle st
 | `ml.model.version` | `string \| null` | Training-side model version value. |
 | `ml.feature.schema_hash` | `string \| null` | Training-side feature schema hash. |
 | `config` | `object` | Effective strict-mode runtime config (`strict_feature_schema`, `strict_tuning_resume_validation`, `strict_split_strategy_validation`). Also projected to forecast `GetHealth` component flags. |
+| `warnings` | `list[string]` | Compact bounded warning-code summary. |
 | `ml_health` | `object` | Compact bounded operator summary derived from diagnostics + last drift cache snapshot when available. |
 
 ## Nullable Value Conditions (Keys Still Present)
@@ -52,6 +54,7 @@ These keys are guaranteed to exist for operability guardrails, including idle st
 | `benchmark_last_run_ts` | Null until benchmark path has run or skipped. |
 | `benchmark_last_status` | Null until benchmark path has run or skipped. |
 | `feature_coverage_warning_last_seen_ts` | Null until coverage warning has been observed. |
+| `warnings` / `ml_health.warnings` | Always present as a bounded list (possibly empty), never null. |
 | `ml.training.run_id` / `ml.model.version` / `ml.feature.schema_hash` | Null when training identity artifact is unavailable. |
 | `ml_health.model.last_reload_ts` / `ml_health.benchmark.last_status` / `ml_health.benchmark.last_run_ts` / `ml_health.drift.last_error_code` / legacy aliases (`ml_health.last_reload_ts`, `ml_health.benchmark_status`, `ml_health.drift_last_computed_ts`, `ml_health.drift_last_error_code`) | Null when source value has not been observed yet. |
 | `ml_health.drift_reference_available` | Null when no drift run has been cached yet. |
@@ -63,6 +66,12 @@ These keys are guaranteed to exist for operability guardrails, including idle st
 - `loading`
 - `ready`
 - `failed`
+
+`status` (canonical operator summary on diagnostics + `ml_health`):
+- `success`
+- `failure`
+- `unknown`
+- `not_run`
 
 `last_reload_status`:
 - `idle`
@@ -79,6 +88,7 @@ These keys are guaranteed to exist for operability guardrails, including idle st
 - `skipped_sampled_out`
 - `success`
 - `failed`
+- `unknown`
 
 `degraded_reasons` (bounded list values):
 - `reload_failed`
@@ -93,6 +103,12 @@ These keys are guaranteed to exist for operability guardrails, including idle st
 `ml_health.feature_coverage_status`:
 - `ok`
 - `warning`
+
+`warnings` / `ml_health.warnings` (bounded list values):
+- `schema_mismatch_detected`
+- `reload_failed_using_last_known_good`
+- `feature_coverage_below_threshold`
+- `drift_reference_unavailable`
 
 `ml_health.drift.reference_resolution_mode` and legacy alias `ml_health.drift_resolution_mode`:
 - `alias`
@@ -122,6 +138,7 @@ backward compatibility.
   - `last_ratio`
   - `below_threshold`
 - `config`
+- `warnings` (bounded list of warning codes)
 
 `ml_health.config` keys (always present, default `false`):
 
@@ -153,6 +170,11 @@ Legacy aliases retained in `ml_health`:
 - `drift_last_computed_ts`
 - `drift_last_error_code`
 
+Additional canonical top-level summary fields in `ml_health`:
+
+- `status`
+- `warnings`
+
 `ml_health.feature_coverage.last_ratio` semantics:
 
 - Bounded float in `[0.0, 1.0]` when observed.
@@ -182,6 +204,11 @@ Core top-level keys (always present):
 - `alerts`
 - `reference_resolution`
 - `reference_model_version`
+- `reference_resolution_mode_requested`
+- `reference_resolution_mode`
+- `reference_model_version_chosen`
+- `reference_alias_requested`
+- `reference_resolution_warning`
 
 Field semantics:
 
@@ -189,7 +216,12 @@ Field semantics:
 - `error_message`: short operator-facing message or `null`, capped at 200 chars.
 - `error`: legacy alias that mirrors `error_message` (`null` on no-error paths).
 - `resolution_mode`: canonical reference resolution mode.
+- `reference_resolution_mode_requested`: requested reference-resolution mode.
+- `reference_resolution_mode`: resolved reference-resolution mode (mirrors `resolution_mode`).
 - `reference_model_version`: selected reference model version when available.
+- `reference_model_version_chosen`: additive alias for selected reference model version.
+- `reference_alias_requested`: requested alias (when configured).
+- `reference_resolution_warning`: bounded optional warning code explaining fallback/ambiguity.
 - `drift_error`: legacy drift code mirror (set when canonical `error_code` is set).
 
 `reference_resolution` shape (always present):
@@ -278,6 +310,19 @@ Notes:
 - `alias_candidate_count` is always an integer (default `0`).
 - `alias_ambiguous` is always a boolean (default `false`).
 
+Top-level reference metadata clarifies requested vs resolved outcomes:
+
+- `reference_resolution_mode_requested`: canonical requested mode.
+- `reference_resolution_mode`: canonical resolved mode (same as `resolution_mode`).
+- `reference_model_version_chosen`: chosen model version (`null` when unresolved).
+- `reference_alias_requested`: requested alias (`null` when not configured).
+- `reference_resolution_warning`: optional bounded warning code:
+  - `alias_not_found_fallback`
+  - `alias_ambiguous_selected_highest`
+  - `stage_fallback_used`
+  - `latest_fallback_used`
+  - `no_reference_versions_available`
+
 ### Per-Feature Bucketing Metadata (When Feature Is Evaluated)
 
 Each `features.<name>.bucketing` map includes:
@@ -301,6 +346,7 @@ Each `features.<name>.bucketing` map includes:
 ```json
 {
   "state": "ready",
+  "status": "success",
   "model_version": "v17",
   "model_source": "mlflow",
   "last_error": null,
@@ -325,6 +371,7 @@ Each `features.<name>.bucketing` map includes:
     "strict_tuning_resume_validation": false,
     "strict_split_strategy_validation": false
   },
+  "warnings": [],
   "ml_health": {
     "model": {
       "state": "ready",
@@ -351,6 +398,8 @@ Each `features.<name>.bucketing` map includes:
       "strict_tuning_resume_validation": false,
       "strict_split_strategy_validation": false
     },
+    "warnings": [],
+    "status": "success",
     "state": "ready",
     "active_model_version": "v17",
     "last_reload_status": "success",
@@ -413,6 +462,11 @@ Each `features.<name>.bucketing` map includes:
     "selected_model_version": "9",
     "selected_run_id": "run-v9"
   },
-  "reference_model_version": "9"
+  "reference_model_version": "9",
+  "reference_resolution_mode_requested": "alias",
+  "reference_resolution_mode": "alias",
+  "reference_model_version_chosen": "9",
+  "reference_alias_requested": "champion",
+  "reference_resolution_warning": null
 }
 ```
