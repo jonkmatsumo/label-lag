@@ -115,6 +115,16 @@ MAX_DRIFT_REFERENCE_RUN_ID_LENGTH = MAX_REFERENCE_RUN_ID_LENGTH
 MAX_DRIFT_REFERENCE_ALIAS_LENGTH = MAX_REFERENCE_METADATA_TEXT_LENGTH
 MAX_DRIFT_BUCKETTYPE_LENGTH = 24
 MAX_DRIFT_BREAKPOINTS = MAX_BREAKPOINTS_COUNT
+MAX_REFERENCE_RESOLUTION_WARNING_LENGTH = 64
+REFERENCE_RESOLUTION_WARNING_CODES = frozenset(
+    {
+        "alias_not_found_fallback",
+        "alias_ambiguous_selected_highest",
+        "stage_fallback_used",
+        "latest_fallback_used",
+        "no_reference_versions_available",
+    }
+)
 _DEFAULT_DRIFT_ERROR_MESSAGES = {
     DriftErrorCode.NO_REFERENCE_DATA.value: "No reference data available",
     DriftErrorCode.INSUFFICIENT_REFERENCE_SAMPLES.value: (
@@ -322,17 +332,21 @@ def _select_reference_model_version(
     """
     metadata: dict[str, Any] = {
         "requested_alias": None,
+        "requested_mode": DriftResolutionMode.STAGE.value,
         "resolution_strategy": None,
+        "resolution_warning": None,
         "alias_candidate_count": 0,
         "alias_ambiguous": False,
     }
 
     if not versions:
+        metadata["resolution_warning"] = "no_reference_versions_available"
         return None, metadata
 
     normalized_alias = str(alias_name or "").strip().lstrip("@")
     if normalized_alias:
         metadata["requested_alias"] = normalized_alias
+        metadata["requested_mode"] = DriftResolutionMode.ALIAS.value
         alias_candidates = [
             version
             for version in versions
@@ -348,6 +362,7 @@ def _select_reference_model_version(
             metadata["alias_ambiguous"] = len(alias_candidates_sorted) > 1
             selected_alias_version = alias_candidates_sorted[0]
             if metadata["alias_ambiguous"]:
+                metadata["resolution_warning"] = "alias_ambiguous_selected_highest"
                 logger.warning(
                     "Drift alias '@%s' resolved to %s candidates; selecting highest "
                     "version deterministically (%s).",
@@ -362,6 +377,7 @@ def _select_reference_model_version(
             "falling back to stage/latest resolution.",
             normalized_alias,
         )
+        metadata["resolution_warning"] = "alias_not_found_fallback"
 
     stage_candidates = [
         version
@@ -373,6 +389,8 @@ def _select_reference_model_version(
             stage_candidates, key=_safe_model_version_number, reverse=True
         )[0]
         metadata["resolution_strategy"] = "production_stage"
+        if metadata.get("resolution_warning") is None:
+            metadata["resolution_warning"] = "stage_fallback_used"
 
         global _DRIFT_STAGE_FALLBACK_WARNED
         if not _DRIFT_STAGE_FALLBACK_WARNED:
@@ -387,6 +405,8 @@ def _select_reference_model_version(
 
     selected_latest = sorted(versions, key=_safe_model_version_number, reverse=True)[0]
     metadata["resolution_strategy"] = "latest_version"
+    if metadata.get("resolution_warning") is None:
+        metadata["resolution_warning"] = "latest_fallback_used"
 
     global _DRIFT_LATEST_FALLBACK_WARNED
     if not _DRIFT_LATEST_FALLBACK_WARNED:
@@ -409,6 +429,36 @@ def _normalize_resolution_mode(raw_strategy: Any) -> str:
     if normalized in _LEGACY_RESOLUTION_MODE_ALIASES:
         return _LEGACY_RESOLUTION_MODE_ALIASES[normalized]
     return DriftResolutionMode.NONE.value
+
+
+def _normalize_requested_resolution_mode(
+    raw_mode: Any,
+    *,
+    requested_alias: Any,
+) -> str:
+    normalized = _normalize_resolution_mode(raw_mode)
+    if normalized != DriftResolutionMode.NONE.value:
+        return normalized
+    alias = _bounded_optional_text(
+        requested_alias,
+        max_len=MAX_REFERENCE_METADATA_TEXT_LENGTH,
+    )
+    if alias is not None:
+        return DriftResolutionMode.ALIAS.value
+    return DriftResolutionMode.STAGE.value
+
+
+def _normalize_reference_resolution_warning(raw_warning: Any) -> str | None:
+    warning = _bounded_optional_text(
+        raw_warning,
+        max_len=MAX_REFERENCE_RESOLUTION_WARNING_LENGTH,
+    )
+    if warning is None:
+        return None
+    warning = warning.lower()
+    if warning not in REFERENCE_RESOLUTION_WARNING_CODES:
+        return None
+    return warning
 
 
 def _bounded_metadata_text(value: Any, *, max_len: int) -> str | None:
@@ -650,6 +700,11 @@ def _finalize_drift_error_contract(results: dict[str, Any]) -> dict[str, Any]:
     results.setdefault("drift_error", None)
     results.setdefault("reference_resolution", {})
     results.setdefault("reference_model_version", None)
+    results.setdefault("reference_resolution_mode_requested", None)
+    results.setdefault("reference_resolution_mode", None)
+    results.setdefault("reference_model_version_chosen", None)
+    results.setdefault("reference_alias_requested", None)
+    results.setdefault("reference_resolution_warning", None)
     raw_resolution_mode = _normalize_resolution_mode(results.get("resolution_mode"))
     reference_resolution = _normalize_reference_resolution_metadata(
         results.get("reference_resolution"),
@@ -710,6 +765,42 @@ def _finalize_drift_error_contract(results: dict[str, Any]) -> dict[str, Any]:
     results["reference_model_version"] = reference_model_version
     if reference_resolution.get("selected_model_version") is None:
         reference_resolution["selected_model_version"] = reference_model_version
+
+    requested_alias = _bounded_optional_text(
+        results.get("reference_alias_requested"),
+        max_len=MAX_REFERENCE_METADATA_TEXT_LENGTH,
+    )
+    if requested_alias is None:
+        requested_alias = _bounded_optional_text(
+            reference_resolution.get("requested_alias"),
+            max_len=MAX_REFERENCE_METADATA_TEXT_LENGTH,
+        )
+    results["reference_alias_requested"] = requested_alias
+    requested_mode = _normalize_requested_resolution_mode(
+        results.get("reference_resolution_mode_requested"),
+        requested_alias=requested_alias,
+    )
+    results["reference_resolution_mode_requested"] = requested_mode
+    results["reference_resolution_mode"] = normalized_resolution_mode
+    results["reference_model_version_chosen"] = reference_model_version
+
+    reference_resolution_warning = _normalize_reference_resolution_warning(
+        results.get("reference_resolution_warning")
+    )
+    if (
+        reference_resolution_warning is None
+        and requested_mode == DriftResolutionMode.ALIAS.value
+        and normalized_resolution_mode
+        in {DriftResolutionMode.STAGE.value, DriftResolutionMode.LATEST.value}
+    ):
+        reference_resolution_warning = "alias_not_found_fallback"
+    if (
+        reference_resolution_warning is None
+        and normalized_resolution_mode == DriftResolutionMode.NONE.value
+        and reference_model_version is None
+    ):
+        reference_resolution_warning = "no_reference_versions_available"
+    results["reference_resolution_warning"] = reference_resolution_warning
 
     return results
 
@@ -807,6 +898,14 @@ def detect_drift(
 ) -> dict[str, Any]:
     """Run drift detection."""
     initial_reference_resolution = _normalize_reference_resolution({})
+    initial_requested_alias = _bounded_optional_text(
+        DRIFT_REFERENCE_MODEL_ALIAS.lstrip("@"),
+        max_len=MAX_REFERENCE_METADATA_TEXT_LENGTH,
+    )
+    initial_requested_mode = _normalize_requested_resolution_mode(
+        None,
+        requested_alias=initial_requested_alias,
+    )
     results = {
         "timestamp": datetime.now(UTC).isoformat(),
         "hours_analyzed": hours,
@@ -824,12 +923,35 @@ def detect_drift(
         "alerts": [],
         "reference_resolution": initial_reference_resolution,
         "reference_model_version": None,
+        "reference_resolution_mode_requested": initial_requested_mode,
+        "reference_resolution_mode": DriftResolutionMode.NONE.value,
+        "reference_model_version_chosen": None,
+        "reference_alias_requested": initial_requested_alias,
+        "reference_resolution_warning": None,
     }
 
     reference_result = get_reference_data(include_metadata=True)
     reference_resolution: dict[str, Any] = initial_reference_resolution
     if isinstance(reference_result, tuple):
         df_reference, raw_reference_resolution = reference_result
+        if isinstance(raw_reference_resolution, dict):
+            results["reference_resolution_mode_requested"] = (
+                _normalize_requested_resolution_mode(
+                    raw_reference_resolution.get("requested_mode"),
+                    requested_alias=raw_reference_resolution.get("requested_alias")
+                    or initial_requested_alias,
+                )
+            )
+            results["reference_alias_requested"] = _bounded_optional_text(
+                raw_reference_resolution.get("requested_alias")
+                or initial_requested_alias,
+                max_len=MAX_REFERENCE_METADATA_TEXT_LENGTH,
+            )
+            results["reference_resolution_warning"] = (
+                _normalize_reference_resolution_warning(
+                    raw_reference_resolution.get("resolution_warning")
+                )
+            )
         reference_resolution = _normalize_reference_resolution(raw_reference_resolution)
     else:
         df_reference = reference_result
@@ -842,6 +964,7 @@ def detect_drift(
         reference_resolution.get("resolution_mode")
         or reference_resolution.get("resolution_strategy")
     )
+    results["reference_resolution_mode"] = results["resolution_mode"]
 
     if df_reference is None or len(df_reference) == 0:
         _set_canonical_error(
