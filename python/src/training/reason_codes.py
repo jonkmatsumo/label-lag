@@ -52,6 +52,24 @@ class DriftResolutionMode(str, Enum):
     NONE = "none"
 
 
+class DriftReferenceResolutionWarning(str, Enum):
+    """Canonical warning codes describing reference resolution fallback behavior."""
+
+    ALIAS_NOT_FOUND_FALLBACK = "alias_not_found_fallback"
+    ALIAS_AMBIGUOUS_SELECTED_HIGHEST = "alias_ambiguous_selected_highest"
+    STAGE_FALLBACK_USED = "stage_fallback_used"
+    LATEST_FALLBACK_USED = "latest_fallback_used"
+    NO_REFERENCE_VERSIONS_AVAILABLE = "no_reference_versions_available"
+
+
+class DriftFeatureStatus(str, Enum):
+    """Canonical per-feature drift status labels."""
+
+    OK = "OK"
+    WARNING = "WARNING"
+    CRITICAL = "CRITICAL"
+
+
 class BenchmarkStatus(str, Enum):
     """Status codes for inference benchmark execution."""
 
@@ -119,6 +137,10 @@ CALIBRATION_SKIP_REASONS = frozenset(reason.value for reason in CalibrationSkipR
 DRIFT_FALLBACK_REASONS = frozenset(reason.value for reason in DriftFallbackReason)
 DRIFT_ERROR_CODES = frozenset(reason.value for reason in DriftErrorCode)
 DRIFT_RESOLUTION_MODES = frozenset(reason.value for reason in DriftResolutionMode)
+DRIFT_REFERENCE_RESOLUTION_WARNING_CODES = frozenset(
+    reason.value for reason in DriftReferenceResolutionWarning
+)
+DRIFT_FEATURE_STATUSES = frozenset(reason.value for reason in DriftFeatureStatus)
 BENCHMARK_STATUSES = frozenset(reason.value for reason in BenchmarkStatus)
 MODEL_MANAGER_STATES = frozenset(reason.value for reason in ModelManagerState)
 RELOAD_STATUSES = frozenset(reason.value for reason in ReloadStatus)
