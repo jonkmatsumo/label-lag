@@ -139,6 +139,12 @@ backward compatibility.
   - `below_threshold`
 - `config`
 - `warnings` (bounded list of warning codes)
+- summary block
+  - `status`
+  - `overall_status`
+  - `degraded`
+  - `has_warnings`
+  - `warning_count`
 
 `ml_health.config` keys (always present, default `false`):
 
@@ -173,6 +179,10 @@ Legacy aliases retained in `ml_health`:
 Additional canonical top-level summary fields in `ml_health`:
 
 - `status`
+- `overall_status` (authoritative alias of `status`)
+- `degraded` (derived from canonical `degraded_reasons` + `overall_status`)
+- `has_warnings` (derived from canonical warnings list)
+- `warning_count` (derived from canonical warnings list length)
 - `warnings`
 
 `ml_health.feature_coverage.last_ratio` semantics:
@@ -222,7 +232,7 @@ Field semantics:
 - `reference_model_version_chosen`: additive alias for selected reference model version.
 - `reference_alias_requested`: requested alias (when configured).
 - `reference_resolution_warning`: bounded optional warning code explaining fallback/ambiguity.
-- `drift_error`: legacy drift code mirror (set when canonical `error_code` is set).
+- `drift_error`: legacy drift code mirror; either canonical `error_code` value or `null`.
 
 `reference_resolution` shape (always present):
 
@@ -238,7 +248,7 @@ Field semantics:
 
 - `psi`: float
 - `status`: `OK` / `WARNING` / `CRITICAL`
-- `drift_error`: string or `null`
+- `drift_error`: canonical error code or `null`
 - `bucketing`: normalized metadata map with bounded keys:
   - `buckettype_requested`
   - `buckettype_used`
@@ -289,7 +299,7 @@ Legacy normalization behavior:
 - Legacy error-code aliases (for example `insufficient_reference_data`,
   `no_reference_model`, `no_live_window`) are normalized into canonical
   `error_code` values.
-- `error_message` is capped at 200 characters.
+- `error_message` is capped at 200 characters and is null when `error_code` is null.
 
 ### Reference Resolution Metadata (Always Present)
 
@@ -306,7 +316,7 @@ Legacy normalization behavior:
 Notes:
 
 - `resolution_mode` is canonical (`alias|stage|latest|none`).
-- `resolution_strategy` may preserve legacy values for compatibility.
+- `resolution_strategy` is canonical and mirrors `resolution_mode`.
 - `alias_candidate_count` is always an integer (default `0`).
 - `alias_ambiguous` is always a boolean (default `false`).
 
@@ -340,6 +350,12 @@ Each `features.<name>.bucketing` map includes:
 - `bucket_mass_ok`
 - `bucket_mass_guardrail_applied`
 - `drift_error`
+
+Bucketing normalization semantics:
+
+- `buckettype_requested` / `buckettype_used`: `bins` / `quantiles` / `null`.
+- `bucketing_fallback_reason`: canonical fallback reason (`tied_quantiles`, `insufficient_bucket_mass`) or `null`.
+- `drift_error`: canonical `error_code` value or `null`.
 
 ## Example Payload
 
@@ -400,6 +416,10 @@ Each `features.<name>.bucketing` map includes:
     },
     "warnings": [],
     "status": "success",
+    "overall_status": "success",
+    "degraded": false,
+    "has_warnings": false,
+    "warning_count": 0,
     "state": "ready",
     "active_model_version": "v17",
     "last_reload_status": "success",
