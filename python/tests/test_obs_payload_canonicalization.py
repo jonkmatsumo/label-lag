@@ -47,6 +47,10 @@ _ML_HEALTH_KEYS = {
     "config",
     "warnings",
     "status",
+    "overall_status",
+    "degraded",
+    "has_warnings",
+    "warning_count",
     "state",
     "active_model_version",
     "last_reload_status",
@@ -157,3 +161,6 @@ def test_ml_health_summary_canonicalizes_optional_fields_and_scalar_types():
     assert health["feature_coverage"]["last_ratio"] == 0.0
     assert health["feature_coverage"]["below_threshold"] is True
     assert health["warnings"] == ["feature_coverage_below_threshold"]
+    assert health["overall_status"] == health["status"]
+    assert health["has_warnings"] is True
+    assert health["warning_count"] == len(health["warnings"]) == 1

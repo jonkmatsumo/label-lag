@@ -118,6 +118,10 @@ def test_ml_health_summary_is_stable_and_bounded():
         "config",
         "warnings",
         "status",
+        "overall_status",
+        "degraded",
+        "has_warnings",
+        "warning_count",
         "state",
         "active_model_version",
         "last_reload_status",
@@ -157,6 +161,10 @@ def test_ml_health_summary_is_stable_and_bounded():
     assert isinstance(health["state"], str)
     assert isinstance(health["warnings"], list)
     assert health["status"] in OPERABILITY_STATUSES
+    assert health["overall_status"] == health["status"]
+    assert isinstance(health["degraded"], bool)
+    assert health["has_warnings"] == bool(health["warnings"])
+    assert health["warning_count"] == len(health["warnings"])
     assert isinstance(health["active_model_version"], str)
     assert isinstance(health["last_reload_status"], str)
     assert health["last_reload_ts"] is None or isinstance(
