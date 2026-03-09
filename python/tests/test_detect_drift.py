@@ -13,6 +13,7 @@ from training.detect_drift import (
     MIN_REFERENCE_SAMPLES,
     PSI_THRESHOLD_CRITICAL,
     _finalize_drift_error_contract,
+    _normalize_bucketing_metadata,
     calculate_psi,
     detect_drift,
     get_reference_data,
@@ -1209,3 +1210,52 @@ class TestDetectDrift:
 
         assert result["resolution_mode"] == expected_mode
         assert result["reference_resolution_mode"] == expected_mode
+
+    def test_noncanonical_drift_error_is_removed_from_finalized_contract(self):
+        legacy = {
+            "drift_error": "operator_specific_failure_code",
+            "error_code": None,
+            "error_message": "free-form message",
+            "error": "free-form message",
+            "resolution_mode": "none",
+            "reference_model_version": None,
+        }
+
+        result = _finalize_drift_error_contract(legacy)
+
+        assert result["error_code"] is None
+        assert result["drift_error"] is None
+        assert result["error_message"] is None
+        assert result["error"] is None
+
+    def test_reference_resolution_warning_is_hydrated_from_reference_metadata(self):
+        legacy = {
+            "resolution_mode": "stage",
+            "reference_resolution": {
+                "resolution_mode": "stage",
+                "resolution_warning": "stage_fallback_used",
+                "selected_model_version": "7",
+            },
+        }
+
+        result = _finalize_drift_error_contract(legacy)
+
+        assert result["reference_resolution_mode"] == DriftResolutionMode.STAGE.value
+        assert result["reference_resolution_warning"] == "stage_fallback_used"
+        assert result["reference_model_version_chosen"] == "7"
+
+    def test_bucketing_metadata_contract_drops_noncanonical_vocab(self):
+        normalized = _normalize_bucketing_metadata(
+            {
+                "buckettype_requested": "unexpected_bucket_scheme",
+                "buckettype_used": "quantiles",
+                "bucketing_fallback_reason": "custom_fallback_reason",
+                "drift_error": "custom_drift_error",
+                "breakpoints": [0, 1, 2],
+            }
+        )
+
+        assert normalized["buckettype_requested"] is None
+        assert normalized["buckettype_used"] == "quantiles"
+        assert normalized["bucketing_fallback_reason"] is None
+        assert normalized["drift_error"] is None
