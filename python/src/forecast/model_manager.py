@@ -46,6 +46,7 @@ from training.reason_codes import (
     DIAGNOSTIC_KEY_STATE,
     DIAGNOSTIC_KEY_STATUS,
     DIAGNOSTIC_KEY_WARNINGS,
+    DIAGNOSTICS_DEGRADED_REASONS,
     DIAGNOSTICS_WARNING_CODES,
     MODEL_MANAGER_STATES,
     RELOAD_FAILURE_REASONS,
@@ -162,6 +163,10 @@ class ModelManager:
         "config",
         "warnings",
         "status",
+        "overall_status",
+        "degraded",
+        "has_warnings",
+        "warning_count",
         "state",
         "active_model_version",
         "last_reload_status",
@@ -549,6 +554,30 @@ class ModelManager:
                 break
         return normalized
 
+    @classmethod
+    def _normalize_degraded_reasons(cls, raw_reasons: Any) -> list[str]:
+        if isinstance(raw_reasons, str):
+            candidates: list[Any] = [raw_reasons]
+        elif isinstance(raw_reasons, list | tuple | set):
+            candidates = list(raw_reasons)
+        else:
+            candidates = []
+        normalized: list[str] = []
+        for candidate in candidates:
+            reason = cls._bounded_optional_str(
+                candidate, max_len=cls._MAX_REASON_CODE_LENGTH
+            )
+            if reason is None:
+                continue
+            reason = reason.lower()
+            if reason not in DIAGNOSTICS_DEGRADED_REASONS:
+                continue
+            if reason not in normalized:
+                normalized.append(reason)
+            if len(normalized) >= 4:
+                break
+        return normalized
+
     @staticmethod
     def _normalize_benchmark_last_status(raw_status: Any) -> str | None:
         normalized = ModelManager._bounded_optional_str(raw_status, max_len=32)
@@ -842,6 +871,15 @@ class ModelManager:
                     DiagnosticsWarningCode.DRIFT_REFERENCE_UNAVAILABLE.value,
                 ]
             )
+        degraded_reasons = self._normalize_degraded_reasons(
+            diagnostics_snapshot.get(DIAGNOSTIC_KEY_DEGRADED_REASONS)
+        )
+        has_warnings = bool(warnings)
+        warning_count = len(warnings)
+        degraded = bool(degraded_reasons) or health_status in {
+            OperabilityStatus.FAILURE.value,
+            OperabilityStatus.UNKNOWN.value,
+        }
 
         # Keep legacy scalar aliases for compatibility with existing consumers.
         payload = {
@@ -852,6 +890,10 @@ class ModelManager:
             "config": strict_config,
             "warnings": warnings,
             "status": health_status,
+            "overall_status": health_status,
+            "degraded": degraded,
+            "has_warnings": has_warnings,
+            "warning_count": warning_count,
             "state": model_summary["state"],
             "active_model_version": model_summary["active_model_version"],
             "last_reload_status": model_summary["last_reload_status"],
