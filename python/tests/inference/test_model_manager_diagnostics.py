@@ -266,6 +266,10 @@ class TestModelManagerDiagnostics:
             "config",
             "warnings",
             "status",
+            "overall_status",
+            "degraded",
+            "has_warnings",
+            "warning_count",
             "state",
             "active_model_version",
             "last_reload_status",
@@ -282,6 +286,10 @@ class TestModelManagerDiagnostics:
         assert health["benchmark_status"] is None
         assert health["warnings"] == ["drift_reference_unavailable"]
         assert health["status"] in OPERABILITY_STATUSES
+        assert health["overall_status"] == health["status"]
+        assert health["degraded"] is False
+        assert health["has_warnings"] is True
+        assert health["warning_count"] == 1
         assert health["drift"]["last_error_code"] is None
         assert health["drift_last_error_code"] is None
         assert health["drift_last_computed_ts"] is None

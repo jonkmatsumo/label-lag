@@ -23,6 +23,10 @@ ML_HEALTH_REQUIRED_KEYS = {
     "config",
     "warnings",
     "status",
+    "overall_status",
+    "degraded",
+    "has_warnings",
+    "warning_count",
     "state",
     "active_model_version",
     "last_reload_status",
@@ -132,6 +136,10 @@ def _assert_ml_health_contract(health: dict) -> None:
         }
     )
     assert health["status"] in {"success", "failure", "unknown", "not_run"}
+    assert health["overall_status"] == health["status"]
+    assert isinstance(health["degraded"], bool)
+    assert health["has_warnings"] == bool(health["warnings"])
+    assert health["warning_count"] == len(health["warnings"])
     assert isinstance(health["active_model_version"], str)
     assert isinstance(health["last_reload_status"], str)
     assert isinstance(health["schema_mismatch_detected"], bool)

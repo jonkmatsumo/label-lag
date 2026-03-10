@@ -46,6 +46,10 @@ from training.reason_codes import (
     DIAGNOSTIC_KEY_STATE,
     DIAGNOSTIC_KEY_STATUS,
     DIAGNOSTIC_KEY_WARNINGS,
+    DIAGNOSTICS_DEGRADED_REASONS,
+    DIAGNOSTICS_WARNING_CODES,
+    MODEL_MANAGER_STATES,
+    RELOAD_FAILURE_REASONS,
     TRACE_KEY_ML_FEATURE_SCHEMA_HASH,
     TRACE_KEY_ML_MODEL_VERSION,
     TRACE_KEY_ML_TRAINING_RUN_ID,
@@ -143,6 +147,14 @@ class ModelManager:
     _ML_HEALTH_BENCHMARK_KEYS = ("enabled", "last_status", "last_run_ts")
     _ML_HEALTH_DRIFT_KEYS = ("reference_resolution_mode", "last_error_code")
     _ML_HEALTH_FEATURE_COVERAGE_KEYS = ("last_ratio", "below_threshold")
+    _MAX_STATE_LENGTH = 32
+    _MAX_MODEL_VERSION_LENGTH = 64
+    _MAX_MODEL_SOURCE_LENGTH = 16
+    _MAX_RELOAD_STATUS_LENGTH = 32
+    _MAX_REASON_CODE_LENGTH = 64
+    _MAX_LAST_ERROR_LENGTH = 200
+    _MAX_TRAINING_RUN_ID_LENGTH = 128
+    _MAX_SCHEMA_HASH_LENGTH = 128
     _ML_HEALTH_TOP_LEVEL_KEYS = (
         "model",
         "benchmark",
@@ -151,6 +163,10 @@ class ModelManager:
         "config",
         "warnings",
         "status",
+        "overall_status",
+        "degraded",
+        "has_warnings",
+        "warning_count",
         "state",
         "active_model_version",
         "last_reload_status",
@@ -530,15 +546,34 @@ class ModelManager:
             if warning is None:
                 continue
             warning = warning.lower()
-            if warning not in {
-                DiagnosticsWarningCode.SCHEMA_MISMATCH_DETECTED.value,
-                DiagnosticsWarningCode.RELOAD_FAILED_USING_LAST_KNOWN_GOOD.value,
-                DiagnosticsWarningCode.FEATURE_COVERAGE_BELOW_THRESHOLD.value,
-                DiagnosticsWarningCode.DRIFT_REFERENCE_UNAVAILABLE.value,
-            }:
+            if warning not in DIAGNOSTICS_WARNING_CODES:
                 continue
             if warning not in normalized:
                 normalized.append(warning)
+            if len(normalized) >= 4:
+                break
+        return normalized
+
+    @classmethod
+    def _normalize_degraded_reasons(cls, raw_reasons: Any) -> list[str]:
+        if isinstance(raw_reasons, str):
+            candidates: list[Any] = [raw_reasons]
+        elif isinstance(raw_reasons, list | tuple | set):
+            candidates = list(raw_reasons)
+        else:
+            candidates = []
+        normalized: list[str] = []
+        for candidate in candidates:
+            reason = cls._bounded_optional_str(
+                candidate, max_len=cls._MAX_REASON_CODE_LENGTH
+            )
+            if reason is None:
+                continue
+            reason = reason.lower()
+            if reason not in DIAGNOSTICS_DEGRADED_REASONS:
+                continue
+            if reason not in normalized:
+                normalized.append(reason)
             if len(normalized) >= 4:
                 break
         return normalized
@@ -586,6 +621,41 @@ class ModelManager:
         if state == ModelManagerState.IDLE.value:
             return OperabilityStatus.NOT_RUN.value
         return OperabilityStatus.UNKNOWN.value
+
+    @classmethod
+    def _normalize_model_manager_state(cls, raw_state: Any) -> str:
+        normalized = cls._bounded_optional_str(raw_state, max_len=cls._MAX_STATE_LENGTH)
+        if normalized is None:
+            return ModelManagerState.IDLE.value
+        normalized = normalized.lower()
+        if normalized in MODEL_MANAGER_STATES:
+            return normalized
+        return ModelManagerState.IDLE.value
+
+    @classmethod
+    def _normalize_model_source(cls, raw_source: Any) -> str:
+        normalized = cls._bounded_optional_str(
+            raw_source, max_len=cls._MAX_MODEL_SOURCE_LENGTH
+        )
+        if normalized is None:
+            return "none"
+        normalized = normalized.lower()
+        if normalized in {"mlflow", "fallback", "none"}:
+            return normalized
+        return "none"
+
+    @classmethod
+    def _normalize_reload_failure_reason(cls, raw_reason: Any) -> str:
+        normalized = cls._bounded_optional_str(
+            raw_reason,
+            max_len=cls._MAX_REASON_CODE_LENGTH,
+        )
+        if normalized is None:
+            return ReloadFailureReason.UNKNOWN.value
+        normalized = normalized.lower()
+        if normalized in RELOAD_FAILURE_REASONS:
+            return normalized
+        return ReloadFailureReason.UNKNOWN.value
 
     @staticmethod
     def _bounded_optional_str(value: Any, *, max_len: int) -> str | None:
@@ -731,10 +801,8 @@ class ModelManager:
         strict_config = self._normalize_strict_config(
             diagnostics_snapshot.get(DIAGNOSTIC_KEY_CONFIG)
         )
-        model_state = self._bounded_str(
+        model_state = self._normalize_model_manager_state(
             diagnostics_snapshot.get(DIAGNOSTIC_KEY_STATE),
-            default=ModelManagerState.IDLE.value,
-            max_len=32,
         )
 
         model_summary = {
@@ -742,12 +810,12 @@ class ModelManager:
             "active_model_version": self._bounded_str(
                 diagnostics_snapshot.get(DIAGNOSTIC_KEY_ACTIVE_MODEL_VERSION),
                 default="unknown",
-                max_len=64,
+                max_len=self._MAX_MODEL_VERSION_LENGTH,
             ),
             "last_reload_status": self._bounded_str(
                 diagnostics_snapshot.get(DIAGNOSTIC_KEY_LAST_RELOAD_STATUS),
                 default="idle",
-                max_len=32,
+                max_len=self._MAX_RELOAD_STATUS_LENGTH,
             ),
             "last_reload_ts": self._coerce_float_or_none(
                 diagnostics_snapshot.get(DIAGNOSTIC_KEY_LAST_RELOAD_TS)
@@ -759,9 +827,8 @@ class ModelManager:
 
         benchmark_summary = {
             "enabled": bool(INFERENCE_BENCHMARK_ENABLED),
-            "last_status": self._bounded_optional_str(
+            "last_status": self._normalize_benchmark_last_status(
                 diagnostics_snapshot.get(DIAGNOSTIC_KEY_BENCHMARK_LAST_STATUS),
-                max_len=32,
             ),
             "last_run_ts": self._coerce_float_or_none(
                 diagnostics_snapshot.get(DIAGNOSTIC_KEY_BENCHMARK_LAST_RUN_TS)
@@ -769,7 +836,7 @@ class ModelManager:
         }
 
         feature_coverage_summary = {
-            "last_ratio": self._coerce_ratio_or_none(
+            "last_ratio": self._normalize_feature_coverage_ratio(
                 diagnostics_snapshot.get(DIAGNOSTIC_KEY_FEATURE_COVERAGE_LAST_RATIO)
             ),
             "below_threshold": bool(
@@ -787,7 +854,7 @@ class ModelManager:
             ),
             "last_error_code": self._bounded_optional_str(
                 drift_last_error_code,
-                max_len=64,
+                max_len=self._MAX_REASON_CODE_LENGTH,
             ),
         }
         health_status = self._normalize_operability_status(
@@ -804,6 +871,15 @@ class ModelManager:
                     DiagnosticsWarningCode.DRIFT_REFERENCE_UNAVAILABLE.value,
                 ]
             )
+        degraded_reasons = self._normalize_degraded_reasons(
+            diagnostics_snapshot.get(DIAGNOSTIC_KEY_DEGRADED_REASONS)
+        )
+        has_warnings = bool(warnings)
+        warning_count = len(warnings)
+        degraded = bool(degraded_reasons) or health_status in {
+            OperabilityStatus.FAILURE.value,
+            OperabilityStatus.UNKNOWN.value,
+        }
 
         # Keep legacy scalar aliases for compatibility with existing consumers.
         payload = {
@@ -814,6 +890,10 @@ class ModelManager:
             "config": strict_config,
             "warnings": warnings,
             "status": health_status,
+            "overall_status": health_status,
+            "degraded": degraded,
+            "has_warnings": has_warnings,
+            "warning_count": warning_count,
             "state": model_summary["state"],
             "active_model_version": model_summary["active_model_version"],
             "last_reload_status": model_summary["last_reload_status"],
@@ -877,15 +957,22 @@ class ModelManager:
         with self._lock:
             bundle = self._resolve_runtime_bundle()
             training_identity = self.training_identity or {}
+            manager_state = self._normalize_model_manager_state(self._state)
+            active_model_version = self._bounded_str(
+                self.model_version,
+                default="unknown",
+                max_len=self._MAX_MODEL_VERSION_LENGTH,
+            )
+            model_source = self._normalize_model_source(self.model_source)
             last_reload_status = (
                 ReloadStatus.SUCCESS.value
-                if self._state == ModelManagerState.READY.value
+                if manager_state == ModelManagerState.READY.value
                 else ReloadStatus.FAILED.value
-                if self._state == ModelManagerState.FAILED.value
+                if manager_state == ModelManagerState.FAILED.value
                 else ReloadStatus.IDLE.value
             )
             degraded_reasons: list[str] = []
-            if self._state == ModelManagerState.FAILED.value:
+            if manager_state == ModelManagerState.FAILED.value:
                 degraded_reasons.append(DiagnosticsDegradedReason.RELOAD_FAILED.value)
             if self.schema_mismatch_detected:
                 degraded_reasons.append(DiagnosticsDegradedReason.SCHEMA_MISMATCH.value)
@@ -896,12 +983,15 @@ class ModelManager:
             diagnostics = {
                 DIAGNOSTIC_KEY_STATUS: self._normalize_operability_status(
                     None,
-                    fallback_state=self._state,
+                    fallback_state=manager_state,
                 ),
-                DIAGNOSTIC_KEY_STATE: self._state,
-                DIAGNOSTIC_KEY_MODEL_VERSION: self.model_version,
-                DIAGNOSTIC_KEY_MODEL_SOURCE: self.model_source,
-                DIAGNOSTIC_KEY_LAST_ERROR: self._last_error,
+                DIAGNOSTIC_KEY_STATE: manager_state,
+                DIAGNOSTIC_KEY_MODEL_VERSION: active_model_version,
+                DIAGNOSTIC_KEY_MODEL_SOURCE: model_source,
+                DIAGNOSTIC_KEY_LAST_ERROR: self._bounded_optional_str(
+                    self._last_error,
+                    max_len=self._MAX_LAST_ERROR_LENGTH,
+                ),
                 DIAGNOSTIC_KEY_SCHEMA_MISMATCH_DETECTED: self.schema_mismatch_detected,
                 DIAGNOSTIC_KEY_CALIBRATOR_LOADED: self.calibrator_loaded,
                 DIAGNOSTIC_KEY_HAS_BUNDLE: bundle is not None,
@@ -912,7 +1002,7 @@ class ModelManager:
                 else None,
                 DIAGNOSTIC_KEY_LAST_RELOAD_STATUS: last_reload_status,
                 DIAGNOSTIC_KEY_LAST_RELOAD_REASON: (
-                    self._mlflow_failure_reason
+                    self._normalize_reload_failure_reason(self._mlflow_failure_reason)
                     if last_reload_status == ReloadStatus.FAILED.value
                     else None
                 ),
@@ -923,26 +1013,31 @@ class ModelManager:
                     self._normalize_benchmark_last_status(self._benchmark_last_status)
                 ),
                 DIAGNOSTIC_KEY_DEGRADED_REASONS: degraded_reasons,
-                DIAGNOSTIC_KEY_ACTIVE_MODEL_VERSION: self.model_version,
+                DIAGNOSTIC_KEY_ACTIVE_MODEL_VERSION: active_model_version,
                 DIAGNOSTIC_KEY_FEATURE_COVERAGE_WARNING_ACTIVE: (
-                    self._feature_coverage_warning_active
+                    bool(self._feature_coverage_warning_active)
                 ),
                 DIAGNOSTIC_KEY_FEATURE_COVERAGE_LAST_RATIO: (
-                    self._feature_coverage_last_ratio
+                    self._normalize_feature_coverage_ratio(
+                        self._feature_coverage_last_ratio
+                    )
                 ),
                 DIAGNOSTIC_KEY_FEATURE_COVERAGE_WARNING_LAST_SEEN_TS: (
                     self._coerce_float_or_none(
                         self._feature_coverage_warning_last_seen_ts
                     )
                 ),
-                DIAGNOSTIC_KEY_ML_TRAINING_RUN_ID: training_identity.get(
-                    TRAINING_IDENTITY_KEY_MLFLOW_RUN_ID
+                DIAGNOSTIC_KEY_ML_TRAINING_RUN_ID: self._bounded_optional_str(
+                    training_identity.get(TRAINING_IDENTITY_KEY_MLFLOW_RUN_ID),
+                    max_len=self._MAX_TRAINING_RUN_ID_LENGTH,
                 ),
-                DIAGNOSTIC_KEY_ML_MODEL_VERSION: training_identity.get(
-                    TRAINING_IDENTITY_KEY_MODEL_VERSION
+                DIAGNOSTIC_KEY_ML_MODEL_VERSION: self._bounded_optional_str(
+                    training_identity.get(TRAINING_IDENTITY_KEY_MODEL_VERSION),
+                    max_len=self._MAX_MODEL_VERSION_LENGTH,
                 ),
-                DIAGNOSTIC_KEY_ML_FEATURE_SCHEMA_HASH: training_identity.get(
-                    TRAINING_IDENTITY_KEY_FEATURE_SCHEMA_HASH
+                DIAGNOSTIC_KEY_ML_FEATURE_SCHEMA_HASH: self._bounded_optional_str(
+                    training_identity.get(TRAINING_IDENTITY_KEY_FEATURE_SCHEMA_HASH),
+                    max_len=self._MAX_SCHEMA_HASH_LENGTH,
                 ),
                 DIAGNOSTIC_KEY_CONFIG: self._normalize_strict_config(
                     self._effective_strict_config()
@@ -958,9 +1053,9 @@ class ModelManager:
                     else None,
                     DiagnosticsWarningCode.RELOAD_FAILED_USING_LAST_KNOWN_GOOD.value
                     if (
-                        self.model_source == "fallback"
+                        model_source == "fallback"
                         or (
-                            self._state == ModelManagerState.FAILED.value
+                            manager_state == ModelManagerState.FAILED.value
                             and bundle is not None
                         )
                     )

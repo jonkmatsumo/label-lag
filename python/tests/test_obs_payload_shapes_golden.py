@@ -49,6 +49,10 @@ def test_ml_health_payload_golden_shape_and_bounds():
         "config",
         "warnings",
         "status",
+        "overall_status",
+        "degraded",
+        "has_warnings",
+        "warning_count",
         "state",
         "active_model_version",
         "last_reload_status",
@@ -77,6 +81,10 @@ def test_ml_health_payload_golden_shape_and_bounds():
     assert set(health["feature_coverage"].keys()) == {"last_ratio", "below_threshold"}
     assert isinstance(health["warnings"], list)
     assert health["status"] in {"success", "failure", "unknown", "not_run"}
+    assert health["overall_status"] == health["status"]
+    assert isinstance(health["degraded"], bool)
+    assert health["has_warnings"] == bool(health["warnings"])
+    assert health["warning_count"] == len(health["warnings"])
     assert health["state"] in {"idle", "loading", "ready", "failed"}
     assert len(health["active_model_version"]) <= 64
     assert len(health["last_reload_status"]) <= 32

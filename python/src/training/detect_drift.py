@@ -19,9 +19,13 @@ import pandas as pd
 from training.crud_client import get_crud_client
 from training.reason_codes import (
     DRIFT_ERROR_CODES,
+    DRIFT_FALLBACK_REASONS,
+    DRIFT_REFERENCE_RESOLUTION_WARNING_CODES,
     DRIFT_RESOLUTION_MODES,
     DriftErrorCode,
     DriftFallbackReason,
+    DriftFeatureStatus,
+    DriftReferenceResolutionWarning,
     DriftResolutionMode,
 )
 
@@ -115,16 +119,8 @@ MAX_DRIFT_REFERENCE_RUN_ID_LENGTH = MAX_REFERENCE_RUN_ID_LENGTH
 MAX_DRIFT_REFERENCE_ALIAS_LENGTH = MAX_REFERENCE_METADATA_TEXT_LENGTH
 MAX_DRIFT_BUCKETTYPE_LENGTH = 24
 MAX_DRIFT_BREAKPOINTS = MAX_BREAKPOINTS_COUNT
+DRIFT_BUCKET_TYPES = frozenset({"bins", "quantiles"})
 MAX_REFERENCE_RESOLUTION_WARNING_LENGTH = 64
-REFERENCE_RESOLUTION_WARNING_CODES = frozenset(
-    {
-        "alias_not_found_fallback",
-        "alias_ambiguous_selected_highest",
-        "stage_fallback_used",
-        "latest_fallback_used",
-        "no_reference_versions_available",
-    }
-)
 _DEFAULT_DRIFT_ERROR_MESSAGES = {
     DriftErrorCode.NO_REFERENCE_DATA.value: "No reference data available",
     DriftErrorCode.INSUFFICIENT_REFERENCE_SAMPLES.value: (
@@ -148,6 +144,13 @@ _LEGACY_DRIFT_ERROR_CODE_ALIASES = {
 _LEGACY_RESOLUTION_MODE_ALIASES = {
     "production_stage": DriftResolutionMode.STAGE.value,
     "latest_version": DriftResolutionMode.LATEST.value,
+}
+_LEGACY_REFERENCE_RESOLUTION_WARNING_CODE_ALIASES = {
+    "alias_missing_fallback": (
+        DriftReferenceResolutionWarning.ALIAS_NOT_FOUND_FALLBACK.value
+    ),
+    "fallback_stage_used": DriftReferenceResolutionWarning.STAGE_FALLBACK_USED.value,
+    "fallback_latest_used": DriftReferenceResolutionWarning.LATEST_FALLBACK_USED.value,
 }
 MAX_DRIFT_ERROR_CODE_LENGTH = 64
 _REFERENCE_RESOLUTION_METADATA_KEYS = (
@@ -340,7 +343,9 @@ def _select_reference_model_version(
     }
 
     if not versions:
-        metadata["resolution_warning"] = "no_reference_versions_available"
+        metadata["resolution_warning"] = (
+            DriftReferenceResolutionWarning.NO_REFERENCE_VERSIONS_AVAILABLE.value
+        )
         return None, metadata
 
     normalized_alias = str(alias_name or "").strip().lstrip("@")
@@ -362,7 +367,9 @@ def _select_reference_model_version(
             metadata["alias_ambiguous"] = len(alias_candidates_sorted) > 1
             selected_alias_version = alias_candidates_sorted[0]
             if metadata["alias_ambiguous"]:
-                metadata["resolution_warning"] = "alias_ambiguous_selected_highest"
+                metadata["resolution_warning"] = (
+                    DriftReferenceResolutionWarning.ALIAS_AMBIGUOUS_SELECTED_HIGHEST.value
+                )
                 logger.warning(
                     "Drift alias '@%s' resolved to %s candidates; selecting highest "
                     "version deterministically (%s).",
@@ -370,14 +377,16 @@ def _select_reference_model_version(
                     len(alias_candidates_sorted),
                     getattr(selected_alias_version, "version", "unknown"),
                 )
-            metadata["resolution_strategy"] = "alias"
+            metadata["resolution_strategy"] = DriftResolutionMode.ALIAS.value
             return selected_alias_version, metadata
         logger.warning(
             "Configured drift reference alias '@%s' not found; "
             "falling back to stage/latest resolution.",
             normalized_alias,
         )
-        metadata["resolution_warning"] = "alias_not_found_fallback"
+        metadata["resolution_warning"] = (
+            DriftReferenceResolutionWarning.ALIAS_NOT_FOUND_FALLBACK.value
+        )
 
     stage_candidates = [
         version
@@ -390,7 +399,9 @@ def _select_reference_model_version(
         )[0]
         metadata["resolution_strategy"] = "production_stage"
         if metadata.get("resolution_warning") is None:
-            metadata["resolution_warning"] = "stage_fallback_used"
+            metadata["resolution_warning"] = (
+                DriftReferenceResolutionWarning.STAGE_FALLBACK_USED.value
+            )
 
         global _DRIFT_STAGE_FALLBACK_WARNED
         if not _DRIFT_STAGE_FALLBACK_WARNED:
@@ -406,7 +417,9 @@ def _select_reference_model_version(
     selected_latest = sorted(versions, key=_safe_model_version_number, reverse=True)[0]
     metadata["resolution_strategy"] = "latest_version"
     if metadata.get("resolution_warning") is None:
-        metadata["resolution_warning"] = "latest_fallback_used"
+        metadata["resolution_warning"] = (
+            DriftReferenceResolutionWarning.LATEST_FALLBACK_USED.value
+        )
 
     global _DRIFT_LATEST_FALLBACK_WARNED
     if not _DRIFT_LATEST_FALLBACK_WARNED:
@@ -456,9 +469,9 @@ def _normalize_reference_resolution_warning(raw_warning: Any) -> str | None:
     if warning is None:
         return None
     warning = warning.lower()
-    if warning not in REFERENCE_RESOLUTION_WARNING_CODES:
-        return None
-    return warning
+    if warning in DRIFT_REFERENCE_RESOLUTION_WARNING_CODES:
+        return warning
+    return _LEGACY_REFERENCE_RESOLUTION_WARNING_CODE_ALIASES.get(warning)
 
 
 def _bounded_metadata_text(value: Any, *, max_len: int) -> str | None:
@@ -550,6 +563,28 @@ def _bounded_optional_text(value: Any, *, max_len: int) -> str | None:
     return text[:max_len]
 
 
+def _normalize_buckettype(raw_buckettype: Any) -> str | None:
+    buckettype = _bounded_optional_text(
+        raw_buckettype, max_len=MAX_DRIFT_BUCKETTYPE_LENGTH
+    )
+    if buckettype is None:
+        return None
+    buckettype = buckettype.lower()
+    if buckettype in DRIFT_BUCKET_TYPES:
+        return buckettype
+    return None
+
+
+def _normalize_bucketing_fallback_reason(raw_reason: Any) -> str | None:
+    reason = _bounded_optional_text(raw_reason, max_len=MAX_DRIFT_ERROR_CODE_LENGTH)
+    if reason is None:
+        return None
+    reason = reason.lower()
+    if reason in DRIFT_FALLBACK_REASONS:
+        return reason
+    return None
+
+
 def _normalize_reference_resolution_metadata(
     raw_resolution: Any,
     *,
@@ -603,23 +638,16 @@ def _normalize_bucketing_metadata(raw_bucketing: Any) -> dict[str, Any]:
                 break
 
     drift_error = _normalize_error_code(metadata.get("drift_error"))
-    if drift_error is None:
-        drift_error = _bounded_error_code(metadata.get("drift_error"))
 
     normalized = {
-        "buckettype_requested": _bounded_optional_text(
-            metadata.get("buckettype_requested"),
-            max_len=MAX_DRIFT_BUCKETTYPE_LENGTH,
+        "buckettype_requested": _normalize_buckettype(
+            metadata.get("buckettype_requested")
         ),
-        "buckettype_used": _bounded_optional_text(
-            metadata.get("buckettype_used"),
-            max_len=MAX_DRIFT_BUCKETTYPE_LENGTH,
-        ),
+        "buckettype_used": _normalize_buckettype(metadata.get("buckettype_used")),
         "buckets_requested": _coerce_int_or_none(metadata.get("buckets_requested")),
         "buckets_used": _coerce_int_or_none(metadata.get("buckets_used")),
-        "bucketing_fallback_reason": _bounded_optional_text(
-            metadata.get("bucketing_fallback_reason"),
-            max_len=MAX_DRIFT_ERROR_CODE_LENGTH,
+        "bucketing_fallback_reason": _normalize_bucketing_fallback_reason(
+            metadata.get("bucketing_fallback_reason")
         ),
         "breakpoints": normalized_breakpoints,
         "reference_sample_size": _coerce_int_or_none(
@@ -705,9 +733,10 @@ def _finalize_drift_error_contract(results: dict[str, Any]) -> dict[str, Any]:
     results.setdefault("reference_model_version_chosen", None)
     results.setdefault("reference_alias_requested", None)
     results.setdefault("reference_resolution_warning", None)
+    raw_reference_resolution = results.get("reference_resolution")
     raw_resolution_mode = _normalize_resolution_mode(results.get("resolution_mode"))
     reference_resolution = _normalize_reference_resolution_metadata(
-        results.get("reference_resolution"),
+        raw_reference_resolution,
         fallback_mode=raw_resolution_mode,
     )
     normalized_resolution_mode = raw_resolution_mode
@@ -732,7 +761,10 @@ def _finalize_drift_error_contract(results: dict[str, Any]) -> dict[str, Any]:
         error_message = results.get("error")
     if error_message is None and error_code is not None:
         error_message = _DEFAULT_DRIFT_ERROR_MESSAGES.get(error_code)
-    if error_message is not None:
+    if error_code is None:
+        results["error_message"] = None
+        results["error"] = None
+    elif error_message is not None:
         bounded_error_message = _bounded_error_message(error_message)
         if bounded_error_message:
             results["error_message"] = bounded_error_message
@@ -744,14 +776,8 @@ def _finalize_drift_error_contract(results: dict[str, Any]) -> dict[str, Any]:
         results["error_message"] = None
         results["error"] = None
 
-    if error_code is not None:
-        results["drift_error"] = error_code
-    else:
-        results["drift_error"] = _normalize_error_code(results.get("drift_error"))
-    if results["drift_error"] is None:
-        results["drift_error"] = _bounded_error_code(results.get("drift_error"))
-
     results["error_code"] = error_code
+    results["drift_error"] = error_code
 
     reference_model_version = _bounded_optional_text(
         results.get("reference_model_version"),
@@ -776,16 +802,22 @@ def _finalize_drift_error_contract(results: dict[str, Any]) -> dict[str, Any]:
             max_len=MAX_REFERENCE_METADATA_TEXT_LENGTH,
         )
     results["reference_alias_requested"] = requested_alias
+    requested_mode_source = results.get("reference_resolution_mode_requested")
+    if requested_mode_source is None and isinstance(raw_reference_resolution, dict):
+        requested_mode_source = raw_reference_resolution.get("requested_mode")
     requested_mode = _normalize_requested_resolution_mode(
-        results.get("reference_resolution_mode_requested"),
+        requested_mode_source,
         requested_alias=requested_alias,
     )
     results["reference_resolution_mode_requested"] = requested_mode
     results["reference_resolution_mode"] = normalized_resolution_mode
     results["reference_model_version_chosen"] = reference_model_version
 
+    raw_resolution_warning = results.get("reference_resolution_warning")
+    if raw_resolution_warning is None and isinstance(raw_reference_resolution, dict):
+        raw_resolution_warning = raw_reference_resolution.get("resolution_warning")
     reference_resolution_warning = _normalize_reference_resolution_warning(
-        results.get("reference_resolution_warning")
+        raw_resolution_warning
     )
     if (
         reference_resolution_warning is None
@@ -793,13 +825,17 @@ def _finalize_drift_error_contract(results: dict[str, Any]) -> dict[str, Any]:
         and normalized_resolution_mode
         in {DriftResolutionMode.STAGE.value, DriftResolutionMode.LATEST.value}
     ):
-        reference_resolution_warning = "alias_not_found_fallback"
+        reference_resolution_warning = (
+            DriftReferenceResolutionWarning.ALIAS_NOT_FOUND_FALLBACK.value
+        )
     if (
         reference_resolution_warning is None
         and normalized_resolution_mode == DriftResolutionMode.NONE.value
         and reference_model_version is None
     ):
-        reference_resolution_warning = "no_reference_versions_available"
+        reference_resolution_warning = (
+            DriftReferenceResolutionWarning.NO_REFERENCE_VERSIONS_AVAILABLE.value
+        )
     results["reference_resolution_warning"] = reference_resolution_warning
 
     return results
@@ -1023,14 +1059,14 @@ def detect_drift(
                 )
             results["features"][feature] = {
                 "psi": round(psi, 4),
-                "status": "OK",
+                "status": DriftFeatureStatus.OK.value,
                 "drift_error": drift_error,
                 "bucketing": normalized_bucketing,
             }
             continue
 
         if psi >= PSI_THRESHOLD_CRITICAL:
-            status = "CRITICAL"
+            status = DriftFeatureStatus.CRITICAL.value
             results["alerts"].append(
                 {
                     "severity": "critical",
@@ -1045,7 +1081,7 @@ def detect_drift(
                 }
             )
         elif psi >= PSI_THRESHOLD_WARNING:
-            status = "WARNING"
+            status = DriftFeatureStatus.WARNING.value
             results["alerts"].append(
                 {
                     "severity": "warning",
@@ -1060,7 +1096,7 @@ def detect_drift(
                 }
             )
         else:
-            status = "OK"
+            status = DriftFeatureStatus.OK.value
 
         results["features"][feature] = {
             "psi": round(psi, 4),
@@ -1069,7 +1105,7 @@ def detect_drift(
             "bucketing": normalized_bucketing,
         }
 
-        if status == "CRITICAL":
+        if status == DriftFeatureStatus.CRITICAL.value:
             results["drift_detected"] = True
             results["drifted_features"].append(feature)
 
